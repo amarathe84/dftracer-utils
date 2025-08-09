@@ -137,12 +137,23 @@ generate_coverage_report() {
     local compiler_info=$(cd "$BUILD_DIR" && make --version 2>/dev/null | head -1 || echo "unknown")
     print_status "Build info: $compiler_info"
     
+    # Detect gcov version and set appropriate ignore-errors flags
+    local gcov_version=$(gcov --version | head -1 | grep -o '[0-9]\+\.[0-9]\+' | head -1)
+    local ignore_errors="gcov"
+    
+    # gcov 13.x supports 'mismatch' error type
+    if [[ "$gcov_version" =~ ^1[3-9]\. ]] || [[ "$gcov_version" =~ ^[2-9][0-9]\. ]]; then
+        ignore_errors="gcov,mismatch"
+    fi
+    
+    print_status "Using gcov version: $gcov_version, ignore-errors: $ignore_errors"
+    
     lcov --capture \
          --directory "$BUILD_DIR" \
          --output-file "$COVERAGE_DIR/coverage.info" \
          --rc branch_coverage=1 \
          --rc geninfo_unexecuted_blocks=1 \
-         --ignore-errors gcov
+         --ignore-errors "$ignore_errors"
     
     lcov --remove "$COVERAGE_DIR/coverage.info" \
          '/usr/*' \
@@ -156,7 +167,7 @@ generate_coverage_report() {
          --output-file "$COVERAGE_DIR/coverage_filtered.info" \
          --rc branch_coverage=1 \
          --rc geninfo_unexecuted_blocks=1 \
-         --ignore-errors gcov
+         --ignore-errors "$ignore_errors"
     
     genhtml "$COVERAGE_DIR/coverage_filtered.info" \
             --output-directory "$COVERAGE_DIR/html" \
