@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Read a range of bytes from a gzip file using the index database
  * @param db SQLite database containing the gzip index
@@ -37,10 +41,14 @@ static inline int read_data_range_megabytes(
     }
 
     // Convert MB to bytes
-    uint64_t start_bytes = (uint64_t)(start_mb * 1024 * 1024);
-    uint64_t end_bytes = (uint64_t)(end_mb * 1024 * 1024);
+    uint64_t start_bytes = static_cast<uint64_t>(start_mb * 1024 * 1024);
+    uint64_t end_bytes = static_cast<uint64_t>(end_mb * 1024 * 1024);
 
     return read_data_range_bytes(db, gz_path, start_bytes, end_bytes, output, output_size);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __DFTRACER_UTILS_READER_READER_H

@@ -23,6 +23,7 @@
             pkg-config
             sqlite
             pigz
+            spdlog
           ]);
 
           CC = "gcc";

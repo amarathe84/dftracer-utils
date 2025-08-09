@@ -1,8 +1,9 @@
 #include "reader.h"
+#include "platform_compat.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <zlib.h>
 
 // size of input buffer for decompression
@@ -17,7 +18,7 @@ typedef struct
     uint64_t c_off;
 } InflateState;
 
-static int inflate_init(InflateState *I, FILE *f, uint64_t c_off, int bits, const unsigned char *dict, int dict_len)
+static int inflate_init(InflateState *I, FILE *f, uint64_t c_off, int bits, const unsigned char * /*dict*/, int /*dict_len*/)
 {
     memset(I, 0, sizeof(*I));
     I->file = f;
@@ -30,7 +31,7 @@ static int inflate_init(InflateState *I, FILE *f, uint64_t c_off, int bits, cons
     }
 
     // seek to compressed offset
-    if (fseeko(f, c_off, SEEK_SET) != 0)
+    if (fseeko(f, static_cast<off_t>(c_off), SEEK_SET) != 0)
     {
         inflateEnd(&I->zs);
         return -1;
@@ -47,7 +48,7 @@ static void inflate_cleanup(InflateState *I)
 static int inflate_read(InflateState *I, unsigned char *out, size_t out_size, size_t *bytes_read)
 {
     I->zs.next_out = out;
-    I->zs.avail_out = out_size;
+    I->zs.avail_out = static_cast<uInt>(out_size);
     *bytes_read = 0;
 
     while (I->zs.avail_out > 0)
@@ -60,7 +61,7 @@ static int inflate_read(InflateState *I, unsigned char *out, size_t out_size, si
                 break; // EOF
             }
             I->zs.next_in = I->in;
-            I->zs.avail_in = n;
+            I->zs.avail_in = static_cast<uInt>(n);
         }
 
         int ret = inflate(&I->zs, Z_NO_FLUSH);
@@ -77,6 +78,8 @@ static int inflate_read(InflateState *I, unsigned char *out, size_t out_size, si
     *bytes_read = out_size - I->zs.avail_out;
     return 0;
 }
+
+extern "C" {
 
 int read_data_range_bytes(
     sqlite3 *db, const char *gz_path, uint64_t start_bytes, uint64_t end_bytes, char **output, size_t *output_size)
@@ -114,8 +117,8 @@ int read_data_range_bytes(
         return -1;
     }
 
-    sqlite3_bind_int64(stmt, 1, start_bytes);
-    sqlite3_bind_int64(stmt, 2, start_bytes);
+    sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(start_bytes));
+    sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(start_bytes));
 
     if (sqlite3_step(stmt) != SQLITE_ROW)
     {
@@ -124,10 +127,10 @@ int read_data_range_bytes(
         return -1;
     }
 
-    uint64_t chunk_idx = sqlite3_column_int64(stmt, 0);
-    uint64_t chunk_c_off = sqlite3_column_int64(stmt, 1);
-    uint64_t chunk_uc_off = sqlite3_column_int64(stmt, 2);
-    uint64_t chunk_uc_size = sqlite3_column_int64(stmt, 3);
+    uint64_t chunk_idx = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
+    uint64_t chunk_c_off = static_cast<uint64_t>(sqlite3_column_int64(stmt, 1));
+    uint64_t chunk_uc_off = static_cast<uint64_t>(sqlite3_column_int64(stmt, 2));
+    uint64_t chunk_uc_size = static_cast<uint64_t>(sqlite3_column_int64(stmt, 3));
 
     sqlite3_finalize(stmt);
 
@@ -162,7 +165,7 @@ int read_data_range_bytes(
     // at or after the start position
     if (start_bytes > 0)
     {
-        unsigned char *search_buffer = malloc(65536);
+        unsigned char *search_buffer = static_cast<unsigned char*>(malloc(65536));
         if (!search_buffer)
         {
             inflate_cleanup(&inflate_state);
@@ -253,7 +256,7 @@ int read_data_range_bytes(
         // Skip to actual start
         if (actual_start > 0)
         {
-            unsigned char *skip_buffer = malloc(65536);
+            unsigned char *skip_buffer = static_cast<unsigned char*>(malloc(65536));
             if (!skip_buffer)
             {
                 inflate_cleanup(&inflate_state);
@@ -261,10 +264,10 @@ int read_data_range_bytes(
                 return -1;
             }
 
-            long long remaining_skip = actual_start;
+            auto remaining_skip = static_cast<long long>(actual_start);
             while (remaining_skip > 0)
             {
-                size_t to_skip = remaining_skip > 65536 ? 65536 : remaining_skip;
+                size_t to_skip = (remaining_skip > 65536) ? 65536U : static_cast<size_t>(remaining_skip);
                 size_t skipped;
                 if (inflate_read(&inflate_state, skip_buffer, to_skip, &skipped) != 0)
                 {
@@ -294,7 +297,7 @@ int read_data_range_bytes(
 
     // extra space for line boundary detection
     uint64_t buffer_size = adjusted_target_size + 4096;
-    *output = malloc(buffer_size + 1);
+    *output = static_cast<char*>(malloc(buffer_size + 1));
     if (!*output)
     {
         inflate_cleanup(&inflate_state);
@@ -315,7 +318,7 @@ int read_data_range_bytes(
         size_t to_read = buffer_size - total_read;
         size_t bytes_read;
 
-        if (inflate_read(&inflate_state, (unsigned char *)(*output + total_read), to_read, &bytes_read) != 0)
+        if (inflate_read(&inflate_state, reinterpret_cast<unsigned char *>(*output + total_read), to_read, &bytes_read) != 0)
         {
             fprintf(stderr, "Failed during read phase at position %zu\n", total_read);
             free(*output);
@@ -377,3 +380,5 @@ int read_data_range_bytes(
     fclose(f);
     return 0;
 }
+
+} // extern "C"

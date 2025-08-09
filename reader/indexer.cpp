@@ -1,7 +1,8 @@
 #include "indexer.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "platform_compat.h"
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <zlib.h>
 
 const char *SQL_SCHEMA = "CREATE TABLE IF NOT EXISTS files ("
@@ -83,7 +84,7 @@ static int
 inflate_process_chunk(InflateState *I, unsigned char *out, size_t out_size, size_t *bytes_out, long long *c_off)
 {
     I->zs.next_out = out;
-    I->zs.avail_out = out_size;
+                I->zs.avail_out = static_cast<uInt>(out_size);
     *bytes_out = 0;
 
     while (I->zs.avail_out > 0)
@@ -96,7 +97,7 @@ inflate_process_chunk(InflateState *I, unsigned char *out, size_t out_size, size
                 break;
             }
             I->zs.next_in = I->in;
-            I->zs.avail_in = n;
+            I->zs.avail_in = static_cast<uInt>(n);
         }
 
         long long c_pos_before = ftello(I->file) - I->zs.avail_in;
@@ -118,6 +119,9 @@ inflate_process_chunk(InflateState *I, unsigned char *out, size_t out_size, size
     return 0;
 }
 
+
+extern "C" {
+
 int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long chunk_size)
 {
     FILE *fp = fopen(gz_path, "rb");
@@ -126,10 +130,33 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
 
     sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
 
+    // Clean up existing data for this file before rebuilding
+    sqlite3_stmt *st_cleanup_chunks = NULL;
+    if (db_prep(db, &st_cleanup_chunks, "DELETE FROM chunks WHERE file_id = ?;"))
+    {
+        fclose(fp);
+        sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+        return -2;
+    }
+    sqlite3_bind_int(st_cleanup_chunks, 1, file_id);
+    sqlite3_step(st_cleanup_chunks);
+    sqlite3_finalize(st_cleanup_chunks);
+
+    sqlite3_stmt *st_cleanup_metadata = NULL;
+    if (db_prep(db, &st_cleanup_metadata, "DELETE FROM metadata WHERE file_id = ?;"))
+    {
+        fclose(fp);
+        sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+        return -2;
+    }
+    sqlite3_bind_int(st_cleanup_metadata, 1, file_id);
+    sqlite3_step(st_cleanup_metadata);
+    sqlite3_finalize(st_cleanup_metadata);
+
     sqlite3_stmt *st_meta = NULL;
     if (db_prep(db,
                 &st_meta,
-                "INSERT OR REPLACE INTO metadata(file_id, chunk_size) "
+                "INSERT INTO metadata(file_id, chunk_size) "
                 "VALUES(?, ?);"))
     {
         fclose(fp);
@@ -234,7 +261,7 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
             last_newline_pos != SIZE_MAX)
         {
             // end current chunk at the last complete line boundary
-            long long chunk_end_uc_off = current_uc_off - bytes_read + last_newline_pos + 1;
+            auto chunk_end_uc_off = static_cast<long long>(current_uc_off - static_cast<long long>(bytes_read) + static_cast<long long>(last_newline_pos) + 1);
             long long chunk_uc_size = chunk_end_uc_off - chunk_start_uc_off;
             long long chunk_c_size = c_off - chunk_start_c_off;
 
@@ -290,3 +317,5 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
     printf("Indexing complete: created %lld chunks\n", chunk_idx + 1);
     return 0;
 }
+
+} // extern "C"
