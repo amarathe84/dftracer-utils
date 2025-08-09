@@ -138,15 +138,24 @@ generate_coverage_report() {
     print_status "Build info: $compiler_info"
     
     # Detect gcov version and set appropriate ignore-errors flags
-    local gcov_version=$(gcov --version | head -1 | grep -o '[0-9]\+\.[0-9]\+' | head -1)
+    local gcov_output=$(gcov --version | head -1)
+    local gcov_version=$(echo "$gcov_output" | grep -o '[0-9]\+\.[0-9]\+' | head -1)
     local ignore_errors="gcov"
     
-    # gcov 13.x supports 'mismatch' error type
-    if [[ "$gcov_version" =~ ^1[3-9]\. ]] || [[ "$gcov_version" =~ ^[2-9][0-9]\. ]]; then
-        ignore_errors="gcov,mismatch"
+    # Check if it's LLVM gcov
+    if echo "$gcov_output" | grep -q "LLVM"; then
+        # LLVM gcov needs inconsistent error handling
+        ignore_errors="inconsistent"
+        print_status "Detected LLVM gcov version: $gcov_version"
+    elif [[ "$gcov_version" =~ ^1[3-9]\. ]] || [[ "$gcov_version" =~ ^[2-9][0-9]\. ]]; then
+        # gcov 13.x+ supports 'mismatch' error type
+        ignore_errors="include,mismatch"
+        print_status "Detected GNU gcov version: $gcov_version"
+    else
+        print_status "Detected GNU gcov version: $gcov_version"
     fi
     
-    print_status "Using gcov version: $gcov_version, ignore-errors: $ignore_errors"
+    print_status "Using ignore-errors: $ignore_errors"
     
     lcov --capture \
          --directory "$BUILD_DIR" \
