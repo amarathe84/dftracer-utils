@@ -48,7 +48,7 @@ add_test(NAME test_reader COMMAND test_reader)
 ##########################################
 
 # Test discovery using the installed package
-if(CMAKE_INSTALL_PREFIX)
+if(NOT CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     add_test(NAME install_package
         COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target install
     )

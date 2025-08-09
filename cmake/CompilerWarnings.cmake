@@ -64,7 +64,6 @@ function(target_set_warnings TARGET_NAME)
             # -Wswitch-enum         # Disabled: causes issues with spdlog/fmt library
             # -Wundef                 # Warn about undefined macros
             -Wuninitialized         # Warn about uninitialized variables
-            -Wno-maybe-uninitialized # Suppress warnings about maybe-uninitialized variables
             -Wunused                # Warn about unused variables, functions, etc.
         )
 
@@ -80,6 +79,7 @@ function(target_set_warnings TARGET_NAME)
                 -Wrestrict              # Warn about restrict violations
                 -Wstrict-null-sentinel  # Warn about non-literal null sentinels
                 -Wstrict-overflow=2     # Warn about strict overflow assumptions
+                -Wno-maybe-uninitialized # Suppress warnings about maybe-uninitialized variables
                 # -Wuseless-cast          # Warn about useless casts
             )
         endif()
