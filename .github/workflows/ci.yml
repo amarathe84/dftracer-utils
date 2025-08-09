@@ -1,13 +1,13 @@
-name: Coverage
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, initialize ]
   pull_request:
     branches: [ main, develop ]
 
 jobs:
-  coverage:
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
