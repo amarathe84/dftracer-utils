@@ -35,10 +35,15 @@ jobs:
         vcpkg install zlib sqlite3
       shell: powershell
     
-    - name: Run test + coverage (Unix)
-      if: runner.os != 'Windows'
+    - name: Run test + coverage
+      if: if: matrix.os == 'ubuntu-24.04'
       run: |
         make coverage
+
+    - name: Run test (Unix)
+      if: runner.os != 'Windows' && matrix.os != 'ubuntu-24.04'
+      run: |
+        make test
     
     - name: Run test + coverage (Windows)
       if: runner.os == 'Windows'
@@ -51,7 +56,7 @@ jobs:
       shell: powershell
     
     - name: Upload coverage reports to Codecov (Unix)
-      if: runner.os != 'Windows'
+      if: matrix.os == 'ubuntu-24.04'
       uses: codecov/codecov-action@v4
       with:
         file: build-coverage/coverage/coverage_filtered.info

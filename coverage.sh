@@ -140,7 +140,8 @@ generate_coverage_report() {
     lcov --capture \
          --directory "$BUILD_DIR" \
          --output-file "$COVERAGE_DIR/coverage.info" \
-         --rc lcov_branch_coverage=1
+         --rc branch_coverage=1 \
+         --rc geninfo_unexecuted_blocks=1
     
     lcov --remove "$COVERAGE_DIR/coverage.info" \
          '/usr/*' \
@@ -152,14 +153,16 @@ generate_coverage_report() {
          '*/build*/*' \
          '*.cpmsource*' \
          --output-file "$COVERAGE_DIR/coverage_filtered.info" \
-         --rc lcov_branch_coverage=1
+         --rc branch_coverage=1 \
+         --rc geninfo_unexecuted_blocks=1
     
     genhtml "$COVERAGE_DIR/coverage_filtered.info" \
             --output-directory "$COVERAGE_DIR/html" \
             --title "dftracer-utils Coverage Report" \
             --num-spaces 4 \
             --sort \
-            --rc lcov_branch_coverage=1 \
+            --rc branch_coverage=1 \
+            --rc geninfo_unexecuted_blocks=1 \
             --function-coverage \
             --branch-coverage
     
