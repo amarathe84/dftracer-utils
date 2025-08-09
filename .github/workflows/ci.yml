@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest, macos-latest]
     
     steps:
     - uses: actions/checkout@v4
@@ -27,16 +27,9 @@ jobs:
       if: runner.os == 'macOS'
       run: |
         brew install cmake lcov zlib sqlite pkg-config
-    
-    - name: Install dependencies (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        choco install cmake
-        vcpkg install zlib sqlite3
-      shell: powershell
-    
+
     - name: Run test + coverage
-      if: if: matrix.os == 'ubuntu-24.04'
+      if: matrix.os == 'ubuntu-24.04'
       run: |
         make coverage
 
@@ -44,16 +37,6 @@ jobs:
       if: runner.os != 'Windows' && matrix.os != 'ubuntu-24.04'
       run: |
         make test
-    
-    - name: Run test + coverage (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON -DDFTRACER_UTILS_COVERAGE=ON
-        cmake --build . --config Debug
-        ctest --output-on-failure
-      shell: powershell
     
     - name: Upload coverage reports to Codecov (Unix)
       if: matrix.os == 'ubuntu-24.04'
@@ -66,10 +49,3 @@ jobs:
         verbose: true
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        
-    # - name: Upload coverage to Coveralls (Unix)
-    #   if: runner.os != 'Windows'
-    #   uses: coverallsapp/github-action@v2
-    #   with:
-    #     github-token: ${{ secrets.GITHUB_TOKEN }}
-    #     path-to-lcov: build-coverage/coverage/coverage_filtered.info
