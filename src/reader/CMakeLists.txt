@@ -55,6 +55,12 @@ target_include_directories(dft_reader
 )
 target_set_warnings(dft_reader)
 
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_reader PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_reader PRIVATE --coverage)
+endif()
+
 # shared library
 add_library(dft_reader_shared SHARED ${DFTRACER_UTILS_${PROJECT_NAME}_SOURCES})
 set_target_properties(dft_reader_shared PROPERTIES 
@@ -75,12 +81,24 @@ target_include_directories(dft_reader_shared
 )
 target_set_warnings(dft_reader_shared)
 
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_reader_shared PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_reader_shared PRIVATE --coverage)
+endif()
+
 # executable
 add_executable(dft_reader_exe main.cpp ${DFTRACER_UTILS_${PROJECT_NAME}_SOURCES})
 set_target_properties(dft_reader_exe PROPERTIES OUTPUT_NAME "dft_reader")
 target_link_libraries(dft_reader_exe PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog argparse::argparse ghc_filesystem)
 target_include_directories(dft_reader_exe PRIVATE ${SQLITE3_INCLUDE_DIRS})
 target_set_warnings(dft_reader_exe)
+
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_reader_exe PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_reader_exe PRIVATE --coverage)
+endif()
 
 
 ##########################################

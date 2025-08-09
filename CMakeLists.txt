@@ -25,6 +25,7 @@ set(INSTALL_LIB_DIR lib)
 set(INSTALL_INCLUDE_DIR include/${CMAKE_PROJECT_NAME})
 option(DFTRACER_UTILS_USE_LOCAL_PACKAGES "Use local packages" OFF)
 option(DFTRACER_UTILS_TESTS "Build tests" OFF)
+option(DFTRACER_UTILS_COVERAGE "Enable coverage reporting" OFF)
 
 # Dependencies
 include(cmake/CPM.cmake)
@@ -58,6 +59,16 @@ CPMAddPackage(
   OPTIONS
     "GHC_FILESYSTEM_WITH_INSTALL ON"
 )
+
+if(DFTRACER_UTILS_TESTS AND DFTRACER_UTILS_COVERAGE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 --coverage" CACHE STRING "Debug flags with coverage" FORCE)
+        set(CMAKE_C_FLAGS_DEBUG "-g -O0 --coverage" CACHE STRING "Debug flags with coverage" FORCE)
+        set(CMAKE_EXE_LINKER_FLAGS_DEBUG "--coverage" CACHE STRING "Linker flags for coverage" FORCE)
+        set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "--coverage" CACHE STRING "Shared linker flags for coverage" FORCE)
+    endif()
+endif()
 
 add_subdirectory(src/reader)
 

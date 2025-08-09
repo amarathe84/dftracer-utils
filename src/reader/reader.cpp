@@ -110,7 +110,7 @@ int read_data_range_bytes(
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
     {
-        fprintf(stderr, "Failed to prepare chunk query: %s\n", sqlite3_errmsg(db));
+        spdlog::error("Failed to prepare chunk query: {}", sqlite3_errmsg(db));
         return -1;
     }
 
@@ -119,7 +119,7 @@ int read_data_range_bytes(
 
     if (sqlite3_step(stmt) != SQLITE_ROW)
     {
-        fprintf(stderr, "No chunk found containing byte offset %lld\n", start_bytes);
+        spdlog::error("No chunk found containing byte offset {}", start_bytes);
         sqlite3_finalize(stmt);
         return -1;
     }
@@ -138,7 +138,7 @@ int read_data_range_bytes(
     FILE *f = fopen(gz_path, "rb");
     if (!f)
     {
-        fprintf(stderr, "Failed to open file: %s\n", gz_path);
+        spdlog::error("Failed to open file: {}", gz_path);
         return -1;
     }
 
@@ -148,7 +148,7 @@ int read_data_range_bytes(
     InflateState inflate_state;
     if (inflate_init(&inflate_state, f, 0, 0) != 0)
     {
-        fprintf(stderr, "Failed to initialize inflation\n");
+        spdlog::error("Failed to reinitialize inflation");
         fclose(f);
         return -1;
     }
@@ -182,7 +182,7 @@ int read_data_range_bytes(
             size_t skipped;
             if (inflate_read(&inflate_state, search_buffer, to_skip, &skipped) != 0)
             {
-                fprintf(stderr, "Failed during initial skip\n");
+                spdlog::error("Failed during initial skip: {}", gz_path);
                 free(search_buffer);
                 inflate_cleanup(&inflate_state);
                 fclose(f);
@@ -242,7 +242,7 @@ int read_data_range_bytes(
         inflate_cleanup(&inflate_state);
         if (inflate_init(&inflate_state, f, 0, 0) != 0)
         {
-            fprintf(stderr, "Failed to reinitialize inflation\n");
+            spdlog::error("Failed to reinitialize inflation");
             fclose(f);
             return -1;
         }
@@ -265,7 +265,7 @@ int read_data_range_bytes(
                 size_t skipped;
                 if (inflate_read(&inflate_state, skip_buffer, to_skip, &skipped) != 0)
                 {
-                    fprintf(stderr, "Failed during final skip phase\n");
+                    spdlog::error("Failed during final skip phase in {}", gz_path);
                     free(skip_buffer);
                     inflate_cleanup(&inflate_state);
                     fclose(f);
@@ -273,7 +273,7 @@ int read_data_range_bytes(
                 }
                 if (skipped == 0)
                     break;
-                remaining_skip -= skipped;
+                remaining_skip -= static_cast<long long>(skipped);
             }
             free(skip_buffer);
         }
@@ -312,7 +312,7 @@ int read_data_range_bytes(
 
         if (inflate_read(&inflate_state, reinterpret_cast<unsigned char *>(*output + total_read), to_read, &bytes_read) != 0)
         {
-            fprintf(stderr, "Failed during read phase at position %zu\n", total_read);
+            spdlog::error("Failed during read phase at position {}", total_read);
             free(*output);
             *output = NULL;
             inflate_cleanup(&inflate_state);

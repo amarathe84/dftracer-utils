@@ -1,7 +1,6 @@
 #include "indexer.h"
 #include "platform_compat.h"
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <zlib.h>
@@ -43,12 +42,12 @@ int init_schema(sqlite3 *db)
     int rc = sqlite3_exec(db, SQL_SCHEMA, NULL, NULL, &errmsg);
     if (rc != SQLITE_OK)
     {
-        fprintf(stderr, "Schema init failed: %s\n", errmsg);
+        spdlog::error("Failed to initialize database schema: {}", errmsg);
         sqlite3_free(errmsg);
     }
     else
     {
-        fprintf(stderr, "Schema init succeeded\n");
+        spdlog::debug("Schema init succeeded");
     }
     return rc;
 }
@@ -257,7 +256,7 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
             }
         }
 
-        current_uc_off += bytes_read;
+        current_uc_off += static_cast<long long>(bytes_read);
 
         if ((current_uc_off - chunk_start_uc_off) >= chunk_size && chunk_has_complete_event &&
             last_newline_pos != SIZE_MAX)

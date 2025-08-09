@@ -1,0 +1,69 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  coverage:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake lcov zlib1g-dev libsqlite3-dev pkg-config
+    
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake lcov zlib sqlite pkg-config
+    
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install cmake
+        vcpkg install zlib sqlite3
+      shell: powershell
+    
+    - name: Run test + coverage (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        make coverage
+    
+    - name: Run test + coverage (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON -DDFTRACER_UTILS_COVERAGE=ON
+        cmake --build . --config Debug
+        ctest --output-on-failure
+      shell: powershell
+    
+    - name: Upload coverage reports to Codecov (Unix)
+      if: runner.os != 'Windows'
+      uses: codecov/codecov-action@v4
+      with:
+        file: build-coverage/coverage/coverage_filtered.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        
+    # - name: Upload coverage to Coveralls (Unix)
+    #   if: runner.os != 'Windows'
+    #   uses: coverallsapp/github-action@v2
+    #   with:
+    #     github-token: ${{ secrets.GITHUB_TOKEN }}
+    #     path-to-lcov: build-coverage/coverage/coverage_filtered.info

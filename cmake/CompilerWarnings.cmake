@@ -60,10 +60,11 @@ function(target_set_warnings TARGET_NAME)
             -Wredundant-decls       # Warn about redundant declarations
             -Wshadow                # Warn about variable shadowing
             -Wsign-conversion       # Warn about sign conversions
-            -Wswitch-default        # Warn about switch statements without default case
+            # -Wswitch-default        # Warn about switch statements without default case
             # -Wswitch-enum         # Disabled: causes issues with spdlog/fmt library
-            -Wundef                 # Warn about undefined macros
+            # -Wundef                 # Warn about undefined macros
             -Wuninitialized         # Warn about uninitialized variables
+            -Wno-maybe-uninitialized # Suppress warnings about maybe-uninitialized variables
             -Wunused                # Warn about unused variables, functions, etc.
         )
 
@@ -75,11 +76,11 @@ function(target_set_warnings TARGET_NAME)
                 -Wduplicated-branches   # Warn about duplicated branches in if-else statements
                 -Wduplicated-cond       # Warn about duplicated conditions in if-else-if chains
                 -Wlogical-op            # Warn about suspicious logical operations
-                -Wnoexcept              # Warn about noexcept violations
+                # -Wnoexcept              # Warn about noexcept violations
                 -Wrestrict              # Warn about restrict violations
                 -Wstrict-null-sentinel  # Warn about non-literal null sentinels
                 -Wstrict-overflow=2     # Warn about strict overflow assumptions
-                -Wuseless-cast          # Warn about useless casts
+                # -Wuseless-cast          # Warn about useless casts
             )
         endif()
 

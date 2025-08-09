@@ -15,6 +15,9 @@
 #include "reader.h"
 #include "filesystem.h"
 
+sqlite3* create_temp_db(void);
+bool compress_file_to_gzip(const std::string& input_file, const std::string& output_file);
+
 // Cross-platform gzip compression function
 bool compress_file_to_gzip(const std::string& input_file, const std::string& output_file) {
     std::ifstream input(input_file, std::ios::binary);

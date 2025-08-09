@@ -24,10 +24,15 @@
             sqlite
             pigz
             spdlog
+            lcov
           ]);
 
           CC = "gcc";
           CXX = "g++";
+          shellHook = ''
+            export CC=gcc
+            export CXX=g++
+          '';
         };
       });
   };
