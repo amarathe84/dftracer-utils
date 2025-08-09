@@ -142,7 +142,7 @@ generate_coverage_report() {
          --output-file "$COVERAGE_DIR/coverage.info" \
          --rc branch_coverage=1 \
          --rc geninfo_unexecuted_blocks=1 \
-         --ignore-errors mismatch
+         --ignore-errors gcov
     
     lcov --remove "$COVERAGE_DIR/coverage.info" \
          '/usr/*' \
@@ -156,7 +156,7 @@ generate_coverage_report() {
          --output-file "$COVERAGE_DIR/coverage_filtered.info" \
          --rc branch_coverage=1 \
          --rc geninfo_unexecuted_blocks=1 \
-         --ignore-errors mismatch
+         --ignore-errors gcov
     
     genhtml "$COVERAGE_DIR/coverage_filtered.info" \
             --output-directory "$COVERAGE_DIR/html" \
@@ -166,8 +166,7 @@ generate_coverage_report() {
             --rc branch_coverage=1 \
             --rc geninfo_unexecuted_blocks=1 \
             --function-coverage \
-            --branch-coverage \
-            --ignore-errors mismatch
+            --branch-coverage
     
     print_success "Coverage report generated in $COVERAGE_DIR/html/"
 }
