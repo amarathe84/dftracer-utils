@@ -46,3 +46,4 @@ build
 dict_analyzer*
 *.pfw.gz
 *.pfw.gz.idx
+install

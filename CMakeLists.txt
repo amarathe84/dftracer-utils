@@ -51,6 +51,14 @@ CPMAddPackage(
     "ARGPARSE_BUILD_SAMPLES OFF"
 )
 
+CPMAddPackage(
+  NAME filesystem
+  GITHUB_REPOSITORY gulrak/filesystem
+  VERSION 1.5.14
+  OPTIONS
+    "GHC_FILESYSTEM_WITH_INSTALL ON"
+)
+
 add_subdirectory(src/reader)
 
 if(DFTRACER_UTILS_TESTS)

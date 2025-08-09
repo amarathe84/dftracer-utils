@@ -172,6 +172,13 @@ if(TARGET ${PKG_TARGET}::${PKG_TARGET} AND NOT TARGET ${PKG_TARGET}::static)
     add_library(${PKG_TARGET}::static ALIAS ${PKG_TARGET}::${PKG_TARGET})
 endif()
 
+# Shared alias: ${PKG_TARGET}::shared -> points to shared target (if it exists)
+if(TARGET ${PKG_TARGET}::shared AND NOT TARGET ${PKG_TARGET}::shared)
+    # Target already exists, no alias needed
+elseif(TARGET ${PKG_TARGET}::dft_reader_shared AND NOT TARGET ${PKG_TARGET}::shared)
+    add_library(${PKG_TARGET}::shared ALIAS ${PKG_TARGET}::dft_reader_shared)
+endif()
+
 check_required_components(${PKG_TARGET})
 ")
     

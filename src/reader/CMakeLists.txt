@@ -26,6 +26,7 @@ set(DFTRACER_UTILS_${PROJECT_NAME}_HEADERS
   indexer.h
   reader.h
   platform_compat.h
+  filesystem.h
 )
 
 set(DFTRACER_UTILS_${PROJECT_NAME}_SOURCES
@@ -42,7 +43,10 @@ add_library(dft_reader STATIC ${DFTRACER_UTILS_${PROJECT_NAME}_SOURCES})
 set_target_properties(dft_reader PROPERTIES 
     OUTPUT_NAME dft_reader
 )
-target_link_libraries(dft_reader PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog)
+target_link_libraries(dft_reader 
+    PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog
+    PUBLIC ghc_filesystem
+)
 target_include_directories(dft_reader 
     PRIVATE ${SQLITE3_INCLUDE_DIRS}
     PUBLIC 
@@ -59,7 +63,10 @@ set_target_properties(dft_reader_shared PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
-target_link_libraries(dft_reader_shared PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog)
+target_link_libraries(dft_reader_shared 
+    PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog
+    PUBLIC ghc_filesystem
+)
 target_include_directories(dft_reader_shared 
     PRIVATE ${SQLITE3_INCLUDE_DIRS}
     PUBLIC 
@@ -71,7 +78,7 @@ target_set_warnings(dft_reader_shared)
 # executable
 add_executable(dft_reader_exe main.cpp ${DFTRACER_UTILS_${PROJECT_NAME}_SOURCES})
 set_target_properties(dft_reader_exe PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader_exe PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog argparse::argparse)
+target_link_libraries(dft_reader_exe PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog argparse::argparse ghc_filesystem)
 target_include_directories(dft_reader_exe PRIVATE ${SQLITE3_INCLUDE_DIRS})
 target_set_warnings(dft_reader_exe)
 
@@ -85,7 +92,7 @@ add_library(dft_reader::static ALIAS dft_reader)
 add_library(dft_reader::shared ALIAS dft_reader_shared)
 
 # Install directive for libraries
-install(TARGETS dft_reader dft_reader_shared
+install(TARGETS dft_reader dft_reader_shared ghc_filesystem
     EXPORT dft_readerTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

@@ -6,7 +6,6 @@
 #include <cstring>
 #include <sqlite3.h>
 #include <string>
-#include <filesystem>
 #include <random>
 #include <fstream>
 #include <vector>
@@ -14,6 +13,7 @@
 
 #include "indexer.h"
 #include "reader.h"
+#include "filesystem.h"
 
 // Cross-platform gzip compression function
 bool compress_file_to_gzip(const std::string& input_file, const std::string& output_file) {
@@ -31,8 +31,8 @@ bool compress_file_to_gzip(const std::string& input_file, const std::string& out
     std::vector<char> buffer(buffer_size);
     
     while (input.read(buffer.data(), buffer_size) || input.gcount() > 0) {
-        int bytes_read = static_cast<int>(input.gcount());
-        if (gzwrite(gz_output, buffer.data(), bytes_read) != bytes_read) {
+        unsigned int bytes_read = static_cast<unsigned int>(input.gcount());
+        if (gzwrite(gz_output, buffer.data(), bytes_read) != static_cast<int>(bytes_read)) {
             gzclose(gz_output);
             return false;
         }
@@ -49,15 +49,15 @@ public:
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(100000, 999999);
         
-        std::filesystem::path temp_base = std::filesystem::temp_directory_path();
+        fs::path temp_base = fs::temp_directory_path();
         std::string base_dir = temp_base / ("dftracer_test_" + std::to_string(dis(gen)));
-        std::filesystem::create_directories(base_dir);
+        fs::create_directories(base_dir);
         test_dir = base_dir;
     }
 
     ~TestEnvironment() {
         if (!test_dir.empty()) {
-            std::filesystem::remove_all(test_dir);
+            fs::remove_all(test_dir);
         }
     }
     
@@ -86,11 +86,9 @@ public:
         f << "{\"id\": 4, \"message\": \"Final line\"}\n";
         f.close();
         
-        // Compress using cross-platform zlib function
         bool success = compress_file_to_gzip(txt_file, gz_file);
-        
-        // Clean up the text file
-        std::filesystem::remove(txt_file);
+
+        fs::remove(txt_file);
         
         if (success) {
             return gz_file;
@@ -276,7 +274,7 @@ TEST_CASE("Edge cases") {
         size_t output_size = 0;
         
         // Use cross-platform non-existent path
-        std::filesystem::path non_existent = std::filesystem::temp_directory_path() / "nonexistent" / "file.gz";
+        fs::path non_existent = fs::temp_directory_path() / "nonexistent" / "file.gz";
         result = read_data_range_bytes(db, non_existent.string().c_str(), 0, 50, &output, &output_size);
         CHECK(result == -1);
     }
