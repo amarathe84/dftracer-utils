@@ -141,7 +141,8 @@ generate_coverage_report() {
          --directory "$BUILD_DIR" \
          --output-file "$COVERAGE_DIR/coverage.info" \
          --rc branch_coverage=1 \
-         --rc geninfo_unexecuted_blocks=1
+         --rc geninfo_unexecuted_blocks=1 \
+         --ignore-errors mismatch
     
     lcov --remove "$COVERAGE_DIR/coverage.info" \
          '/usr/*' \
@@ -154,7 +155,8 @@ generate_coverage_report() {
          '*.cpmsource*' \
          --output-file "$COVERAGE_DIR/coverage_filtered.info" \
          --rc branch_coverage=1 \
-         --rc geninfo_unexecuted_blocks=1
+         --rc geninfo_unexecuted_blocks=1 \
+         --ignore-errors mismatch
     
     genhtml "$COVERAGE_DIR/coverage_filtered.info" \
             --output-directory "$COVERAGE_DIR/html" \
@@ -164,7 +166,8 @@ generate_coverage_report() {
             --rc branch_coverage=1 \
             --rc geninfo_unexecuted_blocks=1 \
             --function-coverage \
-            --branch-coverage
+            --branch-coverage \
+            --ignore-errors mismatch
     
     print_success "Coverage report generated in $COVERAGE_DIR/html/"
 }
