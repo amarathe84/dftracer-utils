@@ -11,6 +11,7 @@ set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Release flags" FORCE)
 
 include(cmake/CompilerWarnings.cmake)
+include(cmake/InstallHelpers.cmake)
 
 # Enable cross-platform large file support
 add_definitions(-D_FILE_OFFSET_BITS=64)
@@ -50,18 +51,7 @@ CPMAddPackage(
     "ARGPARSE_BUILD_SAMPLES OFF"
 )
 
-if(DFTRACER_UTILS_TESTS)
-  CPMAddPackage(
-    NAME doctest
-    GITHUB_REPOSITORY doctest/doctest
-    VERSION 2.4.11
-  )
-  
-  # Add zlib for cross-platform gzip compression in tests
-  find_package(ZLIB REQUIRED)
-endif()
-
-add_subdirectory(reader)
+add_subdirectory(src/reader)
 
 if(DFTRACER_UTILS_TESTS)
   enable_testing()
