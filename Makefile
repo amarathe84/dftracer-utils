@@ -40,7 +40,10 @@ coverage-view:
 test:
 	@echo "Building and running tests..."
 	@mkdir -p build_test
-	@cd build_test && cmake -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) && ctest --output-on-failure
+	@cd build_test
+	cmake -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON -DCMAKE_INSTALL_PREFIX=$$(pwd)/install ..
+	make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	ctest --output-on-failure
 
 # Run tests with coverage (requires coverage build)
 test-coverage:
@@ -73,4 +76,4 @@ install-debug: build
 # Clean all builds
 clean:
 	@echo "Cleaning all build directories..."
-	@rm -rf build build_test build_coverage
+	@rm -rf build build_test build_coverage install

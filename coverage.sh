@@ -137,32 +137,11 @@ generate_coverage_report() {
     local compiler_info=$(cd "$BUILD_DIR" && make --version 2>/dev/null | head -1 || echo "unknown")
     print_status "Build info: $compiler_info"
     
-    # Detect gcov version and set appropriate ignore-errors flags
-    local gcov_output=$(gcov --version | head -1)
-    local gcov_version=$(echo "$gcov_output" | grep -o '[0-9]\+\.[0-9]\+' | head -1)
-    local ignore_errors="gcov"
-    
-    # Check if it's LLVM gcov
-    if echo "$gcov_output" | grep -q "LLVM"; then
-        # LLVM gcov needs inconsistent error handling
-        ignore_errors="inconsistent"
-        print_status "Detected LLVM gcov version: $gcov_version"
-    elif [[ "$gcov_version" =~ ^1[3-9]\. ]] || [[ "$gcov_version" =~ ^[2-9][0-9]\. ]]; then
-        # gcov 13.x+ supports 'mismatch' error type
-        ignore_errors="include,mismatch"
-        print_status "Detected GNU gcov version: $gcov_version"
-    else
-        print_status "Detected GNU gcov version: $gcov_version"
-    fi
-    
-    print_status "Using ignore-errors: $ignore_errors"
-    
     lcov --capture \
          --directory "$BUILD_DIR" \
          --output-file "$COVERAGE_DIR/coverage.info" \
          --rc branch_coverage=1 \
-         --rc geninfo_unexecuted_blocks=1 \
-         --ignore-errors "$ignore_errors"
+         --rc geninfo_unexecuted_blocks=1
     
     lcov --remove "$COVERAGE_DIR/coverage.info" \
          '/usr/*' \
@@ -175,8 +154,7 @@ generate_coverage_report() {
          '*.cpmsource*' \
          --output-file "$COVERAGE_DIR/coverage_filtered.info" \
          --rc branch_coverage=1 \
-         --rc geninfo_unexecuted_blocks=1 \
-         --ignore-errors "$ignore_errors"
+         --rc geninfo_unexecuted_blocks=1
     
     genhtml "$COVERAGE_DIR/coverage_filtered.info" \
             --output-directory "$COVERAGE_DIR/html" \

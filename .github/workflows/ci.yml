@@ -32,11 +32,17 @@ jobs:
         brew install cmake lcov zlib sqlite pkg-config
 
     - name: Run coverage
+      if: matrix.os == 'ubuntu-22.04'
       run: |
         make coverage
+
+    - name: Run test (Unix)
+      if: matrix.os != 'ubuntu-22.04'
+      run: |
+        make test
     
     - name: Upload coverage reports to Codecov (Unix)
-      if: matrix.os == 'ubuntu-24.04'
+      if: matrix.os == 'ubuntu-22.04'
       uses: codecov/codecov-action@v4
       with:
         file: build-coverage/coverage/coverage_filtered.info
