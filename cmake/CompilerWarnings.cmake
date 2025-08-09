@@ -47,7 +47,7 @@ function(target_set_warnings TARGET_NAME)
             -Wcast-qual             # Warn about casts that discard qualifiers
             -Wconversion            # Warn about type conversions that may alter values
             -Wdouble-promotion      # Warn about promotions from float to double
-            -Wfloat-equal           # Warn about floating-point equality comparisons
+            # -Wfloat-equal         # Disabled: causes issues with spdlog/fmt library
             -Wformat=2              # Enable format string security warnings
             -Wimplicit-fallthrough  # Warn about implicit fallthrough in switch statements
             -Wmisleading-indentation # Warn about misleading indentation
@@ -61,7 +61,7 @@ function(target_set_warnings TARGET_NAME)
             -Wshadow                # Warn about variable shadowing
             -Wsign-conversion       # Warn about sign conversions
             -Wswitch-default        # Warn about switch statements without default case
-            -Wswitch-enum           # Warn about unhandled enum cases in switch
+            # -Wswitch-enum         # Disabled: causes issues with spdlog/fmt library
             -Wundef                 # Warn about undefined macros
             -Wuninitialized         # Warn about uninitialized variables
             -Wunused                # Warn about unused variables, functions, etc.

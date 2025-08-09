@@ -2,13 +2,33 @@
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
+#include <algorithm>
 
 #include <sqlite3.h>
 #include <argparse/argparse.hpp>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "indexer.h"
 #include "reader.h"
 #include "platform_compat.h"
+
+static spdlog::level::level_enum string_to_log_level(const std::string& level_str)
+{
+    std::string lower_level = level_str;
+    std::transform(lower_level.begin(), lower_level.end(), lower_level.begin(), ::tolower);
+    
+    if (lower_level == "trace") return spdlog::level::trace;
+    if (lower_level == "debug") return spdlog::level::debug;
+    if (lower_level == "info") return spdlog::level::info;
+    if (lower_level == "warn" || lower_level == "warning") return spdlog::level::warn;
+    if (lower_level == "err" || lower_level == "error") return spdlog::level::err;
+    if (lower_level == "critical") return spdlog::level::critical;
+    if (lower_level == "off") return spdlog::level::off;
+    
+    // Default to info if unrecognized
+    return spdlog::level::info;
+}
 
 static uint64_t file_size_bytes(const char *path)
 {
@@ -56,7 +76,7 @@ static double get_existing_chunk_size_mb(const char *idx_path)
     sqlite3 *db;
     if (sqlite3_open(idx_path, &db) != SQLITE_OK)
     {
-        return -1; // Error
+        return -1;
     }
 
     sqlite3_stmt *stmt;
@@ -79,7 +99,7 @@ static double get_existing_chunk_size_mb(const char *idx_path)
 
 static bool confirm_rebuild()
 {
-    printf("Do you want to rebuild the index with the new chunk size? (y/n): ");
+    spdlog::info("Do you want to rebuild the index with the new chunk size? (y/n): ");
     fflush(stdout);
     
     char response;
@@ -117,6 +137,10 @@ int main(int argc, char **argv)
     program.add_argument("-f", "--force")
         .help("Force rebuild index even if chunk size differs")
         .flag();
+        
+    program.add_argument("--log-level")
+        .help("Set logging level (trace, debug, info, warn, error, critical, off)")
+        .default_value(std::string("info"));
 
     try {
         program.parse_args(argc, argv);
@@ -132,6 +156,22 @@ int main(int argc, char **argv)
     double end_mb = program.get<double>("--end");
     double chunk_size_mb = program.get<double>("--chunk-size");
     bool force_rebuild = program.get<bool>("--force");
+    std::string log_level_str = program.get<std::string>("--log-level");
+
+    spdlog::level::level_enum log_level = string_to_log_level(log_level_str);
+    
+    // stderr-based logger to ensure logs don't interfere with data output
+    auto logger = spdlog::stderr_color_mt("stderr");
+    spdlog::set_default_logger(logger);
+    spdlog::set_level(log_level);
+    
+    spdlog::info("Log level set to: {}", log_level_str);
+    
+    spdlog::debug("Processing file: {}", gz_path);
+    spdlog::debug("Start position: {} MB", start_mb);
+    spdlog::debug("End position: {} MB", end_mb);
+    spdlog::debug("Chunk size: {} MB", chunk_size_mb);
+    spdlog::debug("Force rebuild: {}", force_rebuild);
 
     // Validate arguments
     if (chunk_size_mb <= 0) {
@@ -158,7 +198,7 @@ int main(int argc, char **argv)
     // Check if file exists
     FILE* test_file = fopen(gz_path.c_str(), "rb");
     if (!test_file) {
-        std::cerr << "Error: File '" << gz_path << "' does not exist or cannot be opened" << std::endl;
+        spdlog::error("File '{}' does not exist or cannot be opened", gz_path);
         return 1;
     }
     fclose(test_file);
@@ -167,7 +207,7 @@ int main(int argc, char **argv)
 
     if (has_byte_range && (is_no_value(start_mb) || is_no_value(end_mb)))
     {
-        fprintf(stderr, "Error: Both --start and --end must be specified for MB range\n");
+        spdlog::error("Both --start and --end must be specified for MB range");
         return 1;
     }
 
@@ -196,12 +236,12 @@ int main(int argc, char **argv)
             {
                 if (!force_rebuild)
                 {
-                    printf("Warning: Existing index was created with %.1f MB chunks, but you specified %.1f MB chunks.\n", 
-                           existing_chunk_size, chunk_size_mb);
-                    
+                    spdlog::warn("Existing index was created with {:.1f} MB chunks, but you specified {:.1f} MB chunks.",
+                                  existing_chunk_size, chunk_size_mb);
+
                     if (!confirm_rebuild())
                     {
-                        printf("Using existing index with %.1f MB chunks.\n", existing_chunk_size);
+                        spdlog::info("Using existing index with {:.1f} MB chunks.", existing_chunk_size);
                         // use existing chunk size
                         chunk_size_mb = existing_chunk_size;
                     }
@@ -212,8 +252,8 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    printf("Force rebuild: Existing index has %.1f MB chunks, rebuilding with %.1f MB chunks.\n", 
-                           existing_chunk_size, chunk_size_mb);
+                    spdlog::info("Force rebuild: Existing index has {:.1f} MB chunks, rebuilding with {:.1f} MB chunks.",
+                                  existing_chunk_size, chunk_size_mb);
                     need_rebuild = true;
                 }
             }
@@ -226,15 +266,17 @@ int main(int argc, char **argv)
 
     if (need_rebuild)
     {
-        printf("Index not found or invalid, creating index for %s...\n", gz_path.c_str());
+        spdlog::info("Index not found or invalid, creating index for {}...", gz_path);
 
         sqlite3 *db;
         if (sqlite3_open(idx_path, &db) != SQLITE_OK)
         {
-            fprintf(stderr, "Cannot create DB %s: %s\n", idx_path, sqlite3_errmsg(db));
+            spdlog::error("Cannot create DB {}: {}", idx_path, sqlite3_errmsg(db));
             free(idx_path);
             return 1;
         }
+
+        spdlog::debug("Database opened successfully: {}", idx_path);
 
         if (init_schema(db) != SQLITE_OK)
         {
@@ -247,7 +289,7 @@ int main(int argc, char **argv)
         uint64_t bytes = file_size_bytes(gz_path.c_str());
         if (bytes == UINT64_MAX)
         {
-            fprintf(stderr, "Cannot stat %s\n", gz_path.c_str());
+            spdlog::error("Cannot stat {}", gz_path);
             sqlite3_close(db);
             free(idx_path);
             return 1;
@@ -266,7 +308,7 @@ int main(int argc, char **argv)
                                &st,
                                NULL) != SQLITE_OK)
         {
-            fprintf(stderr, "Prepare failed: %s\n", sqlite3_errmsg(db));
+            spdlog::error("Prepare failed: {}", sqlite3_errmsg(db));
             sqlite3_close(db);
             free(idx_path);
             return 1;
@@ -278,7 +320,7 @@ int main(int argc, char **argv)
         int rc = sqlite3_step(st);
         if (rc != SQLITE_ROW && rc != SQLITE_DONE)
         {
-            fprintf(stderr, "Insert failed: %s\n", sqlite3_errmsg(db));
+            spdlog::error("Insert failed: {}", sqlite3_errmsg(db));
             sqlite3_finalize(st);
             sqlite3_close(db);
             free(idx_path);
@@ -289,26 +331,28 @@ int main(int argc, char **argv)
 
         /* build the index with configurable stride */
         auto stride = static_cast<uint64_t>(chunk_size_mb * 1024 * 1024);
+        spdlog::debug("Building index with stride: {} bytes ({} MB)", stride, chunk_size_mb);
         int ret = build_gzip_index(db, file_id, gz_path.c_str(), static_cast<long long>(stride));
         if (ret != 0)
         {
-            fprintf(stderr, "Index build failed for %s (error code: %d)\n", gz_path.c_str(), ret);
+            spdlog::error("Index build failed for {} (error code: {})", gz_path, ret);
             sqlite3_close(db);
             free(idx_path);
             return 1;
         }
 
-        printf("Index built successfully for %s\n", gz_path.c_str());
+        spdlog::info("Index built successfully for {}", gz_path);
         sqlite3_close(db);
     }
 
     // read operations
     if (has_byte_range)
     {
+        spdlog::debug("Performing byte range read operation");
         sqlite3 *db;
         if (sqlite3_open(idx_path, &db) != SQLITE_OK)
         {
-            fprintf(stderr, "Cannot open DB %s: %s\n", idx_path, sqlite3_errmsg(db));
+            spdlog::error("Cannot open DB {}: {}", idx_path, sqlite3_errmsg(db));
             free(idx_path);
             return 1;
         }
@@ -316,17 +360,19 @@ int main(int argc, char **argv)
         char *output;
         size_t output_size;
 
-        printf("Reading MB range [%.2f, %.2f] from %s...\n", start_mb, end_mb, gz_path.c_str());
+        spdlog::info("Reading MB range [{:.2f}, {:.2f}] from {}...", start_mb, end_mb, gz_path);
 
         int ret = read_data_range_megabytes(db, gz_path.c_str(), start_mb, end_mb, &output, &output_size);
 
         if (ret != 0)
         {
-            fprintf(stderr, "Failed to read range from %s\n", gz_path.c_str());
+            spdlog::error("Failed to read range from {}", gz_path);
             sqlite3_close(db);
             free(idx_path);
             return 1;
         }
+
+        spdlog::debug("Successfully read {} bytes from range", output_size);
 
         fwrite(output, 1, output_size, stdout);
 

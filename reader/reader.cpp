@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <zlib.h>
+#include <spdlog/spdlog.h>
 
 // size of input buffer for decompression
 #define CHUNK_SIZE 16384
@@ -18,7 +19,7 @@ typedef struct
     uint64_t c_off;
 } InflateState;
 
-static int inflate_init(InflateState *I, FILE *f, uint64_t c_off, int bits, const unsigned char * /*dict*/, int /*dict_len*/)
+static int inflate_init(InflateState *I, FILE *f, uint64_t c_off, int bits)
 {
     memset(I, 0, sizeof(*I));
     I->file = f;
@@ -96,12 +97,8 @@ int read_data_range_bytes(
         return -1;
     }
 
-    printf("Reading byte range [%lld, %lld] from %s (%lluB to %lluB)...\n",
-           start_bytes,
-           end_bytes,
-           gz_path,
-           start_bytes,
-           end_bytes);
+    spdlog::info("Reading byte range [{}, {}] from {} ({}B to {}B)...",
+                 start_bytes, end_bytes, gz_path, start_bytes, end_bytes);
 
     sqlite3_stmt *stmt;
     const char *sql = "SELECT chunk_idx, compressed_offset, "
@@ -134,12 +131,9 @@ int read_data_range_bytes(
 
     sqlite3_finalize(stmt);
 
-    printf("Using chunk %lld: uncompressed_offset=%lld, uncompressed_size=%lld "
-           "(compressed_offset=%lld)\n",
-           chunk_idx,
-           chunk_uc_off,
-           chunk_uc_size,
-           chunk_c_off);
+    spdlog::debug("Using chunk {}: uncompressed_offset={}, uncompressed_size={} "
+                  "(compressed_offset={})",
+                  chunk_idx, chunk_uc_off, chunk_uc_size, chunk_c_off);
 
     FILE *f = fopen(gz_path, "rb");
     if (!f)
@@ -152,7 +146,7 @@ int read_data_range_bytes(
     // dictionaries, we will start from the beginning but use the
     // chunk info for validation
     InflateState inflate_state;
-    if (inflate_init(&inflate_state, f, 0, 0, NULL, 0) != 0)
+    if (inflate_init(&inflate_state, f, 0, 0) != 0)
     {
         fprintf(stderr, "Failed to initialize inflation\n");
         fclose(f);
@@ -179,7 +173,7 @@ int read_data_range_bytes(
         // we look 1024 bytes before in case we need to find a complete line
         uint64_t search_start = start_bytes > 1024 ? start_bytes - 1024 : 0;
 
-        printf("Searching for complete JSON line starting around position %lld\n", start_bytes);
+        spdlog::debug("Searching for complete JSON line starting around position {}", start_bytes);
 
         // skip to search start position
         while (current_pos < search_start)
@@ -223,7 +217,7 @@ int read_data_range_bytes(
                 {
                     // found start of JSON line at or after our target
                     actual_start = line_start_pos;
-                    printf("Found JSON line start at position %lld\n", actual_start);
+                    spdlog::debug("Found JSON line start at position {}", actual_start);
                     goto found_start;
                 }
             }
@@ -246,7 +240,7 @@ int read_data_range_bytes(
 
         // restart decompression to get to the actual start position
         inflate_cleanup(&inflate_state);
-        if (inflate_init(&inflate_state, f, 0, 0, NULL, 0) != 0)
+        if (inflate_init(&inflate_state, f, 0, 0) != 0)
         {
             fprintf(stderr, "Failed to reinitialize inflation\n");
             fclose(f);
@@ -309,10 +303,8 @@ int read_data_range_bytes(
     // this reading is line boundary-aware, meaning
     // we will look for complete JSON lines within the requested range
     size_t total_read = 0;
-    printf("Reading %lld bytes starting from position %lld (adjusted from %lld)\n",
-           adjusted_target_size,
-           actual_start,
-           start_bytes);
+    spdlog::debug("Reading {} bytes starting from position {} (adjusted from {})",
+                  adjusted_target_size, actual_start, start_bytes);
     while (total_read < buffer_size)
     {
         size_t to_read = buffer_size - total_read;
@@ -347,7 +339,7 @@ int read_data_range_bytes(
                 {
                     // found a complete JSON line boundary, include the }\n
                     last_complete_line = i + 2;
-                    printf("Found complete JSON line boundary at position %zu\n", last_complete_line);
+                    spdlog::debug("Found complete JSON line boundary at position {}", last_complete_line);
                     break;
                 }
             }
@@ -370,11 +362,9 @@ int read_data_range_bytes(
     (*output)[total_read] = '\0';
     *output_size = total_read;
 
-    printf("Successfully read %zu bytes (requested %lld, adjusted target %lld, "
-           "rounded to complete JSON lines)\n",
-           total_read,
-           target_size,
-           adjusted_target_size);
+    spdlog::debug("Successfully read {} bytes (requested {}, adjusted target {}, "
+                 "rounded to complete JSON lines)",
+                 total_read, target_size, adjusted_target_size);
 
     inflate_cleanup(&inflate_state);
     fclose(f);

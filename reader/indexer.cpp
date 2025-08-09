@@ -1,9 +1,11 @@
 #include "indexer.h"
 #include "platform_compat.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <zlib.h>
+#include <spdlog/spdlog.h>
 
 const char *SQL_SCHEMA = "CREATE TABLE IF NOT EXISTS files ("
                          "  id INTEGER PRIMARY KEY,"
@@ -199,7 +201,7 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
     unsigned char buffer[65536];
     int chunk_has_complete_event = 0;
 
-    printf("Building chunk index with chunk_size=%lld bytes\n", chunk_size);
+    spdlog::info("Building chunk index with chunk_size={} bytes", chunk_size);
 
     while (1)
     {
@@ -282,7 +284,7 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
             }
             sqlite3_reset(st_chunk);
 
-            printf("Chunk %lld: uc_off=%lld-%lld (%lld bytes), events=%lld "
+            spdlog::debug("Chunk {}: uc_off={}-%lld (%lld bytes), events={} "
                    "(ended at line boundary)\n",
                    chunk_idx,
                    chunk_start_uc_off,
@@ -314,7 +316,7 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
     fclose(fp);
 
     sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
-    printf("Indexing complete: created %lld chunks\n", chunk_idx + 1);
+    spdlog::info("Indexing complete: created {} chunks", chunk_idx + 1);
     return 0;
 }
 
