@@ -50,6 +50,20 @@ function(need_sqlite3)
   if(SQLite3_FOUND)
     message(STATUS "Found system SQLite3: ${SQLite3_LIBRARIES}")
     
+    # Create alias for system SQLite3 if it doesn't exist
+    if(NOT TARGET SQLite::SQLite3)
+      # Create imported target for system SQLite3
+      add_library(SQLite::SQLite3 UNKNOWN IMPORTED)
+      set_target_properties(SQLite::SQLite3 PROPERTIES
+        IMPORTED_LOCATION "${SQLite3_LIBRARIES}"
+        INTERFACE_INCLUDE_DIRECTORIES "${SQLite3_INCLUDE_DIRS}"
+      )
+    endif()
+    
+    if(NOT TARGET SQLite::SQLite3_static)
+      add_library(SQLite::SQLite3_static ALIAS SQLite::SQLite3)
+    endif()
+    
     # Set variables in parent scope so they persist outside the function
     set(SQLite3_FOUND ${SQLite3_FOUND} PARENT_SCOPE)
     set(SQLite3_LIBRARIES ${SQLite3_LIBRARIES} PARENT_SCOPE)
@@ -113,16 +127,11 @@ function(need_sqlite3)
       add_library(SQLite::SQLite3_static ALIAS sqlite3_static)
       
       # Make sqlite3 installable
-      install(TARGETS sqlite3 
+      install(TARGETS sqlite3 sqlite3_static
         EXPORT sqlite3Targets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      )
-
-      install(TARGETS sqlite3_static
-        EXPORT sqlite3StaticTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
       )
       
       # Install sqlite3 header
@@ -150,7 +159,14 @@ function(link_sqlite3 TARGET_NAME LIBRARY_TYPE)
   
   # Check if any SQLite3 variant is available
   set(SQLITE3_AVAILABLE FALSE)
-  if(TARGET sqlite3 OR SQLite3_FOUND)
+  
+  # Check for CPM-built SQLite3
+  if(TARGET sqlite3 OR TARGET sqlite3_static)
+    set(SQLITE3_AVAILABLE TRUE)
+  endif()
+  
+  # Check for system SQLite3
+  if(TARGET SQLite::SQLite3)
     set(SQLITE3_AVAILABLE TRUE)
   endif()
   
@@ -159,22 +175,35 @@ function(link_sqlite3 TARGET_NAME LIBRARY_TYPE)
   endif()
   
   # Link appropriate SQLite3 variant
-  if(TARGET sqlite3)
-    # CPM-built SQLite3 - use normal linking since it's our own target
-    if(LIBRARY_TYPE STREQUAL "STATIC")
+  if(LIBRARY_TYPE STREQUAL "STATIC")
+    # For static libraries, prefer static SQLite3
+    if(TARGET sqlite3_static)
       target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3_static)
       message(STATUS "Linked ${TARGET_NAME} to CPM-built SQLite::SQLite3_static")
-    else()
+    elseif(TARGET SQLite::SQLite3_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3_static)
+      message(STATUS "Linked ${TARGET_NAME} to SQLite::SQLite3_static")
+    elseif(TARGET sqlite3)
       target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
       message(STATUS "Linked ${TARGET_NAME} to CPM-built SQLite::SQLite3")
-    endif()
-  elseif(SQLite3_FOUND)
-    if(LIBRARY_TYPE STREQUAL "STATIC")
-      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3_static)
-      message(STATUS "Linked ${TARGET_NAME} to system SQLite::SQLite3_static")
-    else()
+    elseif(TARGET SQLite::SQLite3)
       target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
-      message(STATUS "Linked ${TARGET_NAME} to system SQLite::SQLite3")
+      message(STATUS "Linked ${TARGET_NAME} to SQLite::SQLite3")
+    endif()
+  else()
+    # For shared libraries, prefer shared SQLite3
+    if(TARGET sqlite3)
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
+      message(STATUS "Linked ${TARGET_NAME} to CPM-built SQLite::SQLite3")
+    elseif(TARGET SQLite::SQLite3)
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
+      message(STATUS "Linked ${TARGET_NAME} to SQLite::SQLite3")
+    elseif(TARGET sqlite3_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3_static)
+      message(STATUS "Linked ${TARGET_NAME} to CPM-built SQLite::SQLite3_static")
+    elseif(TARGET SQLite::SQLite3_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3_static)
+      message(STATUS "Linked ${TARGET_NAME} to SQLite::SQLite3_static")
     endif()
   endif()
 endfunction()
