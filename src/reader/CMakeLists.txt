@@ -49,7 +49,7 @@ target_link_libraries(dft_reader
 )
 
 # Link SQLite3 and zlib with appropriate variants for static library
-link_sqlite3(dft_reader)
+link_sqlite3(dft_reader STATIC)
 link_zlib(dft_reader STATIC)
 
 target_include_directories(dft_reader 
@@ -79,7 +79,7 @@ target_link_libraries(dft_reader_shared
 )
 
 # Link SQLite3 and zlib with appropriate variants for shared library
-link_sqlite3(dft_reader_shared)
+link_sqlite3(dft_reader_shared SHARED)
 link_zlib(dft_reader_shared SHARED)
 
 target_include_directories(dft_reader_shared 
@@ -101,8 +101,8 @@ set_target_properties(dft_reader_exe PROPERTIES OUTPUT_NAME "dft_reader")
 target_link_libraries(dft_reader_exe PRIVATE spdlog::spdlog argparse::argparse ghc_filesystem)
 
 # Link SQLite3 and zlib for executable (treat as shared since it's an executable)
-link_sqlite3(dft_reader_exe)
-link_zlib(dft_reader_exe SHARED)
+link_sqlite3(dft_reader_exe STATIC)
+link_zlib(dft_reader_exe STATIC)
 
 target_set_warnings(dft_reader_exe)
 
@@ -131,10 +131,20 @@ if(TARGET sqlite3)
     list(APPEND INSTALLABLE_TARGETS sqlite3)
 endif()
 
+if(TARGET sqlite3_static)
+    list(APPEND INSTALLABLE_TARGETS sqlite3_static)
+endif()
+
 # Add ghc_filesystem if it's installable
 if(TARGET ghc_filesystem)
     list(APPEND INSTALLABLE_TARGETS ghc_filesystem)
 endif()
+
+# message(STATUS "ZLIB CPM: ${ZLIB_CPM}")
+# list(APPEND INSTALLABLE_TARGETS zlib)
+# if (TARGET zlibstatic)
+#     list(APPEND INSTALLABLE_TARGETS zlibstatic)
+# endif()
 
 # Check if we're building from Python (CMAKE_CURRENT_SOURCE_DIR contains pyreader)
 if(DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD)
@@ -146,6 +156,7 @@ if(DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD)
     )
 else()
     # Normal build - export targets
+    message(STATUS "Exporting targets: ${INSTALLABLE_TARGETS}")
     install(TARGETS ${INSTALLABLE_TARGETS}
         EXPORT dft_readerTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -163,6 +174,7 @@ install(TARGETS dft_reader_exe RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Only create package config for non-Python builds
 if(NOT (DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD))
+    message(STATUS "Creating package config for dft_reader")
     create_package_config(
         TARGET dft_reader
         VERSION ${PROJECT_VERSION}

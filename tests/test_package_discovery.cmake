@@ -1,6 +1,3 @@
-# test_package_discovery.cmake - Test script for package discovery
-cmake_minimum_required(VERSION 3.10)
-
 # Test different discovery methods based on TEST_TYPE
 if(TEST_TYPE STREQUAL "pkgconfig")
     # Test pkg-config discovery

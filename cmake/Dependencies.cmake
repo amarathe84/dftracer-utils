@@ -45,8 +45,7 @@ function(need_ghc_filesystem)
 endfunction()
 
 function(need_sqlite3)
-  # Try system SQLite3 first
-  find_package(SQLite3 QUIET)
+  find_package(SQLite3 3.30 QUIET)
   
   if(SQLite3_FOUND)
     message(STATUS "Found system SQLite3: ${SQLite3_LIBRARIES}")
@@ -55,6 +54,7 @@ function(need_sqlite3)
     set(SQLite3_FOUND ${SQLite3_FOUND} PARENT_SCOPE)
     set(SQLite3_LIBRARIES ${SQLite3_LIBRARIES} PARENT_SCOPE)
     set(SQLite3_INCLUDE_DIRS ${SQLite3_INCLUDE_DIRS} PARENT_SCOPE)
+    set(SQLite3_CPM FALSE PARENT_SCOPE)
   else()
     # Build with CPM
     if(NOT SQLite3_ADDED)
@@ -70,11 +70,20 @@ function(need_sqlite3)
       message(STATUS "Built SQLite3 with CPM")
       
       # Create sqlite3 library from amalgamation
-      add_library(sqlite3 STATIC 
+      add_library(sqlite3 SHARED
         ${SQLite3_SOURCE_DIR}/sqlite3.c
       )
-      
+
+      add_library(sqlite3_static STATIC
+        ${SQLite3_SOURCE_DIR}/sqlite3.c
+      )
+
       target_include_directories(sqlite3 PUBLIC 
+        $<BUILD_INTERFACE:${SQLite3_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+      )
+
+      target_include_directories(sqlite3_static PUBLIC
         $<BUILD_INTERFACE:${SQLite3_SOURCE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
       )
@@ -86,17 +95,32 @@ function(need_sqlite3)
         SQLITE_ENABLE_RTREE
         SQLITE_THREADSAFE=1
       )
-      
+
+      target_compile_definitions(sqlite3_static PUBLIC
+        SQLITE_ENABLE_FTS5
+        SQLITE_ENABLE_JSON1
+        SQLITE_ENABLE_RTREE
+        SQLITE_THREADSAFE=1
+      )
+
       if(NOT WIN32)
         target_link_libraries(sqlite3 PRIVATE pthread dl m)
+        target_link_libraries(sqlite3_static PRIVATE pthread dl m)
       endif()
       
       # Create alias for compatibility
       add_library(SQLite::SQLite3 ALIAS sqlite3)
+      add_library(SQLite::SQLite3_static ALIAS sqlite3_static)
       
       # Make sqlite3 installable
       install(TARGETS sqlite3 
         EXPORT sqlite3Targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      )
+
+      install(TARGETS sqlite3_static
+        EXPORT sqlite3StaticTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
       )
@@ -105,6 +129,8 @@ function(need_sqlite3)
       install(FILES ${SQLite3_SOURCE_DIR}/sqlite3.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
       )
+
+      set(SQLite3_CPM TRUE PARENT_SCOPE)
     endif()
   endif()
 endfunction()
@@ -112,7 +138,7 @@ endfunction()
 # Function to link SQLite3 to a target
 # Parameters:
 #   TARGET_NAME - name of the target to link SQLite3 to
-function(link_sqlite3 TARGET_NAME)
+function(link_sqlite3 TARGET_NAME LIBRARY_TYPE)
   # Validate parameters
   if(NOT TARGET_NAME)
     message(FATAL_ERROR "link_sqlite3: TARGET_NAME is required")
@@ -135,18 +161,27 @@ function(link_sqlite3 TARGET_NAME)
   # Link appropriate SQLite3 variant
   if(TARGET sqlite3)
     # CPM-built SQLite3 - use normal linking since it's our own target
-    target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
-    message(STATUS "Linked ${TARGET_NAME} to CPM-built SQLite::SQLite3")
+    if(LIBRARY_TYPE STREQUAL "STATIC")
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3_static)
+      message(STATUS "Linked ${TARGET_NAME} to CPM-built SQLite::SQLite3_static")
+    else()
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
+      message(STATUS "Linked ${TARGET_NAME} to CPM-built SQLite::SQLite3")
+    endif()
   elseif(SQLite3_FOUND)
-    # System SQLite3 - use normal linking
-    target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
-    message(STATUS "Linked ${TARGET_NAME} to system SQLite::SQLite3")
+    if(LIBRARY_TYPE STREQUAL "STATIC")
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3_static)
+      message(STATUS "Linked ${TARGET_NAME} to system SQLite::SQLite3_static")
+    else()
+      target_link_libraries(${TARGET_NAME} PRIVATE SQLite::SQLite3)
+      message(STATUS "Linked ${TARGET_NAME} to system SQLite::SQLite3")
+    endif()
   endif()
 endfunction()
 
 function(need_zlib)
-  find_package(ZLIB QUIET)
-  
+  find_package(ZLIB 1.2 QUIET)
+
   if(ZLIB_FOUND)
     message(STATUS "Found system ZLIB: ${ZLIB_LIBRARIES}")
     
@@ -154,7 +189,9 @@ function(need_zlib)
     set(ZLIB_FOUND ${ZLIB_FOUND} PARENT_SCOPE)
     set(ZLIB_LIBRARIES ${ZLIB_LIBRARIES} PARENT_SCOPE)
     set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS} PARENT_SCOPE)
+    set(ZLIB_CPM FALSE PARENT_SCOPE)
   else()
+    set(ZLIB_CPM FALSE PARENT_SCOPE)
     # Build with CPM
     CPMAddPackage(
       NAME ZLIB
@@ -169,7 +206,8 @@ function(need_zlib)
     
     if(ZLIB_ADDED)
       message(STATUS "Built ZLIB with CPM")
-      
+      set(ZLIB_CPM TRUE PARENT_SCOPE) 
+
       # Create empty install file to prevent zlib installation issues
       file(WRITE "${CMAKE_BINARY_DIR}/_deps/zlib-build/cmake_install.cmake" 
            "# Empty install file to prevent zlib installation\n")
@@ -219,14 +257,14 @@ function(link_zlib TARGET_NAME LIBRARY_TYPE)
   if(LIBRARY_TYPE STREQUAL "STATIC")
     # For static libraries, prefer static zlib if available
     if(TARGET zlibstatic)
-      # CPM-built zlib static - link directly to target
+      # CPM-built zlib static - use generator expression to avoid export issues
       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE zlibstatic)
+      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
     elseif(TARGET zlib)
-      # CPM-built zlib shared - link directly to target
+      # CPM-built zlib shared - use generator expression to avoid export issues
       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE zlib)
+      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
     elseif(ZLIB_FOUND)
       # System zlib - use normal linking
@@ -236,14 +274,14 @@ function(link_zlib TARGET_NAME LIBRARY_TYPE)
   else() # SHARED
     # For shared libraries, prefer shared zlib if available
     if(TARGET zlib)
-      # CPM-built zlib shared - link directly to target
+      # CPM-built zlib shared - use generator expression to avoid export issues
       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE zlib)
+      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
     elseif(TARGET zlibstatic)
-      # CPM-built zlib static - link directly to target
+      # CPM-built zlib static - use generator expression to avoid export issues
       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE zlibstatic)
+      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
     elseif(ZLIB_FOUND)
       # System zlib - use normal linking
