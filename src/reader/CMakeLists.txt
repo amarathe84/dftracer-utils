@@ -1,8 +1,6 @@
-cmake_minimum_required(VERSION 3.10)
-
 project(reader 
     VERSION 1.0.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 # Configure output directories
@@ -14,9 +12,11 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
 # Dependencies
 ##########################################
 
-find_package(ZLIB REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+need_zlib()
+need_sqlite3()
+need_spdlog()
+need_argparse()
+need_ghc_filesystem()
 
 ##########################################
 # Constants
@@ -44,11 +44,15 @@ set_target_properties(dft_reader PROPERTIES
     OUTPUT_NAME dft_reader
 )
 target_link_libraries(dft_reader 
-    PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog
+    PRIVATE spdlog::spdlog
     PUBLIC ghc_filesystem
 )
+
+# Link SQLite3 and zlib with appropriate variants for static library
+link_sqlite3(dft_reader)
+link_zlib(dft_reader STATIC)
+
 target_include_directories(dft_reader 
-    PRIVATE ${SQLITE3_INCLUDE_DIRS}
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
@@ -70,11 +74,15 @@ set_target_properties(dft_reader_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dft_reader_shared 
-    PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog
+    PRIVATE spdlog::spdlog
     PUBLIC ghc_filesystem
 )
+
+# Link SQLite3 and zlib with appropriate variants for shared library
+link_sqlite3(dft_reader_shared)
+link_zlib(dft_reader_shared SHARED)
+
 target_include_directories(dft_reader_shared 
-    PRIVATE ${SQLITE3_INCLUDE_DIRS}
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
@@ -90,8 +98,12 @@ endif()
 # executable
 add_executable(dft_reader_exe main.cpp ${DFTRACER_UTILS_${PROJECT_NAME}_SOURCES})
 set_target_properties(dft_reader_exe PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader_exe PRIVATE ZLIB::ZLIB ${SQLITE3_LIBRARIES} spdlog::spdlog argparse::argparse ghc_filesystem)
-target_include_directories(dft_reader_exe PRIVATE ${SQLITE3_INCLUDE_DIRS})
+target_link_libraries(dft_reader_exe PRIVATE spdlog::spdlog argparse::argparse ghc_filesystem)
+
+# Link SQLite3 and zlib for executable (treat as shared since it's an executable)
+link_sqlite3(dft_reader_exe)
+link_zlib(dft_reader_exe SHARED)
+
 target_set_warnings(dft_reader_exe)
 
 # Apply coverage flags if enabled
@@ -109,13 +121,38 @@ endif()
 add_library(dft_reader::static ALIAS dft_reader)
 add_library(dft_reader::shared ALIAS dft_reader_shared)
 
-# Install directive for libraries
-install(TARGETS dft_reader dft_reader_shared ghc_filesystem
-    EXPORT dft_readerTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+# Install directive for libraries  
+# Note: Only install targets that we can actually install (not imported/system targets)
+# Don't install zlib targets as they are built by CPM and not designed for export
+set(INSTALLABLE_TARGETS dft_reader dft_reader_shared)
+
+# Add sqlite3 if it's our own target (CPM-built)
+if(TARGET sqlite3)
+    list(APPEND INSTALLABLE_TARGETS sqlite3)
+endif()
+
+# Add ghc_filesystem if it's installable
+if(TARGET ghc_filesystem)
+    list(APPEND INSTALLABLE_TARGETS ghc_filesystem)
+endif()
+
+# Check if we're building from Python (CMAKE_CURRENT_SOURCE_DIR contains pyreader)
+if(DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD)
+    # Python build - don't export targets to avoid zlib export issues
+    install(TARGETS ${INSTALLABLE_TARGETS}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+else()
+    # Normal build - export targets
+    install(TARGETS ${INSTALLABLE_TARGETS}
+        EXPORT dft_readerTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 # Install headers
 install(FILES ${DFTRACER_UTILS_${PROJECT_NAME}_HEADERS}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}
@@ -124,11 +161,14 @@ install(FILES ${DFTRACER_UTILS_${PROJECT_NAME}_HEADERS}
 # Install executable
 install(TARGETS dft_reader_exe RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-create_package_config(
-    TARGET dft_reader
-    VERSION ${PROJECT_VERSION}
-    DESCRIPTION "DFTracer reader library for processing gzipped files"
-    URL "https://github.com/LLNL/dftracer-utils"
-    REQUIRES "zlib sqlite3"
-    LIBS_PRIVATE "-lspdlog"
-)
+# Only create package config for non-Python builds
+if(NOT (DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD))
+    create_package_config(
+        TARGET dft_reader
+        VERSION ${PROJECT_VERSION}
+        DESCRIPTION "DFTracer reader library for processing gzipped files"
+        URL "https://github.com/LLNL/dftracer-utils"
+        REQUIRES "sqlite3 spdlog"
+        LIBS_PRIVATE "-lspdlog -lsqlite3 -lz"
+    )
+endif()

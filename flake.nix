@@ -19,12 +19,18 @@
           packages = [ gcc ] ++ (with pkgs; [
             cmake
             ninja
-            zlib
             pkg-config
-            sqlite
             pigz
-            spdlog
             lcov
+            # sqlite
+            # zlib
+            # spdlog
+            (python39.withPackages (p: [
+              p.cython
+              p.setuptools
+              p.wheel
+              p.venvShellHook
+            ]))
           ]);
 
           CC = "gcc";

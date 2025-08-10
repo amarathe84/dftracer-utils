@@ -10,8 +10,10 @@ CPMAddPackage(
   VERSION 2.4.11
 )
 
-# Add zlib for cross-platform gzip compression
-find_package(ZLIB REQUIRED)
+include(${CMAKE_SOURCE_DIR}/cmake/CPM.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
+
+need_zlib()
 
 ##########################################
 # Targets

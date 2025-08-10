@@ -318,5 +318,4 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
     spdlog::info("Indexing complete: created {} chunks", chunk_idx + 1);
     return 0;
 }
-
 } // extern "C"
