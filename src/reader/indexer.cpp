@@ -1,17 +1,17 @@
 #include "indexer.h"
 #include "platform_compat.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
 #include <vector>
-#include <chrono>
 
 #include <picosha2.h>
-#include <sqlite3.h>
 #include <spdlog/spdlog.h>
+#include <sqlite3.h>
 #include <zlib.h>
 
 #include "filesystem.h"
@@ -333,7 +333,7 @@ bool Indexer::Impl::need_rebuild() const
     // {
     //     double diff = std::abs(existing_chunk_size - chunk_size_mb_);
     //     if (diff > 0.1)
-    //     { 
+    //     {
     //         // Allow small floating point differences
     //         spdlog::debug("Index rebuild needed: chunk size differs ({:.1f} MB vs {:.1f} MB)",
     //                       existing_chunk_size,

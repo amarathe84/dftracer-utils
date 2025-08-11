@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     catch (const std::exception &err)
     {
         spdlog::error("Error occurred: {}", err.what());
-        // std::cerr << program;
+        std::cerr << program;
         return 1;
     }
 
@@ -63,7 +63,6 @@ int main(int argc, char **argv)
     spdlog::debug("Chunk size: {} MB", chunk_size_mb);
     spdlog::debug("Force rebuild: {}", force_rebuild);
 
-    // Validate arguments
     if (chunk_size_mb <= 0)
     {
         spdlog::error("Chunk size must be positive (greater than 0 and in MB)");
@@ -83,9 +82,7 @@ int main(int argc, char **argv)
 
     try
     {
-        spdlog::debug("Created DFT indexer for gz: {} and index: {}", gz_path, idx_path);
         dft::indexer::Indexer indexer(gz_path, idx_path, chunk_size_mb, force_rebuild);
-        spdlog::debug("Successfully destroyed DFT indexer");
 
         if (check_rebuild)
         {
@@ -114,10 +111,7 @@ int main(int argc, char **argv)
 
         try
         {
-            spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
             dft::reader::Reader reader(gz_path, idx_path);
-
-            spdlog::debug("Reading byte range [{} B, {} B] from {}...", start_bytes, end_bytes, gz_path);
 
             auto result = reader.read_range_bytes(start_bytes, end_bytes);
             auto &data = result.first;
@@ -126,7 +120,6 @@ int main(int argc, char **argv)
             spdlog::debug("Successfully read {} bytes from range", output_size);
 
             fwrite(data.get(), 1, output_size, stdout);
-            spdlog::debug("Successfully destroyed DFT reader");
         }
         catch (const std::runtime_error &e)
         {

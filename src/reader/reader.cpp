@@ -141,7 +141,7 @@ class Reader::Impl
         {
             // seek a bit before the requested start to find the beginning of the JSON line
             size_t search_start = (start_bytes >= 512) ? start_bytes - 512 : 0;
-            
+
             // skip to search start position
             if (search_start > 0)
             {
@@ -165,7 +165,8 @@ class Reader::Impl
                         fclose(f);
                         throw std::runtime_error("Failed during skip phase");
                     }
-                    if (skipped == 0) break;
+                    if (skipped == 0)
+                        break;
                     remaining_skip -= skipped;
                 }
                 free(skip_buffer);
@@ -188,7 +189,7 @@ class Reader::Impl
                 // look backwards from the target position to find the start of the line
                 for (int64_t i = static_cast<int64_t>(relative_target); i >= 0; i--)
                 {
-                    if (i == 0 || search_buffer[i-1] == '\n')
+                    if (i == 0 || search_buffer[i - 1] == '\n')
                     {
                         actual_start = search_start + i;
                         spdlog::debug("Found JSON line start at position {} (requested {})", actual_start, start_bytes);
@@ -228,7 +229,8 @@ class Reader::Impl
                         fclose(f);
                         throw std::runtime_error("Failed during final skip phase");
                     }
-                    if (skipped == 0) break;
+                    if (skipped == 0)
+                        break;
                     remaining_skip -= skipped;
                 }
                 free(skip_buffer);
@@ -237,7 +239,7 @@ class Reader::Impl
 
         // step 1: read data until we find a complete JSON line past the requested end
         size_t target_size = end_bytes - start_bytes;
-        size_t original_target_size = target_size;  // for debugging
+        size_t original_target_size = target_size;   // for debugging
         size_t buffer_capacity = target_size + 8192; // extra space for complete lines
         char *output = static_cast<char *>(malloc(buffer_capacity + 1));
         if (!output)
@@ -250,7 +252,7 @@ class Reader::Impl
         size_t total_read = 0;
         size_t current_pos = actual_start;
         bool found_end_boundary = false;
-        
+
         // always read in chunks and look for complete JSON line boundaries
         while (total_read < buffer_capacity && !found_end_boundary)
         {
@@ -271,7 +273,9 @@ class Reader::Impl
 
             size_t chunk_size = std::min(static_cast<size_t>(4096), buffer_capacity - total_read);
             size_t bytes_read;
-            if (inflate_read(&inflate_state, reinterpret_cast<unsigned char *>(output + total_read), chunk_size, &bytes_read) != 0)
+            if (inflate_read(
+                    &inflate_state, reinterpret_cast<unsigned char *>(output + total_read), chunk_size, &bytes_read) !=
+                0)
             {
                 free(output);
                 inflate_cleanup(&inflate_state);
@@ -294,10 +298,10 @@ class Reader::Impl
                 // find the last complete JSON boundary after the requested end position
                 // scan the entire buffer to find all boundaries and pick the one closest to end_bytes
                 size_t best_boundary_pos = SIZE_MAX;
-                
+
                 for (size_t i = 1; i < total_read; i++)
                 {
-                    if (output[i-1] == '}' && output[i] == '\n')
+                    if (output[i - 1] == '}' && output[i] == '\n')
                     {
                         size_t absolute_pos = actual_start + i + 1; // +1 to include the newline
                         if (absolute_pos >= end_bytes)
@@ -322,8 +326,12 @@ class Reader::Impl
 
         output[total_read] = '\0';
 
-        spdlog::debug("Read {} bytes from adjusted range [{}, {}) (requested [{}, {}))", 
-                      total_read, actual_start, actual_start + total_read, start_bytes, end_bytes);
+        spdlog::debug("Read {} bytes from adjusted range [{}, {}) (requested [{}, {}))",
+                      total_read,
+                      actual_start,
+                      actual_start + total_read,
+                      start_bytes,
+                      end_bytes);
 
         inflate_cleanup(&inflate_state);
         fclose(f);
