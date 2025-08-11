@@ -1,17 +1,17 @@
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cmath>
-#include <algorithm>
 
-#include <sqlite3.h>
 #include <argparse/argparse.hpp>
-#include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
+#include <sqlite3.h>
 
 #include "indexer.h"
-#include "reader.h"
 #include "platform_compat.h"
+#include "reader.h"
 #include "utils.h"
 
 static uint64_t file_size_bytes(const char *path)
@@ -28,7 +28,8 @@ static uint64_t file_size_bytes(const char *path)
 static int index_exists_and_valid(const char *idx_path)
 {
     FILE *f = fopen(idx_path, "rb");
-    if (!f) return 0;
+    if (!f)
+        return 0;
     fclose(f);
 
     sqlite3 *db;
@@ -85,7 +86,7 @@ static bool confirm_rebuild()
 {
     spdlog::info("Do you want to rebuild the index with the new chunk size? (y/n): ");
     fflush(stdout);
-    
+
     char response;
     if (scanf(" %c", &response) == 1)
     {
@@ -99,45 +100,37 @@ int main(int argc, char **argv)
     argparse::ArgumentParser program("dft_reader", "1.0");
     program.add_description("DFTracer utility for reading and indexing gzipped files");
 
-    program.add_argument("file")
-        .help("Gzipped file to process")
-        .required();
-    
-    program.add_argument("-s", "--start")
-        .help("Start position in bytes")
-        .scan<'g', double>()
-        .default_value(-1.0);
-        
-    program.add_argument("-e", "--end")
-        .help("End position in bytes")
-        .scan<'g', double>()
-        .default_value(-1.0);
-        
+    program.add_argument("file").help("Gzipped file to process").required();
+
+    program.add_argument("-s", "--start").help("Start position in bytes").scan<'d', size_t>().default_value(0);
+
+    program.add_argument("-e", "--end").help("End position in bytes").scan<'d', size_t>().default_value(0);
+
     program.add_argument("-c", "--chunk-size")
         .help("Chunk size for indexing in megabytes (default: 32)")
         .scan<'g', double>()
         .default_value(32.0);
-        
-    program.add_argument("-f", "--force")
-        .help("Force rebuild index even if chunk size differs")
-        .flag();
-        
+
+    program.add_argument("-f", "--force").help("Force rebuild index even if chunk size differs").flag();
+
     program.add_argument("--log-level")
         .help("Set logging level (trace, debug, info, warn, error, critical, off)")
         .default_value(std::string("info"));
 
-    try {
+    try
+    {
         program.parse_args(argc, argv);
     }
-    catch (const std::exception& err) {
+    catch (const std::exception &err)
+    {
         std::cerr << err.what() << std::endl;
         std::cerr << program;
         return 1;
     }
 
     std::string gz_path = program.get<std::string>("file");
-    double start_bytes = program.get<double>("--start");
-    double end_bytes = program.get<double>("--end");
+    size_t start_bytes = program.get<size_t>("--start");
+    size_t end_bytes = program.get<size_t>("--end");
     double chunk_size_mb = program.get<double>("--chunk-size");
     bool force_rebuild = program.get<bool>("--force");
     std::string log_level_str = program.get<std::string>("--log-level");
@@ -145,10 +138,10 @@ int main(int argc, char **argv)
     // stderr-based logger to ensure logs don't interfere with data output
     auto logger = spdlog::stderr_color_mt("stderr");
     spdlog::set_default_logger(logger);
-    dft::utils::set_log_level(log_level_str);  // Use the new utility function
-    
+    dft::utils::set_log_level(log_level_str); // Use the new utility function
+
     spdlog::info("Log level set to: {}", log_level_str);
-    
+
     spdlog::debug("Processing file: {}", gz_path);
     spdlog::debug("Start position: {} B", start_bytes);
     spdlog::debug("End position: {} B", end_bytes);
@@ -156,37 +149,35 @@ int main(int argc, char **argv)
     spdlog::debug("Force rebuild: {}", force_rebuild);
 
     // Validate arguments
-    if (chunk_size_mb <= 0) {
+    if (chunk_size_mb <= 0)
+    {
         std::cerr << "Error: Chunk size must be positive (greater than 0 and in MB)" << std::endl;
         return 1;
     }
 
-    constexpr double epsilon = 1e-9;
-    
-    auto is_no_value = [](double val) {
-        return std::abs(val - (-1.0)) < epsilon;
-    };
-
-    if (!is_no_value(start_bytes) && start_bytes < 0) {
+    if (start_bytes == 0)
+    {
         std::cerr << "Error: Start position must be non-negative" << std::endl;
         return 1;
     }
 
-    if (!is_no_value(end_bytes) && end_bytes < 0) {
+    if (end_bytes == 0)
+    {
         std::cerr << "Error: End position must be non-negative" << std::endl;
         return 1;
     }
 
-    FILE* test_file = fopen(gz_path.c_str(), "rb");
-    if (!test_file) {
+    FILE *test_file = fopen(gz_path.c_str(), "rb");
+    if (!test_file)
+    {
         spdlog::error("File '{}' does not exist or cannot be opened", gz_path);
         return 1;
     }
     fclose(test_file);
 
-    bool has_byte_range = (!is_no_value(start_bytes) || !is_no_value(end_bytes));
+    bool has_byte_range = (start_bytes > 0 || end_bytes > 0);
 
-    if (has_byte_range && (is_no_value(start_bytes) || is_no_value(end_bytes)))
+    if (has_byte_range && (start_bytes == 0 || end_bytes == 0))
     {
         spdlog::error("Both --start and --end must be specified for byte range");
         return 1;
@@ -204,7 +195,7 @@ int main(int argc, char **argv)
 
     bool need_rebuild = false;
     bool index_exists = index_exists_and_valid(idx_path);
-    
+
     if (index_exists)
     {
         // check if chunk size differs from existing index
@@ -212,13 +203,15 @@ int main(int argc, char **argv)
         if (existing_chunk_size > 0)
         {
             double diff = fabs(existing_chunk_size - chunk_size_mb);
-             // allow small floating point differences
+            // allow small floating point differences
             if (diff > 0.1)
             {
                 if (!force_rebuild)
                 {
-                    spdlog::warn("Existing index was created with {:.1f} MB chunks, but you specified {:.1f} MB chunks.",
-                                  existing_chunk_size, chunk_size_mb);
+                    spdlog::warn(
+                        "Existing index was created with {:.1f} MB chunks, but you specified {:.1f} MB chunks.",
+                        existing_chunk_size,
+                        chunk_size_mb);
 
                     if (!confirm_rebuild())
                     {
@@ -233,8 +226,10 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    spdlog::info("Force rebuild: Existing index has {:.1f} MB chunks, rebuilding with {:.1f} MB chunks.",
-                                  existing_chunk_size, chunk_size_mb);
+                    spdlog::info(
+                        "Force rebuild: Existing index has {:.1f} MB chunks, rebuilding with {:.1f} MB chunks.",
+                        existing_chunk_size,
+                        chunk_size_mb);
                     need_rebuild = true;
                 }
             }
@@ -311,9 +306,9 @@ int main(int argc, char **argv)
         sqlite3_finalize(st);
 
         /* build the index with configurable stride */
-        auto stride = static_cast<uint64_t>(chunk_size_mb * 1024 * 1024);
+        auto stride = static_cast<size_t>(chunk_size_mb * 1024 * 1024);
         spdlog::debug("Building index with stride: {} bytes ({} MB)", stride, chunk_size_mb);
-        int ret = dft::indexer::build(db, file_id, gz_path.c_str(), static_cast<long long>(stride));
+        int ret = dft::indexer::build(db, file_id, gz_path.c_str(), stride);
         if (ret != 0)
         {
             spdlog::error("Index build failed for {} (error code: {})", gz_path, ret);
@@ -341,7 +336,7 @@ int main(int argc, char **argv)
         char *output;
         size_t output_size;
 
-        spdlog::info("Reading byte range [{:.2f}B, {:.2f}B] from {}...", start_bytes, end_bytes, gz_path);
+        spdlog::info("Reading byte range [{} B, {} B] from {}...", start_bytes, end_bytes, gz_path);
 
         int ret = dft::reader::read_range_bytes(db, gz_path.c_str(), start_bytes, end_bytes, &output, &output_size);
 

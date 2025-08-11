@@ -2,57 +2,60 @@
 #define __DFTRACER_UTILS_READER_UTILS_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/**
- * Set the global spdlog log level programmatically
- * @param level_str String representation of log level (case insensitive)
- *                  Valid values: "trace", "debug", "info", "warn"/"warning", 
- *                  "err"/"error", "critical", "off"
- * @return 0 on success, -1 if level_str is invalid (though it defaults to info)
- */
-int dft_utils_set_log_level(const char* level_str);
+    /**
+     * Set the global spdlog log level programmatically
+     * @param level_str String representation of log level (case insensitive)
+     *                  Valid values: "trace", "debug", "info", "warn"/"warning",
+     *                  "err"/"error", "critical", "off"
+     * @return 0 on success, -1 if level_str is invalid (though it defaults to info)
+     */
+    int dft_utils_set_log_level(const char *level_str);
 
-/**
- * Set the global spdlog log level using integer level
- * @param level Integer representation of log level:
- *              0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off
- * @return 0 on success, -1 if level is out of range
- */
-int dft_utils_set_log_level_int(int level);
+    /**
+     * Set the global spdlog log level using integer level
+     * @param level Integer representation of log level:
+     *              0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off
+     * @return 0 on success, -1 if level is out of range
+     */
+    int dft_utils_set_log_level_int(int level);
 
-/**
- * Get the current global spdlog log level as a string
- * @return String representation of current log level (pointer to static string)
- */
-const char* dft_utils_get_log_level_string(void);
+    /**
+     * Get the current global spdlog log level as a string
+     * @return String representation of current log level (pointer to static string)
+     */
+    const char *dft_utils_get_log_level_string(void);
 
-/**
- * Get the current global spdlog log level as an integer
- * @return Integer representation of current log level (0-6)
- */
-int dft_utils_get_log_level_int(void);
+    /**
+     * Get the current global spdlog log level as an integer
+     * @return Integer representation of current log level (0-6)
+     */
+    int dft_utils_get_log_level_int(void);
 
-// Backward compatibility aliases (deprecated)
-int dft_set_log_level(const char* level_str);
-int dft_set_log_level_int(int level);
-const char* dft_get_log_level_string(void);
-int dft_get_log_level_int(void);
+    // Backward compatibility aliases (deprecated)
+    int dft_set_log_level(const char *level_str);
+    int dft_set_log_level_int(int level);
+    const char *dft_get_log_level_string(void);
+    int dft_get_log_level_int(void);
 
 #ifdef __cplusplus
 }
 
 #include <string>
 
-namespace dft {
-namespace utils {
-    int set_log_level(const std::string& level_str);
-    int set_log_level_int(int level);
-    std::string get_log_level_string();
-    int get_log_level_int();
-}
-}
+namespace dft
+{
+namespace utils
+{
+int set_log_level(const std::string &level_str);
+int set_log_level_int(int level);
+std::string get_log_level_string();
+int get_log_level_int();
+} // namespace utils
+} // namespace dft
 #endif
 
 #endif // __DFTRACER_UTILS_READER_UTILS_H
