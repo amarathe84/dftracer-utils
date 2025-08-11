@@ -11,6 +11,14 @@ extern "C"
 #endif
 
     /**
+     * Get the maximum byte position available in the indexed gzip file
+     * @param db SQLite database containing the gzip index
+     * @param max_bytes Pointer to store the maximum byte position
+     * @return 0 on success, -1 on error
+     */
+    int dft_reader_get_max_bytes(sqlite3 *db, size_t *max_bytes);
+
+    /**
      * Read a range of bytes from a gzip file using the index database
      * @param db SQLite database containing the gzip index
      * @param gz_path Path to the gzip file
@@ -55,6 +63,8 @@ namespace dft
 {
 namespace reader
 {
+int get_max_bytes(sqlite3 *db, size_t *max_bytes);
+
 int read_range_bytes(
     sqlite3 *db, const char *gz_path, size_t start_bytes, size_t end_bytes, char **output, size_t *output_size);
 

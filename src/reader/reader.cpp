@@ -84,6 +84,49 @@ static int inflate_read(InflateState *I, unsigned char *out, size_t out_size, si
 extern "C"
 {
 
+    int dft_reader_get_max_bytes(sqlite3 *db, size_t *max_bytes)
+    {
+        if (!db || !max_bytes)
+        {
+            return -1;
+        }
+
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT MAX(uncompressed_offset + uncompressed_size) FROM chunks";
+
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        {
+            spdlog::error("Failed to prepare max bytes query: {}", sqlite3_errmsg(db));
+            return -1;
+        }
+
+        int result = -1;
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            sqlite3_int64 max_val = sqlite3_column_int64(stmt, 0);
+            if (max_val >= 0)
+            {
+                *max_bytes = static_cast<size_t>(max_val);
+                result = 0;
+                spdlog::debug("Maximum bytes available: {}", *max_bytes);
+            }
+            else
+            {
+                // No chunks found or empty result
+                *max_bytes = 0;
+                result = 0;
+                spdlog::debug("No chunks found, maximum bytes: 0");
+            }
+        }
+        else
+        {
+            spdlog::error("Failed to execute max bytes query: {}", sqlite3_errmsg(db));
+        }
+
+        sqlite3_finalize(stmt);
+        return result;
+    }
+
     int dft_reader_read_range_bytes(
         sqlite3 *db, const char *gz_path, size_t start_bytes, size_t end_bytes, char **output, size_t *output_size)
     {
@@ -436,6 +479,11 @@ namespace dft
 {
 namespace reader
 {
+int get_max_bytes(sqlite3 *db, size_t *max_bytes)
+{
+    return dft_reader_get_max_bytes(db, max_bytes);
+}
+
 int read_range_bytes(
     sqlite3 *db, const char *gz_path, size_t start_bytes, size_t end_bytes, char **output, size_t *output_size)
 {

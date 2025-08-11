@@ -285,6 +285,66 @@ TEST_CASE("Edge cases") {
     sqlite3_close(db);
 }
 
+TEST_CASE("Get maximum bytes") {
+    TestEnvironment env;
+    REQUIRE(env.is_valid());
+    
+    sqlite3* db = create_temp_db();
+    REQUIRE(db != nullptr);
+    
+    SUBCASE("Empty database") {
+        size_t max_bytes;
+        int result = dft::reader::get_max_bytes(db, &max_bytes);
+        CHECK(result == 0);
+        CHECK(max_bytes == 0);
+    }
+    
+    SUBCASE("Database with chunks") {
+        std::string gz_file = env.create_test_gzip_file();
+        REQUIRE(!gz_file.empty());
+
+        int result = dft::indexer::build(db, 1, gz_file.c_str(), 512);
+        REQUIRE(result == 0);
+        
+        size_t max_bytes;
+        result = dft::reader::get_max_bytes(db, &max_bytes);
+        CHECK(result == 0);
+        CHECK(max_bytes > 0);
+        
+        // Verify that we can't read beyond max_bytes
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        // Try to read beyond max_bytes - should fail or return empty
+        result = dft::reader::read_range_bytes(db, gz_file.c_str(), max_bytes + 1, max_bytes + 100, &output, &output_size);
+        // This should fail because start position is beyond available data
+        CHECK(result == -1);
+        
+        // Try to read up to max_bytes - should succeed
+        if (max_bytes > 10) {
+            result = dft::reader::read_range_bytes(db, gz_file.c_str(), max_bytes - 10, max_bytes, &output, &output_size);
+            if (result == 0 && output) {
+                CHECK(output_size > 0);
+                free(output);
+            }
+        }
+    }
+    
+    SUBCASE("Null parameters") {
+        size_t max_bytes;
+        
+        // null db
+        int result = dft::reader::get_max_bytes(nullptr, &max_bytes);
+        CHECK(result == -1);
+        
+        // null max_bytes
+        result = dft::reader::get_max_bytes(db, nullptr);
+        CHECK(result == -1);
+    }
+    
+    sqlite3_close(db);
+}
+
 TEST_CASE("Memory management") {
     TestEnvironment env;
     REQUIRE(env.is_valid());
