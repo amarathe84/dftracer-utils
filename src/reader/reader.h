@@ -75,6 +75,8 @@ extern "C"
 } // extern "C"
 
 #include <string>
+#include <memory>
+#include <stdexcept>
 
 // C++ namespace wrapper for convenience
 namespace dft
@@ -109,6 +111,128 @@ namespace reader
     {
         return dft_reader_read_range_megabytes(reader, gz_path.c_str(), start_mb, end_mb, output, output_size);
     }
+
+    /**
+     * RAII wrapper class for DFT reader
+     * 
+     * This class provides automatic resource management for the DFT reader using RAII.
+     * The reader is automatically destroyed when the object goes out of scope.
+     * Memory allocated for reading operations is automatically managed using smart pointers.
+     * 
+     * Example usage:
+     * ```cpp
+     * try {
+     *     dft::reader::Reader reader("trace.gz", "trace.gz.idx");
+     *     size_t max_bytes = reader.get_max_bytes();
+     *     auto data = reader.read_range_bytes("trace.gz", 0, 1024);
+     * } catch (const std::runtime_error& e) {
+     *     // Handle error
+     * }
+     * ```
+     */
+    class Reader
+    {
+    public:
+        /**
+         * Smart pointer type for managing allocated memory
+         */
+        using Buffer = std::unique_ptr<char, void(*)(void*)>;
+
+        /**
+         * Create a new DFT reader instance
+         * @param gz_path Path to the gzipped trace file
+         * @param idx_path Path to the index file
+         * @throws std::runtime_error if reader creation fails
+         */
+        Reader(const std::string& gz_path, const std::string& idx_path);
+
+        /**
+         * Destructor - automatically destroys the reader
+         */
+        ~Reader();
+
+        // Disable copy constructor and copy assignment
+        Reader(const Reader&) = delete;
+        Reader& operator=(const Reader&) = delete;
+
+        /**
+         * Move constructor
+         */
+        Reader(Reader&& other) noexcept;
+
+        /**
+         * Move assignment operator
+         */
+        Reader& operator=(Reader&& other) noexcept;
+
+        /**
+         * Get the maximum byte position available in the indexed gzip file
+         * @return maximum byte position
+         * @throws std::runtime_error if operation fails
+         */
+        size_t get_max_bytes() const;
+
+        /**
+         * Read a range of bytes from the gzip file using the index database
+         * @param gz_path Path to the gzip file (can be different from constructor)
+         * @param start_bytes Start position in bytes
+         * @param end_bytes End position in bytes
+         * @return pair of (smart pointer to data, size of data)
+         * @throws std::runtime_error if operation fails
+         */
+        std::pair<Buffer, size_t> read_range_bytes(const std::string& gz_path, size_t start_bytes, size_t end_bytes) const;
+
+        /**
+         * Read a range of bytes from the gzip file using the stored gz_path
+         * @param start_bytes Start position in bytes
+         * @param end_bytes End position in bytes
+         * @return pair of (smart pointer to data, size of data)
+         * @throws std::runtime_error if operation fails
+         */
+        std::pair<Buffer, size_t> read_range_bytes(size_t start_bytes, size_t end_bytes) const;
+
+        /**
+         * Read a range of megabytes from the gzip file using the index database
+         * @param gz_path Path to the gzip file (can be different from constructor)
+         * @param start_mb Start position in megabytes
+         * @param end_mb End position in megabytes
+         * @return pair of (smart pointer to data, size of data)
+         * @throws std::runtime_error if operation fails
+         */
+        std::pair<Buffer, size_t> read_range_megabytes(const std::string& gz_path, double start_mb, double end_mb) const;
+
+        /**
+         * Read a range of megabytes from the gzip file using the stored gz_path
+         * @param start_mb Start position in megabytes
+         * @param end_mb End position in megabytes
+         * @return pair of (smart pointer to data, size of data)
+         * @throws std::runtime_error if operation fails
+         */
+        std::pair<Buffer, size_t> read_range_megabytes(double start_mb, double end_mb) const;
+
+        /**
+         * Get the raw C reader pointer (for interoperability)
+         * @return Raw pointer to the C reader
+         */
+        dft_reader_t* get() const;
+
+        /**
+         * Check if the reader is valid
+         * @return true if reader is valid, false otherwise
+         */
+        bool is_valid() const;
+
+        /**
+         * Get the gzip file path
+         * @return gzip file path
+         */
+        const std::string& get_gz_path() const;
+
+    private:
+        dft_reader_t* reader_;
+        std::string gz_path_;
+    };
+
 } // namespace reader
 } // namespace dft
 #endif

@@ -618,4 +618,121 @@ extern "C"
     }
 } // extern "C"
 
+// RAII C++ class implementations
+namespace dft
+{
+namespace reader
+{
+
+Reader::Reader(const std::string& gz_path, const std::string& idx_path)
+    : reader_(dft_reader_create(gz_path.c_str(), idx_path.c_str()))
+    , gz_path_(gz_path)
+{
+    if (!reader_)
+    {
+        throw std::runtime_error("Failed to create DFT reader");
+    }
+}
+
+Reader::~Reader()
+{
+    if (reader_)
+    {
+        dft_reader_destroy(reader_);
+    }
+}
+
+Reader::Reader(Reader&& other) noexcept
+    : reader_(other.reader_)
+    , gz_path_(std::move(other.gz_path_))
+{
+    other.reader_ = nullptr;
+}
+
+Reader& Reader::operator=(Reader&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (reader_)
+        {
+            dft_reader_destroy(reader_);
+        }
+        reader_ = other.reader_;
+        gz_path_ = std::move(other.gz_path_);
+        other.reader_ = nullptr;
+    }
+    return *this;
+}
+
+size_t Reader::get_max_bytes() const
+{
+    size_t max_bytes;
+    int result = dft_reader_get_max_bytes(reader_, &max_bytes);
+    if (result != 0)
+    {
+        throw std::runtime_error("Failed to get maximum bytes");
+    }
+    return max_bytes;
+}
+
+std::pair<Reader::Buffer, size_t> Reader::read_range_bytes(const std::string& gz_path, size_t start_bytes, size_t end_bytes) const
+{
+    char* raw_output = nullptr;
+    size_t output_size = 0;
+    
+    int result = dft_reader_read_range_bytes(reader_, gz_path.c_str(), start_bytes, end_bytes, &raw_output, &output_size);
+    if (result != 0)
+    {
+        throw std::runtime_error("Failed to read byte range");
+    }
+    
+    // Wrap in smart pointer for automatic cleanup
+    Buffer output(raw_output, std::free);
+    return std::make_pair(std::move(output), output_size);
+}
+
+std::pair<Reader::Buffer, size_t> Reader::read_range_bytes(size_t start_bytes, size_t end_bytes) const
+{
+    return read_range_bytes(gz_path_, start_bytes, end_bytes);
+}
+
+std::pair<Reader::Buffer, size_t> Reader::read_range_megabytes(const std::string& gz_path, double start_mb, double end_mb) const
+{
+    char* raw_output = nullptr;
+    size_t output_size = 0;
+    
+    int result = dft_reader_read_range_megabytes(reader_, gz_path.c_str(), start_mb, end_mb, &raw_output, &output_size);
+    if (result != 0)
+    {
+        throw std::runtime_error("Failed to read megabyte range");
+    }
+    
+    // Wrap in smart pointer for automatic cleanup
+    Buffer output(raw_output, std::free);
+    return std::make_pair(std::move(output), output_size);
+}
+
+std::pair<Reader::Buffer, size_t> Reader::read_range_megabytes(double start_mb, double end_mb) const
+{
+    return read_range_megabytes(gz_path_, start_mb, end_mb);
+}
+
+dft_reader_t* Reader::get() const
+{
+    return reader_;
+}
+
+bool Reader::is_valid() const
+{
+    return reader_ != nullptr;
+}
+
+const std::string& Reader::get_gz_path() const
+{
+    return gz_path_;
+}
+
+} // namespace reader
+} // namespace dft
+
 

@@ -733,3 +733,78 @@ extern "C"
     }
 
 } // extern "C"
+
+// RAII C++ class implementations
+namespace dft
+{
+namespace indexer
+{
+
+Indexer::Indexer(const std::string& gz_path, const std::string& idx_path, double chunk_size_mb, bool force_rebuild)
+    : indexer_(dft_indexer_create(gz_path.c_str(), idx_path.c_str(), chunk_size_mb, force_rebuild))
+{
+    if (!indexer_)
+    {
+        throw std::runtime_error("Failed to create DFT indexer");
+    }
+}
+
+Indexer::~Indexer()
+{
+    if (indexer_)
+    {
+        dft_indexer_destroy(indexer_);
+    }
+}
+
+Indexer::Indexer(Indexer&& other) noexcept
+    : indexer_(other.indexer_)
+{
+    other.indexer_ = nullptr;
+}
+
+Indexer& Indexer::operator=(Indexer&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (indexer_)
+        {
+            dft_indexer_destroy(indexer_);
+        }
+        indexer_ = other.indexer_;
+        other.indexer_ = nullptr;
+    }
+    return *this;
+}
+
+void Indexer::build()
+{
+    int result = dft_indexer_build(indexer_);
+    if (result != 0)
+    {
+        throw std::runtime_error("Failed to build index");
+    }
+}
+
+bool Indexer::need_rebuild() const
+{
+    int result = dft_indexer_need_rebuild(indexer_);
+    if (result == -1)
+    {
+        throw std::runtime_error("Failed to check if rebuild is needed");
+    }
+    return result == 1;
+}
+
+dft_indexer_t* Indexer::get() const
+{
+    return indexer_;
+}
+
+bool Indexer::is_valid() const
+{
+    return indexer_ != nullptr;
+}
+
+} // namespace indexer
+} // namespace dft

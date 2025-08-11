@@ -46,6 +46,7 @@ extern "C"
 
 #include <string>
 #include <stdexcept>
+#include <memory>
 
 namespace dft
 {
@@ -98,6 +99,84 @@ inline void destroy(dft_indexer_t* indexer)
 {
     dft_indexer_destroy(indexer);
 }
+
+/**
+ * RAII wrapper class for DFT indexer
+ * 
+ * This class provides automatic resource management for the DFT indexer using RAII.
+ * The indexer is automatically destroyed when the object goes out of scope.
+ * 
+ * Example usage:
+ * ```cpp
+ * try {
+ *     dft::indexer::Indexer indexer("trace.gz", "trace.gz.idx", 1.0);
+ *     indexer.build();
+ * } catch (const std::runtime_error& e) {
+ *     // Handle error
+ * }
+ * ```
+ */
+class Indexer
+{
+public:
+    /**
+     * Create a new DFT indexer instance
+     * @param gz_path Path to the gzipped trace file
+     * @param idx_path Path to the index file
+     * @param chunk_size_mb Chunk size for indexing in megabytes
+     * @param force_rebuild Force rebuild even if index exists and chunk size matches
+     * @throws std::runtime_error if indexer creation fails
+     */
+    Indexer(const std::string& gz_path, const std::string& idx_path, double chunk_size_mb, bool force_rebuild = false);
+
+    /**
+     * Destructor - automatically destroys the indexer
+     */
+    ~Indexer();
+
+    // Disable copy constructor and copy assignment
+    Indexer(const Indexer&) = delete;
+    Indexer& operator=(const Indexer&) = delete;
+
+    /**
+     * Move constructor
+     */
+    Indexer(Indexer&& other) noexcept;
+
+    /**
+     * Move assignment operator
+     */
+    Indexer& operator=(Indexer&& other) noexcept;
+
+    /**
+     * Build or rebuild the index if necessary
+     * @throws std::runtime_error if build fails
+     */
+    void build();
+
+    /**
+     * Check if a rebuild is needed
+     * @return true if rebuild is needed, false if not needed
+     * @throws std::runtime_error on error
+     */
+    bool need_rebuild() const;
+
+    /**
+     * Get the raw C indexer pointer (for interoperability)
+     * @return Raw pointer to the C indexer
+     */
+    dft_indexer_t* get() const;
+
+    /**
+     * Check if the indexer is valid
+     * @return true if indexer is valid, false otherwise
+     */
+    bool is_valid() const;
+
+private:
+    dft_indexer_t* indexer_;
+};
+
 } // namespace indexer
 } // namespace dft
 #endif
