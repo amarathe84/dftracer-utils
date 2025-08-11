@@ -125,7 +125,7 @@ TEST_CASE("Indexer creation and destruction") {
     
     std::string idx_file = env.get_index_path(gz_file);
     
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
     CHECK(indexer != nullptr);
     
     if (indexer) {
@@ -142,7 +142,7 @@ TEST_CASE("Gzip index building") {
     
     std::string idx_file = env.get_index_path(gz_file);
     
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -161,7 +161,7 @@ TEST_CASE("Data range reading") {
     std::string idx_file = env.get_index_path(gz_file);
     
     // Build index first
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -169,7 +169,7 @@ TEST_CASE("Data range reading") {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     REQUIRE(reader != nullptr);
     
     SUBCASE("Read valid byte range") {
@@ -244,7 +244,7 @@ TEST_CASE("Edge cases") {
     std::string idx_file = env.get_index_path(gz_file);
     
     // Build index first
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -252,7 +252,7 @@ TEST_CASE("Edge cases") {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     REQUIRE(reader != nullptr);
     
     SUBCASE("Invalid byte range (start >= end)") {
@@ -291,7 +291,7 @@ TEST_CASE("Get maximum bytes") {
     
     SUBCASE("Empty index") {
         // Create reader without building index first
-        dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+        dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
         if (reader) {
             size_t max_bytes;
             int result = dft_reader_get_max_bytes(reader, &max_bytes);
@@ -305,7 +305,7 @@ TEST_CASE("Get maximum bytes") {
     
     SUBCASE("Reader with built index") {
         // Build index first
-        dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+        dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
         REQUIRE(indexer != nullptr);
         
         int result = dft_indexer_build(indexer);
@@ -313,7 +313,7 @@ TEST_CASE("Get maximum bytes") {
         dft_indexer_destroy(indexer);
         
         // Create reader
-        dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+        dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
         REQUIRE(reader != nullptr);
         
         size_t max_bytes;
@@ -347,7 +347,7 @@ TEST_CASE("Get maximum bytes") {
         
         std::string test_idx_file = env.get_index_path(test_gz_file);
         
-        dft_reader_t* reader = dft_reader_create(test_gz_file.c_str(), test_idx_file.c_str());
+        dft_reader_handle_t reader = dft_reader_create(test_gz_file.c_str(), test_idx_file.c_str());
         if (reader) {
             size_t max_bytes;
             
@@ -374,7 +374,7 @@ TEST_CASE("Memory management") {
     std::string idx_file = env.get_index_path(gz_file);
     
     // Build index first
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -382,7 +382,7 @@ TEST_CASE("Memory management") {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     REQUIRE(reader != nullptr);
     
     // multiple reads to ensure no memory leaks
@@ -412,7 +412,7 @@ TEST_CASE("Exact byte reading (small ranges)") {
     std::string idx_file = env.get_index_path(gz_file);
     
     // Build index first
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -420,7 +420,7 @@ TEST_CASE("Exact byte reading (small ranges)") {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     REQUIRE(reader != nullptr);
 
     SUBCASE("Read exactly 10 bytes") {

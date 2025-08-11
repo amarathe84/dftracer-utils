@@ -79,78 +79,54 @@ int main(int argc, char **argv)
 
     fclose(test_file);
 
-    // construct index path
     std::string idx_path = gz_path + ".idx";
 
-    // Create indexer
-    dft_indexer_t* indexer = dft_indexer_create(gz_path.c_str(), idx_path.c_str(), chunk_size_mb, force_rebuild);
-    if (!indexer)
-    {
-        spdlog::error("Failed to create indexer");
+    try {
+        spdlog::debug("Created DFT indexer for gz: {} and index: {}", gz_path, idx_path);
+        dft::indexer::Indexer indexer(gz_path, idx_path, chunk_size_mb, force_rebuild);
+        spdlog::debug("Successfully destroyed DFT indexer");
+
+        if (check_rebuild) {
+            if (!indexer.need_rebuild())
+            {
+                spdlog::info("Index is up to date, no rebuild needed");
+                return 0;
+            }
+        }
+
+        if (force_rebuild) {
+            indexer.build();
+        }
+    }
+    catch (const std::runtime_error& e) {
+        spdlog::error("Indexer error: {}", e.what());
         return 1;
     }
-
-    if (check_rebuild) {
-        int need_rebuild_result = dft_indexer_need_rebuild(indexer);
-        if (need_rebuild_result == -1)
-        {
-            spdlog::error("Failed to check if rebuild is needed");
-            dft_indexer_destroy(indexer);
-            return 1;
-        }
-
-        if (need_rebuild_result == 0)
-        {
-            spdlog::info("Index is up to date, no rebuild needed");
-            dft_indexer_destroy(indexer);
-            return 0;
-        }
-    }
-
-    if (force_rebuild) {
-        if (dft_indexer_build(indexer) != 0)
-        {
-            spdlog::error("Failed to build index");
-            dft_indexer_destroy(indexer);
-            return 1;
-        }
-    }
-
-    dft_indexer_destroy(indexer);
 
     // read operations
     if (end_bytes > start_bytes)
     {
         spdlog::debug("Performing byte range read operation");
         
-        // Create reader
-        dft_reader_t* reader = dft_reader_create(gz_path.c_str(), idx_path.c_str());
-        if (!reader)
-        {
-            spdlog::error("Failed to create reader");
+        try {
+            spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
+            dft::reader::Reader reader(gz_path, idx_path);
+
+            spdlog::info("Reading byte range [{} B, {} B] from {}...", start_bytes, end_bytes, gz_path);
+
+            auto result = reader.read_range_bytes(start_bytes, end_bytes);
+            auto& data = result.first;
+            size_t output_size = result.second;
+
+            spdlog::debug("Successfully read {} bytes from range", output_size);
+
+            fwrite(data.get(), 1, output_size, stdout);
+            spdlog::debug("Successfully destroyed DFT reader");
+        }
+        catch (const std::runtime_error& e) {
+            spdlog::error("Reader error: {}", e.what());
             return 1;
         }
-
-        char *output;
-        size_t output_size;
-
-        spdlog::info("Reading byte range [{} B, {} B] from {}...", start_bytes, end_bytes, gz_path);
-
-        int ret = dft_reader_read_range_bytes(reader, gz_path.c_str(), start_bytes, end_bytes, &output, &output_size);
-
-        if (ret != 0)
-        {
-            spdlog::error("Failed to read range from {}", gz_path);
-            dft_reader_destroy(reader);
-            return 1;
-        }
-
-        spdlog::debug("Successfully read {} bytes from range", output_size);
-
-        fwrite(output, 1, output_size, stdout);
-
-        free(output);
-        dft_reader_destroy(reader);
     }
 
     return 0;

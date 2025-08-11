@@ -9,7 +9,10 @@ extern "C"
 {
 #endif
 
-    typedef struct dft_indexer dft_indexer_t;
+    /**
+     * Opaque handle for DFT indexer
+     */
+    typedef void* dft_indexer_handle_t;
 
     /**
      * Create a new DFT indexer instance
@@ -17,107 +20,55 @@ extern "C"
      * @param idx_path Path to the index file
      * @param chunk_size_mb Chunk size for indexing in megabytes
      * @param force_rebuild Force rebuild even if index exists and chunk size matches
-     * @return Pointer to the indexer instance, or NULL on failure
+     * @return Opaque handle to the indexer instance, or NULL on failure
      */
-    dft_indexer_t* dft_indexer_create(const char* gz_path, const char* idx_path, double chunk_size_mb, bool force_rebuild);
+    dft_indexer_handle_t dft_indexer_create(const char* gz_path, const char* idx_path, double chunk_size_mb, int force_rebuild);
 
     /**
      * Build or rebuild the index if necessary
-     * @param indexer DFT indexer instance
+     * @param indexer DFT indexer handle
      * @return 0 on success, -1 on error
      */
-    int dft_indexer_build(dft_indexer_t* indexer);
+    int dft_indexer_build(dft_indexer_handle_t indexer);
 
     /**
      * Check if a rebuild is needed (index doesn't exist, is invalid, or chunk size differs)
-     * @param indexer DFT indexer instance
+     * @param indexer DFT indexer handle
      * @return 1 if rebuild is needed, 0 if not needed, -1 on error
      */
-    int dft_indexer_need_rebuild(dft_indexer_t* indexer);
+    int dft_indexer_need_rebuild(dft_indexer_handle_t indexer);
 
     /**
      * Destroy a DFT indexer instance and free all associated resources
-     * @param indexer Pointer to the indexer instance
+     * @param indexer Opaque handle to the indexer instance
      */
-    void dft_indexer_destroy(dft_indexer_t* indexer);
+    void dft_indexer_destroy(dft_indexer_handle_t indexer);
 
 #ifdef __cplusplus
 } // extern "C"
 
 #include <string>
-#include <stdexcept>
 #include <memory>
 
-namespace dft
-{
-namespace indexer
-{
-/**
- * Create a new DFT indexer instance (C++ wrapper)
- * @param gz_path Path to the gzipped trace file
- * @param idx_path Path to the index file
- * @param chunk_size_mb Chunk size for indexing in megabytes
- * @param force_rebuild Force rebuild even if index exists and chunk size matches
- * @return Pointer to the indexer instance, or nullptr on failure
- */
-inline dft_indexer_t* create(const std::string& gz_path, const std::string& idx_path, double chunk_size_mb, bool force_rebuild = false)
-{
-    return dft_indexer_create(gz_path.c_str(), idx_path.c_str(), chunk_size_mb, force_rebuild);
-}
+namespace dft {
+namespace indexer {
 
 /**
- * Build or rebuild the index if necessary (C++ wrapper)
- * @param indexer DFT indexer instance
- * @return 0 on success, -1 on error
- */
-inline int build(dft_indexer_t* indexer)
-{
-    return dft_indexer_build(indexer);
-}
-
-/**
- * Check if a rebuild is needed (C++ wrapper)
- * @param indexer DFT indexer instance
- * @return true if rebuild is needed, false if not needed
- * @throws std::runtime_error on error
- */
-inline bool need_rebuild(dft_indexer_t* indexer)
-{
-    int result = dft_indexer_need_rebuild(indexer);
-    if (result == -1)
-    {
-        throw std::runtime_error("Failed to check if rebuild is needed");
-    }
-    return result == 1;
-}
-
-/**
- * Destroy a DFT indexer instance and free all associated resources (C++ wrapper)
- * @param indexer Pointer to the indexer instance
- */
-inline void destroy(dft_indexer_t* indexer)
-{
-    dft_indexer_destroy(indexer);
-}
-
-/**
- * RAII wrapper class for DFT indexer
- * 
- * This class provides automatic resource management for the DFT indexer using RAII.
- * The indexer is automatically destroyed when the object goes out of scope.
- * 
+ * C++ RAII wrapper for DFT indexer
+ *
  * Example usage:
  * ```cpp
  * try {
  *     dft::indexer::Indexer indexer("trace.gz", "trace.gz.idx", 1.0);
- *     indexer.build();
+ *     if (indexer.need_rebuild()) {
+ *         indexer.build();
+ *     }
  * } catch (const std::runtime_error& e) {
  *     // Handle error
  * }
  * ```
  */
-class Indexer
-{
+class Indexer {
 public:
     /**
      * Create a new DFT indexer instance
@@ -162,19 +113,32 @@ public:
     bool need_rebuild() const;
 
     /**
-     * Get the raw C indexer pointer (for interoperability)
-     * @return Raw pointer to the C indexer
-     */
-    dft_indexer_t* get() const;
-
-    /**
      * Check if the indexer is valid
      * @return true if indexer is valid, false otherwise
      */
     bool is_valid() const;
 
+    /**
+     * Get the gzip file path
+     * @return gzip file path
+     */
+    const std::string& get_gz_path() const;
+
+    /**
+     * Get the index file path
+     * @return index file path
+     */
+    const std::string& get_idx_path() const;
+
+    /**
+     * Get the chunk size in megabytes
+     * @return chunk size in megabytes
+     */
+    double get_chunk_size_mb() const;
+
 private:
-    dft_indexer_t* indexer_;
+    class Impl;
+    std::unique_ptr<Impl> pImpl_;
 };
 
 } // namespace indexer

@@ -103,7 +103,7 @@ TEST_CASE("Opaque indexer creation and destruction") {
     
     std::string idx_file = gz_file + ".idx";
     
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
     CHECK(indexer != nullptr);
     
     if (indexer) {
@@ -112,7 +112,7 @@ TEST_CASE("Opaque indexer creation and destruction") {
 }
 
 TEST_CASE("Opaque indexer invalid parameters") {
-    dft_indexer_t* indexer;
+    dft_indexer_handle_t indexer;
     
     // Test null gz_path
     indexer = dft_indexer_create(nullptr, "test.idx", 1.0, false);
@@ -139,7 +139,7 @@ TEST_CASE("Opaque indexer build and rebuild detection") {
     
     std::string idx_file = gz_file + ".idx";
     
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
     REQUIRE(indexer != nullptr);
     
     // Initial build should be needed
@@ -183,7 +183,7 @@ TEST_CASE("Opaque indexer force rebuild") {
     std::string idx_file = gz_file + ".idx";
     
     // Build initial index
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -212,7 +212,7 @@ TEST_CASE("Opaque reader creation and destruction") {
     std::string idx_file = gz_file + ".idx";
     
     // Build index first
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -221,7 +221,7 @@ TEST_CASE("Opaque reader creation and destruction") {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     CHECK(reader != nullptr);
     
     if (reader) {
@@ -230,7 +230,7 @@ TEST_CASE("Opaque reader creation and destruction") {
 }
 
 TEST_CASE("Opaque reader invalid parameters") {
-    dft_reader_t* reader;
+    dft_reader_handle_t reader;
     
     // Test null gz_path
     reader = dft_reader_create(nullptr, "test.idx");
@@ -260,7 +260,7 @@ TEST_CASE("Opaque reader byte range reading") {
     std::string idx_file = gz_file + ".idx";
     
     // Build index
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -269,7 +269,7 @@ TEST_CASE("Opaque reader byte range reading") {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     REQUIRE(reader != nullptr);
     
     SUBCASE("Read valid byte range") {
@@ -323,7 +323,7 @@ TEST_CASE("Opaque reader maximum bytes") {
     std::string idx_file = gz_file + ".idx";
     
     // Build index
-    dft_indexer_t* indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
     REQUIRE(indexer != nullptr);
     
     int result = dft_indexer_build(indexer);
@@ -332,7 +332,7 @@ TEST_CASE("Opaque reader maximum bytes") {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_t* reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     REQUIRE(reader != nullptr);
     
     size_t max_bytes = 0;
@@ -359,32 +359,32 @@ TEST_CASE("C++ namespace wrappers") {
     std::string idx_file = gz_file + ".idx";
     
     // Test indexer namespace wrappers with std::string
-    dft_indexer_t* indexer = dft::indexer::create(gz_file, idx_file, 1.0, false);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 1.0, false);
     CHECK(indexer != nullptr);
     
     if (indexer) {
-        bool need_rebuild = dft::indexer::need_rebuild(indexer);
+        bool need_rebuild = dft_indexer_need_rebuild(indexer);
         CHECK(need_rebuild == true); // First time should need rebuild
         
-        int result = dft::indexer::build(indexer);
+        int result = dft_indexer_build(indexer);
         CHECK(result == 0);
         
-        dft::indexer::destroy(indexer);
+        dft_indexer_destroy(indexer);
     }
     
     // Test reader namespace wrappers with std::string
-    dft_reader_t* reader = dft::reader::create(gz_file, idx_file);
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     CHECK(reader != nullptr);
     
     if (reader) {
         size_t max_bytes = 0;
-        int result = dft::reader::get_max_bytes(reader, &max_bytes);
+        int result = dft_reader_get_max_bytes(reader, &max_bytes);
         CHECK(result == 0);
         CHECK(max_bytes > 0);
         
         char* output = nullptr;
         size_t output_size = 0;
-        result = dft::reader::read_range_bytes(reader, gz_file, 0, 100, &output, &output_size);
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 0, 100, &output, &output_size);
         CHECK(result == 0);
         
         if (output) {
@@ -392,6 +392,6 @@ TEST_CASE("C++ namespace wrappers") {
             free(output);
         }
         
-        dft::reader::destroy(reader);
+        dft_reader_destroy(reader);
     }
 }
