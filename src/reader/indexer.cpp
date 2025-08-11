@@ -3,8 +3,25 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
+#include <stdexcept>
 #include <spdlog/spdlog.h>
+#include <sqlite3.h>
 #include <zlib.h>
+#include <sys/stat.h>
+#include <picosha2.h>
+#include <fstream>
+#include <vector>
+
+struct dft_indexer
+{
+    char *gz_path;
+    char *idx_path;
+    double chunk_size_mb;
+    bool force_rebuild;
+    sqlite3 *db;
+    bool db_opened;
+};
 
 const char *SQL_SCHEMA = "CREATE TABLE IF NOT EXISTS files ("
                          "  id INTEGER PRIMARY KEY,"
@@ -38,8 +55,271 @@ const char *SQL_SCHEMA = "CREATE TABLE IF NOT EXISTS files ("
 
 extern "C"
 {
+    static std::string calculate_file_sha256(const char *file_path)
+    {
+        std::ifstream file(file_path, std::ios::binary);
+        if (!file.is_open())
+        {
+            spdlog::error("Cannot open file for SHA256 calculation: {}", file_path);
+            return "";
+        }
 
-    int dft_indexer_init(sqlite3 *db)
+        std::vector<unsigned char> buffer(8192);
+        picosha2::hash256_one_by_one hasher;
+        hasher.init();
+
+        while (file.read(reinterpret_cast<char*>(buffer.data()), buffer.size()) || file.gcount() > 0)
+        {
+            hasher.process(buffer.begin(), buffer.begin() + file.gcount());
+        }
+
+        hasher.finish();
+        std::string hex_str;
+        picosha2::get_hash_hex_string(hasher, hex_str);
+        return hex_str;
+    }
+
+    static time_t get_file_mtime(const char *file_path)
+    {
+        struct stat st;
+        if (stat(file_path, &st) == 0)
+        {
+            return st.st_mtime;
+        }
+        return 0;
+    }
+
+    static int index_exists_and_valid(const char *idx_path)
+    {
+        FILE *f = fopen(idx_path, "rb");
+        if (!f)
+            return 0;
+        fclose(f);
+
+        sqlite3 *db;
+        if (sqlite3_open(idx_path, &db) != SQLITE_OK)
+        {
+            return 0;
+        }
+
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT name FROM sqlite_master WHERE type='table' AND "
+                          "name IN ('chunks', 'metadata', 'files')";
+        int table_count = 0;
+
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK)
+        {
+            while (sqlite3_step(stmt) == SQLITE_ROW)
+            {
+                table_count++;
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        sqlite3_close(db);
+        return table_count >= 3;
+    }
+
+    static double get_existing_chunk_size_mb(const char *idx_path)
+    {
+        sqlite3 *db;
+        if (sqlite3_open(idx_path, &db) != SQLITE_OK)
+        {
+            return -1;
+        }
+
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT chunk_size FROM metadata LIMIT 1";
+        double chunk_size_mb = -1;
+
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK)
+        {
+            if (sqlite3_step(stmt) == SQLITE_ROW)
+            {
+                auto chunk_size_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
+                chunk_size_mb = static_cast<double>(chunk_size_bytes) / (1024.0 * 1024.0);
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        sqlite3_close(db);
+        return chunk_size_mb;
+    }
+
+    static bool get_stored_file_info(const char *idx_path, const char *gz_path, std::string &stored_sha256, time_t &stored_mtime)
+    {
+        sqlite3 *db;
+        if (sqlite3_open(idx_path, &db) != SQLITE_OK)
+        {
+            return false;
+        }
+
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT sha256_hex, mtime_unix FROM files WHERE logical_name = ? LIMIT 1";
+        bool found = false;
+
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK)
+        {
+            sqlite3_bind_text(stmt, 1, gz_path, -1, SQLITE_STATIC);
+            if (sqlite3_step(stmt) == SQLITE_ROW)
+            {
+                const char *sha256_text = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                if (sha256_text)
+                {
+                    stored_sha256 = sha256_text;
+                }
+                stored_mtime = static_cast<time_t>(sqlite3_column_int64(stmt, 1));
+                found = true;
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        sqlite3_close(db);
+        return found;
+    }
+
+    static uint64_t file_size_bytes(const char *path)
+    {
+        FILE *fp = fopen(path, "rb");
+        if (!fp)
+            return UINT64_MAX;
+        fseeko(fp, 0, SEEK_END);
+        auto sz = static_cast<uint64_t>(ftello(fp));
+        fclose(fp);
+        return sz;
+    }
+
+    dft_indexer_t* dft_indexer_create(const char* gz_path, const char* idx_path, double chunk_size_mb, bool force_rebuild)
+    {
+        if (!gz_path || !idx_path || chunk_size_mb <= 0)
+        {
+            spdlog::error("Invalid parameters for indexer creation");
+            return nullptr;
+        }
+
+        dft_indexer_t* indexer = static_cast<dft_indexer_t*>(malloc(sizeof(dft_indexer_t)));
+        if (!indexer)
+        {
+            spdlog::error("Failed to allocate memory for indexer");
+            return nullptr;
+        }
+
+        indexer->db = nullptr;
+        indexer->db_opened = false;
+        indexer->chunk_size_mb = chunk_size_mb;
+        indexer->force_rebuild = force_rebuild;
+
+        size_t gz_len = strlen(gz_path);
+        indexer->gz_path = static_cast<char*>(malloc(gz_len + 1));
+        if (!indexer->gz_path)
+        {
+            spdlog::error("Failed to allocate memory for gz path");
+            free(indexer);
+            return nullptr;
+        }
+        strcpy(indexer->gz_path, gz_path);
+
+        // Copy index path
+        size_t idx_len = strlen(idx_path);
+        indexer->idx_path = static_cast<char*>(malloc(idx_len + 1));
+        if (!indexer->idx_path)
+        {
+            spdlog::error("Failed to allocate memory for index path");
+            free(indexer->gz_path);
+            free(indexer);
+            return nullptr;
+        }
+        strcpy(indexer->idx_path, idx_path);
+
+        spdlog::debug("Created DFT indexer for gz: {} and index: {}", gz_path, idx_path);
+        return indexer;
+    }
+
+    int dft_indexer_need_rebuild(dft_indexer_t* indexer)
+    {
+        if (!indexer)
+        {
+            return -1;
+        }
+
+        // Check if index exists and is valid
+        if (!index_exists_and_valid(indexer->idx_path))
+        {
+            spdlog::debug("Index rebuild needed: index does not exist or is invalid");
+            return 1;
+        }
+
+        // If force rebuild is set, always rebuild
+        if (indexer->force_rebuild)
+        {
+            spdlog::debug("Index rebuild needed: force rebuild is enabled");
+            return 1;
+        }
+
+        // Check if chunk size differs
+        double existing_chunk_size = get_existing_chunk_size_mb(indexer->idx_path);
+        if (existing_chunk_size > 0)
+        {
+            double diff = fabs(existing_chunk_size - indexer->chunk_size_mb);
+            if (diff > 0.1) // Allow small floating point differences
+            {
+                spdlog::debug("Index rebuild needed: chunk size differs ({:.1f} MB vs {:.1f} MB)", 
+                             existing_chunk_size, indexer->chunk_size_mb);
+                return 1;
+            }
+        }
+
+        // Check if file content has changed using SHA256
+        std::string stored_sha256;
+        time_t stored_mtime;
+        if (get_stored_file_info(indexer->idx_path, indexer->gz_path, stored_sha256, stored_mtime))
+        {
+            // // First, quick check using modification time as optimization
+            // time_t current_mtime = get_file_mtime(indexer->gz_path);
+            // if (current_mtime != stored_mtime && current_mtime > 0 && stored_mtime > 0)
+            // {
+            //     spdlog::debug("Index rebuild needed: file modification time changed");
+            //     return 1;
+            // }
+
+            // If we have a stored SHA256, calculate current SHA256 and compare
+            if (!stored_sha256.empty())
+            {
+                std::string current_sha256 = calculate_file_sha256(indexer->gz_path);
+                if (current_sha256.empty())
+                {
+                    spdlog::error("Failed to calculate SHA256 for {}", indexer->gz_path);
+                    return -1;
+                }
+
+                if (current_sha256 != stored_sha256)
+                {
+                    spdlog::debug("Index rebuild needed: file SHA256 changed ({} vs {})", 
+                                 current_sha256.substr(0, 16) + "...", 
+                                 stored_sha256.substr(0, 16) + "...");
+                    return 1;
+                }
+            }
+            else
+            {
+                // No stored SHA256, this might be an old index format
+                spdlog::debug("Index rebuild needed: no SHA256 stored in index (old format)");
+                return 1;
+            }
+        }
+        else
+        {
+            // Could not get stored file info, assume rebuild needed
+            spdlog::debug("Index rebuild needed: could not retrieve stored file information");
+            return 1;
+        }
+
+        spdlog::debug("Index rebuild not needed: file content unchanged");
+        return 0;
+    }
+
+    // Initialize database schema
+    static int init_schema(sqlite3 *db)
     {
         char *errmsg = NULL;
         int rc = sqlite3_exec(db, SQL_SCHEMA, NULL, NULL, &errmsg);
@@ -55,6 +335,7 @@ extern "C"
         return rc;
     }
 
+    // Helper function for database preparation
     static int db_prep(sqlite3 *db, sqlite3_stmt **pStmt, const char *sql)
     {
         return sqlite3_prepare_v2(db, sql, -1, pStmt, NULL);
@@ -123,7 +404,8 @@ extern "C"
         return 0;
     }
 
-    int dft_indexer_build(sqlite3 *db, int file_id, const char *gz_path, size_t chunk_size)
+    // Internal function to build index
+    static int build_index_internal(sqlite3 *db, int file_id, const char *gz_path, size_t chunk_size)
     {
         FILE *fp = fopen(gz_path, "rb");
         if (!fp)
@@ -319,20 +601,135 @@ extern "C"
         return 0;
     }
 
+    int dft_indexer_build(dft_indexer_t* indexer)
+    {
+        if (!indexer)
+        {
+            return -1;
+        }
+
+        // Check if rebuild is needed
+        int need_rebuild = dft_indexer_need_rebuild(indexer);
+        if (need_rebuild == -1)
+        {
+            return -1;
+        }
+        
+        if (need_rebuild == 0)
+        {
+            spdlog::info("Index is up to date, skipping rebuild");
+            return 0;
+        }
+
+        spdlog::info("Building index for {} with {:.1f} MB chunks...", indexer->gz_path, indexer->chunk_size_mb);
+
+        // Open database
+        if (sqlite3_open(indexer->idx_path, &indexer->db) != SQLITE_OK)
+        {
+            spdlog::error("Cannot create/open database {}: {}", indexer->idx_path, sqlite3_errmsg(indexer->db));
+            return -1;
+        }
+        indexer->db_opened = true;
+
+        // Initialize schema
+        if (init_schema(indexer->db) != SQLITE_OK)
+        {
+            spdlog::error("Failed to initialize database schema");
+            return -1;
+        }
+
+        // Get file info
+        uint64_t bytes = file_size_bytes(indexer->gz_path);
+        if (bytes == UINT64_MAX)
+        {
+            spdlog::error("Cannot stat {}", indexer->gz_path);
+            return -1;
+        }
+
+        // Calculate SHA256 and get modification time
+        std::string file_sha256 = calculate_file_sha256(indexer->gz_path);
+        if (file_sha256.empty())
+        {
+            spdlog::error("Failed to calculate SHA256 for {}", indexer->gz_path);
+            return -1;
+        }
+        
+        time_t file_mtime = get_file_mtime(indexer->gz_path);
+
+        spdlog::debug("File info: size={} bytes, mtime={}, sha256={}...", 
+                     bytes, file_mtime, file_sha256.substr(0, 16));
+
+        // Insert/update file record
+        sqlite3_stmt *st;
+        if (sqlite3_prepare_v2(indexer->db,
+                               "INSERT INTO files(logical_name, byte_size, mtime_unix, sha256_hex) "
+                               "VALUES(?, ?, ?, ?) "
+                               "ON CONFLICT(logical_name) DO UPDATE SET "
+                               "byte_size=excluded.byte_size, "
+                               "mtime_unix=excluded.mtime_unix, "
+                               "sha256_hex=excluded.sha256_hex "
+                               "RETURNING id;",
+                               -1, &st, NULL) != SQLITE_OK)
+        {
+            spdlog::error("Prepare failed: {}", sqlite3_errmsg(indexer->db));
+            return -1;
+        }
+
+        sqlite3_bind_text(st, 1, indexer->gz_path, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(st, 2, static_cast<sqlite3_int64>(bytes));
+        sqlite3_bind_int64(st, 3, static_cast<sqlite3_int64>(file_mtime));
+        sqlite3_bind_text(st, 4, file_sha256.c_str(), -1, SQLITE_TRANSIENT);
+
+        int rc = sqlite3_step(st);
+        if (rc != SQLITE_ROW && rc != SQLITE_DONE)
+        {
+            spdlog::error("Insert failed: {}", sqlite3_errmsg(indexer->db));
+            sqlite3_finalize(st);
+            return -1;
+        }
+
+        int db_file_id = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+
+        // Build the index
+        auto stride = static_cast<size_t>(indexer->chunk_size_mb * 1024 * 1024);
+        spdlog::debug("Building index with stride: {} bytes ({:.1f} MB)", stride, indexer->chunk_size_mb);
+        
+        int ret = build_index_internal(indexer->db, db_file_id, indexer->gz_path, stride);
+        if (ret != 0)
+        {
+            spdlog::error("Index build failed for {} (error code: {})", indexer->gz_path, ret);
+            return -1;
+        }
+
+        spdlog::info("Index built successfully for {}", indexer->gz_path);
+        return 0;
+    }
+
+    void dft_indexer_destroy(dft_indexer_t* indexer)
+    {
+        if (!indexer)
+        {
+            return;
+        }
+
+        if (indexer->db_opened && indexer->db)
+        {
+            sqlite3_close(indexer->db);
+        }
+
+        if (indexer->gz_path)
+        {
+            free(indexer->gz_path);
+        }
+
+        if (indexer->idx_path)
+        {
+            free(indexer->idx_path);
+        }
+
+        free(indexer);
+        spdlog::debug("Successfully destroyed DFT indexer");
+    }
+
 } // extern "C"
-
-namespace dft
-{
-namespace indexer
-{
-int init(sqlite3 *db)
-{
-    return dft_indexer_init(db);
-}
-
-int build(sqlite3 *db, int file_id, const char *gz_path, size_t chunk_size)
-{
-    return dft_indexer_build(db, file_id, gz_path, chunk_size);
-}
-} // namespace indexer
-} // namespace dft

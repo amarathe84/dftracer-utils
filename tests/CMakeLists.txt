@@ -45,6 +45,32 @@ endif()
 
 add_test(NAME test_reader COMMAND test_reader)
 
+## Test Opaque API
+
+add_executable(test_opaque_api
+    test_opaque_api.cpp
+)
+target_link_libraries(test_opaque_api
+    PRIVATE
+    dft_reader
+    doctest::doctest
+    ZLIB::ZLIB
+    ghc_filesystem
+)
+target_include_directories(test_opaque_api
+    PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/reader
+)
+target_set_warnings(test_opaque_api)
+
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_opaque_api PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(test_opaque_api PRIVATE --coverage)
+endif()
+
+add_test(NAME test_opaque_api COMMAND test_opaque_api)
+
 ##########################################
 # Package Discovery Tests
 ##########################################

@@ -5,12 +5,12 @@
 #include <dftracer_utils/reader/indexer.h>
 #include <dftracer_utils/reader/reader.h>
 #include <dftracer_utils/reader/utils.h>
+#include <dftracer_utils/reader/filesystem.h>
 
 #include <algorithm>
 #include <cctype>
 #include <memory>
 #include <optional>
-#include <sqlite3.h>
 #include <stdexcept>
 #include <string>
 
@@ -35,10 +35,10 @@ std::string trim_trailing(const char *data, size_t size)
 class DFTracerReader
 {
   private:
-    sqlite3 *db_;
+    dft_reader_t *reader_;
     std::string gzip_path_;
     std::string index_path_;
-    bool db_opened_;
+    bool is_open_;
 
     uint64_t current_pos_;
     uint64_t max_bytes_;
@@ -46,7 +46,7 @@ class DFTracerReader
 
   public:
     DFTracerReader(const std::string &gzip_path, const std::optional<std::string> &index_path = std::nullopt)
-        : gzip_path_(gzip_path), db_(nullptr), db_opened_(false), current_pos_(0), max_bytes_(0),
+        : gzip_path_(gzip_path), reader_(nullptr), is_open_(false), current_pos_(0), max_bytes_(0),
           default_step_(1024 * 1024)
     {
 
@@ -69,19 +69,25 @@ class DFTracerReader
 
     void open()
     {
-        if (db_opened_)
+        if (is_open_)
         {
             return;
         }
 
-        if (sqlite3_open(index_path_.c_str(), &db_) != SQLITE_OK)
-        {
-            throw std::runtime_error("Failed to open index database: " + std::string(sqlite3_errmsg(db_)));
+        if (!fs::exists(gzip_path_)) {
+          throw std::runtime_error("Gzip file does not exist: " + gzip_path_);
         }
-        db_opened_ = true;
+
+        reader_ = dft_reader_create(gzip_path_.c_str(), index_path_.c_str());
+        if (!reader_)
+        {
+            throw std::runtime_error("Failed to create DFT reader for gzip: " + gzip_path_ + " and index: " + index_path_);
+        }
+        
+        is_open_ = true;
 
         size_t max_bytes;
-        int result = dft::reader::get_max_bytes(db_, &max_bytes);
+        int result = dft_reader_get_max_bytes(reader_, &max_bytes);
         if (result == 0)
         {
             max_bytes_ = static_cast<uint64_t>(max_bytes);
@@ -94,11 +100,11 @@ class DFTracerReader
 
     void close()
     {
-        if (db_opened_ && db_)
+        if (is_open_ && reader_)
         {
-            sqlite3_close(db_);
-            db_ = nullptr;
-            db_opened_ = false;
+            dft_reader_destroy(reader_);
+            reader_ = nullptr;
+            is_open_ = false;
             current_pos_ = 0;
             max_bytes_ = 0;
         }
@@ -106,13 +112,13 @@ class DFTracerReader
 
     uint64_t get_max_bytes()
     {
-        if (!db_opened_)
+        if (!is_open_)
         {
-            throw std::runtime_error("Database is not open");
+            throw std::runtime_error("Reader is not open");
         }
 
         size_t max_bytes;
-        int result = dft::reader::get_max_bytes(db_, &max_bytes);
+        int result = dft_reader_get_max_bytes(reader_, &max_bytes);
 
         if (result != 0)
         {
@@ -190,18 +196,18 @@ class DFTracerReader
 
     ByteIterator iterator()
     {
-        if (!db_opened_)
+        if (!is_open_)
         {
-            throw std::runtime_error("Database is not open");
+            throw std::runtime_error("Reader is not open");
         }
         return ByteIterator(this, 1024 * 1024);
     }
 
     ByteIterator iter(uint64_t step_bytes)
     {
-        if (!db_opened_)
+        if (!is_open_)
         {
-            throw std::runtime_error("Database is not open");
+            throw std::runtime_error("Reader is not open");
         }
         if (step_bytes == 0)
         {
@@ -212,9 +218,9 @@ class DFTracerReader
 
     DFTracerReader &__iter__()
     {
-        if (!db_opened_)
+        if (!is_open_)
         {
-            throw std::runtime_error("Database is not open");
+            throw std::runtime_error("Reader is not open");
         }
         current_pos_ = 0;
         return *this;
@@ -222,9 +228,9 @@ class DFTracerReader
 
     std::string __next__()
     {
-        if (!db_opened_)
+        if (!is_open_)
         {
-            throw std::runtime_error("Database is not open");
+            throw std::runtime_error("Reader is not open");
         }
 
         if (current_pos_ >= max_bytes_)
@@ -262,16 +268,15 @@ class DFTracerReader
 
     std::string read(uint64_t start_bytes, uint64_t end_bytes)
     {
-        if (!db_opened_)
+        if (!is_open_)
         {
-            throw std::runtime_error("Database is not open");
+            throw std::runtime_error("Reader is not open");
         }
 
         char *output = nullptr;
         size_t output_size = 0;
 
-        int result =
-            dft::reader::read_range_bytes(db_, gzip_path_.c_str(), start_bytes, end_bytes, &output, &output_size);
+        int result = dft_reader_read_range_bytes(reader_, gzip_path_.c_str(), start_bytes, end_bytes, &output, &output_size);
 
         if (result != 0)
         {
@@ -289,16 +294,19 @@ class DFTracerReader
 
     std::string read_mb(double start_mb, double end_mb)
     {
-        if (!db_opened_)
+        if (!is_open_)
         {
-            throw std::runtime_error("Database is not open");
+            throw std::runtime_error("Reader is not open");
         }
 
         char *output = nullptr;
         size_t output_size = 0;
 
-        int result =
-            dft::reader::read_range_megabytes(db_, gzip_path_.c_str(), start_mb, end_mb, &output, &output_size);
+        // Convert MB to bytes and call the byte version
+        size_t start_bytes = static_cast<size_t>(start_mb * 1024 * 1024);
+        size_t end_bytes = static_cast<size_t>(end_mb * 1024 * 1024);
+
+        int result = dft_reader_read_range_bytes(reader_, gzip_path_.c_str(), start_bytes, end_bytes, &output, &output_size);
 
         if (result != 0)
         {
@@ -337,7 +345,7 @@ class DFTracerReader
 
     bool is_open() const
     {
-        return db_opened_;
+        return is_open_;
     }
 };
 

@@ -22,7 +22,7 @@ function(need_argparse)
     CPMAddPackage(
       NAME argparse
       GITHUB_REPOSITORY p-ranav/argparse
-      VERSION 3.1
+      VERSION 3.2
       OPTIONS
         "ARGPARSE_BUILD_TESTS OFF"
         "ARGPARSE_BUILD_SAMPLES OFF"
@@ -369,6 +369,28 @@ function(link_zlib TARGET_NAME LIBRARY_TYPE)
       # System zlib - use normal linking
       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
+    endif()
+  endif()
+endfunction()
+
+function(need_picosha2)
+  if(NOT PicoSHA2_ADDED)
+    CPMAddPackage(
+      NAME PicoSHA2
+      GITHUB_REPOSITORY okdshin/PicoSHA2
+      VERSION 1.0.1
+      GIT_TAG "v1.0.1"
+      DOWNLOAD_ONLY YES
+    )
+    
+    if(PicoSHA2_ADDED)
+      add_library(picosha2 INTERFACE)
+      target_include_directories(picosha2 INTERFACE
+          $<BUILD_INTERFACE:${PicoSHA2_SOURCE_DIR}>
+          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+      )
+      install(FILES ${PicoSHA2_SOURCE_DIR}/picosha2.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+      message(STATUS "Added picosha2 header-only library")
     endif()
   endif()
 endfunction()

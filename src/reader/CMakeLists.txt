@@ -17,6 +17,7 @@ need_sqlite3()
 need_spdlog()
 need_argparse()
 need_ghc_filesystem()
+need_picosha2()
 
 ##########################################
 # Constants
@@ -46,7 +47,7 @@ set_target_properties(dft_reader PROPERTIES
     OUTPUT_NAME dft_reader
 )
 target_link_libraries(dft_reader 
-    PRIVATE spdlog::spdlog
+    PRIVATE spdlog::spdlog picosha2
     PUBLIC ghc_filesystem
 )
 
@@ -76,7 +77,7 @@ set_target_properties(dft_reader_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dft_reader_shared 
-    PRIVATE spdlog::spdlog
+    PRIVATE spdlog::spdlog picosha2
     PUBLIC ghc_filesystem
 )
 
@@ -100,7 +101,7 @@ endif()
 # executable
 add_executable(dft_reader_exe main.cpp ${DFTRACER_UTILS_${PROJECT_NAME}_SOURCES})
 set_target_properties(dft_reader_exe PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader_exe PRIVATE spdlog::spdlog argparse::argparse ghc_filesystem)
+target_link_libraries(dft_reader_exe PRIVATE spdlog::spdlog argparse::argparse ghc_filesystem picosha2)
 
 # Link SQLite3 and zlib for executable (treat as shared since it's an executable)
 link_sqlite3(dft_reader_exe STATIC)
@@ -148,6 +149,10 @@ endif()
 # Add ghc_filesystem if it's installable
 if(TARGET ghc_filesystem)
     list(APPEND INSTALLABLE_TARGETS ghc_filesystem)
+endif()
+
+if(TARGET picosha2)
+    list(APPEND INSTALLABLE_TARGETS picosha2)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS}

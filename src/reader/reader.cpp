@@ -6,7 +6,16 @@
 #include <cstdlib>
 #include <cstring>
 #include <spdlog/spdlog.h>
+#include <sqlite3.h>
 #include <zlib.h>
+
+struct dft_reader
+{
+    sqlite3 *db;
+    char *gz_path;
+    char *index_path;
+    bool is_open;
+};
 
 // size of input buffer for decompression
 #define CHUNK_SIZE 16384
@@ -84,19 +93,110 @@ static int inflate_read(InflateState *I, unsigned char *out, size_t out_size, si
 extern "C"
 {
 
-    int dft_reader_get_max_bytes(sqlite3 *db, size_t *max_bytes)
+    dft_reader_t *dft_reader_create(const char *gz_path, const char *idx_path)
     {
-        if (!db || !max_bytes)
+        if (!gz_path || !idx_path)
         {
+            spdlog::error("Both gz_path and idx_path cannot be null");
+            return nullptr;
+        }
+
+        dft_reader_t *reader = static_cast<dft_reader_t *>(malloc(sizeof(dft_reader_t)));
+        if (!reader)
+        {
+            spdlog::error("Failed to allocate memory for reader");
+            return nullptr;
+        }
+
+        // Initialize the structure
+        reader->db = nullptr;
+        reader->is_open = false;
+        reader->gz_path = nullptr;
+        reader->index_path = nullptr;
+        
+        // Copy the gz path
+        size_t gz_path_len = strlen(gz_path);
+        reader->gz_path = static_cast<char *>(malloc(gz_path_len + 1));
+        if (!reader->gz_path)
+        {
+            spdlog::error("Failed to allocate memory for gz path");
+            free(reader);
+            return nullptr;
+        }
+        strcpy(reader->gz_path, gz_path);
+        
+        // Copy the index path
+        size_t idx_path_len = strlen(idx_path);
+        reader->index_path = static_cast<char *>(malloc(idx_path_len + 1));
+        if (!reader->index_path)
+        {
+            spdlog::error("Failed to allocate memory for index path");
+            free(reader->gz_path);
+            free(reader);
+            return nullptr;
+        }
+        strcpy(reader->index_path, idx_path);
+
+        // Open the database
+        if (sqlite3_open(idx_path, &reader->db) != SQLITE_OK)
+        {
+            spdlog::error("Failed to open index database: {}", sqlite3_errmsg(reader->db));
+            free(reader->gz_path);
+            free(reader->index_path);
+            free(reader);
+            return nullptr;
+        }
+
+        reader->is_open = true;
+        spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
+        return reader;
+    }
+
+    void dft_reader_destroy(dft_reader_t *reader)
+    {
+        if (!reader)
+        {
+            return;
+        }
+
+        if (reader->is_open && reader->db)
+        {
+            sqlite3_close(reader->db);
+        }
+
+        if (reader->gz_path)
+        {
+            free(reader->gz_path);
+        }
+
+        if (reader->index_path)
+        {
+            free(reader->index_path);
+        }
+
+        free(reader);
+        spdlog::debug("Successfully destroyed DFT reader");
+    }
+
+    int dft_reader_get_max_bytes(dft_reader_t *reader, size_t *max_bytes)
+    {
+        if (!reader || !max_bytes)
+        {
+            return -1;
+        }
+
+        if (!reader->is_open || !reader->db)
+        {
+            spdlog::error("Reader is not open");
             return -1;
         }
 
         sqlite3_stmt *stmt;
         const char *sql = "SELECT MAX(uncompressed_offset + uncompressed_size) FROM chunks";
 
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        if (sqlite3_prepare_v2(reader->db, sql, -1, &stmt, NULL) != SQLITE_OK)
         {
-            spdlog::error("Failed to prepare max bytes query: {}", sqlite3_errmsg(db));
+            spdlog::error("Failed to prepare max bytes query: {}", sqlite3_errmsg(reader->db));
             return -1;
         }
 
@@ -120,7 +220,7 @@ extern "C"
         }
         else
         {
-            spdlog::error("Failed to execute max bytes query: {}", sqlite3_errmsg(db));
+            spdlog::error("Failed to execute max bytes query: {}", sqlite3_errmsg(reader->db));
         }
 
         sqlite3_finalize(stmt);
@@ -128,10 +228,16 @@ extern "C"
     }
 
     int dft_reader_read_range_bytes(
-        sqlite3 *db, const char *gz_path, size_t start_bytes, size_t end_bytes, char **output, size_t *output_size)
+        dft_reader_t *reader, const char *gz_path, size_t start_bytes, size_t end_bytes, char **output, size_t *output_size)
     {
-        if (!db || !gz_path || !output || !output_size)
+        if (!reader || !gz_path || !output || !output_size)
         {
+            return -1;
+        }
+
+        if (!reader->is_open || !reader->db)
+        {
+            spdlog::error("Reader is not open");
             return -1;
         }
 
@@ -157,9 +263,9 @@ extern "C"
                           "+ uncompressed_size) > ? "
                           "ORDER BY chunk_idx LIMIT 1";
 
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+        if (sqlite3_prepare_v2(reader->db, sql, -1, &stmt, NULL) != SQLITE_OK)
         {
-            spdlog::error("Failed to prepare chunk query: {}", sqlite3_errmsg(db));
+            spdlog::error("Failed to prepare chunk query: {}", sqlite3_errmsg(reader->db));
             return -1;
         }
 
@@ -207,9 +313,12 @@ extern "C"
 
         size_t actual_start = start_bytes;
 
+        // for small ranges (< 1KB), skip JSON line boundary search and read exact bytes
+        bool use_exact_bytes = (target_size < 1024);
+
         // skip to find the start of a complete JSON line
-        // at or after the start position
-        if (start_bytes > 0)
+        // at or after the start position (only for larger ranges)
+        if (start_bytes > 0 && !use_exact_bytes)
         {
             unsigned char *search_buffer = static_cast<unsigned char *>(malloc(65536));
             if (!search_buffer)
@@ -222,8 +331,8 @@ extern "C"
             // read and scan for the first complete JSON line
             // at or after start_bytes
             size_t current_pos = 0;
-            // we look 1024 bytes before in case we need to find a complete line
-            size_t search_start = start_bytes > 1024 ? start_bytes - 1024 : 0;
+            // we look at most 256 bytes before in case we need to find a complete line
+            size_t search_start = start_bytes > 256 ? start_bytes - 256 : 0;
 
             spdlog::debug("Searching for complete JSON line starting around position {}", start_bytes);
 
@@ -247,7 +356,7 @@ extern "C"
 
             // read and search for a complete line starting position
             size_t buffer_used = 0;
-            while (current_pos < start_bytes + 4096)
+            while (current_pos < start_bytes + 512)  // limit search to 512 bytes past start
             {
                 size_t to_read = 65536 - buffer_used;
                 size_t bytes_read;
@@ -299,7 +408,7 @@ extern "C"
                 return -1;
             }
 
-            // Skip to actual start
+            // skip to actual start
             if (actual_start > 0)
             {
                 unsigned char *skip_buffer = static_cast<unsigned char *>(malloc(65536));
@@ -332,11 +441,30 @@ extern "C"
         }
 
         // adjust target size based on actual start position
-        size_t adjusted_target_size = target_size - (actual_start - start_bytes);
-        if (adjusted_target_size <= 0)
+        size_t adjusted_target_size;
+        if (use_exact_bytes)
         {
-            // read at least some data
-            adjusted_target_size = 1024;
+            // for exact byte mode, use the original target size
+            adjusted_target_size = target_size;
+        }
+        else if (actual_start <= start_bytes)
+        {
+            // actual_start is at or before requested start, use original target size
+            adjusted_target_size = target_size;
+        }
+        else
+        {
+            // actual_start is after requested start, adjust target size
+            size_t offset_diff = actual_start - start_bytes;
+            if (offset_diff >= target_size)
+            {
+                // read at least some data
+                adjusted_target_size = 1024;
+            }
+            else
+            {
+                adjusted_target_size = target_size - offset_diff;
+            }
         }
 
         // use streaming approach for large files instead of allocating everything at once
@@ -355,28 +483,38 @@ extern "C"
         }
 
         // @note: read the requested range using streaming approach
-        // this reading is line boundary-aware, meaning
+        // this reading is line boundary-aware for larger ranges, meaning
         // we will look for complete JSON lines within the requested range
+        // for small ranges, we read exact bytes
         size_t total_read = 0;
         bool boundary_search_mode = false;
-        spdlog::debug("Reading {} bytes starting from position {} (adjusted from {})",
+        spdlog::debug("Reading {} bytes starting from position {} (adjusted from {}) - exact mode: {}",
                       adjusted_target_size,
                       actual_start,
-                      start_bytes);
+                      start_bytes,
+                      use_exact_bytes);
 
         while (true)
         {
             // check if we've reached our target and should stop
             if (!boundary_search_mode && total_read >= adjusted_target_size)
             {
-                boundary_search_mode = true;
-                spdlog::debug("Reached target size {}, entering boundary search mode", adjusted_target_size);
+                if (use_exact_bytes)
+                {
+                    // in exact mode, stop immediately when we reach the target
+                    break;
+                }
+                else
+                {
+                    boundary_search_mode = true;
+                    spdlog::debug("Reached target size {}, entering boundary search mode", adjusted_target_size);
+                }
             }
 
-            // safety valve for boundary search mode
-            if (boundary_search_mode && total_read > adjusted_target_size + 1024 * 1024)
+            // safety valve for boundary search mode - limit to 4KB past target
+            if (boundary_search_mode && total_read > adjusted_target_size + 4096)
             {
-                spdlog::warn("Boundary search exceeded 1MB past target, stopping");
+                spdlog::debug("Boundary search exceeded 4KB past target, stopping");
                 break;
             }
 
@@ -403,7 +541,12 @@ extern "C"
 
             // read in manageable chunks - smaller chunks in boundary search mode
             size_t chunk_size;
-            if (boundary_search_mode)
+            if (use_exact_bytes)
+            {
+                // In exact mode, read only what we need
+                chunk_size = std::min(adjusted_target_size - total_read, static_cast<size_t>(buffer_capacity - total_read));
+            }
+            else if (boundary_search_mode)
             {
                 chunk_size = std::min(static_cast<size_t>(256), static_cast<size_t>(buffer_capacity - total_read));
             }
@@ -433,8 +576,8 @@ extern "C"
 
             total_read += bytes_read;
 
-            // in boundary search mode, look for complete JSON line boundaries
-            if (boundary_search_mode)
+            // in boundary search mode (not exact mode), look for complete JSON line boundaries
+            if (boundary_search_mode && !use_exact_bytes)
             {
                 // scan the newly read data for }\n boundary
                 for (size_t i = 1; i < bytes_read; i++)
@@ -475,19 +618,4 @@ extern "C"
     }
 } // extern "C"
 
-namespace dft
-{
-namespace reader
-{
-int get_max_bytes(sqlite3 *db, size_t *max_bytes)
-{
-    return dft_reader_get_max_bytes(db, max_bytes);
-}
 
-int read_range_bytes(
-    sqlite3 *db, const char *gz_path, size_t start_bytes, size_t end_bytes, char **output, size_t *output_size)
-{
-    return dft_reader_read_range_bytes(db, gz_path, start_bytes, end_bytes, output, output_size);
-}
-} // namespace reader
-} // namespace dft
