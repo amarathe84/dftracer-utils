@@ -307,12 +307,26 @@ int read_data_range_bytes(
     // this reading is line boundary-aware, meaning
     // we will look for complete JSON lines within the requested range
     size_t total_read = 0;
-    uint64_t total_target_read = 0;
+    bool boundary_search_mode = false;
     spdlog::debug("Reading {} bytes starting from position {} (adjusted from {})",
                   adjusted_target_size, actual_start, start_bytes);
     
-    while (total_target_read < adjusted_target_size)
+    while (true)
     {
+        // Check if we've reached our target and should stop
+        if (!boundary_search_mode && total_read >= adjusted_target_size)
+        {
+            boundary_search_mode = true;
+            spdlog::debug("Reached target size {}, entering boundary search mode", adjusted_target_size);
+        }
+        
+        // Safety valve for boundary search mode
+        if (boundary_search_mode && total_read > adjusted_target_size + 1024 * 1024)
+        {
+            spdlog::warn("Boundary search exceeded 1MB past target, stopping");
+            break;
+        }
+        
         // Ensure we have enough buffer space
         if (total_read + 65536 > buffer_capacity)
         {
@@ -334,11 +348,20 @@ int read_data_range_bytes(
             spdlog::debug("Grew buffer to {} bytes", buffer_capacity);
         }
 
-        // Read in manageable chunks
-        size_t chunk_size = std::min(static_cast<size_t>(65536), 
-                                     static_cast<size_t>(buffer_capacity - total_read));
+        // Read in manageable chunks - smaller chunks in boundary search mode
+        size_t chunk_size;
+        if (boundary_search_mode)
+        {
+            chunk_size = std::min(static_cast<size_t>(256), 
+                                  static_cast<size_t>(buffer_capacity - total_read));
+        }
+        else
+        {
+            chunk_size = std::min(static_cast<size_t>(65536), 
+                                  static_cast<size_t>(buffer_capacity - total_read));
+        }
+        
         size_t bytes_read;
-
         if (inflate_read(&inflate_state, reinterpret_cast<unsigned char *>(*output + total_read), chunk_size, &bytes_read) != 0)
         {
             spdlog::error("Failed during read phase at position {}", total_read);
@@ -351,51 +374,38 @@ int read_data_range_bytes(
 
         if (bytes_read == 0)
         {
+            spdlog::debug("Reached EOF at {} bytes", total_read);
             break; // EOF
         }
         
         total_read += bytes_read;
-        total_target_read += bytes_read;
 
-        // Simple boundary detection: once we've read enough, continue until we hit }\n
-        if (total_target_read >= adjusted_target_size && bytes_read > 0)
+        // In boundary search mode, look for complete JSON line boundaries
+        if (boundary_search_mode)
         {
-            // We've read our target amount. Now scan the buffer we just read
-            // to see if it contains a complete }\n boundary
-            bool found_boundary_in_chunk = false;
-            size_t boundary_pos = 0;
-            
+            // Scan the newly read data for }\n boundary
             for (size_t i = 1; i < bytes_read; i++)
             {
                 size_t buffer_pos = total_read - bytes_read + i;
                 if (buffer_pos > 0 && (*output)[buffer_pos-1] == '}' && (*output)[buffer_pos] == '\n')
                 {
-                    // Found a boundary in this chunk
-                    found_boundary_in_chunk = true;
-                    boundary_pos = buffer_pos + 1;
-                    break;
+                    // Found a boundary - truncate here and stop
+                    total_read = buffer_pos + 1;
+                    spdlog::debug("Found JSON boundary at position {}, truncating", total_read);
+                    goto done_reading;
                 }
             }
             
-            if (found_boundary_in_chunk)
+            // Also check if the last character we read completes a boundary
+            if (total_read >= 2 && (*output)[total_read-2] == '}' && (*output)[total_read-1] == '\n')
             {
-                // Truncate at the boundary and stop
-                total_read = boundary_pos;
-                spdlog::debug("Found boundary at position {}, truncating", boundary_pos);
-                break;
-            }
-            
-            // If no boundary in this chunk, continue reading in small increments
-            chunk_size = 256;
-            
-            // Safety valve
-            if (total_read > adjusted_target_size + 1024 * 1024)
-            {
-                spdlog::warn("Boundary search exceeded 1MB past target, stopping");
+                spdlog::debug("Found JSON boundary at end of read, position {}", total_read);
                 break;
             }
         }
     }
+    
+done_reading:
 
     (*output)[total_read] = '\0';
     *output_size = total_read;
