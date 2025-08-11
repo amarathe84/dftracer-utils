@@ -4,6 +4,7 @@
 
 #include <dftracer_utils/reader/reader.h>
 #include <dftracer_utils/reader/indexer.h>
+#include <dftracer_utils/reader/utils.h>
 
 #include <sqlite3.h>
 #include <string>
@@ -80,9 +81,9 @@ public:
         
         char* output = nullptr;
         size_t output_size = 0;
-        
-        int result = read_data_range_bytes(db_, gzip_path_.c_str(), start_bytes, end_bytes, &output, &output_size);
-        
+
+        int result = dft::reader::read_range_bytes(db_, gzip_path_.c_str(), start_bytes, end_bytes, &output, &output_size);
+
         if (result != 0) {
             if (output) {
                 free(output);
@@ -102,9 +103,9 @@ public:
         
         char* output = nullptr;
         size_t output_size = 0;
-        
-        int result = read_data_range_megabytes(db_, gzip_path_.c_str(), start_mb, end_mb, &output, &output_size);
-        
+
+        int result = dft::reader::read_range_megabytes(db_, gzip_path_.c_str(), start_mb, end_mb, &output, &output_size);
+
         if (result != 0) {
             if (output) {
                 free(output);
@@ -159,4 +160,21 @@ NB_MODULE(dft_reader_ext, m) {
                      "Path to the index file")
         .def_prop_ro("is_open", &DFTracerReader::is_open,
                      "Whether the database is open");
+
+    // Log level control functions
+    m.def("set_log_level", [](const std::string& level) {
+        return dft::utils::set_log_level(level);
+    }, "level"_a,
+          "Set the global log level using a string (trace, debug, info, warn, error, critical, off)");
+
+    m.def("set_log_level_int", &dft::utils::set_log_level_int, "level"_a,
+          "Set the global log level using an integer (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off)");
+    
+    m.def("get_log_level_string", []() {
+        return std::string(dft::utils::get_log_level_string());
+    },
+          "Get the current global log level as a string");
+
+    m.def("get_log_level_int", &dft::utils::get_log_level_int,
+          "Get the current global log level as an integer");
 }

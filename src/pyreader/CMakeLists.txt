@@ -97,6 +97,7 @@ set(READER_HEADERS
     reader.h
     platform_compat.h
     filesystem.h
+    utils.h
 )
 
 foreach(header ${READER_HEADERS})
@@ -123,6 +124,18 @@ endif()
 
 target_include_directories(dft_reader_ext PRIVATE ${PYREADER_INCLUDE_DIR})
 target_link_libraries(dft_reader_ext PRIVATE dft_reader::static)
+
+# get_target_property(DFT_READER_LINK_LIBS dft_reader::static INTERFACE_LINK_LIBRARIES)
+# if(DFT_READER_LINK_LIBS)
+#     foreach(lib ${DFT_READER_LINK_LIBS})
+#         if(TARGET ${lib})
+#             get_target_property(LIB_INCLUDE_DIRS ${lib} INTERFACE_INCLUDE_DIRECTORIES)
+#             if(LIB_INCLUDE_DIRS)
+#                 target_include_directories(dft_reader_ext PRIVATE ${LIB_INCLUDE_DIRS})
+#             endif()
+#         endif()
+#     endforeach()
+# endif()
 
 # Set RPATH for the extension module
 if(APPLE)

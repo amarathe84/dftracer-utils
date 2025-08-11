@@ -24,11 +24,11 @@ from dft_reader import DFTracerReader
 # Using context manager (recommended)
 with DFTracerReader("trace.pfw.gz") as reader:
     # Read first 1KB
-    data = reader.read_range_bytes(0, 1024)
+    data = reader.read(0, 1024)
     print(f"Read {len(data)} bytes")
     
     # Read first megabyte
-    data = reader.read_range_megabytes(0, 1)
+    data = reader.read_mb(0, 1)
     print(f"Read {len(data)} bytes")
 ```
 
