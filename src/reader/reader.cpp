@@ -120,7 +120,7 @@ class Reader::Impl
             throw std::invalid_argument("start_bytes must be less than end_bytes");
         }
 
-        spdlog::info("Reading byte range [{}, {}] from {}...", start_bytes, end_bytes, gz_path);
+        spdlog::debug("Reading byte range [{}, {}] from {}...", start_bytes, end_bytes, gz_path);
 
         FILE *f = fopen(gz_path.c_str(), "rb");
         if (!f)

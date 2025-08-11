@@ -18,6 +18,7 @@ int main(int argc, char **argv)
     argparse::ArgumentParser program("dft_reader", "1.0");
     program.add_description("DFTracer utility for reading and indexing gzipped files");
     program.add_argument("file").help("Gzipped file to process").required();
+    program.add_argument("-i", "--index").help("Index file to use").default_value<std::string>("");
     program.add_argument("-s", "--start").help("Start position in bytes").default_value<size_t>(0).scan<'d', size_t>();
     program.add_argument("-e", "--end").help("End position in bytes").default_value<size_t>(0).scan<'d', size_t>();
     program.add_argument("-c", "--chunk-size")
@@ -42,7 +43,7 @@ int main(int argc, char **argv)
     }
 
     std::string gz_path = program.get<std::string>("file");
-
+    std::string index_path = program.get<std::string>("--index");
     size_t start_bytes = program.get<size_t>("--start");
     size_t end_bytes = program.get<size_t>("--end");
     double chunk_size_mb = program.get<double>("--chunk-size");
@@ -55,8 +56,7 @@ int main(int argc, char **argv)
     spdlog::set_default_logger(logger);
     dft::utils::set_log_level(log_level_str);
 
-    // spdlog::info("Log level set to: {}", log_level_str);
-
+    spdlog::debug("Log level set to: {}", log_level_str);
     spdlog::debug("Processing file: {}", gz_path);
     spdlog::debug("Start position: {} B", start_bytes);
     spdlog::debug("End position: {} B", end_bytes);
@@ -79,7 +79,7 @@ int main(int argc, char **argv)
 
     fclose(test_file);
 
-    std::string idx_path = gz_path + ".idx";
+    std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
     try
     {
@@ -91,7 +91,7 @@ int main(int argc, char **argv)
         {
             if (!indexer.need_rebuild())
             {
-                spdlog::info("Index is up to date, no rebuild needed");
+                spdlog::debug("Index is up to date, no rebuild needed");
                 return 0;
             }
         }
@@ -117,7 +117,7 @@ int main(int argc, char **argv)
             spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
             dft::reader::Reader reader(gz_path, idx_path);
 
-            spdlog::info("Reading byte range [{} B, {} B] from {}...", start_bytes, end_bytes, gz_path);
+            spdlog::debug("Reading byte range [{} B, {} B] from {}...", start_bytes, end_bytes, gz_path);
 
             auto result = reader.read_range_bytes(start_bytes, end_bytes);
             auto &data = result.first;

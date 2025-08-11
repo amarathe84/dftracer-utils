@@ -535,7 +535,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
     unsigned char buffer[65536];
     int chunk_has_complete_event = 0;
 
-    spdlog::info("Building chunk index with chunk_size={} bytes", chunk_size);
+    spdlog::debug("Building chunk index with chunk_size={} bytes", chunk_size);
 
     while (1)
     {
@@ -648,7 +648,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
     fclose(fp);
 
     sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
-    spdlog::info("Indexing complete: created {} chunks", chunk_idx + 1);
+    spdlog::debug("Indexing complete: created {} chunks", chunk_idx + 1);
     return 0;
 }
 
@@ -658,11 +658,11 @@ void Indexer::Impl::build()
     bool rebuild_needed = need_rebuild();
     if (!rebuild_needed)
     {
-        spdlog::info("Index is up to date, skipping rebuild");
+        spdlog::debug("Index is up to date, skipping rebuild");
         return;
     }
 
-    spdlog::info("Building index for {} with {:.1f} MB chunks...", gz_path_, chunk_size_mb_);
+    spdlog::debug("Building index for {} with {:.1f} MB chunks...", gz_path_, chunk_size_mb_);
 
     // open database
     if (sqlite3_open(idx_path_.c_str(), &db_) != SQLITE_OK)
@@ -737,7 +737,7 @@ void Indexer::Impl::build()
         throw std::runtime_error("Index build failed for " + gz_path_ + " (error code: " + std::to_string(ret) + ")");
     }
 
-    spdlog::info("Index built successfully for {}", gz_path_);
+    spdlog::debug("Index built successfully for {}", gz_path_);
 }
 
 } // namespace indexer
