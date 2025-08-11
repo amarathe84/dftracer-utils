@@ -12,6 +12,7 @@
 #include "platform_compat.h"
 #include "reader.h"
 #include "utils.h"
+#include "filesystem.h"
 
 int main(int argc, char **argv)
 {
@@ -93,7 +94,7 @@ int main(int argc, char **argv)
             }
         }
 
-        if (force_rebuild)
+        if (force_rebuild || !fs::exists(idx_path))
         {
             indexer.build();
         }
