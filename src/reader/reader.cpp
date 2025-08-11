@@ -83,7 +83,7 @@ static int inflate_read(InflateState *I, unsigned char *out, size_t out_size, si
 
 extern "C" {
 
-int read_data_range_bytes(
+int dft_reader_read_range_bytes(
     sqlite3 *db, const char *gz_path, uint64_t start_bytes, uint64_t end_bytes, char **output, size_t *output_size)
 {
     if (!db || !gz_path || !output || !output_size)
@@ -418,5 +418,14 @@ done_reading:
     fclose(f);
     return 0;
 }
-
 } // extern "C"
+
+// C++ namespace implementation
+namespace dft {
+namespace reader {
+    int read_range_bytes(
+        sqlite3 *db, const char *gz_path, uint64_t start_bytes, uint64_t end_bytes, char **output, size_t *output_size) {
+        return dft_reader_read_range_bytes(db, gz_path, start_bytes, end_bytes, output, output_size);
+    }
+}
+}

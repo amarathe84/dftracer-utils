@@ -27,11 +27,13 @@ set(DFTRACER_UTILS_${PROJECT_NAME}_HEADERS
   reader.h
   platform_compat.h
   filesystem.h
+  utils.h
 )
 
 set(DFTRACER_UTILS_${PROJECT_NAME}_SOURCES
   indexer.cpp 
   reader.cpp
+  utils.cpp
 )
 
 ##########################################
@@ -110,6 +112,14 @@ target_set_warnings(dft_reader_exe)
 if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(dft_reader_exe PRIVATE --coverage -fprofile-arcs -ftest-coverage)
     target_link_libraries(dft_reader_exe PRIVATE --coverage)
+endif()
+
+# Make sure spdlog include directories are available for all targets
+get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
+if(SPDLOG_INCLUDE_DIRS)
+    target_include_directories(dft_reader PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dft_reader_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dft_reader_exe PRIVATE ${SPDLOG_INCLUDE_DIRS})
 endif()
 
 

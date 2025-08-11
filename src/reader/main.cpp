@@ -12,23 +12,7 @@
 #include "indexer.h"
 #include "reader.h"
 #include "platform_compat.h"
-
-static spdlog::level::level_enum string_to_log_level(const std::string& level_str)
-{
-    std::string lower_level = level_str;
-    std::transform(lower_level.begin(), lower_level.end(), lower_level.begin(), ::tolower);
-    
-    if (lower_level == "trace") return spdlog::level::trace;
-    if (lower_level == "debug") return spdlog::level::debug;
-    if (lower_level == "info") return spdlog::level::info;
-    if (lower_level == "warn" || lower_level == "warning") return spdlog::level::warn;
-    if (lower_level == "err" || lower_level == "error") return spdlog::level::err;
-    if (lower_level == "critical") return spdlog::level::critical;
-    if (lower_level == "off") return spdlog::level::off;
-    
-    // Default to info if unrecognized
-    return spdlog::level::info;
-}
+#include "utils.h"
 
 static uint64_t file_size_bytes(const char *path)
 {
@@ -120,12 +104,12 @@ int main(int argc, char **argv)
         .required();
     
     program.add_argument("-s", "--start")
-        .help("Start position in megabytes")
+        .help("Start position in bytes")
         .scan<'g', double>()
         .default_value(-1.0);
         
     program.add_argument("-e", "--end")
-        .help("End position in megabytes")
+        .help("End position in bytes")
         .scan<'g', double>()
         .default_value(-1.0);
         
@@ -152,24 +136,22 @@ int main(int argc, char **argv)
     }
 
     std::string gz_path = program.get<std::string>("file");
-    double start_mb = program.get<double>("--start");
-    double end_mb = program.get<double>("--end");
+    double start_bytes = program.get<double>("--start");
+    double end_bytes = program.get<double>("--end");
     double chunk_size_mb = program.get<double>("--chunk-size");
     bool force_rebuild = program.get<bool>("--force");
     std::string log_level_str = program.get<std::string>("--log-level");
 
-    spdlog::level::level_enum log_level = string_to_log_level(log_level_str);
-    
     // stderr-based logger to ensure logs don't interfere with data output
     auto logger = spdlog::stderr_color_mt("stderr");
     spdlog::set_default_logger(logger);
-    spdlog::set_level(log_level);
+    dft::utils::set_log_level(log_level_str);  // Use the new utility function
     
     spdlog::info("Log level set to: {}", log_level_str);
     
     spdlog::debug("Processing file: {}", gz_path);
-    spdlog::debug("Start position: {} MB", start_mb);
-    spdlog::debug("End position: {} MB", end_mb);
+    spdlog::debug("Start position: {} B", start_bytes);
+    spdlog::debug("End position: {} B", end_bytes);
     spdlog::debug("Chunk size: {} MB", chunk_size_mb);
     spdlog::debug("Force rebuild: {}", force_rebuild);
 
@@ -184,18 +166,17 @@ int main(int argc, char **argv)
     auto is_no_value = [](double val) {
         return std::abs(val - (-1.0)) < epsilon;
     };
-    
-    if (!is_no_value(start_mb) && start_mb < 0) {
+
+    if (!is_no_value(start_bytes) && start_bytes < 0) {
         std::cerr << "Error: Start position must be non-negative" << std::endl;
         return 1;
     }
 
-    if (!is_no_value(end_mb) && end_mb < 0) {
+    if (!is_no_value(end_bytes) && end_bytes < 0) {
         std::cerr << "Error: End position must be non-negative" << std::endl;
         return 1;
     }
 
-    // Check if file exists
     FILE* test_file = fopen(gz_path.c_str(), "rb");
     if (!test_file) {
         spdlog::error("File '{}' does not exist or cannot be opened", gz_path);
@@ -203,11 +184,11 @@ int main(int argc, char **argv)
     }
     fclose(test_file);
 
-    bool has_byte_range = (!is_no_value(start_mb) || !is_no_value(end_mb));
+    bool has_byte_range = (!is_no_value(start_bytes) || !is_no_value(end_bytes));
 
-    if (has_byte_range && (is_no_value(start_mb) || is_no_value(end_mb)))
+    if (has_byte_range && (is_no_value(start_bytes) || is_no_value(end_bytes)))
     {
-        spdlog::error("Both --start and --end must be specified for MB range");
+        spdlog::error("Both --start and --end must be specified for byte range");
         return 1;
     }
 
@@ -278,7 +259,7 @@ int main(int argc, char **argv)
 
         spdlog::debug("Database opened successfully: {}", idx_path);
 
-        if (init_schema(db) != SQLITE_OK)
+        if (dft::indexer::init(db) != SQLITE_OK)
         {
             sqlite3_close(db);
             free(idx_path);
@@ -332,7 +313,7 @@ int main(int argc, char **argv)
         /* build the index with configurable stride */
         auto stride = static_cast<uint64_t>(chunk_size_mb * 1024 * 1024);
         spdlog::debug("Building index with stride: {} bytes ({} MB)", stride, chunk_size_mb);
-        int ret = build_gzip_index(db, file_id, gz_path.c_str(), static_cast<long long>(stride));
+        int ret = dft::indexer::build(db, file_id, gz_path.c_str(), static_cast<long long>(stride));
         if (ret != 0)
         {
             spdlog::error("Index build failed for {} (error code: {})", gz_path, ret);
@@ -360,9 +341,9 @@ int main(int argc, char **argv)
         char *output;
         size_t output_size;
 
-        spdlog::info("Reading MB range [{:.2f}, {:.2f}] from {}...", start_mb, end_mb, gz_path);
+        spdlog::info("Reading byte range [{:.2f}B, {:.2f}B] from {}...", start_bytes, end_bytes, gz_path);
 
-        int ret = read_data_range_megabytes(db, gz_path.c_str(), start_mb, end_mb, &output, &output_size);
+        int ret = dft::reader::read_range_bytes(db, gz_path.c_str(), start_bytes, end_bytes, &output, &output_size);
 
         if (ret != 0)
         {

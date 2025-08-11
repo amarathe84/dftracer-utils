@@ -7,10 +7,17 @@
 extern "C" {
 #endif
 
-int init_schema(sqlite3 *db);
-int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long chunk_size);
+int dft_indexer_init(sqlite3 *db);
+int dft_indexer_build(sqlite3 *db, int file_id, const char *gz_path, long long chunk_size);
 
 #ifdef __cplusplus
+} // extern "C"
+
+namespace dft {
+namespace indexer {
+    int init(sqlite3 *db);
+    int build(sqlite3 *db, int file_id, const char *gz_path, long long chunk_size);
+}
 }
 #endif
 

@@ -19,7 +19,7 @@ extern "C" {
  * @param output_size Pointer to store the size of extracted data
  * @return 0 on success, -1 on error
  */
-int read_data_range_bytes(
+int dft_reader_read_range_bytes(
     sqlite3 *db, const char *gz_path, uint64_t start_bytes, uint64_t end_bytes, char **output, size_t *output_size);
 
 /**
@@ -32,7 +32,7 @@ int read_data_range_bytes(
  * @param output_size Pointer to store the size of extracted data
  * @return 0 on success, -1 on error
  */
-static inline int read_data_range_megabytes(
+static inline int dft_reader_read_range_megabytes(
     sqlite3 *db, const char *gz_path, double start_mb, double end_mb, char **output, size_t *output_size)
 {
     if (!db || !gz_path || !output || !output_size)
@@ -44,10 +44,32 @@ static inline int read_data_range_megabytes(
     uint64_t start_bytes = static_cast<uint64_t>(start_mb * 1024 * 1024);
     uint64_t end_bytes = static_cast<uint64_t>(end_mb * 1024 * 1024);
 
-    return read_data_range_bytes(db, gz_path, start_bytes, end_bytes, output, output_size);
+    return dft_reader_read_range_bytes(db, gz_path, start_bytes, end_bytes, output, output_size);
 }
 
 #ifdef __cplusplus
+} // extern "C"
+
+namespace dft {
+namespace reader {
+    int read_range_bytes(
+        sqlite3 *db, const char *gz_path, uint64_t start_bytes, uint64_t end_bytes, char **output, size_t *output_size);
+
+    static inline int read_range_megabytes(
+        sqlite3 *db, const char *gz_path, double start_mb, double end_mb, char **output, size_t *output_size)
+    {
+        if (!db || !gz_path || !output || !output_size)
+        {
+            return -1;
+        }
+
+        // Convert MB to bytes
+        uint64_t start_bytes = static_cast<uint64_t>(start_mb * 1024 * 1024);
+        uint64_t end_bytes = static_cast<uint64_t>(end_mb * 1024 * 1024);
+
+        return read_range_bytes(db, gz_path, start_bytes, end_bytes, output, output_size);
+    }
+}
 }
 #endif
 

@@ -110,8 +110,8 @@ sqlite3* create_temp_db() {
     if (rc != SQLITE_OK) {
         return nullptr;
     }
-    
-    if (init_schema(db) != 0) {
+
+    if (dft::indexer::init(db) != 0) {
         sqlite3_close(db);
         return nullptr;
     }
@@ -152,7 +152,7 @@ TEST_CASE("Gzip index building") {
     std::string gz_file = env.create_test_gzip_file();
     REQUIRE(!gz_file.empty());
     
-    int result = build_gzip_index(db, 1, gz_file.c_str(), 1024);
+    int result = dft::indexer::build(db, 1, gz_file.c_str(), 1024);
     CHECK(result == 0);
     
     // verify chunks were created
@@ -181,8 +181,8 @@ TEST_CASE("Data range reading") {
     
     std::string gz_file = env.create_test_gzip_file();
     REQUIRE(!gz_file.empty());
-    
-    int result = build_gzip_index(db, 1, gz_file.c_str(), 512);
+
+    int result = dft::indexer::build(db, 1, gz_file.c_str(), 512);
     REQUIRE(result == 0);
     
     SUBCASE("Read valid byte range") {
@@ -191,7 +191,7 @@ TEST_CASE("Data range reading") {
         
         // read first 50 bytes
         // reader may return more to complete JSON lines
-        result = read_data_range_bytes(db, gz_file.c_str(), 0, 50, &output, &output_size);
+        result = dft::reader::read_range_bytes(db, gz_file.c_str(), 0, 50, &output, &output_size);
         CHECK(result == 0);
         
         if (result == 0) {
@@ -213,19 +213,19 @@ TEST_CASE("Data range reading") {
         size_t output_size = 0;
         
         // null db
-        result = read_data_range_bytes(nullptr, gz_file.c_str(), 0, 50, &output, &output_size);
+        result = dft::reader::read_range_bytes(nullptr, gz_file.c_str(), 0, 50, &output, &output_size);
         CHECK(result == -1);
         
         // null gz_path
-        result = read_data_range_bytes(db, nullptr, 0, 50, &output, &output_size);
+        result = dft::reader::read_range_bytes(db, nullptr, 0, 50, &output, &output_size);
         CHECK(result == -1);
         
         // null output
-        result = read_data_range_bytes(db, gz_file.c_str(), 0, 50, nullptr, &output_size);
+        result = dft::reader::read_range_bytes(db, gz_file.c_str(), 0, 50, nullptr, &output_size);
         CHECK(result == -1);
         
         // null output_size
-        result = read_data_range_bytes(db, gz_file.c_str(), 0, 50, &output, nullptr);
+        result = dft::reader::read_range_bytes(db, gz_file.c_str(), 0, 50, &output, nullptr);
         CHECK(result == -1);
     }
     
@@ -234,7 +234,7 @@ TEST_CASE("Data range reading") {
         size_t output_size = 0;
         
         // read first 0.001 MB (about 1024 bytes)
-        result = read_data_range_megabytes(db, gz_file.c_str(), 0.0, 0.001, &output, &output_size);
+        result = dft::reader::read_range_megabytes(db, gz_file.c_str(), 0.0, 0.001, &output, &output_size);
         CHECK(result == 0);
         
         if (result == 0) {
@@ -257,15 +257,15 @@ TEST_CASE("Edge cases") {
 
     std::string gz_file = env.create_test_gzip_file();
     REQUIRE(!gz_file.empty());
-    
-    int result = build_gzip_index(db, 1, gz_file.c_str(), 512);
+
+    int result = dft::indexer::build(db, 1, gz_file.c_str(), 512);
     REQUIRE(result == 0);
     
     SUBCASE("Invalid byte range (start > end)") {
         char* output = nullptr;
         size_t output_size = 0;
-        
-        result = read_data_range_bytes(db, gz_file.c_str(), 100, 50, &output, &output_size);
+
+        result = dft::reader::read_range_bytes(db, gz_file.c_str(), 100, 50, &output, &output_size);
         // this should either fail or handle gracefully
         if (result == 0 && output) {
             free(output);
@@ -278,7 +278,7 @@ TEST_CASE("Edge cases") {
         
         // Use cross-platform non-existent path
         fs::path non_existent = fs::temp_directory_path() / "nonexistent" / "file.gz";
-        result = read_data_range_bytes(db, non_existent.string().c_str(), 0, 50, &output, &output_size);
+        result = dft::reader::read_range_bytes(db, non_existent.string().c_str(), 0, 50, &output, &output_size);
         CHECK(result == -1);
     }
     
@@ -294,17 +294,17 @@ TEST_CASE("Memory management") {
     
     std::string gz_file = env.create_test_gzip_file();
     REQUIRE(!gz_file.empty());
-    
-    int result = build_gzip_index(db, 1, gz_file.c_str(), 512);
+
+    int result = dft::indexer::build(db, 1, gz_file.c_str(), 512);
     REQUIRE(result == 0);
     
     // multiple reads to ensure no memory leaks
     for (int i = 0; i < 10000; i++) {
         char* output = nullptr;
         size_t output_size = 0;
-        
-        result = read_data_range_bytes(db, gz_file.c_str(), 0, 30, &output, &output_size);
-        
+
+        result = dft::reader::read_range_bytes(db, gz_file.c_str(), 0, 30, &output, &output_size);
+
         if (result == 0 && output) {
             CHECK(output_size > 0);
             free(output);

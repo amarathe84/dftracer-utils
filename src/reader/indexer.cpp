@@ -36,7 +36,9 @@ const char *SQL_SCHEMA = "CREATE TABLE IF NOT EXISTS files ("
                          "  PRIMARY KEY(file_id)"
                          ");";
 
-int init_schema(sqlite3 *db)
+extern "C" {
+
+int dft_indexer_init(sqlite3 *db)
 {
     char *errmsg = NULL;
     int rc = sqlite3_exec(db, SQL_SCHEMA, NULL, NULL, &errmsg);
@@ -121,9 +123,7 @@ inflate_process_chunk(InflateState *I, unsigned char *out, size_t out_size, size
 }
 
 
-extern "C" {
-
-int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long chunk_size)
+int dft_indexer_build(sqlite3 *db, int file_id, const char *gz_path, long long chunk_size)
 {
     FILE *fp = fopen(gz_path, "rb");
     if (!fp)
@@ -318,4 +318,17 @@ int build_gzip_index(sqlite3 *db, int file_id, const char *gz_path, long long ch
     spdlog::info("Indexing complete: created {} chunks", chunk_idx + 1);
     return 0;
 }
+
 } // extern "C"
+
+namespace dft {
+namespace indexer {
+    int init(sqlite3 *db) {
+        return dft_indexer_init(db);
+    }
+
+    int build(sqlite3 *db, int file_id, const char *gz_path, long long chunk_size) {
+        return dft_indexer_build(db, file_id, gz_path, chunk_size);
+    }
+}
+}
