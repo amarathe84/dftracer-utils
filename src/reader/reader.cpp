@@ -9,10 +9,6 @@
 #include <sqlite3.h>
 #include <zlib.h>
 
-// ==============================================================================
-// Pure C++ Implementation (hidden from users)
-// ==============================================================================
-
 namespace dft {
 namespace reader {
 

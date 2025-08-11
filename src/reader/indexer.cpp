@@ -13,10 +13,6 @@
 #include <fstream>
 #include <vector>
 
-// ==============================================================================
-// Pure C++ Implementation (hidden from users)
-// ==============================================================================
-
 namespace dft {
 namespace indexer {
 
