@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <zlib.h>
 #include <spdlog/spdlog.h>
 
@@ -279,9 +280,7 @@ int read_data_range_bytes(
         }
     }
 
-    // allocate output buffer with extra space to ensure
-    // we can find a complete line boundary
-    // then, we adjust target size based on actual start position
+    // adjust target size based on actual start position
     uint64_t adjusted_target_size = target_size - (actual_start - start_bytes);
     if (adjusted_target_size <= 0)
     {
@@ -289,9 +288,14 @@ int read_data_range_bytes(
         adjusted_target_size = 1024;
     }
 
-    // extra space for line boundary detection
-    uint64_t buffer_size = adjusted_target_size + 4096;
-    *output = static_cast<char*>(malloc(buffer_size + 1));
+    // Use streaming approach for large files instead of allocating everything at once
+    // Limit initial allocation to reasonable chunk size (32MB max)
+    const uint64_t MAX_CHUNK_SIZE = 32 * 1024 * 1024; // 32MB
+    uint64_t initial_chunk = std::min(adjusted_target_size + 4096, MAX_CHUNK_SIZE);
+    
+    // Start with smaller allocation and grow as needed
+    size_t buffer_capacity = static_cast<size_t>(initial_chunk);
+    *output = static_cast<char*>(malloc(buffer_capacity + 1));
     if (!*output)
     {
         inflate_cleanup(&inflate_state);
@@ -299,18 +303,43 @@ int read_data_range_bytes(
         return -1;
     }
 
-    // @note: read the requested range
+    // @note: read the requested range using streaming approach
     // this reading is line boundary-aware, meaning
     // we will look for complete JSON lines within the requested range
     size_t total_read = 0;
+    uint64_t total_target_read = 0;
     spdlog::debug("Reading {} bytes starting from position {} (adjusted from {})",
                   adjusted_target_size, actual_start, start_bytes);
-    while (total_read < buffer_size)
+    
+    while (total_target_read < adjusted_target_size)
     {
-        size_t to_read = buffer_size - total_read;
+        // Ensure we have enough buffer space
+        if (total_read + 65536 > buffer_capacity)
+        {
+            // Need to grow buffer - double it or add 32MB, whichever is smaller
+            size_t new_capacity = std::min(buffer_capacity * 2, 
+                                          buffer_capacity + static_cast<size_t>(MAX_CHUNK_SIZE));
+            char *new_buffer = static_cast<char*>(realloc(*output, new_capacity + 1));
+            if (!new_buffer)
+            {
+                spdlog::error("Failed to grow buffer from {} to {} bytes", buffer_capacity, new_capacity);
+                free(*output);
+                *output = NULL;
+                inflate_cleanup(&inflate_state);
+                fclose(f);
+                return -1;
+            }
+            *output = new_buffer;
+            buffer_capacity = new_capacity;
+            spdlog::debug("Grew buffer to {} bytes", buffer_capacity);
+        }
+
+        // Read in manageable chunks
+        size_t chunk_size = std::min(static_cast<size_t>(65536), 
+                                     static_cast<size_t>(buffer_capacity - total_read));
         size_t bytes_read;
 
-        if (inflate_read(&inflate_state, reinterpret_cast<unsigned char *>(*output + total_read), to_read, &bytes_read) != 0)
+        if (inflate_read(&inflate_state, reinterpret_cast<unsigned char *>(*output + total_read), chunk_size, &bytes_read) != 0)
         {
             spdlog::error("Failed during read phase at position {}", total_read);
             free(*output);
@@ -324,36 +353,45 @@ int read_data_range_bytes(
         {
             break; // EOF
         }
+        
         total_read += bytes_read;
+        total_target_read += bytes_read;
 
-        // if we've read at least the target size,
-        // look for a complete line boundary
-        if (total_read >= adjusted_target_size)
+        // Simple boundary detection: once we've read enough, continue until we hit }\n
+        if (total_target_read >= adjusted_target_size && bytes_read > 0)
         {
-            // find the last complete line that ends with }\n after the target
-            // position
-            size_t last_complete_line = total_read;
-            for (size_t i = adjusted_target_size; i < total_read - 1; i++)
+            // We've read our target amount. Now scan the buffer we just read
+            // to see if it contains a complete }\n boundary
+            bool found_boundary_in_chunk = false;
+            size_t boundary_pos = 0;
+            
+            for (size_t i = 1; i < bytes_read; i++)
             {
-                if ((*output)[i] == '}' && (*output)[i + 1] == '\n')
+                size_t buffer_pos = total_read - bytes_read + i;
+                if (buffer_pos > 0 && (*output)[buffer_pos-1] == '}' && (*output)[buffer_pos] == '\n')
                 {
-                    // found a complete JSON line boundary, include the }\n
-                    last_complete_line = i + 2;
-                    spdlog::debug("Found complete JSON line boundary at position {}", last_complete_line);
+                    // Found a boundary in this chunk
+                    found_boundary_in_chunk = true;
+                    boundary_pos = buffer_pos + 1;
                     break;
                 }
             }
-
-            // found a complete line boundary
-            if (last_complete_line < total_read)
+            
+            if (found_boundary_in_chunk)
             {
-                total_read = last_complete_line;
+                // Truncate at the boundary and stop
+                total_read = boundary_pos;
+                spdlog::debug("Found boundary at position {}, truncating", boundary_pos);
                 break;
             }
-
-            // reached EOF without finding a complete boundary
-            if (bytes_read == 0)
+            
+            // If no boundary in this chunk, continue reading in small increments
+            chunk_size = 256;
+            
+            // Safety valve
+            if (total_read > adjusted_target_size + 1024 * 1024)
             {
+                spdlog::warn("Boundary search exceeded 1MB past target, stopping");
                 break;
             }
         }

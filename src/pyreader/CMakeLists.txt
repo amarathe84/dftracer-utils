@@ -35,6 +35,13 @@ set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
 set(CMAKE_C_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
 
+# macOS SDK compatibility for GCC - use older deployment target
+if (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "macOS deployment target")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmacosx-version-min=11.0")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmacosx-version-min=11.0")
+endif()
+
 # Signal that this is a Python build to avoid export issues
 set(DFTRACER_PYTHON_BUILD ON CACHE BOOL "Building for Python" FORCE)
 
@@ -85,7 +92,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/d
 set(PYREADER_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
 file(MAKE_DIRECTORY ${PYREADER_INCLUDE_DIR}/dftracer_utils/reader)
 
-# Copy headers to the package-style directory structure
 set(READER_HEADERS
     indexer.h
     reader.h
@@ -101,19 +107,38 @@ foreach(header ${READER_HEADERS})
     )
 endforeach()
 
-nanobind_add_module(
-  dft_reader_ext
-  NB_STATIC STABLE_ABI LTO
-  src/reader_ext.cpp
-)
+if (APPLE)
+  nanobind_add_module(
+    dft_reader_ext
+    NB_STATIC STABLE_ABI
+    src/reader_ext.cpp
+  )
+else()
+  nanobind_add_module(
+    dft_reader_ext
+    NB_STATIC STABLE_ABI LTO
+    src/reader_ext.cpp
+  )
+endif()
+
 target_include_directories(dft_reader_ext PRIVATE ${PYREADER_INCLUDE_DIR})
-target_link_libraries(dft_reader_ext PRIVATE dft_reader::shared)
+target_link_libraries(dft_reader_ext PRIVATE dft_reader::static)
 
 # Set RPATH for the extension module
-set_target_properties(dft_reader_ext PROPERTIES 
-    INSTALL_RPATH_USE_LINK_PATH TRUE
+if(APPLE)
+  set_target_properties(dft_reader_ext PROPERTIES
+    INSTALL_RPATH "@loader_path;@loader_path/lib"
+    BUILD_RPATH "@loader_path;@loader_path/lib"
     BUILD_WITH_INSTALL_RPATH FALSE
-    INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/lib64:$ORIGIN/../lib:$ORIGIN/../lib64"
-)
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+  )
+else()
+  set_target_properties(dft_reader_ext PROPERTIES
+      INSTALL_RPATH_USE_LINK_PATH TRUE
+      BUILD_WITH_INSTALL_RPATH FALSE
+      # INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/lib64:$ORIGIN/../lib:$ORIGIN/../lib64"
+      INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64"
+  )
+endif()
 
 install(TARGETS dft_reader_ext LIBRARY DESTINATION dft_reader)

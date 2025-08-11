@@ -140,30 +140,13 @@ if(TARGET ghc_filesystem)
     list(APPEND INSTALLABLE_TARGETS ghc_filesystem)
 endif()
 
-# message(STATUS "ZLIB CPM: ${ZLIB_CPM}")
-# list(APPEND INSTALLABLE_TARGETS zlib)
-# if (TARGET zlibstatic)
-#     list(APPEND INSTALLABLE_TARGETS zlibstatic)
-# endif()
+install(TARGETS ${INSTALLABLE_TARGETS}
+    EXPORT dft_readerTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
-# Check if we're building from Python (CMAKE_CURRENT_SOURCE_DIR contains pyreader)
-if(DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD)
-    # Python build - don't export targets to avoid zlib export issues
-    install(TARGETS ${INSTALLABLE_TARGETS}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-else()
-    # Normal build - export targets
-    message(STATUS "Exporting targets: ${INSTALLABLE_TARGETS}")
-    install(TARGETS ${INSTALLABLE_TARGETS}
-        EXPORT dft_readerTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-endif()
 # Install headers
 install(FILES ${DFTRACER_UTILS_${PROJECT_NAME}_HEADERS}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}
@@ -173,14 +156,14 @@ install(FILES ${DFTRACER_UTILS_${PROJECT_NAME}_HEADERS}
 install(TARGETS dft_reader_exe RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Only create package config for non-Python builds
-if(NOT (DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD))
-    message(STATUS "Creating package config for dft_reader")
-    create_package_config(
-        TARGET dft_reader
-        VERSION ${PROJECT_VERSION}
-        DESCRIPTION "DFTracer reader library for processing gzipped files"
-        URL "https://github.com/LLNL/dftracer-utils"
-        REQUIRES "sqlite3 spdlog"
-        LIBS_PRIVATE "-lspdlog -lsqlite3 -lz"
-    )
-endif()
+# if(NOT (DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD))
+message(STATUS "Creating package config for dft_reader")
+create_package_config(
+    TARGET dft_reader
+    VERSION ${PROJECT_VERSION}
+    DESCRIPTION "DFTracer reader library for processing gzipped files"
+    URL "https://github.com/LLNL/dftracer-utils"
+    REQUIRES "sqlite3 spdlog"
+    LIBS_PRIVATE "-lspdlog -lsqlite3 -lz"
+)
+# endif()

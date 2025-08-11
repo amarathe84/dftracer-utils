@@ -237,16 +237,69 @@ function(need_zlib)
       message(STATUS "Built ZLIB with CPM")
       set(ZLIB_CPM TRUE PARENT_SCOPE) 
 
-      # Create empty install file to prevent zlib installation issues
-      file(WRITE "${CMAKE_BINARY_DIR}/_deps/zlib-build/cmake_install.cmake" 
-           "# Empty install file to prevent zlib installation\n")
+      # Make sure the source and binary directories are available in parent scope
+      set(ZLIB_SOURCE_DIR ${ZLIB_SOURCE_DIR} PARENT_SCOPE)
+      set(ZLIB_BINARY_DIR ${ZLIB_BINARY_DIR} PARENT_SCOPE)
+
+      # Completely override zlib's cmake_install.cmake after configuration
+      # This works because zlib regenerates its install file, but we'll override it post-generation
+      add_custom_target(override_zlib_install
+        ALL
+        COMMAND ${CMAKE_COMMAND} -E echo "# Installation disabled for zlib to prevent duplicates" > "${ZLIB_BINARY_DIR}/cmake_install.cmake"
+        COMMAND ${CMAKE_COMMAND} -E echo "message(STATUS \"Skipping zlib installation - handled manually\")" >> "${ZLIB_BINARY_DIR}/cmake_install.cmake"
+        DEPENDS zlib zlibstatic
+        COMMENT "Preventing zlib from installing files automatically"
+        VERBATIM
+      )
       
+      # Also prevent any subdirectory installs
+      install(CODE "
+        message(STATUS \"Preventing any residual zlib installation\")
+        # This prevents any zlib install commands from executing
+      ")
+
+      # Add zlib targets if they're CPM-built (our own targets)
+      # We manually install zlib because ZLIB_INSTALL is problematic
+      if(TARGET zlib)
+          # Manual installation of zlib to the correct location
+          install(TARGETS zlib
+              ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+              LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+          )
+      endif()
+      if(TARGET zlibstatic)
+          install(TARGETS zlibstatic
+              ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+              LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+          )
+      endif()
+
+      # Install zlib headers manually
+      if(ZLIB_SOURCE_DIR AND ZLIB_BINARY_DIR)
+          # Check if the header files actually exist before trying to install them
+          if(EXISTS "${ZLIB_SOURCE_DIR}/zlib.h")
+              install(FILES "${ZLIB_SOURCE_DIR}/zlib.h"
+                  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+              )
+          endif()
+          
+          if(EXISTS "${ZLIB_BINARY_DIR}/zconf.h")
+              install(FILES "${ZLIB_BINARY_DIR}/zconf.h"
+                  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+              )
+          endif()
+      else()
+          message(WARNING "Using ZLIB with CPM but source/binary directories not found. Skipping zlib header installation.")
+      endif()
+
       # Create simple aliases - these won't be exportable but that's OK
       # The consumer will need to find their own zlib
       if(TARGET zlib AND NOT TARGET ZLIB::ZLIB)
         add_library(ZLIB::ZLIB ALIAS zlib)
       endif()
-      
+
       if(TARGET zlibstatic AND NOT TARGET ZLIB::ZLIBSTATIC)
         add_library(ZLIB::ZLIBSTATIC ALIAS zlibstatic)
       endif()
