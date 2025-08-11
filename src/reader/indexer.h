@@ -1,18 +1,17 @@
 #ifndef __DFTRACER_UTILS_READER_INDEXER_H
 #define __DFTRACER_UTILS_READER_INDEXER_H
 
-#include <stddef.h>
-#include <stdint.h>
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+#include <stddef.h>
+#include <stdint.h>
 
     /**
      * Opaque handle for DFT indexer
      */
-    typedef void* dft_indexer_handle_t;
+    typedef void *dft_indexer_handle_t;
 
     /**
      * Create a new DFT indexer instance
@@ -22,7 +21,8 @@ extern "C"
      * @param force_rebuild Force rebuild even if index exists and chunk size matches
      * @return Opaque handle to the indexer instance, or NULL on failure
      */
-    dft_indexer_handle_t dft_indexer_create(const char* gz_path, const char* idx_path, double chunk_size_mb, int force_rebuild);
+    dft_indexer_handle_t
+    dft_indexer_create(const char *gz_path, const char *idx_path, double chunk_size_mb, int force_rebuild);
 
     /**
      * Build or rebuild the index if necessary
@@ -47,11 +47,15 @@ extern "C"
 #ifdef __cplusplus
 } // extern "C"
 
-#include <string>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
 
-namespace dft {
-namespace indexer {
+namespace dft
+{
+namespace indexer
+{
 
 /**
  * C++ RAII wrapper for DFT indexer
@@ -68,8 +72,9 @@ namespace indexer {
  * }
  * ```
  */
-class Indexer {
-public:
+class Indexer
+{
+  public:
     /**
      * Create a new DFT indexer instance
      * @param gz_path Path to the gzipped trace file
@@ -78,7 +83,7 @@ public:
      * @param force_rebuild Force rebuild even if index exists and chunk size matches
      * @throws std::runtime_error if indexer creation fails
      */
-    Indexer(const std::string& gz_path, const std::string& idx_path, double chunk_size_mb, bool force_rebuild = false);
+    Indexer(const std::string &gz_path, const std::string &idx_path, double chunk_size_mb, bool force_rebuild = false);
 
     /**
      * Destructor - automatically destroys the indexer
@@ -86,18 +91,18 @@ public:
     ~Indexer();
 
     // Disable copy constructor and copy assignment
-    Indexer(const Indexer&) = delete;
-    Indexer& operator=(const Indexer&) = delete;
+    Indexer(const Indexer &) = delete;
+    Indexer &operator=(const Indexer &) = delete;
 
     /**
      * Move constructor
      */
-    Indexer(Indexer&& other) noexcept;
+    Indexer(Indexer &&other) noexcept;
 
     /**
      * Move assignment operator
      */
-    Indexer& operator=(Indexer&& other) noexcept;
+    Indexer &operator=(Indexer &&other) noexcept;
 
     /**
      * Build or rebuild the index if necessary
@@ -122,13 +127,13 @@ public:
      * Get the gzip file path
      * @return gzip file path
      */
-    const std::string& get_gz_path() const;
+    const std::string &get_gz_path() const;
 
     /**
      * Get the index file path
      * @return index file path
      */
-    const std::string& get_idx_path() const;
+    const std::string &get_idx_path() const;
 
     /**
      * Get the chunk size in megabytes
@@ -136,7 +141,7 @@ public:
      */
     double get_chunk_size_mb() const;
 
-private:
+  private:
     class Impl;
     std::unique_ptr<Impl> pImpl_;
 };

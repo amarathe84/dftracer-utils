@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     }
 
     std::string gz_path = program.get<std::string>("file");
-    
+
     size_t start_bytes = program.get<size_t>("--start");
     size_t end_bytes = program.get<size_t>("--end");
     double chunk_size_mb = program.get<double>("--chunk-size");
@@ -81,12 +81,14 @@ int main(int argc, char **argv)
 
     std::string idx_path = gz_path + ".idx";
 
-    try {
+    try
+    {
         spdlog::debug("Created DFT indexer for gz: {} and index: {}", gz_path, idx_path);
         dft::indexer::Indexer indexer(gz_path, idx_path, chunk_size_mb, force_rebuild);
         spdlog::debug("Successfully destroyed DFT indexer");
 
-        if (check_rebuild) {
+        if (check_rebuild)
+        {
             if (!indexer.need_rebuild())
             {
                 spdlog::info("Index is up to date, no rebuild needed");
@@ -94,11 +96,13 @@ int main(int argc, char **argv)
             }
         }
 
-        if (force_rebuild) {
+        if (force_rebuild)
+        {
             indexer.build();
         }
     }
-    catch (const std::runtime_error& e) {
+    catch (const std::runtime_error &e)
+    {
         spdlog::error("Indexer error: {}", e.what());
         return 1;
     }
@@ -107,15 +111,16 @@ int main(int argc, char **argv)
     if (end_bytes > start_bytes)
     {
         spdlog::debug("Performing byte range read operation");
-        
-        try {
+
+        try
+        {
             spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
             dft::reader::Reader reader(gz_path, idx_path);
 
             spdlog::info("Reading byte range [{} B, {} B] from {}...", start_bytes, end_bytes, gz_path);
 
             auto result = reader.read_range_bytes(start_bytes, end_bytes);
-            auto& data = result.first;
+            auto &data = result.first;
             size_t output_size = result.second;
 
             spdlog::debug("Successfully read {} bytes from range", output_size);
@@ -123,7 +128,8 @@ int main(int argc, char **argv)
             fwrite(data.get(), 1, output_size, stdout);
             spdlog::debug("Successfully destroyed DFT reader");
         }
-        catch (const std::runtime_error& e) {
+        catch (const std::runtime_error &e)
+        {
             spdlog::error("Reader error: {}", e.what());
             return 1;
         }

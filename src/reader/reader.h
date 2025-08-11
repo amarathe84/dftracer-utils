@@ -1,18 +1,18 @@
 #ifndef __DFTRACER_UTILS_READER_READER_H
 #define __DFTRACER_UTILS_READER_READER_H
 
-#include <stddef.h>
-#include <stdint.h>
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
+#include <stddef.h>
+#include <stdint.h>
+
     /**
      * Opaque handle for DFT reader
      */
-    typedef void* dft_reader_handle_t;
+    typedef void *dft_reader_handle_t;
 
     /**
      * Create a new DFT reader instance
@@ -20,7 +20,7 @@ extern "C"
      * @param idx_path Path to the index file
      * @return Opaque handle to the reader instance, or NULL on failure
      */
-    dft_reader_handle_t dft_reader_create(const char* gz_path, const char* idx_path);
+    dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path);
 
     /**
      * Destroy a DFT reader instance and free all associated resources
@@ -46,8 +46,12 @@ extern "C"
      * @param output_size Pointer to store the size of extracted data
      * @return 0 on success, -1 on error
      */
-    int dft_reader_read_range_bytes(
-        dft_reader_handle_t reader, const char *gz_path, size_t start_bytes, size_t end_bytes, char **output, size_t *output_size);
+    int dft_reader_read_range_bytes(dft_reader_handle_t reader,
+                                    const char *gz_path,
+                                    size_t start_bytes,
+                                    size_t end_bytes,
+                                    char **output,
+                                    size_t *output_size);
 
     /**
      * Read a range of megabytes from a gzip file using the index database
@@ -59,21 +63,29 @@ extern "C"
      * @param output_size Pointer to store the size of extracted data
      * @return 0 on success, -1 on error
      */
-    int dft_reader_read_range_megabytes(
-        dft_reader_handle_t reader, const char *gz_path, double start_mb, double end_mb, char **output, size_t *output_size);
+    int dft_reader_read_range_megabytes(dft_reader_handle_t reader,
+                                        const char *gz_path,
+                                        double start_mb,
+                                        double end_mb,
+                                        char **output,
+                                        size_t *output_size);
 
 #ifdef __cplusplus
 } // extern "C"
 
-#include <string>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
 
-namespace dft {
-namespace reader {
+namespace dft
+{
+namespace reader
+{
 
 /**
  * DFT reader
- * 
+ *
  * Example usage:
  * ```cpp
  * try {
@@ -86,12 +98,13 @@ namespace reader {
  * }
  * ```
  */
-class Reader {
-public:
+class Reader
+{
+  public:
     /**
      * Smart pointer type for managing allocated memory
      */
-    using Buffer = std::unique_ptr<char, void(*)(void*)>;
+    using Buffer = std::unique_ptr<char, void (*)(void *)>;
 
     /**
      * Create a new DFT reader instance
@@ -99,7 +112,7 @@ public:
      * @param idx_path Path to the index file
      * @throws std::runtime_error if reader creation fails
      */
-    Reader(const std::string& gz_path, const std::string& idx_path);
+    Reader(const std::string &gz_path, const std::string &idx_path);
 
     /**
      * Destructor - automatically destroys the reader
@@ -107,18 +120,18 @@ public:
     ~Reader();
 
     // Disable copy constructor and copy assignment
-    Reader(const Reader&) = delete;
-    Reader& operator=(const Reader&) = delete;
+    Reader(const Reader &) = delete;
+    Reader &operator=(const Reader &) = delete;
 
     /**
      * Move constructor
      */
-    Reader(Reader&& other) noexcept;
+    Reader(Reader &&other) noexcept;
 
     /**
      * Move assignment operator
      */
-    Reader& operator=(Reader&& other) noexcept;
+    Reader &operator=(Reader &&other) noexcept;
 
     /**
      * Get the maximum byte position available in the indexed gzip file
@@ -135,7 +148,7 @@ public:
      * @return pair of (smart pointer to data, size of data)
      * @throws std::runtime_error if operation fails
      */
-    std::pair<Buffer, size_t> read_range_bytes(const std::string& gz_path, size_t start_bytes, size_t end_bytes) const;
+    std::pair<Buffer, size_t> read_range_bytes(const std::string &gz_path, size_t start_bytes, size_t end_bytes) const;
 
     /**
      * Read a range of bytes from the gzip file using the stored gz_path
@@ -154,7 +167,7 @@ public:
      * @return pair of (smart pointer to data, size of data)
      * @throws std::runtime_error if operation fails
      */
-    std::pair<Buffer, size_t> read_range_megabytes(const std::string& gz_path, double start_mb, double end_mb) const;
+    std::pair<Buffer, size_t> read_range_megabytes(const std::string &gz_path, double start_mb, double end_mb) const;
 
     /**
      * Read a range of megabytes from the gzip file using the stored gz_path
@@ -175,15 +188,15 @@ public:
      * Get the gzip file path
      * @return gzip file path
      */
-    const std::string& get_gz_path() const;
+    const std::string &get_gz_path() const;
 
     /**
      * Get the index file path
      * @return index file path
      */
-    const std::string& get_idx_path() const;
+    const std::string &get_idx_path() const;
 
-private:
+  private:
     class Impl;
     std::unique_ptr<Impl> pImpl_;
 };
