@@ -35,7 +35,7 @@ std::string trim_trailing(const char *data, size_t size)
 class DFTracerReader
 {
   private:
-    dft_reader_t *reader_;
+    std::unique_ptr<dft::reader::Reader> reader_;
     std::string gzip_path_;
     std::string index_path_;
     bool is_open_;
@@ -78,23 +78,12 @@ class DFTracerReader
           throw std::runtime_error("Gzip file does not exist: " + gzip_path_);
         }
 
-        reader_ = dft_reader_create(gzip_path_.c_str(), index_path_.c_str());
-        if (!reader_)
-        {
-            throw std::runtime_error("Failed to create DFT reader for gzip: " + gzip_path_ + " and index: " + index_path_);
-        }
-        
-        is_open_ = true;
-
-        size_t max_bytes;
-        int result = dft_reader_get_max_bytes(reader_, &max_bytes);
-        if (result == 0)
-        {
-            max_bytes_ = static_cast<uint64_t>(max_bytes);
-        }
-        else
-        {
-            max_bytes_ = 0;
+        try {
+            reader_ = std::make_unique<dft::reader::Reader>(gzip_path_, index_path_);
+            is_open_ = true;
+            max_bytes_ = static_cast<uint64_t>(reader_->get_max_bytes());
+        } catch (const std::runtime_error& e) {
+            throw std::runtime_error("Failed to create DFT reader for gzip: " + gzip_path_ + " and index: " + index_path_ + " - " + e.what());
         }
     }
 
@@ -102,8 +91,7 @@ class DFTracerReader
     {
         if (is_open_ && reader_)
         {
-            dft_reader_destroy(reader_);
-            reader_ = nullptr;
+            reader_.reset();
             is_open_ = false;
             current_pos_ = 0;
             max_bytes_ = 0;
@@ -117,15 +105,11 @@ class DFTracerReader
             throw std::runtime_error("Reader is not open");
         }
 
-        size_t max_bytes;
-        int result = dft_reader_get_max_bytes(reader_, &max_bytes);
-
-        if (result != 0)
-        {
-            throw std::runtime_error("Failed to get maximum bytes");
+        try {
+            return static_cast<uint64_t>(reader_->get_max_bytes());
+        } catch (const std::runtime_error& e) {
+            throw std::runtime_error("Failed to get maximum bytes: " + std::string(e.what()));
         }
-
-        return static_cast<uint64_t>(max_bytes);
     }
 
     class ByteIterator
@@ -273,23 +257,12 @@ class DFTracerReader
             throw std::runtime_error("Reader is not open");
         }
 
-        char *output = nullptr;
-        size_t output_size = 0;
-
-        int result = dft_reader_read_range_bytes(reader_, gzip_path_.c_str(), start_bytes, end_bytes, &output, &output_size);
-
-        if (result != 0)
-        {
-            if (output)
-            {
-                free(output);
-            }
-            throw std::runtime_error("Failed to read data range");
+        try {
+            auto result = reader_->read_range_bytes(start_bytes, end_bytes);
+            return trim_trailing(result.first.get(), result.second);
+        } catch (const std::runtime_error& e) {
+            throw std::runtime_error("Failed to read data range: " + std::string(e.what()));
         }
-
-        std::string data = trim_trailing(output, output_size);
-        free(output);
-        return data;
     }
 
     std::string read_mb(double start_mb, double end_mb)
@@ -299,27 +272,12 @@ class DFTracerReader
             throw std::runtime_error("Reader is not open");
         }
 
-        char *output = nullptr;
-        size_t output_size = 0;
-
-        // Convert MB to bytes and call the byte version
-        size_t start_bytes = static_cast<size_t>(start_mb * 1024 * 1024);
-        size_t end_bytes = static_cast<size_t>(end_mb * 1024 * 1024);
-
-        int result = dft_reader_read_range_bytes(reader_, gzip_path_.c_str(), start_bytes, end_bytes, &output, &output_size);
-
-        if (result != 0)
-        {
-            if (output)
-            {
-                free(output);
-            }
-            throw std::runtime_error("Failed to read data range");
+        try {
+            auto result = reader_->read_range_megabytes(start_mb, end_mb);
+            return trim_trailing(result.first.get(), result.second);
+        } catch (const std::runtime_error& e) {
+            throw std::runtime_error("Failed to read data range: " + std::string(e.what()));
         }
-
-        std::string data = trim_trailing(output, output_size);
-        free(output);
-        return data;
     }
 
     DFTracerReader &__enter__()
