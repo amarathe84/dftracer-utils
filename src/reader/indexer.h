@@ -18,7 +18,7 @@ extern "C"
      * @param gz_path Path to the gzipped trace file
      * @param idx_path Path to the index file
      * @param chunk_size_mb Chunk size for indexing in megabytes
-     * @param force_rebuild Force rebuild even if index exists and chunk size matches
+     * @param force_rebuild Force rebuild index
      * @return Opaque handle to the indexer instance, or NULL on failure
      */
     dft_indexer_handle_t
@@ -58,7 +58,7 @@ namespace indexer
 {
 
 /**
- * C++ RAII wrapper for DFT indexer
+ * DFT indexer
  *
  * Example usage:
  * ```cpp

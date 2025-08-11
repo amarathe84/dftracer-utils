@@ -5,13 +5,16 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <picosha2.h>
-#include <spdlog/spdlog.h>
-#include <sqlite3.h>
 #include <stdexcept>
-#include <sys/stat.h>
 #include <vector>
+#include <chrono>
+
+#include <picosha2.h>
+#include <sqlite3.h>
+#include <spdlog/spdlog.h>
 #include <zlib.h>
+
+#include "filesystem.h"
 
 namespace dft
 {
@@ -81,15 +84,18 @@ class Indexer::Impl
     bool is_valid() const
     {
         return true;
-    } // Always valid after construction
+    }
+
     const std::string &get_gz_path() const
     {
         return gz_path_;
     }
+
     const std::string &get_idx_path() const
     {
         return idx_path_;
     }
+
     double get_chunk_size_mb() const
     {
         return chunk_size_mb_;
@@ -187,11 +193,18 @@ std::string Indexer::Impl::calculate_file_sha256(const std::string &file_path) c
 
 time_t Indexer::Impl::get_file_mtime(const std::string &file_path) const
 {
-    struct stat st;
-    if (stat(file_path.c_str(), &st) == 0)
+    try
     {
-        return st.st_mtime;
+        auto ftime = fs::last_write_time(file_path);
+        auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+            ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+        return std::chrono::system_clock::to_time_t(sctp);
     }
+    catch (const fs::filesystem_error &)
+    {
+        return 0;
+    }
+
     return 0;
 }
 
@@ -315,24 +328,33 @@ bool Indexer::Impl::need_rebuild() const
     }
 
     // Check if chunk size differs
-    double existing_chunk_size = get_existing_chunk_size_mb(idx_path_);
-    if (existing_chunk_size > 0)
-    {
-        double diff = std::abs(existing_chunk_size - chunk_size_mb_);
-        if (diff > 0.1)
-        { // Allow small floating point differences
-            spdlog::debug("Index rebuild needed: chunk size differs ({:.1f} MB vs {:.1f} MB)",
-                          existing_chunk_size,
-                          chunk_size_mb_);
-            return true;
-        }
-    }
+    // double existing_chunk_size = get_existing_chunk_size_mb(idx_path_);
+    // if (existing_chunk_size > 0)
+    // {
+    //     double diff = std::abs(existing_chunk_size - chunk_size_mb_);
+    //     if (diff > 0.1)
+    //     { 
+    //         // Allow small floating point differences
+    //         spdlog::debug("Index rebuild needed: chunk size differs ({:.1f} MB vs {:.1f} MB)",
+    //                       existing_chunk_size,
+    //                       chunk_size_mb_);
+    //         return true;
+    //     }
+    // }
 
     // Check if file content has changed using SHA256
     std::string stored_sha256;
     time_t stored_mtime;
     if (get_stored_file_info(idx_path_, gz_path_, stored_sha256, stored_mtime))
     {
+        // quick check using modification time as optimization
+        // time_t current_mtime = get_file_mtime(indexer->gz_path);
+        // if (current_mtime != stored_mtime && current_mtime > 0 && stored_mtime > 0)
+        // {
+        //     spdlog::debug("Index rebuild needed: file modification time changed");
+        //     return 1;
+        // }
+
         // If we have a stored SHA256, calculate current SHA256 and compare
         if (!stored_sha256.empty())
         {
