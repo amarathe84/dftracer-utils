@@ -92,7 +92,7 @@ class Reader::Impl
             }
             else
             {
-                // No chunks found or empty result
+                // no chunks found or empty result
                 max_bytes = 0;
                 spdlog::debug("No chunks found, maximum bytes: 0");
             }
@@ -120,50 +120,7 @@ class Reader::Impl
             throw std::invalid_argument("start_bytes must be less than end_bytes");
         }
 
-        size_t target_size = end_bytes - start_bytes;
-
-        spdlog::debug("Reading byte range [{}, {}] from {} ({}B to {}B)...",
-                      start_bytes,
-                      end_bytes,
-                      gz_path,
-                      start_bytes,
-                      end_bytes);
-
-        sqlite3_stmt *stmt;
-        const char *sql = "SELECT chunk_idx, compressed_offset, "
-                          "uncompressed_offset, uncompressed_size "
-                          "FROM chunks "
-                          "WHERE uncompressed_offset <= ? AND (uncompressed_offset "
-                          "+ uncompressed_size) > ? "
-                          "ORDER BY chunk_idx LIMIT 1";
-
-        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, NULL) != SQLITE_OK)
-        {
-            throw std::runtime_error("Failed to prepare chunk query: " + std::string(sqlite3_errmsg(db_)));
-        }
-
-        sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(start_bytes));
-        sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(start_bytes));
-
-        if (sqlite3_step(stmt) != SQLITE_ROW)
-        {
-            sqlite3_finalize(stmt);
-            throw std::runtime_error("No chunk found containing byte offset " + std::to_string(start_bytes));
-        }
-
-        uint64_t chunk_idx = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
-        uint64_t chunk_c_off = static_cast<uint64_t>(sqlite3_column_int64(stmt, 1));
-        uint64_t chunk_uc_off = static_cast<uint64_t>(sqlite3_column_int64(stmt, 2));
-        uint64_t chunk_uc_size = static_cast<uint64_t>(sqlite3_column_int64(stmt, 3));
-
-        sqlite3_finalize(stmt);
-
-        spdlog::debug("Using chunk {}: uncompressed_offset={}, uncompressed_size={} "
-                      "(compressed_offset={})",
-                      chunk_idx,
-                      chunk_uc_off,
-                      chunk_uc_size,
-                      chunk_c_off);
+        spdlog::info("Reading byte range [{}, {}] from {}...", start_bytes, end_bytes, gz_path);
 
         FILE *f = fopen(gz_path.c_str(), "rb");
         if (!f)
@@ -171,9 +128,6 @@ class Reader::Impl
             throw std::runtime_error("Failed to open file: " + gz_path);
         }
 
-        // @note: since we can't start decompression from the middle without
-        // dictionaries, we will start from the beginning but use the
-        // chunk info for validation
         InflateState inflate_state;
         if (inflate_init(&inflate_state, f, 0, 0) != 0)
         {
@@ -181,94 +135,69 @@ class Reader::Impl
             throw std::runtime_error("Failed to initialize inflation");
         }
 
+        // step 1: find the actual start position (beginning of a complete JSON line)
         size_t actual_start = start_bytes;
-
-        // for small ranges (< 1KB), skip JSON line boundary search and read exact bytes
-        bool use_exact_bytes = target_size < 1024;
-
-        // skip to find the start of a complete JSON line
-        // at or after the start position (only for larger ranges)
-        if (start_bytes > 0 && !use_exact_bytes)
+        if (start_bytes > 0)
         {
-            unsigned char *search_buffer = static_cast<unsigned char *>(malloc(65536));
-            if (!search_buffer)
+            // seek a bit before the requested start to find the beginning of the JSON line
+            size_t search_start = (start_bytes >= 512) ? start_bytes - 512 : 0;
+            
+            // skip to search start position
+            if (search_start > 0)
+            {
+                unsigned char *skip_buffer = static_cast<unsigned char *>(malloc(65536));
+                if (!skip_buffer)
+                {
+                    inflate_cleanup(&inflate_state);
+                    fclose(f);
+                    throw std::runtime_error("Failed to allocate skip buffer");
+                }
+
+                size_t remaining_skip = search_start;
+                while (remaining_skip > 0)
+                {
+                    size_t to_skip = (remaining_skip > 65536) ? 65536 : remaining_skip;
+                    size_t skipped;
+                    if (inflate_read(&inflate_state, skip_buffer, to_skip, &skipped) != 0)
+                    {
+                        free(skip_buffer);
+                        inflate_cleanup(&inflate_state);
+                        fclose(f);
+                        throw std::runtime_error("Failed during skip phase");
+                    }
+                    if (skipped == 0) break;
+                    remaining_skip -= skipped;
+                }
+                free(skip_buffer);
+            }
+
+            // read data to find the start of a complete JSON line
+            unsigned char search_buffer[2048];
+            size_t search_bytes;
+            if (inflate_read(&inflate_state, search_buffer, sizeof(search_buffer) - 1, &search_bytes) != 0)
             {
                 inflate_cleanup(&inflate_state);
                 fclose(f);
-                throw std::runtime_error("Failed to allocate search buffer");
+                throw std::runtime_error("Failed during search phase");
             }
 
-            // read and scan for the first complete JSON line
-            // at or after start_bytes
-            size_t current_pos = 0;
-            // we look at most 256 bytes before in case we need to find a complete line
-            size_t search_start = start_bytes > 256 ? start_bytes - 256 : 0;
-
-            spdlog::debug("Searching for complete JSON line starting around position {}", start_bytes);
-
-            // skip to search start position
-            while (current_pos < search_start)
+            // find the last newline before or at our target start position
+            size_t relative_target = start_bytes - search_start;
+            if (relative_target < search_bytes)
             {
-                size_t to_skip = search_start - current_pos > 65536 ? 65536 : search_start - current_pos;
-                size_t skipped;
-                if (inflate_read(&inflate_state, search_buffer, to_skip, &skipped) != 0)
+                // look backwards from the target position to find the start of the line
+                for (int64_t i = static_cast<int64_t>(relative_target); i >= 0; i--)
                 {
-                    free(search_buffer);
-                    inflate_cleanup(&inflate_state);
-                    fclose(f);
-                    throw std::runtime_error("Failed during initial skip: " + gz_path);
-                }
-                if (skipped == 0)
-                    break;
-                current_pos += skipped;
-            }
-
-            // read and search for a complete line starting position
-            size_t buffer_used = 0;
-            while (current_pos < start_bytes + 512)
-            { // limit search to 512 bytes past start
-                size_t to_read = 65536 - buffer_used;
-                size_t bytes_read;
-                if (inflate_read(&inflate_state, search_buffer + buffer_used, to_read, &bytes_read) != 0)
-                {
-                    break;
-                }
-                if (bytes_read == 0)
-                    break;
-
-                buffer_used += bytes_read;
-
-                // finding complete JSON line boundaries (}\n{)
-                for (size_t i = 0; i < buffer_used - 1; i++)
-                {
-                    size_t line_start_pos = current_pos + i;
-                    if (line_start_pos >= start_bytes && (i == 0 || (search_buffer[i - 1] == '\n')) &&
-                        search_buffer[i] == '{')
+                    if (i == 0 || search_buffer[i-1] == '\n')
                     {
-                        // found start of JSON line at or after our target
-                        actual_start = line_start_pos;
-                        spdlog::debug("Found JSON line start at position {}", actual_start);
-                        goto found_start;
+                        actual_start = search_start + i;
+                        spdlog::debug("Found JSON line start at position {} (requested {})", actual_start, start_bytes);
+                        break;
                     }
                 }
-
-                current_pos += bytes_read;
-                // keep some overlap for boundary detection
-                if (buffer_used > 32768)
-                {
-                    memmove(search_buffer, search_buffer + 32768, buffer_used - 32768);
-                    buffer_used -= 32768;
-                    current_pos -= 32768;
-                }
             }
 
-            // when no JSON line start found, use original start position
-            actual_start = start_bytes;
-
-        found_start:
-            free(search_buffer);
-
-            // restart decompression to get to the actual start position
+            // restart decompression from the beginning
             inflate_cleanup(&inflate_state);
             if (inflate_init(&inflate_state, f, 0, 0) != 0)
             {
@@ -287,60 +216,29 @@ class Reader::Impl
                     throw std::runtime_error("Failed to allocate skip buffer");
                 }
 
-                auto remaining_skip = static_cast<long long>(actual_start);
+                size_t remaining_skip = actual_start;
                 while (remaining_skip > 0)
                 {
-                    size_t to_skip = (remaining_skip > 65536) ? 65536U : static_cast<size_t>(remaining_skip);
+                    size_t to_skip = (remaining_skip > 65536) ? 65536 : remaining_skip;
                     size_t skipped;
                     if (inflate_read(&inflate_state, skip_buffer, to_skip, &skipped) != 0)
                     {
                         free(skip_buffer);
                         inflate_cleanup(&inflate_state);
                         fclose(f);
-                        throw std::runtime_error("Failed during final skip phase in " + gz_path);
+                        throw std::runtime_error("Failed during final skip phase");
                     }
-                    if (skipped == 0)
-                        break;
-                    remaining_skip -= static_cast<long long>(skipped);
+                    if (skipped == 0) break;
+                    remaining_skip -= skipped;
                 }
                 free(skip_buffer);
             }
         }
 
-        // adjust target size based on actual start position
-        size_t adjusted_target_size;
-        if (use_exact_bytes)
-        {
-            // for exact byte mode, use the original target size
-            adjusted_target_size = target_size;
-        }
-        else if (actual_start <= start_bytes)
-        {
-            // actual_start is at or before requested start, use original target size
-            adjusted_target_size = target_size;
-        }
-        else
-        {
-            // actual_start is after requested start, adjust target size
-            size_t offset_diff = actual_start - start_bytes;
-            if (offset_diff >= target_size)
-            {
-                // read at least some data
-                adjusted_target_size = 1024;
-            }
-            else
-            {
-                adjusted_target_size = target_size - offset_diff;
-            }
-        }
-
-        // use streaming approach for large files instead of allocating everything at once
-        // limit initial allocation to reasonable chunk size (32MB max)
-        constexpr size_t MAX_CHUNK_SIZE = 32 * 1024 * 1024; // 32MB
-        size_t initial_chunk = std::min(adjusted_target_size + 4096, MAX_CHUNK_SIZE);
-
-        // Start with smaller allocation and grow as needed
-        size_t buffer_capacity = static_cast<size_t>(initial_chunk);
+        // step 1: read data until we find a complete JSON line past the requested end
+        size_t target_size = end_bytes - start_bytes;
+        size_t original_target_size = target_size;  // for debugging
+        size_t buffer_capacity = target_size + 8192; // extra space for complete lines
         char *output = static_cast<char *>(malloc(buffer_capacity + 1));
         if (!output)
         {
@@ -349,136 +247,88 @@ class Reader::Impl
             throw std::runtime_error("Failed to allocate output buffer");
         }
 
-        // @note: read the requested range using streaming approach
-        // this reading is line boundary-aware for larger ranges, meaning
-        // we will look for complete JSON lines within the requested range
-        // for small ranges, we read exact bytes
         size_t total_read = 0;
-        bool boundary_search_mode = false;
-        spdlog::debug("Reading {} bytes starting from position {} (adjusted from {}) - exact mode: {}",
-                      adjusted_target_size,
-                      actual_start,
-                      start_bytes,
-                      use_exact_bytes);
-
-        while (true)
+        size_t current_pos = actual_start;
+        bool found_end_boundary = false;
+        
+        // always read in chunks and look for complete JSON line boundaries
+        while (total_read < buffer_capacity && !found_end_boundary)
         {
-            // check if we've reached our target and should stop
-            if (!boundary_search_mode && total_read >= adjusted_target_size)
+            // grow buffer if needed
+            if (total_read + 4096 > buffer_capacity)
             {
-                if (use_exact_bytes)
-                {
-                    // in exact mode, stop immediately when we reach the target
-                    break;
-                }
-                else
-                {
-                    boundary_search_mode = true;
-                    spdlog::debug("Reached target size {}, entering boundary search mode", adjusted_target_size);
-                }
-            }
-
-            // safety valve for boundary search mode - limit to 4KB past target
-            if (boundary_search_mode && total_read > adjusted_target_size + 4096)
-            {
-                spdlog::debug("Boundary search exceeded 4KB past target, stopping");
-                break;
-            }
-
-            // ensure we have enough buffer space
-            if (total_read + 65536 > buffer_capacity)
-            {
-                // grow buffer - double it or add 32MB, whichever is smaller
-                size_t new_capacity =
-                    std::min(buffer_capacity * 2, buffer_capacity + static_cast<size_t>(MAX_CHUNK_SIZE));
-                char *new_buffer = static_cast<char *>(realloc(output, new_capacity + 1));
+                buffer_capacity *= 2;
+                char *new_buffer = static_cast<char *>(realloc(output, buffer_capacity + 1));
                 if (!new_buffer)
                 {
                     free(output);
                     inflate_cleanup(&inflate_state);
                     fclose(f);
-                    throw std::runtime_error("Failed to grow buffer from " + std::to_string(buffer_capacity) + " to " +
-                                             std::to_string(new_capacity) + " bytes");
+                    throw std::runtime_error("Failed to grow buffer");
                 }
                 output = new_buffer;
-                buffer_capacity = new_capacity;
-                spdlog::debug("Grew buffer to {} bytes", buffer_capacity);
             }
 
-            // read in manageable chunks - smaller chunks in boundary search mode
-            size_t chunk_size;
-            if (use_exact_bytes)
-            {
-                // In exact mode, read only what we need
-                chunk_size =
-                    std::min(adjusted_target_size - total_read, static_cast<size_t>(buffer_capacity - total_read));
-            }
-            else if (boundary_search_mode)
-            {
-                chunk_size = std::min(static_cast<size_t>(256), static_cast<size_t>(buffer_capacity - total_read));
-            }
-            else
-            {
-                chunk_size = std::min(static_cast<size_t>(65536), static_cast<size_t>(buffer_capacity - total_read));
-            }
-
+            size_t chunk_size = std::min(static_cast<size_t>(4096), buffer_capacity - total_read);
             size_t bytes_read;
-            if (inflate_read(
-                    &inflate_state, reinterpret_cast<unsigned char *>(output + total_read), chunk_size, &bytes_read) !=
-                0)
+            if (inflate_read(&inflate_state, reinterpret_cast<unsigned char *>(output + total_read), chunk_size, &bytes_read) != 0)
             {
                 free(output);
                 inflate_cleanup(&inflate_state);
                 fclose(f);
-                throw std::runtime_error("Failed during read phase at position " + std::to_string(total_read));
+                throw std::runtime_error("Failed during read phase");
             }
 
             if (bytes_read == 0)
             {
-                spdlog::debug("Reached EOF at {} bytes", total_read);
                 break; // EOF
             }
 
             total_read += bytes_read;
+            current_pos += bytes_read;
 
-            // in boundary search mode (not exact mode), look for complete JSON line boundaries
-            if (boundary_search_mode && !use_exact_bytes)
+            // only look for boundaries if we've read past the requested end_bytes
+            // AND we have at least as much data as originally requested
+            if (current_pos >= end_bytes && total_read >= original_target_size)
             {
-                // scan the newly read data for }\n boundary
-                for (size_t i = 1; i < bytes_read; i++)
+                // find the last complete JSON boundary after the requested end position
+                // scan the entire buffer to find all boundaries and pick the one closest to end_bytes
+                size_t best_boundary_pos = SIZE_MAX;
+                
+                for (size_t i = 1; i < total_read; i++)
                 {
-                    size_t buffer_pos = total_read - bytes_read + i;
-                    if (buffer_pos > 0 && output[buffer_pos - 1] == '}' && output[buffer_pos] == '\n')
+                    if (output[i-1] == '}' && output[i] == '\n')
                     {
-                        // found a boundary - truncate here and stop
-                        total_read = buffer_pos + 1;
-                        spdlog::debug("Found JSON boundary at position {}, truncating", total_read);
-                        goto done_reading;
+                        size_t absolute_pos = actual_start + i + 1; // +1 to include the newline
+                        if (absolute_pos >= end_bytes)
+                        {
+                            // this boundary is at or past our target - candidate for truncation
+                            if (best_boundary_pos == SIZE_MAX || i < best_boundary_pos)
+                            {
+                                best_boundary_pos = i + 1; // +1 to include newline
+                            }
+                        }
                     }
                 }
 
-                // check if the last character we read completes a boundary
-                if (total_read >= 2 && output[total_read - 2] == '}' && output[total_read - 1] == '\n')
+                if (best_boundary_pos != SIZE_MAX)
                 {
-                    spdlog::debug("Found JSON boundary at end of read, position {}", total_read);
+                    total_read = best_boundary_pos;
+                    found_end_boundary = true;
                     break;
                 }
             }
         }
 
-    done_reading:
         output[total_read] = '\0';
 
-        spdlog::debug("Successfully read {} bytes (requested {}, adjusted target {}, "
-                      "rounded to complete JSON lines)",
-                      total_read,
-                      target_size,
-                      adjusted_target_size);
+        spdlog::debug("Read {} bytes from adjusted range [{}, {}) (requested [{}, {}))", 
+                      total_read, actual_start, actual_start + total_read, start_bytes, end_bytes);
 
         inflate_cleanup(&inflate_state);
         fclose(f);
 
-        // Wrap in smart pointer for automatic cleanup
+        // wrap in smart pointer for automatic cleanup
         Reader::Buffer buffer(output, std::free);
         return std::make_pair(std::move(buffer), total_read);
     }

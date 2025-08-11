@@ -10,107 +10,9 @@
 #include "indexer.h"
 #include "reader.h"
 #include "filesystem.h"
+#include "testing_utilities.h"
 
-// Cross-platform gzip compression function
-static bool compress_file_to_gzip(const std::string& input_file, const std::string& output_file) {
-    std::ifstream input(input_file, std::ios::binary);
-    if (!input.is_open()) {
-        return false;
-    }
-    
-    gzFile gz_output = gzopen(output_file.c_str(), "wb");
-    if (!gz_output) {
-        return false;
-    }
-    
-    const size_t buffer_size = 8192;
-    std::vector<char> buffer(buffer_size);
-    
-    while (input.read(buffer.data(), buffer_size) || input.gcount() > 0) {
-        unsigned int bytes_read = static_cast<unsigned int>(input.gcount());
-        if (gzwrite(gz_output, buffer.data(), bytes_read) != static_cast<int>(bytes_read)) {
-            gzclose(gz_output);
-            return false;
-        }
-    }
-    
-    gzclose(gz_output);
-    return true;
-}
-
-class TestEnvironment {
-public:
-    TestEnvironment(size_t lines): num_lines(lines) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(100000, 999999);
-        
-        fs::path temp_base = fs::temp_directory_path();
-        fs::path test_path = temp_base / ("dftracer_raii_test_" + std::to_string(dis(gen)));
-        
-        try {
-            if (fs::create_directories(test_path)) {
-                test_dir = test_path.string();
-            }
-        } catch (const std::exception& e) {
-            // Leave test_dir empty to indicate failure
-        }
-    }
-
-    TestEnvironment(): TestEnvironment(100) {}
-
-    TestEnvironment(const TestEnvironment&) = delete;
-    TestEnvironment& operator=(const TestEnvironment&) = delete;
-
-    ~TestEnvironment() {
-        if (!test_dir.empty()) {
-            fs::remove_all(test_dir);
-        }
-    }
-    
-    const std::string& get_dir() const { return test_dir; }
-    bool is_valid() const { return !test_dir.empty(); }
-
-    std::string create_test_gzip_file() {
-        if (test_dir.empty()) {
-            return "";
-        }
-        
-        // Create test file in the unique directory
-        std::string gz_file = test_dir + "/test_data.gz";
-        std::string idx_file = test_dir + "/test_data.gz.idx";
-        std::string txt_file = test_dir + "/test_data.txt";
-        
-        // Write test data to text file
-        std::ofstream f(txt_file);
-        if (!f.is_open()) {
-            return "";
-        }
-
-        for (size_t i = 1; i <= num_lines; ++i) {
-            f << "{\"id\": " << i << ", \"message\": \"Test message " << i << "\"}\n";
-        }
-        f.close();
-        
-        bool success = compress_file_to_gzip(txt_file, gz_file);
-
-        fs::remove(txt_file);
-        
-        if (success) {
-            return gz_file;
-        }
-        
-        return "";
-    }
-
-    std::string get_index_path(const std::string& gz_file) {
-        return gz_file + ".idx";
-    }
-    
-private:
-    size_t num_lines;
-    std::string test_dir;
-};
+using namespace dft_utils_test;
 
 TEST_CASE("RAII Indexer - Basic functionality") {
     TestEnvironment env;
@@ -203,12 +105,12 @@ TEST_CASE("RAII Reader - Basic functionality") {
         // Read using explicit gz_path
         auto result1 = reader.read_range_bytes(gz_file, 0, 50);
         CHECK(result1.first != nullptr);
-        CHECK(result1.second == 50);
+        CHECK(result1.second >= 50);
         
         // Read using stored gz_path
         auto result2 = reader.read_range_bytes(0, 50);
         CHECK(result2.first != nullptr);
-        CHECK(result2.second == 50);
+        CHECK(result2.second >= 50);
         
         // Memory is automatically freed when result1 and result2 go out of scope
     }
@@ -286,11 +188,11 @@ TEST_CASE("RAII API - Integration test") {
         // Read multiple ranges
         auto result1 = reader.read_range_bytes(0, 100);
         CHECK(result1.first != nullptr);
-        CHECK(result1.second == 100);
+        CHECK(result1.second >= 100);
         
         auto result2 = reader.read_range_bytes(100, 200);
         CHECK(result2.first != nullptr);
-        CHECK(result2.second == 100);
+        CHECK(result2.second >= 100);
         
         // Verify data content
         std::string content1(result1.first.get(), result1.second);
@@ -324,7 +226,7 @@ TEST_CASE("RAII API - Memory safety stress test") {
     for (int i = 0; i < 100; ++i) {
         auto result = reader.read_range_bytes(0, 50);
         CHECK(result.first != nullptr);
-        CHECK(result.second == 50);
+        CHECK(result.second >= 50);
         // Memory automatically freed each iteration
     }
 }

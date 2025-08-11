@@ -13,108 +13,9 @@
 #include "indexer.h"
 #include "reader.h"
 #include "filesystem.h"
+#include "testing_utilities.h"
 
-// Cross-platform gzip compression function
-static bool compress_file_to_gzip(const std::string& input_file, const std::string& output_file) {
-    std::ifstream input(input_file, std::ios::binary);
-    if (!input.is_open()) {
-        return false;
-    }
-    
-    gzFile gz_output = gzopen(output_file.c_str(), "wb");
-    if (!gz_output) {
-        return false;
-    }
-    
-    const size_t buffer_size = 8192;
-    std::vector<char> buffer(buffer_size);
-    
-    while (input.read(buffer.data(), buffer_size) || input.gcount() > 0) {
-        unsigned int bytes_read = static_cast<unsigned int>(input.gcount());
-        if (gzwrite(gz_output, buffer.data(), bytes_read) != static_cast<int>(bytes_read)) {
-            gzclose(gz_output);
-            return false;
-        }
-    }
-    
-    gzclose(gz_output);
-    return true;
-}
-
-class TestEnvironment {
-public:
-    TestEnvironment(size_t lines): num_lines(lines) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(100000, 999999);
-        
-        fs::path temp_base = fs::temp_directory_path();
-        fs::path test_path = temp_base / ("dftracer_test_" + std::to_string(dis(gen)));
-        
-        try {
-            if (fs::create_directories(test_path)) {
-                test_dir = test_path.string();
-            }
-        } catch (const std::exception& e) {
-            // Leave test_dir empty to indicate failure
-        }
-    }
-
-    TestEnvironment(): TestEnvironment(100) {}
-
-    TestEnvironment(const TestEnvironment&) = delete;
-    TestEnvironment& operator=(const TestEnvironment&) = delete;
-
-    ~TestEnvironment() {
-        if (!test_dir.empty()) {
-            fs::remove_all(test_dir);
-        }
-    }
-    
-    const std::string& get_dir() const { return test_dir; }
-    bool is_valid() const { return !test_dir.empty(); }
-
-
-    std::string create_test_gzip_file() {
-        if (test_dir.empty()) {
-            return "";
-        }
-        
-        // Create test file in the unique directory
-        std::string gz_file = test_dir + "/test_data.gz";
-        std::string idx_file = test_dir + "/test_data.gz.idx";
-        std::string txt_file = test_dir + "/test_data.txt";
-        
-        // Write test data to text file
-        std::ofstream f(txt_file);
-        if (!f.is_open()) {
-            return "";
-        }
-
-        for (size_t i = 1; i <= num_lines; ++i) {
-            f << "{\"id\": " << i << ", \"message\": \"Test message " << i << "\"}\n";
-        }
-        f.close();
-        
-        bool success = compress_file_to_gzip(txt_file, gz_file);
-
-        fs::remove(txt_file);
-        
-        if (success) {
-            return gz_file;
-        }
-        
-        return "";
-    }
-
-    std::string get_index_path(const std::string& gz_file) {
-        return gz_file + ".idx";
-    }
-    
-private:
-    size_t num_lines;
-    std::string test_dir;
-};
+using namespace dft_utils_test;
 
 TEST_CASE("Indexer creation and destruction") {
     TestEnvironment env;
@@ -183,8 +84,7 @@ TEST_CASE("Data range reading") {
         if (result == 0) {
             CHECK(output != nullptr);
             CHECK(output_size > 0);
-            // For small ranges (< 1KB), should get exact bytes
-            CHECK(output_size == 50);
+            CHECK(output_size >= 50);
             
             // check that we got some JSON content
             std::string content(output, output_size);
@@ -325,9 +225,9 @@ TEST_CASE("Get maximum bytes") {
         char* output = nullptr;
         size_t output_size = 0;
         
-        // Try to read beyond max_bytes - should fail
+        // Try to read beyond max_bytes - should succeed
         result = dft_reader_read_range_bytes(reader, gz_file.c_str(), max_bytes + 1, max_bytes + 100, &output, &output_size);
-        CHECK(result == -1);
+        CHECK(result == 0);
         
         // Try to read up to max_bytes - should succeed
         if (max_bytes > 10) {
@@ -386,7 +286,7 @@ TEST_CASE("Memory management") {
     REQUIRE(reader != nullptr);
     
     // multiple reads to ensure no memory leaks
-    for (int i = 0; i < 100; i++) {  // Reduced from 10000 to speed up tests
+    for (int i = 0; i < 100; i++) {
         char* output = nullptr;
         size_t output_size = 0;
 
@@ -423,7 +323,7 @@ TEST_CASE("Exact byte reading (small ranges)") {
     dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
     REQUIRE(reader != nullptr);
 
-    SUBCASE("Read exactly 10 bytes") {
+    SUBCASE("Read at least 10 bytes") {
         char* output = nullptr;
         size_t output_size = 0;
         
@@ -432,12 +332,12 @@ TEST_CASE("Exact byte reading (small ranges)") {
         
         if (result == 0) {
             CHECK(output != nullptr);
-            CHECK(output_size == 10);  // Should be exact for small ranges
+            CHECK(output_size >= 10);
             free(output);
         }
     }
     
-    SUBCASE("Read exactly 50 bytes from start") {
+    SUBCASE("Read at least 50 bytes from start") {
         char* output = nullptr;
         size_t output_size = 0;
         
@@ -446,7 +346,7 @@ TEST_CASE("Exact byte reading (small ranges)") {
         
         if (result == 0) {
             CHECK(output != nullptr);
-            CHECK(output_size == 50);  // Should be exact for small ranges
+            CHECK(output_size >= 50);
             free(output);
         }
     }
@@ -481,6 +381,269 @@ TEST_CASE("Exact byte reading (small ranges)") {
                 CHECK(output_size <= max_bytes);  // Should get all or less data
                 free(output);
             }
+        }
+    }
+
+    dft_reader_destroy(reader);
+}
+
+TEST_CASE("JSON boundary detection") {
+    TestEnvironment env(1000);  // More lines for better boundary testing
+    REQUIRE(env.is_valid());
+    
+    std::string gz_file = env.create_test_gzip_file();
+    REQUIRE(!gz_file.empty());
+    
+    std::string idx_file = env.get_index_path(gz_file);
+    
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 0.5, false);
+    REQUIRE(indexer != nullptr);
+    
+    int result = dft_indexer_build(indexer);
+    REQUIRE(result == 0);
+    dft_indexer_destroy(indexer);
+    
+    // Create reader
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    REQUIRE(reader != nullptr);
+
+    SUBCASE("Small range should provide minimum requested bytes") {
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        // Request 100 bytes - should get AT LEAST 100 bytes due to boundary extension
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 0, 100, &output, &output_size);
+        CHECK(result == 0);
+        
+        if (result == 0) {
+            CHECK(output != nullptr);
+            CHECK(output_size >= 100);  // Should get at least what was requested
+            
+            // Verify that output ends with complete JSON line
+            std::string content(output, output_size);
+            CHECK(content.back() == '\n');  // Should end with newline
+            
+            // Should contain complete JSON objects
+            size_t last_brace = content.rfind('}');
+            REQUIRE(last_brace != std::string::npos);
+            CHECK(last_brace < content.length() - 1);  // '}' should not be the last character
+            CHECK(content[last_brace + 1] == '\n');    // Should be followed by newline
+            
+            free(output);
+        }
+    }
+    
+    SUBCASE("Output should not cut off in middle of JSON") {
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        // Request 500 bytes - this should not cut off mid-JSON
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 0, 500, &output, &output_size);
+        CHECK(result == 0);
+        
+        if (result == 0) {
+            CHECK(output != nullptr);
+            CHECK(output_size >= 500);
+            
+            std::string content(output, output_size);
+            
+            // Should not end with partial JSON like {"name":"name_%
+            size_t name_pos = content.find("\"name_");
+            size_t last_brace_pos = content.rfind('}');
+            bool has_incomplete_name = (name_pos != std::string::npos) && (name_pos > last_brace_pos);
+            CHECK_FALSE(has_incomplete_name);
+            
+            // Verify it ends with complete JSON boundary (}\n)
+            if (content.length() >= 2) {
+                CHECK(content[content.length() - 2] == '}');
+                CHECK(content[content.length() - 1] == '\n');
+            }
+            
+            free(output);
+        }
+    }
+    
+    SUBCASE("Large range boundary detection") {
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        // Request 10000 bytes
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 0, 10000, &output, &output_size);
+        CHECK(result == 0);
+        
+        if (result == 0) {
+            CHECK(output != nullptr);
+            CHECK(output_size >= 10000);
+            
+            std::string content(output, output_size);
+            
+            // Should end with complete JSON line
+            CHECK(content.back() == '\n');
+            
+            // Count complete JSON objects
+            size_t json_count = 0;
+            size_t pos = 0;
+            while ((pos = content.find("}\n", pos)) != std::string::npos) {
+                json_count++;
+                pos += 2;
+            }
+            CHECK(json_count > 0);  // Should have multiple complete JSON objects
+            
+            free(output);
+        }
+    }
+    
+    SUBCASE("Middle range with start boundary detection") {
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        // Start from byte 5000 to test start boundary detection
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 5000, 15000, &output, &output_size);
+        CHECK(result == 0);
+        
+        if (result == 0) {
+            CHECK(output != nullptr);
+            CHECK(output_size >= 10000);  // Should get at least requested range
+            
+            std::string content(output, output_size);
+            
+            // Should start with beginning of JSON object
+            CHECK(content[0] == '{');
+            
+            // Should end with complete JSON line
+            CHECK(content.back() == '\n');
+            CHECK(content[content.length() - 2] == '}');
+            
+            free(output);
+        }
+    }
+    
+    SUBCASE("Very small range edge case") {
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        // Request only 2 bytes - should still get complete JSON
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 10, 12, &output, &output_size);
+        CHECK(result == 0);
+        
+        if (result == 0) {
+            CHECK(output != nullptr);
+            CHECK(output_size >= 2);  // Should get at least what was requested
+            
+            std::string content(output, output_size);
+            
+            // Even for tiny requests, should get complete JSON objects
+            if (content.length() > 0) {
+                // Should either be complete JSON objects or start with '{'
+                bool starts_with_brace = (content[0] == '{');
+                bool starts_with_bracket = (content[0] == '[');
+                bool starts_properly = starts_with_brace || starts_with_bracket;
+                CHECK(starts_properly);
+                
+                // If it contains '}', should end properly
+                if (content.find('}') != std::string::npos) {
+                    CHECK(content.back() == '\n');
+                }
+            }
+            
+            free(output);
+        }
+    }
+
+    dft_reader_destroy(reader);
+}
+
+TEST_CASE("Regression test for truncated JSON output") {
+    // This test specifically catches the original bug where output was like:
+    // {"name":"name_%  instead of complete JSON lines
+    
+    TestEnvironment env(2000);  // Enough lines to trigger the boundary issue
+    REQUIRE(env.is_valid());
+    
+    // Create test data with specific pattern that might trigger the bug
+    std::string test_dir = env.get_dir();
+    std::string gz_file = test_dir + "/regression_test.gz";
+    std::string idx_file = test_dir + "/regression_test.gz.idx";
+    std::string txt_file = test_dir + "/regression_test.txt";
+    
+    // Create test data similar to trace.pfw.gz format
+    std::ofstream f(txt_file);
+    REQUIRE(f.is_open());
+    
+    f << "[\n";  // JSON array start
+    for (size_t i = 1; i <= 1000; ++i) {
+        f << "{\"name\":\"name_" << i << "\",\"cat\":\"cat_" << i << "\",\"dur\":" << (i * 10 % 1000) << "}\n";
+    }
+    f.close();
+    
+    bool success = compress_file_to_gzip(txt_file, gz_file);
+    REQUIRE(success);
+    fs::remove(txt_file);
+    
+    // Build index
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 32.0, false);
+    REQUIRE(indexer != nullptr);
+    
+    int result = dft_indexer_build(indexer);
+    REQUIRE(result == 0);
+    dft_indexer_destroy(indexer);
+    
+    // Create reader
+    dft_reader_handle_t reader = dft_reader_create(gz_file.c_str(), idx_file.c_str());
+    REQUIRE(reader != nullptr);
+
+    SUBCASE("Original failing case: 0 to 10000 bytes") {
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 0, 10000, &output, &output_size);
+        CHECK(result == 0);
+        
+        if (result == 0) {
+            CHECK(output != nullptr);
+            CHECK(output_size >= 10000);
+            
+            std::string content(output, output_size);
+            
+            // Should NOT end with incomplete patterns like "name_%
+            CHECK(content.find("\"name_%") == std::string::npos);
+            CHECK(content.find("\"cat_%") == std::string::npos);
+            
+            // Should end with complete JSON line
+            CHECK(content.back() == '\n');
+            CHECK(content[content.length() - 2] == '}');
+            
+            // Should contain the pattern but complete
+            CHECK(content.find("\"name\":\"name_") != std::string::npos);
+            CHECK(content.find("\"cat\":\"cat_") != std::string::npos);
+            
+            free(output);
+        }
+    }
+    
+    SUBCASE("Small range minimum bytes check") {
+        char* output = nullptr;
+        size_t output_size = 0;
+        
+        // This was returning only 44 bytes instead of at least 100
+        result = dft_reader_read_range_bytes(reader, gz_file.c_str(), 0, 100, &output, &output_size);
+        CHECK(result == 0);
+        
+        if (result == 0) {
+            CHECK(output != nullptr);
+            CHECK(output_size >= 100);  // This was the main bug - was only 44 bytes
+            
+            std::string content(output, output_size);
+            
+            // Should contain multiple complete JSON objects for 100+ bytes
+            size_t brace_count = 0;
+            for (char c : content) {
+                if (c == '}') brace_count++;
+            }
+            CHECK(brace_count >= 2);  // Should have at least 2 complete objects for 100+ bytes
+            
+            free(output);
         }
     }
 

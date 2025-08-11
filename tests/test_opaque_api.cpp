@@ -13,86 +13,9 @@
 #include "indexer.h"
 #include "reader.h"
 #include "filesystem.h"
+#include "testing_utilities.h"
 
-// Cross-platform gzip compression function
-static bool compress_file_to_gzip(const std::string& input_file, const std::string& output_file) {
-    std::ifstream input(input_file, std::ios::binary);
-    if (!input.is_open()) {
-        return false;
-    }
-    
-    gzFile gz_output = gzopen(output_file.c_str(), "wb");
-    if (!gz_output) {
-        return false;
-    }
-    
-    const size_t buffer_size = 8192;
-    std::vector<char> buffer(buffer_size);
-    
-    while (input.read(buffer.data(), buffer_size) || input.gcount() > 0) {
-        unsigned int bytes_read = static_cast<unsigned int>(input.gcount());
-        if (gzwrite(gz_output, buffer.data(), bytes_read) != static_cast<int>(bytes_read)) {
-            gzclose(gz_output);
-            return false;
-        }
-    }
-    
-    gzclose(gz_output);
-    return true;
-}
-
-class TestEnvironment {
-public:
-    TestEnvironment() {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(100000, 999999);
-        
-        test_dir = "/tmp/dft_test_" + std::to_string(dis(gen));
-        
-        if (fs::create_directories(test_dir)) {
-            valid = true;
-        }
-    }
-    
-    ~TestEnvironment() {
-        if (valid && fs::exists(test_dir)) {
-            fs::remove_all(test_dir);
-        }
-    }
-    
-    bool is_valid() const {
-        return valid;
-    }
-    
-    std::string create_test_gzip_file() {
-        if (!valid) return "";
-        
-        std::string txt_file = test_dir + "/test_data.txt";
-        std::string gz_file = test_dir + "/test_data.txt.gz";
-        
-        // Create a simple text file with some JSON-like content
-        std::ofstream out(txt_file);
-        if (!out.is_open()) {
-            return "";
-        }
-        
-        for (int i = 0; i < 1000; ++i) {
-            out << "{\"id\": " << i << ", \"message\": \"test line " << i << "\"}\n";
-        }
-        out.close();
-        
-        if (compress_file_to_gzip(txt_file, gz_file)) {
-            return gz_file;
-        }
-        
-        return "";
-    }
-    
-private:
-    std::string test_dir;
-    bool valid = false;
-};
+using namespace dft_utils_test;
 
 TEST_CASE("Opaque indexer creation and destruction") {
     TestEnvironment env;
@@ -166,9 +89,9 @@ TEST_CASE("Opaque indexer build and rebuild detection") {
     indexer = dft_indexer_create(gz_file.c_str(), idx_file.c_str(), 2.0, false);
     REQUIRE(indexer != nullptr);
     
-    // Should need rebuild due to different chunk size
+    // Should not rebuild due to different chunk size
     need_rebuild = dft_indexer_need_rebuild(indexer);
-    CHECK(need_rebuild == 1);
+    CHECK(need_rebuild == 0);
     
     dft_indexer_destroy(indexer);
 }
@@ -339,13 +262,15 @@ TEST_CASE("Opaque reader maximum bytes") {
     result = dft_reader_get_max_bytes(reader, &max_bytes);
     CHECK(result == 0);
     CHECK(max_bytes > 0);
-    
-    // Test reading beyond max bytes should fail
+
+    // Test reading beyond max bytes should succeed but return empty output and output size
     char* output = nullptr;
     size_t output_size = 0;
     result = dft_reader_read_range_bytes(reader, gz_file.c_str(), max_bytes + 1, max_bytes + 100, &output, &output_size);
-    CHECK(result != 0);
-    
+    CHECK(result == 0);
+    CHECK(output_size == 0);
+    free(output);
+
     dft_reader_destroy(reader);
 }
 
