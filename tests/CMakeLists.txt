@@ -16,6 +16,21 @@ include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
 need_zlib()
 
 ##########################################
+# Testing Utilities
+##########################################
+
+add_library(testing_utilities STATIC
+    testing_utilities.cpp
+)
+target_link_libraries(testing_utilities
+    PRIVATE
+    dft_reader
+    doctest::doctest
+    ZLIB::ZLIB
+    ghc_filesystem
+)
+
+##########################################
 # Targets
 ##########################################
 
@@ -23,13 +38,13 @@ need_zlib()
 
 add_executable(test_reader
     test_reader.cpp
+    testing_utilities.cpp
 )
 target_link_libraries(test_reader
     PRIVATE
     dft_reader
     doctest::doctest
-    ZLIB::ZLIB
-    ghc_filesystem
+    testing_utilities
 )
 target_include_directories(test_reader
     PRIVATE
@@ -54,8 +69,7 @@ target_link_libraries(test_opaque_api
     PRIVATE
     dft_reader
     doctest::doctest
-    ZLIB::ZLIB
-    ghc_filesystem
+    testing_utilities
 )
 target_include_directories(test_opaque_api
     PRIVATE
@@ -80,8 +94,7 @@ target_link_libraries(test_raii_api
     PRIVATE
     dft_reader
     doctest::doctest
-    ZLIB::ZLIB
-    ghc_filesystem
+    testing_utilities
 )
 target_include_directories(test_raii_api
     PRIVATE
