@@ -36,39 +36,26 @@ extern "C"
      */
     int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes);
 
+
     /**
-     * Read a range of bytes from a gzip file using the index database
+     * Read a range of bytes from a gzip file using the index database (streaming)
+     * Returns complete JSON lines only. Call repeatedly until returns 0.
      * @param reader DFT reader handle
      * @param gz_path Path to the gzip file
      * @param start_bytes Start position in bytes
      * @param end_bytes End position in bytes
-     * @param output Buffer to store the extracted data (caller must free)
-     * @param output_size Pointer to store the size of extracted data
-     * @return 0 on success, -1 on error
+     * @param buffer User-provided buffer for complete JSON lines
+     * @param buffer_size Size of user-provided buffer
+     * @param bytes_written Pointer to store actual bytes written to buffer
+     * @return 1 if more data available, 0 if done, -1 on error
      */
-    int dft_reader_read_range_bytes(dft_reader_handle_t reader,
-                                    const char *gz_path,
-                                    size_t start_bytes,
-                                    size_t end_bytes,
-                                    char **output,
-                                    size_t *output_size);
-
-    /**
-     * Read a range of megabytes from a gzip file using the index database
-     * @param reader DFT reader handle
-     * @param gz_path Path to the gzip file
-     * @param start_mb Start position in megabytes
-     * @param end_mb End position in megabytes
-     * @param output Buffer to store the extracted data (caller must free)
-     * @param output_size Pointer to store the size of extracted data
-     * @return 0 on success, -1 on error
-     */
-    int dft_reader_read_range_megabytes(dft_reader_handle_t reader,
-                                        const char *gz_path,
-                                        double start_mb,
-                                        double end_mb,
-                                        char **output,
-                                        size_t *output_size);
+    int dft_reader_read(dft_reader_handle_t reader,
+                       const char *gz_path,
+                       size_t start_bytes,
+                       size_t end_bytes,
+                       char *buffer,
+                       size_t buffer_size,
+                       size_t *bytes_written);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -101,10 +88,6 @@ namespace reader
 class Reader
 {
   public:
-    /**
-     * Smart pointer type for managing allocated memory
-     */
-    using Buffer = std::unique_ptr<char, void (*)(void *)>;
 
     /**
      * Create a new DFT reader instance
@@ -141,42 +124,33 @@ class Reader
     size_t get_max_bytes() const;
 
     /**
-     * Read a range of bytes from the gzip file using the index database
+     * Read a range of bytes from the gzip file using the index database (streaming)
+     * Returns complete JSON lines only. Call repeatedly until returns false.
      * @param gz_path Path to the gzip file (can be different from constructor)
      * @param start_bytes Start position in bytes
      * @param end_bytes End position in bytes
-     * @return pair of (smart pointer to data, size of data)
+     * @param buffer User-provided buffer for complete JSON lines
+     * @param buffer_size Size of user-provided buffer
+     * @param bytes_written Pointer to store actual bytes written to buffer
+     * @return true if more data available, false if done
      * @throws std::runtime_error if operation fails
      */
-    std::pair<Buffer, size_t> read_range_bytes(const std::string &gz_path, size_t start_bytes, size_t end_bytes) const;
+    bool read(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
+             char *buffer, size_t buffer_size, size_t *bytes_written);
 
     /**
-     * Read a range of bytes from the gzip file using the stored gz_path
+     * Read a range of bytes from the gzip file using the stored gz_path (streaming)
+     * Returns complete JSON lines only. Call repeatedly until returns false.
      * @param start_bytes Start position in bytes
      * @param end_bytes End position in bytes
-     * @return pair of (smart pointer to data, size of data)
+     * @param buffer User-provided buffer for complete JSON lines
+     * @param buffer_size Size of user-provided buffer
+     * @param bytes_written Pointer to store actual bytes written to buffer
+     * @return true if more data available, false if done
      * @throws std::runtime_error if operation fails
      */
-    std::pair<Buffer, size_t> read_range_bytes(size_t start_bytes, size_t end_bytes) const;
-
-    /**
-     * Read a range of megabytes from the gzip file using the index database
-     * @param gz_path Path to the gzip file (can be different from constructor)
-     * @param start_mb Start position in megabytes
-     * @param end_mb End position in megabytes
-     * @return pair of (smart pointer to data, size of data)
-     * @throws std::runtime_error if operation fails
-     */
-    std::pair<Buffer, size_t> read_range_megabytes(const std::string &gz_path, double start_mb, double end_mb) const;
-
-    /**
-     * Read a range of megabytes from the gzip file using the stored gz_path
-     * @param start_mb Start position in megabytes
-     * @param end_mb End position in megabytes
-     * @return pair of (smart pointer to data, size of data)
-     * @throws std::runtime_error if operation fails
-     */
-    std::pair<Buffer, size_t> read_range_megabytes(double start_mb, double end_mb) const;
+    bool read(size_t start_bytes, size_t end_bytes,
+             char *buffer, size_t buffer_size, size_t *bytes_written);
 
     /**
      * Check if the reader is valid

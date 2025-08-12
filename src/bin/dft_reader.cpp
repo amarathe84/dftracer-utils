@@ -20,8 +20,8 @@ int main(int argc, char **argv)
     program.add_description("DFTracer utility for reading and indexing gzipped files");
     program.add_argument("file").help("Gzipped file to process").required();
     program.add_argument("-i", "--index").help("Index file to use").default_value<std::string>("");
-    program.add_argument("-s", "--start").help("Start position in bytes").default_value<size_t>(0).scan<'d', size_t>();
-    program.add_argument("-e", "--end").help("End position in bytes").default_value<size_t>(0).scan<'d', size_t>();
+    program.add_argument("-s", "--start").help("Start position in bytes").default_value<int64_t>(-1).scan<'d', int64_t>();
+    program.add_argument("-e", "--end").help("End position in bytes").default_value<int64_t>(-1).scan<'d', int64_t>();
     program.add_argument("-c", "--chunk-size")
         .help("Chunk size for indexing in megabytes (default: 32)")
         .scan<'g', double>()
@@ -45,8 +45,8 @@ int main(int argc, char **argv)
 
     std::string gz_path = program.get<std::string>("file");
     std::string index_path = program.get<std::string>("--index");
-    size_t start_bytes = program.get<size_t>("--start");
-    size_t end_bytes = program.get<size_t>("--end");
+    int64_t start_bytes = program.get<int64_t>("--start");
+    int64_t end_bytes = program.get<int64_t>("--end");
     double chunk_size_mb = program.get<double>("--chunk-size");
     bool force_rebuild = program.get<bool>("--force");
     bool check_rebuild = program.get<bool>("--check");
@@ -105,29 +105,36 @@ int main(int argc, char **argv)
     }
 
     // read operations
-    if (end_bytes > start_bytes)
+    if (start_bytes != -1)
     {
+        size_t start_bytes_ = static_cast<size_t>(start_bytes);
+        size_t end_bytes_ = end_bytes == -1 ? std::numeric_limits<size_t>::max() : static_cast<size_t>(end_bytes);
         spdlog::debug("Performing byte range read operation");
 
         try
         {
             dft::reader::Reader reader(gz_path, idx_path);
             auto max_bytes = reader.get_max_bytes();
-            if (end_bytes > max_bytes)
+            if (end_bytes_ > max_bytes)
             {
                 spdlog::warn("End bytes exceed maximum available bytes, clamping to max value {} B ({} MB)",
                              max_bytes,
                              max_bytes / (1024 * 1024));
-                end_bytes = max_bytes;
+                end_bytes_ = max_bytes;
             }
 
-            auto result = reader.read_range_bytes(start_bytes, end_bytes);
-            auto &data = result.first;
-            size_t output_size = result.second;
+            constexpr size_t BUFFER_SIZE = 64 * 1024; // 64KB buffer
+            char buffer[BUFFER_SIZE];
+            size_t bytes_written;
+            size_t total_bytes = 0;
 
-            spdlog::debug("Successfully read {} bytes from range", output_size);
-
-            fwrite(data.get(), 1, output_size, stdout);
+            while (reader.read(start_bytes_, end_bytes_, buffer, BUFFER_SIZE, &bytes_written))
+            {
+                fwrite(buffer, 1, bytes_written, stdout);
+                total_bytes += bytes_written;
+            }
+            
+            spdlog::debug("Successfully read {} bytes from range", total_bytes);
         }
         catch (const std::runtime_error &e)
         {
