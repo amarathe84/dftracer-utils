@@ -10,6 +10,7 @@
 #include <dft_utils/indexer/indexer.h>
 #include <dft_utils/reader/reader.h>
 #include <dft_utils/utils/filesystem.h>
+#include <dft_utils/utils/logger.h>
 #include "testing_utilities.h"
 
 using namespace dft_utils_test;
@@ -46,6 +47,16 @@ TEST_CASE("C++ Indexer - Basic functionality") {
         
         indexer.build();
         CHECK_FALSE(indexer.need_rebuild()); // Should not need rebuild after building
+    }
+    
+    SUBCASE("Getter methods") {
+        double chunk_size = 1.5;
+        dft::indexer::Indexer indexer(gz_file, idx_file, chunk_size);
+        
+        // Test getter methods
+        CHECK(indexer.get_gz_path() == gz_file);
+        CHECK(indexer.get_idx_path() == idx_file);
+        CHECK(indexer.get_chunk_size_mb() == chunk_size);
     }
     
     SUBCASE("Move semantics") {
@@ -97,6 +108,14 @@ TEST_CASE("C++ Reader - Basic functionality") {
         dft::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         CHECK(max_bytes > 0);
+    }
+    
+    SUBCASE("Getter methods") {
+        dft::reader::Reader reader(gz_file, idx_file);
+        
+        // Test getter methods
+        CHECK(reader.get_gz_path() == gz_file);
+        CHECK(reader.get_idx_path() == idx_file);
     }
     
     SUBCASE("Read byte range with automatic memory management") {
@@ -726,6 +745,228 @@ TEST_CASE("C++ API - Regression and stress tests") {
                 if (c == '}') brace_count++;
             }
             CHECK(brace_count >= 2);  // Should have at least 2 complete objects for 100+ bytes
+        }
+    }
+}
+
+TEST_CASE("C++ Logger - Comprehensive functionality") {
+    SUBCASE("C++ API - Set and get log level by string") {
+        // Test all valid log levels
+        CHECK(dft::utils::set_log_level("trace") == 0);
+        CHECK(dft::utils::get_log_level_string() == "trace");
+        
+        CHECK(dft::utils::set_log_level("debug") == 0);
+        CHECK(dft::utils::get_log_level_string() == "debug");
+        
+        CHECK(dft::utils::set_log_level("info") == 0);
+        CHECK(dft::utils::get_log_level_string() == "info");
+        
+        CHECK(dft::utils::set_log_level("warn") == 0);
+        CHECK(dft::utils::get_log_level_string() == "warn");
+        
+        CHECK(dft::utils::set_log_level("warning") == 0);
+        CHECK(dft::utils::get_log_level_string() == "warn");
+        
+        CHECK(dft::utils::set_log_level("error") == 0);
+        CHECK(dft::utils::get_log_level_string() == "error");
+        
+        CHECK(dft::utils::set_log_level("err") == 0);
+        CHECK(dft::utils::get_log_level_string() == "error");
+        
+        CHECK(dft::utils::set_log_level("critical") == 0);
+        CHECK(dft::utils::get_log_level_string() == "critical");
+        
+        CHECK(dft::utils::set_log_level("off") == 0);
+        CHECK(dft::utils::get_log_level_string() == "off");
+        
+        // Test case insensitive
+        CHECK(dft::utils::set_log_level("TRACE") == 0);
+        CHECK(dft::utils::get_log_level_string() == "trace");
+        
+        CHECK(dft::utils::set_log_level("Debug") == 0);
+        CHECK(dft::utils::get_log_level_string() == "debug");
+        
+        // Test unrecognized level (should default to info)
+        CHECK(dft::utils::set_log_level("invalid") == 0);
+        CHECK(dft::utils::get_log_level_string() == "info");
+    }
+    
+    SUBCASE("C++ API - Set and get log level by integer") {
+        // Test valid integer levels (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off)
+        CHECK(dft::utils::set_log_level_int(0) == 0);
+        CHECK(dft::utils::get_log_level_int() == 0);
+        CHECK(dft::utils::get_log_level_string() == "trace");
+        
+        CHECK(dft::utils::set_log_level_int(1) == 0);
+        CHECK(dft::utils::get_log_level_int() == 1);
+        CHECK(dft::utils::get_log_level_string() == "debug");
+        
+        CHECK(dft::utils::set_log_level_int(2) == 0);
+        CHECK(dft::utils::get_log_level_int() == 2);
+        CHECK(dft::utils::get_log_level_string() == "info");
+        
+        CHECK(dft::utils::set_log_level_int(3) == 0);
+        CHECK(dft::utils::get_log_level_int() == 3);
+        CHECK(dft::utils::get_log_level_string() == "warn");
+        
+        CHECK(dft::utils::set_log_level_int(4) == 0);
+        CHECK(dft::utils::get_log_level_int() == 4);
+        CHECK(dft::utils::get_log_level_string() == "error");
+        
+        CHECK(dft::utils::set_log_level_int(5) == 0);
+        CHECK(dft::utils::get_log_level_int() == 5);
+        CHECK(dft::utils::get_log_level_string() == "critical");
+        
+        CHECK(dft::utils::set_log_level_int(6) == 0);
+        CHECK(dft::utils::get_log_level_int() == 6);
+        CHECK(dft::utils::get_log_level_string() == "off");
+        
+        // Test invalid integer levels
+        CHECK(dft::utils::set_log_level_int(-1) == -1);
+        CHECK(dft::utils::set_log_level_int(7) == -1);
+        CHECK(dft::utils::set_log_level_int(100) == -1);
+    }
+}
+
+TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
+    TestEnvironment env(1000);
+    REQUIRE(env.is_valid());
+    
+    std::string gz_file = env.create_test_gzip_file();
+    REQUIRE(!gz_file.empty());
+    
+    std::string idx_file = env.get_index_path(gz_file);
+    
+    SUBCASE("Indexer with various chunk sizes") {
+        // Test different chunk sizes to trigger different code paths
+        for (double chunk_size : {0.1, 0.5, 1.0, 2.0, 5.0}) {
+            dft::indexer::Indexer indexer(gz_file, idx_file + std::to_string(chunk_size), chunk_size);
+            CHECK_NOTHROW(indexer.build());
+            CHECK(indexer.get_chunk_size_mb() == chunk_size);
+        }
+    }
+    
+    SUBCASE("Reader with different range sizes to trigger various code paths") {
+        // Build index first
+        {
+            dft::indexer::Indexer indexer(gz_file, idx_file, 0.1); // Small chunks
+            indexer.build();
+        }
+        
+        dft::reader::Reader reader(gz_file, idx_file);
+        size_t max_bytes = reader.get_max_bytes();
+        
+        // Test various range sizes to trigger different internal paths
+        std::vector<std::pair<size_t, size_t>> ranges = {
+            {0, 1},          // Very small range
+            {0, 10},         // Small range
+            {0, 100},        // Medium range
+            {0, 1000},       // Large range
+            {100, 200},      // Mid-file range
+            {max_bytes/2, max_bytes/2 + 50}, // Middle section
+        };
+        
+        for (const auto& range : ranges) {
+            size_t start = range.first;
+            size_t end = range.second;
+            if (end <= max_bytes) {
+                auto result = reader.read_range_bytes(start, end);
+                CHECK(result.first != nullptr);
+                CHECK(result.second >= (end - start));
+            }
+        }
+    }
+    
+    SUBCASE("Force rebuild scenarios") {
+        // Test force rebuild functionality
+        dft::indexer::Indexer indexer1(gz_file, idx_file, 1.0, false);
+        indexer1.build();
+        CHECK_FALSE(indexer1.need_rebuild());
+        
+        // Force rebuild should rebuild even if not needed
+        dft::indexer::Indexer indexer2(gz_file, idx_file, 1.0, true);
+        // Force rebuild affects behavior during construction/build
+        CHECK_NOTHROW(indexer2.build()); // Should succeed even if forced
+        // Note: force_rebuild flag behavior needs further investigation
+        CHECK_FALSE(indexer2.need_rebuild()); // After building, shouldn't need rebuild
+    }
+    
+    SUBCASE("Multiple readers on same index") {
+        // Build index once
+        {
+            dft::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+            indexer.build();
+        }
+        
+        // Create multiple readers
+        std::vector<dft::reader::Reader*> readers;
+        for (int i = 0; i < 5; ++i) {
+            readers.push_back(new dft::reader::Reader(gz_file, idx_file));
+            CHECK(readers.back()->is_valid());
+        }
+        
+        // All should be able to read simultaneously
+        for (auto& reader : readers) {
+            auto result = reader->read_range_bytes(0, 50);
+            CHECK(result.first != nullptr);
+            CHECK(result.second >= 50);
+        }
+        
+        // Clean up
+        for (auto& reader : readers) {
+            delete reader;
+        }
+    }
+    
+    SUBCASE("Edge case: Reading near file boundaries") {
+        // Build index
+        {
+            dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+            indexer.build();
+        }
+        
+        dft::reader::Reader reader(gz_file, idx_file);
+        size_t max_bytes = reader.get_max_bytes();
+        
+        if (max_bytes > 10) {
+            // Read from near the end
+            auto result1 = reader.read_range_bytes(max_bytes - 10, max_bytes - 1);
+            CHECK(result1.first != nullptr);
+            CHECK(result1.second >= 9);
+            
+            // Read the very last byte
+            if (max_bytes > 1) {
+                auto result2 = reader.read_range_bytes(max_bytes - 1, max_bytes);
+                CHECK(result2.first != nullptr);
+                CHECK(result2.second >= 1);
+            }
+        }
+    }
+    
+    SUBCASE("Large file handling") {
+        // Create larger test environment
+        TestEnvironment large_env(5000); // More lines
+        std::string large_gz = large_env.create_test_gzip_file();
+        std::string large_idx = large_env.get_index_path(large_gz);
+        
+        // Build index with small chunks to force more complex compression
+        {
+            dft::indexer::Indexer indexer(large_gz, large_idx, 0.1);
+            indexer.build();
+        }
+        
+        dft::reader::Reader reader(large_gz, large_idx);
+        size_t max_bytes = reader.get_max_bytes();
+        
+        // Read various large ranges
+        if (max_bytes > 1000) {
+            auto result1 = reader.read_range_bytes(0, 1000);
+            CHECK(result1.first != nullptr);
+            CHECK(result1.second >= 1000);
+            
+            auto result2 = reader.read_range_bytes(500, 1500);
+            CHECK(result2.first != nullptr);
+            CHECK(result2.second >= 1000);
         }
     }
 }

@@ -348,14 +348,7 @@ bool Indexer::Impl::need_rebuild() const
     // Check if index exists and is valid
     if (!index_exists_and_valid(idx_path_))
     {
-        spdlog::debug("Index rebuild needed: index does not exist or is invalid");
-        return true;
-    }
-
-    // If force rebuild is set, always rebuild
-    if (force_rebuild_)
-    {
-        spdlog::debug("Index rebuild needed: force rebuild is enabled");
+        spdlog::info("Index rebuild needed: index does not exist or is invalid");
         return true;
     }
 
@@ -398,7 +391,7 @@ bool Indexer::Impl::need_rebuild() const
 
             if (current_sha256 != stored_sha256)
             {
-                spdlog::debug("Index rebuild needed: file SHA256 changed ({} vs {})",
+                spdlog::info("Index rebuild needed: file SHA256 changed ({} vs {})",
                               current_sha256.substr(0, 16) + "...",
                               stored_sha256.substr(0, 16) + "...");
                 return true;
@@ -407,14 +400,14 @@ bool Indexer::Impl::need_rebuild() const
         else
         {
             // No stored SHA256, this might be an old index format
-            spdlog::debug("Index rebuild needed: no SHA256 stored in index (old format)");
+            spdlog::info("Index rebuild needed: no SHA256 stored in index (old format)");
             return true;
         }
     }
     else
     {
         // Could not get stored file info, assume rebuild needed
-        spdlog::debug("Index rebuild needed: could not retrieve stored file information");
+        spdlog::info("Index rebuild needed: could not retrieve stored file information");
         return true;
     }
 
@@ -914,14 +907,6 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
 
 void Indexer::Impl::build()
 {
-    // check if rebuild is needed
-    bool rebuild_needed = need_rebuild();
-    if (!rebuild_needed)
-    {
-        spdlog::debug("Index is up to date, skipping rebuild");
-        return;
-    }
-
     spdlog::debug("Building index for {} with {:.1f} MB chunks...", gz_path_, chunk_size_mb_);
 
     // open database

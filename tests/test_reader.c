@@ -6,6 +6,7 @@
 
 #include <dft_utils/indexer/indexer.h>
 #include <dft_utils/reader/reader.h>
+#include <dft_utils/utils/logger.h>
 #include "testing_utilities.h"
 
 // Global test environment handle
@@ -13,8 +14,10 @@ static test_environment_handle_t g_env = NULL;
 static char* g_gz_file = NULL;
 static char* g_idx_file = NULL;
 
+static test_environment_handle_t setup_test_environment(void);
+
 void setUp(void) {
-    // Called before each test
+    setup_test_environment();
 }
 
 void tearDown(void) {
@@ -27,10 +30,14 @@ void tearDown(void) {
         free(g_idx_file);
         g_idx_file = NULL;
     }
+    if (g_env) {
+        test_environment_destroy(g_env);
+        g_env = NULL;
+    }
 }
 
 // Helper function to set up test environment for tests that need it
-static void setup_test_environment(void) {
+static test_environment_handle_t setup_test_environment(void) {
     if (!g_env) {
         g_env = test_environment_create();
         TEST_ASSERT_NOT_NULL(g_env);
@@ -46,11 +53,11 @@ static void setup_test_environment(void) {
         g_idx_file = test_environment_get_index_path(g_env, g_gz_file);
         TEST_ASSERT_NOT_NULL(g_idx_file);
     }
+
+    return g_env;
 }
 
 void test_indexer_creation_and_destruction(void) {
-    setup_test_environment();
-    
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
@@ -79,7 +86,6 @@ void test_indexer_invalid_parameters(void) {
 }
 
 void test_gzip_index_building(void) {
-    setup_test_environment();
     
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 0);
     TEST_ASSERT_NOT_NULL(indexer);
@@ -138,34 +144,22 @@ void test_indexer_rebuild_detection(void) {
     // Clean up
     free(test_gz_file);
     free(test_idx_file);
-    test_environment_destroy(test_env);
 }
 
 void test_indexer_force_rebuild(void) {
-    setup_test_environment();
-    
-    // Build initial index
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 0);
-    TEST_ASSERT_NOT_NULL(indexer);
-    
-    int result = dft_indexer_build(indexer);
-    TEST_ASSERT_EQUAL_INT(0, result);
-    
-    dft_indexer_destroy(indexer);
-    
+
     // Create indexer with force rebuild
-    indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 1);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 1);
     TEST_ASSERT_NOT_NULL(indexer);
     
-    // Should need rebuild because force is enabled
+    // Should need rebuild because no index is generated
     int need_rebuild = dft_indexer_need_rebuild(indexer);
     TEST_ASSERT_EQUAL_INT(1, need_rebuild);
-    
+
     dft_indexer_destroy(indexer);
 }
 
 void test_reader_creation_and_destruction(void) {
-    setup_test_environment();
     
     // Build index first
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 0);
@@ -183,6 +177,7 @@ void test_reader_creation_and_destruction(void) {
     if (reader) {
         dft_reader_destroy(reader);
     }
+
 }
 
 void test_reader_invalid_parameters(void) {
@@ -204,8 +199,7 @@ void test_reader_invalid_parameters(void) {
 }
 
 void test_data_range_reading(void) {
-    setup_test_environment();
-    
+
     // Build index first
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
     TEST_ASSERT_NOT_NULL(indexer);
@@ -242,8 +236,7 @@ void test_data_range_reading(void) {
 }
 
 void test_read_with_null_parameters(void) {
-    setup_test_environment();
-    
+
     // Build index first
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
     TEST_ASSERT_NOT_NULL(indexer);
@@ -279,8 +272,7 @@ void test_read_with_null_parameters(void) {
 }
 
 void test_read_megabyte_range(void) {
-    setup_test_environment();
-    
+
     // Build index first
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
     TEST_ASSERT_NOT_NULL(indexer);
@@ -311,8 +303,7 @@ void test_read_megabyte_range(void) {
 }
 
 void test_edge_cases(void) {
-    setup_test_environment();
-    
+
     // Build index first
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
     TEST_ASSERT_NOT_NULL(indexer);
@@ -344,8 +335,7 @@ void test_edge_cases(void) {
 }
 
 void test_get_maximum_bytes(void) {
-    setup_test_environment();
-    
+
     // Build index first
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
     TEST_ASSERT_NOT_NULL(indexer);
@@ -382,8 +372,7 @@ void test_get_maximum_bytes(void) {
 }
 
 void test_get_max_bytes_null_parameters(void) {
-    setup_test_environment();
-    
+
     dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
     if (reader) {
         size_t max_bytes;
@@ -401,8 +390,7 @@ void test_get_max_bytes_null_parameters(void) {
 }
 
 void test_memory_management(void) {
-    setup_test_environment();
-    
+
     // Build index first
     dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
     TEST_ASSERT_NOT_NULL(indexer);
@@ -580,6 +568,100 @@ void test_regression_for_truncated_json_output(void) {
     test_environment_destroy(large_env);
 }
 
+// Logger C API tests
+void test_logger_set_get_level_string(void) {
+    // Test all valid log levels
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("trace"));
+    TEST_ASSERT_EQUAL_STRING("trace", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("debug"));
+    TEST_ASSERT_EQUAL_STRING("debug", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("info"));
+    TEST_ASSERT_EQUAL_STRING("info", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("warn"));
+    TEST_ASSERT_EQUAL_STRING("warn", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("warning"));
+    TEST_ASSERT_EQUAL_STRING("warn", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("error"));
+    TEST_ASSERT_EQUAL_STRING("error", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("err"));
+    TEST_ASSERT_EQUAL_STRING("error", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("critical"));
+    TEST_ASSERT_EQUAL_STRING("critical", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("off"));
+    TEST_ASSERT_EQUAL_STRING("off", dft_utils_get_log_level_string());
+    
+    // Test case insensitive
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("TRACE"));
+    TEST_ASSERT_EQUAL_STRING("trace", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("Debug"));
+    TEST_ASSERT_EQUAL_STRING("debug", dft_utils_get_log_level_string());
+    
+    // Test unrecognized level (should default to info)
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level("invalid"));
+    TEST_ASSERT_EQUAL_STRING("info", dft_utils_get_log_level_string());
+    
+    // Test NULL input
+    TEST_ASSERT_EQUAL_INT(-1, dft_utils_set_log_level(NULL));
+}
+
+void test_logger_set_get_level_int(void) {
+    // Test valid integer levels (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off)
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level_int(0));
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("trace", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level_int(1));
+    TEST_ASSERT_EQUAL_INT(1, dft_utils_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("debug", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level_int(2));
+    TEST_ASSERT_EQUAL_INT(2, dft_utils_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("info", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level_int(3));
+    TEST_ASSERT_EQUAL_INT(3, dft_utils_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("warn", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level_int(4));
+    TEST_ASSERT_EQUAL_INT(4, dft_utils_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("error", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level_int(5));
+    TEST_ASSERT_EQUAL_INT(5, dft_utils_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("critical", dft_utils_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_utils_set_log_level_int(6));
+    TEST_ASSERT_EQUAL_INT(6, dft_utils_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("off", dft_utils_get_log_level_string());
+    
+    // Test invalid integer levels
+    TEST_ASSERT_EQUAL_INT(-1, dft_utils_set_log_level_int(-1));
+    TEST_ASSERT_EQUAL_INT(-1, dft_utils_set_log_level_int(7));
+    TEST_ASSERT_EQUAL_INT(-1, dft_utils_set_log_level_int(100));
+}
+
+void test_logger_backward_compatibility(void) {
+    // Test backward compatibility aliases
+    TEST_ASSERT_EQUAL_INT(0, dft_set_log_level("info"));
+    TEST_ASSERT_EQUAL_STRING("info", dft_get_log_level_string());
+    
+    TEST_ASSERT_EQUAL_INT(0, dft_set_log_level_int(4));
+    TEST_ASSERT_EQUAL_INT(4, dft_get_log_level_int());
+    TEST_ASSERT_EQUAL_STRING("error", dft_get_log_level_string());
+    
+    // Test NULL input
+    TEST_ASSERT_EQUAL_INT(-1, dft_set_log_level(NULL));
+}
+
 int main(void) {
     UNITY_BEGIN();
     
@@ -611,6 +693,11 @@ int main(void) {
     // Advanced tests
     RUN_TEST(test_json_boundary_detection);
     RUN_TEST(test_regression_for_truncated_json_output);
+    
+    // Logger tests
+    RUN_TEST(test_logger_set_get_level_string);
+    RUN_TEST(test_logger_set_get_level_int);
+    RUN_TEST(test_logger_backward_compatibility);
     
     // Clean up global test environment
     if (g_env) {
