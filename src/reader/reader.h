@@ -36,7 +36,6 @@ extern "C"
      */
     int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes);
 
-
     /**
      * Read a range of bytes from a gzip file using the index database (streaming)
      * Returns complete JSON lines only. Call repeatedly until returns 0.
@@ -50,12 +49,12 @@ extern "C"
      * @return 1 if more data available, 0 if done, -1 on error
      */
     int dft_reader_read(dft_reader_handle_t reader,
-                       const char *gz_path,
-                       size_t start_bytes,
-                       size_t end_bytes,
-                       char *buffer,
-                       size_t buffer_size,
-                       size_t *bytes_written);
+                        const char *gz_path,
+                        size_t start_bytes,
+                        size_t end_bytes,
+                        char *buffer,
+                        size_t buffer_size,
+                        size_t *bytes_written);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -88,7 +87,6 @@ namespace reader
 class Reader
 {
   public:
-
     /**
      * Create a new DFT reader instance
      * @param gz_path Path to the gzipped trace file
@@ -135,8 +133,12 @@ class Reader
      * @return true if more data available, false if done
      * @throws std::runtime_error if operation fails
      */
-    bool read(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
-             char *buffer, size_t buffer_size, size_t *bytes_written);
+    bool read(const std::string &gz_path,
+              size_t start_bytes,
+              size_t end_bytes,
+              char *buffer,
+              size_t buffer_size,
+              size_t *bytes_written);
 
     /**
      * Read a range of bytes from the gzip file using the stored gz_path (streaming)
@@ -149,8 +151,7 @@ class Reader
      * @return true if more data available, false if done
      * @throws std::runtime_error if operation fails
      */
-    bool read(size_t start_bytes, size_t end_bytes,
-             char *buffer, size_t buffer_size, size_t *bytes_written);
+    bool read(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size, size_t *bytes_written);
 
     /**
      * Check if the reader is valid

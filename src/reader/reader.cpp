@@ -109,8 +109,12 @@ class Reader::Impl
         return max_bytes;
     }
 
-    bool read(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
-             char *buffer, size_t buffer_size, size_t *bytes_written)
+    bool read(const std::string &gz_path,
+              size_t start_bytes,
+              size_t end_bytes,
+              char *buffer,
+              size_t buffer_size,
+              size_t *bytes_written)
     {
         if (!is_open_ || !db_)
         {
@@ -130,10 +134,8 @@ class Reader::Impl
         *bytes_written = 0;
 
         // Check if this is a new streaming request
-        if (!streaming_state_.is_active || 
-            streaming_state_.current_gz_path != gz_path ||
-            streaming_state_.start_bytes != start_bytes ||
-            streaming_state_.target_end_bytes != end_bytes)
+        if (!streaming_state_.is_active || streaming_state_.current_gz_path != gz_path ||
+            streaming_state_.start_bytes != start_bytes || streaming_state_.target_end_bytes != end_bytes)
         {
             // Initialize new streaming session
             initialize_streaming_session(gz_path, start_bytes, end_bytes);
@@ -149,8 +151,7 @@ class Reader::Impl
         return stream_data_chunk(buffer, buffer_size, bytes_written);
     }
 
-public:
-
+  public:
     bool is_valid() const
     {
         return is_open_ && db_ != nullptr;
@@ -321,7 +322,8 @@ public:
             }
             else
             {
-                spdlog::error("Failed to allocate memory for checkpoint dictionary of size {}", checkpoint->dict_compressed_size);
+                spdlog::error("Failed to allocate memory for checkpoint dictionary of size {}",
+                              checkpoint->dict_compressed_size);
             }
         }
         else
@@ -355,7 +357,8 @@ public:
         int ret = inflate(&zs, Z_FINISH);
         if (ret != Z_STREAM_END)
         {
-            spdlog::error("inflate failed during window decompression with error: {} ({})", ret, zs.msg ? zs.msg : "no message");
+            spdlog::error(
+                "inflate failed during window decompression with error: {} ({})", ret, zs.msg ? zs.msg : "no message");
             inflateEnd(&zs);
             return -1;
         }
@@ -561,11 +564,11 @@ public:
 
     void initialize_streaming_session(const std::string &gz_path, size_t start_bytes, size_t end_bytes)
     {
-        spdlog::debug("Initializing streaming session for range [{}, {}] from {}", 
-                      start_bytes, end_bytes, gz_path);
+        spdlog::debug("Initializing streaming session for range [{}, {}] from {}", start_bytes, end_bytes, gz_path);
 
         // Clean up any existing state - SAFELY
-        if (streaming_state_.is_active) {
+        if (streaming_state_.is_active)
+        {
             streaming_state_.reset(); // This is safe - only closes file handle and resets pointers
         }
 
@@ -592,13 +595,14 @@ public:
         streaming_state_.checkpoint.reset(new CheckpointInfo());
         if (find_checkpoint(start_bytes, streaming_state_.checkpoint.get()) == 0)
         {
-            if (inflate_init_from_checkpoint(streaming_state_.inflate_state.get(), 
-                                           streaming_state_.file_handle, 
-                                           streaming_state_.checkpoint.get()) == 0)
+            if (inflate_init_from_checkpoint(streaming_state_.inflate_state.get(),
+                                             streaming_state_.file_handle,
+                                             streaming_state_.checkpoint.get()) == 0)
             {
                 use_checkpoint = true;
-                spdlog::debug("Using checkpoint at uncompressed offset {} for target {}", 
-                             streaming_state_.checkpoint->uc_offset, start_bytes);
+                spdlog::debug("Using checkpoint at uncompressed offset {} for target {}",
+                              streaming_state_.checkpoint->uc_offset,
+                              start_bytes);
             }
             else
             {
@@ -626,8 +630,9 @@ public:
         streaming_state_.current_position = streaming_state_.actual_start_bytes;
         streaming_state_.decompression_initialized = true;
 
-        spdlog::debug("Streaming session initialized: actual_start={}, target_end={}", 
-                     streaming_state_.actual_start_bytes, end_bytes);
+        spdlog::debug("Streaming session initialized: actual_start={}, target_end={}",
+                      streaming_state_.actual_start_bytes,
+                      end_bytes);
     }
 
     size_t find_json_line_start(size_t target_start, bool use_checkpoint)
@@ -653,8 +658,8 @@ public:
         // Read data to find the start of a complete JSON line
         unsigned char search_buffer[2048];
         size_t search_bytes;
-        if (inflate_read(streaming_state_.inflate_state.get(), search_buffer, 
-                        sizeof(search_buffer) - 1, &search_bytes) != 0)
+        if (inflate_read(
+                streaming_state_.inflate_state.get(), search_buffer, sizeof(search_buffer) - 1, &search_bytes) != 0)
         {
             throw std::runtime_error("Failed during search phase");
         }
@@ -669,8 +674,7 @@ public:
                 if (i == 0 || search_buffer[i - 1] == '\n')
                 {
                     actual_start = current_pos + static_cast<size_t>(i);
-                    spdlog::debug("Found JSON line start at position {} (requested {})", 
-                                 actual_start, target_start);
+                    spdlog::debug("Found JSON line start at position {} (requested {})", actual_start, target_start);
                     break;
                 }
             }
@@ -696,7 +700,8 @@ public:
 
     void skip_bytes(size_t bytes_to_skip)
     {
-        if (bytes_to_skip == 0) return;
+        if (bytes_to_skip == 0)
+            return;
 
         unsigned char *skip_buffer = static_cast<unsigned char *>(malloc(65536));
         if (!skip_buffer)
@@ -738,13 +743,13 @@ public:
     void restart_decompression()
     {
         inflate_cleanup(streaming_state_.inflate_state.get());
-        
+
         bool use_checkpoint = (streaming_state_.checkpoint != nullptr);
         if (use_checkpoint)
         {
-            if (inflate_init_from_checkpoint(streaming_state_.inflate_state.get(), 
-                                           streaming_state_.file_handle, 
-                                           streaming_state_.checkpoint.get()) != 0)
+            if (inflate_init_from_checkpoint(streaming_state_.inflate_state.get(),
+                                             streaming_state_.file_handle,
+                                             streaming_state_.checkpoint.get()) != 0)
             {
                 throw std::runtime_error("Failed to reinitialize from checkpoint");
             }
@@ -771,26 +776,15 @@ public:
         // Read data in chunks, ensuring we don't exceed buffer size
         while (total_read < buffer_size)
         {
-            // Check if we've reached the target end
-            if (streaming_state_.current_position >= streaming_state_.target_end_bytes)
-            {
-                // Look for a complete JSON boundary to finish cleanly
-                if (total_read > 0 && find_json_boundary_in_buffer(buffer, total_read))
-                {
-                    break;
-                }
-                // If no boundary found and we're past target, we're done
-                streaming_state_.is_finished = true;
-                break;
-            }
-
-            size_t chunk_size = std::min(static_cast<size_t>(4096), buffer_size - total_read);
+            // Use the remaining buffer space as chunk size
+            size_t chunk_size = buffer_size - total_read;
             size_t bytes_read;
-            
+
             int result = inflate_read(streaming_state_.inflate_state.get(),
-                                    reinterpret_cast<unsigned char *>(buffer + total_read),
-                                    chunk_size, &bytes_read);
-            
+                                      reinterpret_cast<unsigned char *>(buffer + total_read),
+                                      chunk_size,
+                                      &bytes_read);
+
             if (result != 0)
             {
                 throw std::runtime_error("Failed during streaming read phase");
@@ -814,59 +808,29 @@ public:
 
             total_read += bytes_read;
             streaming_state_.current_position += bytes_read;
+
+            // Check if we've reached or exceeded the target end
+            if (streaming_state_.current_position >= streaming_state_.target_end_bytes)
+            {
+                // We've reached the target end, we can stop reading more data
+                streaming_state_.is_finished = true;
+                break;
+            }
         }
 
-        // Ensure we end on a complete JSON line boundary
-        if (total_read > 0)
-        {
-            total_read = adjust_to_json_boundary(buffer, total_read);
-        }
-
-        // Don't null-terminate the buffer as it may not be expected by the caller
-        // The caller should handle null termination if needed
-        
         *bytes_written = total_read;
 
         // Check if we have more data to stream
-        bool has_more = !streaming_state_.is_finished && 
-                       streaming_state_.current_position < streaming_state_.target_end_bytes;
+        bool has_more =
+            !streaming_state_.is_finished && streaming_state_.current_position < streaming_state_.target_end_bytes;
 
-        spdlog::debug("Streamed {} bytes (position: {} / {}), has_more: {}", 
-                     total_read, streaming_state_.current_position, 
-                     streaming_state_.target_end_bytes, has_more);
+        spdlog::debug("Streamed {} bytes (position: {} / {}), has_more: {}",
+                      total_read,
+                      streaming_state_.current_position,
+                      streaming_state_.target_end_bytes,
+                      has_more);
 
         return has_more;
-    }
-
-    bool find_json_boundary_in_buffer(const char *buffer, size_t buffer_size)
-    {
-        for (size_t i = 1; i < buffer_size; i++)
-        {
-            if (buffer[i - 1] == '}' && buffer[i] == '\n')
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    size_t adjust_to_json_boundary(char *buffer, size_t buffer_size)
-    {
-        // Find the last complete JSON boundary in the buffer
-        for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i > 0; i--)
-        {
-            if (buffer[i - 1] == '}' && buffer[i] == '\n')
-            {
-                // Adjust current position based on what we're keeping vs discarding
-                size_t bytes_to_discard = buffer_size - (static_cast<size_t>(i) + 1);
-                streaming_state_.current_position -= bytes_to_discard;
-                return static_cast<size_t>(i) + 1; // +1 to include newline
-            }
-        }
-        
-        // If no boundary found, we might need to buffer this data for next call
-        // For now, just return the full buffer and let the next call handle it
-        return buffer_size;
     }
 
     void cleanup_streaming_state()
@@ -880,7 +844,7 @@ public:
         {
             free_checkpoint(streaming_state_.checkpoint.get());
         }
-        
+
         // Reset the streaming state
         streaming_state_.reset();
     }
@@ -891,39 +855,41 @@ public:
     bool is_open_;
 
     // Streaming state management
-    struct StreamingState {
+    struct StreamingState
+    {
         std::string current_gz_path;
         size_t start_bytes;
-        size_t current_position;  // Current byte position in range
-        size_t target_end_bytes;  // End position in bytes
+        size_t current_position;   // Current byte position in range
+        size_t target_end_bytes;   // End position in bytes
         size_t actual_start_bytes; // Adjusted start (beginning of JSON line)
-        std::string incomplete_line;  // Buffer for incomplete JSON line
-        bool is_active;  // True if streaming is in progress
-        bool is_finished;  // True if reached end of range
-        
+        bool is_active;            // True if streaming is in progress
+        bool is_finished;          // True if reached end of range
+
         // Persistent decompression state
         std::unique_ptr<InflateState> inflate_state;
         std::unique_ptr<CheckpointInfo> checkpoint;
-        FILE* file_handle;
+        FILE *file_handle;
         bool decompression_initialized;
 
-        StreamingState() : start_bytes(0), current_position(0), 
-                          target_end_bytes(0), actual_start_bytes(0),
-                          is_active(false), is_finished(false),
-                          file_handle(nullptr), decompression_initialized(false) {}
-        
-        void reset() {
+        StreamingState()
+            : start_bytes(0), current_position(0), target_end_bytes(0), actual_start_bytes(0), is_active(false),
+              is_finished(false), file_handle(nullptr), decompression_initialized(false)
+        {
+        }
+
+        void reset()
+        {
             current_gz_path.clear();
             start_bytes = 0;
             current_position = 0;
             target_end_bytes = 0;
             actual_start_bytes = 0;
-            incomplete_line.clear();
             is_active = false;
             is_finished = false;
-            
+
             // Clean up persistent state - but DON'T call cleanup methods that might double-clean
-            if (file_handle) {
+            if (file_handle)
+            {
                 fclose(file_handle);
                 file_handle = nullptr;
             }
@@ -959,14 +925,17 @@ size_t Reader::get_max_bytes() const
     return pImpl_->get_max_bytes();
 }
 
-bool Reader::read(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
-                  char *buffer, size_t buffer_size, size_t *bytes_written)
+bool Reader::read(const std::string &gz_path,
+                  size_t start_bytes,
+                  size_t end_bytes,
+                  char *buffer,
+                  size_t buffer_size,
+                  size_t *bytes_written)
 {
     return pImpl_->read(gz_path, start_bytes, end_bytes, buffer, buffer_size, bytes_written);
 }
 
-bool Reader::read(size_t start_bytes, size_t end_bytes,
-                  char *buffer, size_t buffer_size, size_t *bytes_written)
+bool Reader::read(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size, size_t *bytes_written)
 {
     return pImpl_->read(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size, bytes_written);
 }
@@ -1045,12 +1014,12 @@ extern "C"
     }
 
     int dft_reader_read(dft_reader_handle_t reader,
-                       const char *gz_path,
-                       size_t start_bytes,
-                       size_t end_bytes,
-                       char *buffer,
-                       size_t buffer_size,
-                       size_t *bytes_written)
+                        const char *gz_path,
+                        size_t start_bytes,
+                        size_t end_bytes,
+                        char *buffer,
+                        size_t buffer_size,
+                        size_t *bytes_written)
     {
         if (!reader || !gz_path || !buffer || !bytes_written || buffer_size == 0)
         {
