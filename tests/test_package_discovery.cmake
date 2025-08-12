@@ -7,67 +7,67 @@ if(TEST_TYPE STREQUAL "pkgconfig")
     set(ENV{PKG_CONFIG_PATH} "${PKG_CONFIG_PATH}")
     
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(DFT_READER dft_reader)
+    pkg_check_modules(DFT_UTILS dft_utils)
     
-    if(NOT DFT_READER_FOUND)
-        message(FATAL_ERROR "❌ pkg-config discovery failed: dft_reader not found")
+    if(NOT DFT_UTILS_FOUND)
+        message(FATAL_ERROR "❌ pkg-config discovery failed: dft_utils not found")
     endif()
     
     message(STATUS "✅ pkg-config discovery successful")
-    message(STATUS "   Version: ${DFT_READER_VERSION}")
-    message(STATUS "   Include dirs: ${DFT_READER_INCLUDE_DIRS}")
-    message(STATUS "   Libraries: ${DFT_READER_LIBRARIES}")
+    message(STATUS "   Version: ${DFT_UTILS_VERSION}")
+    message(STATUS "   Include dirs: ${DFT_UTILS_INCLUDE_DIRS}")
+    message(STATUS "   Libraries: ${DFT_UTILS_LIBRARIES}")
 
 elseif(TEST_TYPE STREQUAL "cmake")
     # Test CMake find_package discovery
     message(STATUS "Testing CMake find_package discovery...")
     
     # Check if config file exists
-    find_file(DFT_READER_CONFIG 
-        NAMES dft_readerConfig.cmake
+    find_file(DFT_UTILS_CONFIG 
+        NAMES dft_utilsConfig.cmake
         PATHS ${CMAKE_PREFIX_PATH}
-        PATH_SUFFIXES lib/cmake/dft_reader
+        PATH_SUFFIXES lib/cmake/dft_utils
         NO_DEFAULT_PATH
     )
     
-    if(NOT DFT_READER_CONFIG)
-        message(FATAL_ERROR "❌ CMake discovery failed: dft_readerConfig.cmake not found")
+    if(NOT DFT_UTILS_CONFIG)
+        message(FATAL_ERROR "❌ CMake discovery failed: dft_utilsConfig.cmake not found")
     endif()
     
     message(STATUS "✅ CMake find_package discovery successful")
-    message(STATUS "   Config file: ${DFT_READER_CONFIG}")
+    message(STATUS "   Config file: ${DFT_UTILS_CONFIG}")
 
 elseif(TEST_TYPE STREQUAL "target")
     # Test specific target alias by checking config files
     message(STATUS "Testing target alias: ${TARGET_ALIAS}")
     
     # Check if config file exists
-    find_file(DFT_READER_CONFIG 
-        NAMES dft_readerConfig.cmake
+    find_file(DFT_UTILS_CONFIG 
+        NAMES dft_utilsConfig.cmake
         PATHS ${CMAKE_PREFIX_PATH}
-        PATH_SUFFIXES lib/cmake/dft_reader
+        PATH_SUFFIXES lib/cmake/dft_utils
         NO_DEFAULT_PATH
     )
     
-    if(NOT DFT_READER_CONFIG)
-        message(FATAL_ERROR "❌ Target alias test failed: dft_readerConfig.cmake not found")
+    if(NOT DFT_UTILS_CONFIG)
+        message(FATAL_ERROR "❌ Target alias test failed: dft_utilsConfig.cmake not found")
     endif()
     
     # Also check targets file
-    find_file(DFT_READER_TARGETS 
-        NAMES dft_readerTargets.cmake
+    find_file(DFT_UTILS_TARGETS 
+        NAMES dft_utilsTargets.cmake
         PATHS ${CMAKE_PREFIX_PATH}
-        PATH_SUFFIXES lib/cmake/dft_reader
+        PATH_SUFFIXES lib/cmake/dft_utils
         NO_DEFAULT_PATH
     )
     
-    if(NOT DFT_READER_TARGETS)
-        message(FATAL_ERROR "❌ Target alias test failed: dft_readerTargets.cmake not found")
+    if(NOT DFT_UTILS_TARGETS)
+        message(FATAL_ERROR "❌ Target alias test failed: dft_utilsTargets.cmake not found")
     endif()
     
     # Read both config files to check if the target alias exists
-    file(READ ${DFT_READER_CONFIG} CONFIG_CONTENT)
-    file(READ ${DFT_READER_TARGETS} TARGETS_CONTENT)
+    file(READ ${DFT_UTILS_CONFIG} CONFIG_CONTENT)
+    file(READ ${DFT_UTILS_TARGETS} TARGETS_CONTENT)
     
     string(FIND "${CONFIG_CONTENT}" "${TARGET_ALIAS}" CONFIG_ALIAS_FOUND)
     string(FIND "${TARGETS_CONTENT}" "${TARGET_ALIAS}" TARGETS_ALIAS_FOUND)

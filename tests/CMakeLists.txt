@@ -24,10 +24,14 @@ add_library(testing_utilities STATIC
 )
 target_link_libraries(testing_utilities
     PRIVATE
-    dft_reader
+    dft_utils
     doctest::doctest
     ZLIB::ZLIB
     ghc_filesystem
+)
+target_include_directories(testing_utilities
+    PRIVATE
+    ${CMAKE_BINARY_DIR}/include
 )
 
 ##########################################
@@ -42,13 +46,13 @@ add_executable(test_reader
 )
 target_link_libraries(test_reader
     PRIVATE
-    dft_reader
+    dft_utils
     doctest::doctest
     testing_utilities
 )
 target_include_directories(test_reader
     PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/reader
+    ${CMAKE_BINARY_DIR}/include
 )
 target_set_warnings(test_reader)
 
@@ -67,13 +71,13 @@ add_executable(test_opaque_api
 )
 target_link_libraries(test_opaque_api
     PRIVATE
-    dft_reader
+    dft_utils
     doctest::doctest
     testing_utilities
 )
 target_include_directories(test_opaque_api
     PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/reader
+    ${CMAKE_BINARY_DIR}/include
 )
 target_set_warnings(test_opaque_api)
 
@@ -92,13 +96,13 @@ add_executable(test_raii_api
 )
 target_link_libraries(test_raii_api
     PRIVATE
-    dft_reader
+    dft_utils
     doctest::doctest
     testing_utilities
 )
 target_include_directories(test_raii_api
     PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/reader
+    ${CMAKE_BINARY_DIR}/include
 )
 target_set_warnings(test_raii_api)
 
@@ -141,7 +145,7 @@ if(NOT CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     )
     
     # Create tests for all target aliases
-    foreach(TARGET_ALIAS "dft_reader" "dft_reader::static" "dft_reader::shared" "dft_reader::dft_reader")
+    foreach(TARGET_ALIAS "dft_utils" "dft_utils::static" "dft_utils::shared")
         string(REPLACE "::" "_" TEST_NAME_SUFFIX ${TARGET_ALIAS})
         add_test(NAME test_target_${TEST_NAME_SUFFIX}
             COMMAND ${CMAKE_COMMAND}
@@ -156,10 +160,9 @@ if(NOT CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set_tests_properties(
         test_pkgconfig_discovery
         test_cmake_discovery
-        test_target_dft_reader
-        test_target_dft_reader_static
-        test_target_dft_reader_shared
-        test_target_dft_reader_dft_reader
+        test_target_dft_utils
+        test_target_dft_utils_static
+        test_target_dft_utils_shared
         PROPERTIES
         FIXTURES_REQUIRED "installed_package"
     )

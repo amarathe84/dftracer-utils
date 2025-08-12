@@ -7,9 +7,9 @@
 #include <vector>
 #include <zlib.h>
 
-#include "indexer.h"
-#include "reader.h"
-#include "filesystem.h"
+#include <dft_utils/indexer/indexer.h>
+#include <dft_utils/reader/reader.h>
+#include <dft_utils/utils/filesystem.h>
 #include "testing_utilities.h"
 
 using namespace dft_utils_test;
