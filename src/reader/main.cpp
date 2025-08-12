@@ -59,8 +59,8 @@ int main(int argc, char **argv)
 
     spdlog::debug("Log level set to: {}", log_level_str);
     spdlog::debug("Processing file: {}", gz_path);
-    spdlog::debug("Start position: {} B", start_bytes);
-    spdlog::debug("End position: {} B", end_bytes);
+    spdlog::debug("Start position: {} B ({} MB)", start_bytes, start_bytes / (1024 * 1024));
+    spdlog::debug("End position: {} B ({} MB)", end_bytes, end_bytes / (1024 * 1024));
     spdlog::debug("Chunk size: {} MB", chunk_size_mb);
     spdlog::debug("Force rebuild: {}", force_rebuild);
 
@@ -76,7 +76,6 @@ int main(int argc, char **argv)
         spdlog::error("File '{}' does not exist or cannot be opened", gz_path);
         return 1;
     }
-
     fclose(test_file);
 
     std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
@@ -108,11 +107,17 @@ int main(int argc, char **argv)
     // read operations
     if (end_bytes > start_bytes)
     {
-        spdlog::debug("Performing byte range read operation");
-
-        try
-        {
+      spdlog::debug("Performing byte range read operation");
+      
+      try
+      {
             dft::reader::Reader reader(gz_path, idx_path);
+            auto max_bytes = reader.get_max_bytes();
+            if (end_bytes > max_bytes)
+            {
+                spdlog::warn("End bytes exceed maximum available bytes, clamping to max value {} B ({} MB)", max_bytes, max_bytes / (1024 * 1024));
+                end_bytes = max_bytes;
+            }
 
             auto result = reader.read_range_bytes(start_bytes, end_bytes);
             auto &data = result.first;
