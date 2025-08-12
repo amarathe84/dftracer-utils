@@ -12,8 +12,8 @@
 #include <zlib.h>
 
 #include <dft_utils/indexer/indexer.h>
-#include <dft_utils/utils/platform_compat.h>
 #include <dft_utils/utils/filesystem.h>
+#include <dft_utils/utils/platform_compat.h>
 
 namespace dft
 {
@@ -136,7 +136,7 @@ class Indexer::Impl
     int inflate_process_chunk(
         InflateState *state, unsigned char *out, size_t out_size, size_t *bytes_out, size_t *c_off) const;
 
-    int create_checkpoint(InflateState *state, CheckpointData *checkpoint, size_t uc_offset, int deflate_start) const;
+    int create_checkpoint(InflateState *state, CheckpointData *checkpoint, size_t uc_offset) const;
     int compress_window(const unsigned char *window,
                         size_t window_size,
                         unsigned char **compressed,
@@ -211,7 +211,8 @@ std::string Indexer::Impl::calculate_file_sha256(const std::string &file_path) c
     picosha2::hash256_one_by_one hasher;
     hasher.init();
 
-    while (file.read(reinterpret_cast<char *>(buffer.data()), buffer.size()) || file.gcount() > 0)
+    while (file.read(reinterpret_cast<char *>(buffer.data()), static_cast<std::streamsize>(buffer.size())) ||
+           file.gcount() > 0)
     {
         hasher.process(buffer.begin(), buffer.begin() + file.gcount());
     }
@@ -499,10 +500,7 @@ int Indexer::Impl::inflate_process_chunk(
     return 0;
 }
 
-int Indexer::Impl::create_checkpoint(InflateState *state,
-                                     CheckpointData *checkpoint,
-                                     size_t uc_offset,
-                                     int deflate_start) const
+int Indexer::Impl::create_checkpoint(InflateState *state, CheckpointData *checkpoint, size_t uc_offset) const
 {
     checkpoint->uc_offset = uc_offset;
 
@@ -835,7 +833,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
                           current_uc_off,
                           inflate_state.zs.data_type);
             CheckpointData checkpoint;
-            if (create_checkpoint(&inflate_state, &checkpoint, current_uc_off, deflate_start) == 0)
+            if (create_checkpoint(&inflate_state, &checkpoint, current_uc_off) == 0)
             {
                 if (save_checkpoint(db, file_id, &checkpoint) == 0)
                 {

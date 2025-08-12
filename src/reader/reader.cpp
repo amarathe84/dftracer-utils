@@ -225,7 +225,7 @@ class Reader::Impl
                 {
                     if (i == 0 || search_buffer[i - 1] == '\n')
                     {
-                        actual_start = current_pos + i;
+                        actual_start = current_pos + static_cast<size_t>(i);
                         spdlog::debug("Found JSON line start at position {} (requested {})", actual_start, start_bytes);
                         break;
                     }

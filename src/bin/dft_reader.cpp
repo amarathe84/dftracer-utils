@@ -10,9 +10,9 @@
 
 #include <dft_utils/indexer/indexer.h>
 #include <dft_utils/reader/reader.h>
-#include <dft_utils/utils/platform_compat.h>
 #include <dft_utils/utils/filesystem.h>
 #include <dft_utils/utils/logger.h>
+#include <dft_utils/utils/platform_compat.h>
 
 int main(int argc, char **argv)
 {
