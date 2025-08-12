@@ -1,6 +1,3 @@
-#include "indexer.h"
-#include "platform_compat.h"
-
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -14,7 +11,9 @@
 #include <sqlite3.h>
 #include <zlib.h>
 
-#include "filesystem.h"
+#include <dft_utils/indexer/indexer.h>
+#include <dft_utils/utils/platform_compat.h>
+#include <dft_utils/utils/filesystem.h>
 
 namespace dft
 {
@@ -136,10 +135,16 @@ class Indexer::Impl
     void inflate_cleanup_simple(InflateState *state) const;
     int inflate_process_chunk(
         InflateState *state, unsigned char *out, size_t out_size, size_t *bytes_out, size_t *c_off) const;
-    
+
     int create_checkpoint(InflateState *state, CheckpointData *checkpoint, size_t uc_offset, int deflate_start) const;
-    int compress_window(const unsigned char *window, size_t window_size, unsigned char **compressed, size_t *compressed_size) const;
-    int decompress_window(const unsigned char *compressed, size_t compressed_size, unsigned char *window, size_t *window_size) const;
+    int compress_window(const unsigned char *window,
+                        size_t window_size,
+                        unsigned char **compressed,
+                        size_t *compressed_size) const;
+    int decompress_window(const unsigned char *compressed,
+                          size_t compressed_size,
+                          unsigned char *window,
+                          size_t *window_size) const;
     int save_checkpoint(sqlite3 *db, int file_id, const CheckpointData *checkpoint) const;
     int find_gzip_deflate_start(FILE *f) const;
 
@@ -481,7 +486,7 @@ int Indexer::Impl::inflate_process_chunk(
         }
 
         *c_off = c_pos_before;
-        
+
         // Break early if we've processed at least some data and hit a block boundary
         // This allows us to check for checkpoint opportunities after each block
         if (*bytes_out > 0 && (state->zs.data_type & 0xc0) == 0x80)
@@ -494,20 +499,23 @@ int Indexer::Impl::inflate_process_chunk(
     return 0;
 }
 
-int Indexer::Impl::create_checkpoint(InflateState *state, CheckpointData *checkpoint, size_t uc_offset, int deflate_start) const
+int Indexer::Impl::create_checkpoint(InflateState *state,
+                                     CheckpointData *checkpoint,
+                                     size_t uc_offset,
+                                     int deflate_start) const
 {
     checkpoint->uc_offset = uc_offset;
-    
+
     // Get precise compressed position: file position minus unprocessed input
     size_t file_pos = static_cast<size_t>(ftello(state->file));
     size_t absolute_c_offset = file_pos - state->zs.avail_in;
-    
+
     // Store absolute file position (as in original zran)
     checkpoint->c_offset = absolute_c_offset;
-    
+
     // Get bit offset from zlib state (following zran approach)
     checkpoint->bits = state->zs.data_type & 7;
-    
+
     // Try to get the sliding window dictionary from zlib
     // This contains the last 32KB of uncompressed data
     unsigned have = 0;
@@ -520,9 +528,12 @@ int Indexer::Impl::create_checkpoint(InflateState *state, CheckpointData *checkp
             memmove(checkpoint->window + (32768 - have), checkpoint->window, have);
             memset(checkpoint->window, 0, 32768 - have);
         }
-        
-        spdlog::debug("Created checkpoint: uc_offset={}, c_offset={}, bits={}, dict_size={}", 
-                      uc_offset, checkpoint->c_offset, checkpoint->bits, have);
+
+        spdlog::debug("Created checkpoint: uc_offset={}, c_offset={}, bits={}, dict_size={}",
+                      uc_offset,
+                      checkpoint->c_offset,
+                      checkpoint->bits,
+                      have);
         return 0;
     }
     else
@@ -533,16 +544,19 @@ int Indexer::Impl::create_checkpoint(InflateState *state, CheckpointData *checkp
     }
 }
 
-int Indexer::Impl::compress_window(const unsigned char *window, size_t window_size, unsigned char **compressed, size_t *compressed_size) const
+int Indexer::Impl::compress_window(const unsigned char *window,
+                                   size_t window_size,
+                                   unsigned char **compressed,
+                                   size_t *compressed_size) const
 {
     z_stream zs;
     memset(&zs, 0, sizeof(zs));
-    
+
     if (deflateInit(&zs, Z_BEST_COMPRESSION) != Z_OK)
     {
         return -1;
     }
-    
+
     size_t max_compressed = deflateBound(&zs, window_size);
     *compressed = static_cast<unsigned char *>(malloc(max_compressed));
     if (!*compressed)
@@ -550,12 +564,12 @@ int Indexer::Impl::compress_window(const unsigned char *window, size_t window_si
         deflateEnd(&zs);
         return -1;
     }
-    
+
     zs.next_in = const_cast<unsigned char *>(window);
     zs.avail_in = static_cast<uInt>(window_size);
     zs.next_out = *compressed;
     zs.avail_out = static_cast<uInt>(max_compressed);
-    
+
     int ret = deflate(&zs, Z_FINISH);
     if (ret != Z_STREAM_END)
     {
@@ -563,34 +577,37 @@ int Indexer::Impl::compress_window(const unsigned char *window, size_t window_si
         deflateEnd(&zs);
         return -1;
     }
-    
+
     *compressed_size = max_compressed - zs.avail_out;
     deflateEnd(&zs);
     return 0;
 }
 
-int Indexer::Impl::decompress_window(const unsigned char *compressed, size_t compressed_size, unsigned char *window, size_t *window_size) const
+int Indexer::Impl::decompress_window(const unsigned char *compressed,
+                                     size_t compressed_size,
+                                     unsigned char *window,
+                                     size_t *window_size) const
 {
     z_stream zs;
     memset(&zs, 0, sizeof(zs));
-    
+
     if (inflateInit(&zs) != Z_OK)
     {
         return -1;
     }
-    
+
     zs.next_in = const_cast<unsigned char *>(compressed);
     zs.avail_in = static_cast<uInt>(compressed_size);
     zs.next_out = window;
     zs.avail_out = static_cast<uInt>(*window_size);
-    
+
     int ret = inflate(&zs, Z_FINISH);
     if (ret != Z_STREAM_END)
     {
         inflateEnd(&zs);
         return -1;
     }
-    
+
     *window_size = *window_size - zs.avail_out;
     inflateEnd(&zs);
     return 0;
@@ -600,29 +617,30 @@ int Indexer::Impl::save_checkpoint(sqlite3 *db, int file_id, const CheckpointDat
 {
     unsigned char *compressed_window;
     size_t compressed_size;
-    
+
     if (compress_window(checkpoint->window, 32768, &compressed_window, &compressed_size) != 0)
     {
         spdlog::debug("Failed to compress window for checkpoint");
         return -1;
     }
-    
+
     sqlite3_stmt *stmt;
-    const char *sql = "INSERT INTO checkpoints(file_id, uc_offset, c_offset, bits, dict_compressed) VALUES(?, ?, ?, ?, ?)";
-    
+    const char *sql =
+        "INSERT INTO checkpoints(file_id, uc_offset, c_offset, bits, dict_compressed) VALUES(?, ?, ?, ?, ?)";
+
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
     {
         spdlog::debug("Failed to prepare checkpoint insert: {}", sqlite3_errmsg(db));
         free(compressed_window);
         return -1;
     }
-    
+
     sqlite3_bind_int(stmt, 1, file_id);
     sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(checkpoint->uc_offset));
     sqlite3_bind_int64(stmt, 3, static_cast<sqlite3_int64>(checkpoint->c_offset));
     sqlite3_bind_int(stmt, 4, checkpoint->bits);
     sqlite3_bind_blob(stmt, 5, compressed_window, static_cast<int>(compressed_size), SQLITE_TRANSIENT);
-    
+
     int ret = sqlite3_step(stmt);
     if (ret != SQLITE_DONE)
     {
@@ -632,10 +650,10 @@ int Indexer::Impl::save_checkpoint(sqlite3 *db, int file_id, const CheckpointDat
     {
         spdlog::debug("Successfully inserted checkpoint into database: uc_offset={}", checkpoint->uc_offset);
     }
-    
+
     sqlite3_finalize(stmt);
     free(compressed_window);
-    
+
     return (ret == SQLITE_DONE) ? 0 : -1;
 }
 
@@ -644,7 +662,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
     FILE *fp = fopen(gz_path.c_str(), "rb");
     if (!fp)
         return -1;
-    
+
     // Find where the deflate stream starts (after gzip header)
     int deflate_start = find_gzip_deflate_start(fp);
     if (deflate_start < 0)
@@ -690,7 +708,8 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
     sqlite3_finalize(st_cleanup_metadata);
 
     sqlite3_stmt *st_meta = NULL;
-    if (sqlite3_prepare_v2(db, "INSERT INTO metadata(file_id, chunk_size, checkpoint_interval) VALUES(?, ?, ?);", -1, &st_meta, NULL))
+    if (sqlite3_prepare_v2(
+            db, "INSERT INTO metadata(file_id, chunk_size, checkpoint_interval) VALUES(?, ?, ?);", -1, &st_meta, NULL))
     {
         fclose(fp);
         sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
@@ -725,7 +744,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
         sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
         return -4;
     }
-    
+
     InflateState inflate_state;
     if (inflate_init_simple(&inflate_state, fp) != 0)
     {
@@ -734,7 +753,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
         sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
         return -4;
     }
-    
+
     spdlog::debug("Starting indexing loop with deflate_start: {}", deflate_start);
 
     size_t chunk_idx = 0;
@@ -744,11 +763,12 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
     size_t current_events = 0;
     unsigned char buffer[65536];
     int chunk_has_complete_event = 0;
-    
+
     const size_t checkpoint_interval = 33554432; // 32MB
     size_t last_checkpoint_uc_off = 0;
 
-    spdlog::debug("Building chunk index with chunk_size={} bytes, checkpoint interval={} bytes", chunk_size, checkpoint_interval);
+    spdlog::debug(
+        "Building chunk index with chunk_size={} bytes, checkpoint interval={} bytes", chunk_size, checkpoint_interval);
 
     while (1)
     {
@@ -807,19 +827,21 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
 
         // Create checkpoint at deflate block boundaries (following zran approach)
         // Only create checkpoints at block boundaries and when enough data has been processed
-        if ((inflate_state.zs.data_type & 0xc0) == 0x80 && current_uc_off >= 32768 && 
+        if ((inflate_state.zs.data_type & 0xc0) == 0x80 && current_uc_off >= 32768 &&
             (last_checkpoint_uc_off == 0 || current_uc_off - last_checkpoint_uc_off >= checkpoint_interval))
         {
             // We're at end of deflate block - perfect place for checkpoint (following zran approach)
-            spdlog::debug("Deflate block boundary detected at uc_offset={}, data_type=0x{:02x}", 
-                          current_uc_off, inflate_state.zs.data_type);
+            spdlog::debug("Deflate block boundary detected at uc_offset={}, data_type=0x{:02x}",
+                          current_uc_off,
+                          inflate_state.zs.data_type);
             CheckpointData checkpoint;
             if (create_checkpoint(&inflate_state, &checkpoint, current_uc_off, deflate_start) == 0)
             {
                 if (save_checkpoint(db, file_id, &checkpoint) == 0)
                 {
                     last_checkpoint_uc_off = current_uc_off;
-                    spdlog::debug("Successfully created checkpoint at deflate block boundary, uc_offset={}", current_uc_off);
+                    spdlog::debug("Successfully created checkpoint at deflate block boundary, uc_offset={}",
+                                  current_uc_off);
                 }
                 else
                 {
@@ -1048,17 +1070,17 @@ int Indexer::Impl::find_gzip_deflate_start(FILE *f) const
     {
         return -1;
     }
-    
+
     // Check gzip magic number
     if (header[0] != 0x1f || header[1] != 0x8b)
     {
         return -1; // Not a gzip file
     }
-    
+
     // Skip compression method, flags, mtime, xfl, os
     int deflate_start = 10;
     unsigned char flags = header[3];
-    
+
     // Skip extra fields if present
     if (flags & 0x04) // FEXTRA
     {
@@ -1070,29 +1092,33 @@ int Indexer::Impl::find_gzip_deflate_start(FILE *f) const
             return -1;
         deflate_start += 2 + len;
     }
-    
+
     // Skip original filename if present
     if (flags & 0x08) // FNAME
     {
         int c;
-        do {
+        do
+        {
             c = fgetc(f);
-            if (c == EOF) return -1;
+            if (c == EOF)
+                return -1;
             deflate_start++;
         } while (c != 0);
     }
-    
-    // Skip comment if present  
+
+    // Skip comment if present
     if (flags & 0x10) // FCOMMENT
     {
         int c;
-        do {
+        do
+        {
             c = fgetc(f);
-            if (c == EOF) return -1;
+            if (c == EOF)
+                return -1;
             deflate_start++;
         } while (c != 0);
     }
-    
+
     // Skip header CRC if present
     if (flags & 0x02) // FHCRC
     {
@@ -1100,7 +1126,7 @@ int Indexer::Impl::find_gzip_deflate_start(FILE *f) const
             return -1;
         deflate_start += 2;
     }
-    
+
     return deflate_start;
 }
 

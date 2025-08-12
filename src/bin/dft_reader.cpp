@@ -8,11 +8,11 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-#include "indexer.h"
-#include "platform_compat.h"
-#include "reader.h"
-#include "utils.h"
-#include "filesystem.h"
+#include <dft_utils/indexer/indexer.h>
+#include <dft_utils/reader/reader.h>
+#include <dft_utils/utils/platform_compat.h>
+#include <dft_utils/utils/filesystem.h>
+#include <dft_utils/utils/logger.h>
 
 int main(int argc, char **argv)
 {
@@ -107,15 +107,17 @@ int main(int argc, char **argv)
     // read operations
     if (end_bytes > start_bytes)
     {
-      spdlog::debug("Performing byte range read operation");
-      
-      try
-      {
+        spdlog::debug("Performing byte range read operation");
+
+        try
+        {
             dft::reader::Reader reader(gz_path, idx_path);
             auto max_bytes = reader.get_max_bytes();
             if (end_bytes > max_bytes)
             {
-                spdlog::warn("End bytes exceed maximum available bytes, clamping to max value {} B ({} MB)", max_bytes, max_bytes / (1024 * 1024));
+                spdlog::warn("End bytes exceed maximum available bytes, clamping to max value {} B ({} MB)",
+                             max_bytes,
+                             max_bytes / (1024 * 1024));
                 end_bytes = max_bytes;
             }
 

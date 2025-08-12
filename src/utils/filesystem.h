@@ -1,4 +1,5 @@
-#pragma once
+#ifndef __DFTRACER_UTILS_LOGGER_H
+#define __DFTRACER_UTILS_LOGGER_H
 
 // C++11 compatible filesystem header
 // This header provides a portable way to use filesystem across different C++ standards
@@ -60,4 +61,6 @@ namespace fs = std::experimental::filesystem;
 // fallback to gulrak/filesystem for C++11 compatibility
 #include <ghc/filesystem.hpp>
 namespace fs = ghc::filesystem;
-#endif
+
+#endif // DFT_USE_STD_FS
+#endif // __DFTRACER_UTILS_FILESYSTEM_H

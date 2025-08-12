@@ -2,10 +2,10 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 
-#include <dftracer_utils/reader/indexer.h>
-#include <dftracer_utils/reader/reader.h>
-#include <dftracer_utils/reader/utils.h>
-#include <dftracer_utils/reader/filesystem.h>
+#include <dft_utils/reader/indexer.h>
+#include <dft_utils/reader/reader.h>
+#include <dft_utils/reader/utils.h>
+#include <dft_utils/reader/filesystem.h>
 
 #include <algorithm>
 #include <cctype>

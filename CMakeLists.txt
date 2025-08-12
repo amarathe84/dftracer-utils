@@ -32,7 +32,7 @@ include(cmake/Utils.cmake)
 set_coverage_compiler_flags(DFTRACER_UTILS_TESTS AND DFTRACER_UTILS_COVERAGE)
 
 set(DFTRACER_PYTHON_BUILD OFF CACHE BOOL "Building for Python" FORCE)
-add_subdirectory(src/reader)
+add_subdirectory(src)
 
 if(DFTRACER_UTILS_TESTS)
   enable_testing()

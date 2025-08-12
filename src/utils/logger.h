@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_READER_UTILS_H
-#define __DFTRACER_UTILS_READER_UTILS_H
+#ifndef __DFTRACER_UTILS_UTILS_LOGGER_H
+#define __DFTRACER_UTILS_UTILS_LOGGER_H
 
 #ifdef __cplusplus
 extern "C"
@@ -58,4 +58,4 @@ int get_log_level_int();
 } // namespace dft
 #endif
 
-#endif // __DFTRACER_UTILS_READER_UTILS_H
+#endif // __DFTRACER_UTILS_UTILS_LOGGER_H

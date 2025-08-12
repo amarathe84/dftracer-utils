@@ -1,6 +1,3 @@
-#include "reader.h"
-#include "platform_compat.h"
-
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -8,6 +5,9 @@
 #include <spdlog/spdlog.h>
 #include <sqlite3.h>
 #include <zlib.h>
+
+#include <dft_utils/reader/reader.h>
+#include <dft_utils/utils/platform_compat.h>
 
 namespace dft
 {
@@ -138,8 +138,8 @@ class Reader::Impl
             if (inflate_init_from_checkpoint(&inflate_state, f, &checkpoint) == 0)
             {
                 use_checkpoint = true;
-                spdlog::debug("Using checkpoint at uncompressed offset {} for target {}", 
-                              checkpoint.uc_offset, start_bytes);
+                spdlog::debug(
+                    "Using checkpoint at uncompressed offset {} for target {}", checkpoint.uc_offset, start_bytes);
             }
             else
             {
@@ -161,9 +161,9 @@ class Reader::Impl
         // step 1: find the actual start position (beginning of a complete JSON line)
         size_t actual_start = start_bytes;
         size_t current_pos = use_checkpoint ? checkpoint.uc_offset : 0;
-        
+
         // If using checkpoint, we should already be positioned close to the target
-        
+
         if (start_bytes > current_pos)
         {
             // seek a bit before the requested start to find the beginning of the JSON line
@@ -189,11 +189,13 @@ class Reader::Impl
                     if (inflate_result != 0)
                     {
                         spdlog::debug("inflate_read failed during skip phase with error: {}", inflate_result);
-                        spdlog::debug("  to_skip: {}, skipped: {}, remaining_skip: {}", to_skip, skipped, remaining_skip);
+                        spdlog::debug(
+                            "  to_skip: {}, skipped: {}, remaining_skip: {}", to_skip, skipped, remaining_skip);
                         free(skip_buffer);
                         inflate_cleanup(&inflate_state);
                         fclose(f);
-                        if (use_checkpoint) free_checkpoint(&checkpoint);
+                        if (use_checkpoint)
+                            free_checkpoint(&checkpoint);
                         throw std::runtime_error("Failed during skip phase");
                     }
                     if (skipped == 0)
@@ -272,11 +274,13 @@ class Reader::Impl
                     if (inflate_result != 0)
                     {
                         spdlog::debug("inflate_read failed during final skip phase with error: {}", inflate_result);
-                        spdlog::debug("  to_skip: {}, skipped: {}, remaining_skip: {}", to_skip, skipped, remaining_skip);
+                        spdlog::debug(
+                            "  to_skip: {}, skipped: {}, remaining_skip: {}", to_skip, skipped, remaining_skip);
                         free(skip_buffer);
                         inflate_cleanup(&inflate_state);
                         fclose(f);
-                        if (use_checkpoint) free_checkpoint(&checkpoint);
+                        if (use_checkpoint)
+                            free_checkpoint(&checkpoint);
                         throw std::runtime_error("Failed during final skip phase");
                     }
                     if (skipped == 0)
@@ -296,7 +300,8 @@ class Reader::Impl
         {
             inflate_cleanup(&inflate_state);
             fclose(f);
-            if (use_checkpoint) free_checkpoint(&checkpoint);
+            if (use_checkpoint)
+                free_checkpoint(&checkpoint);
             throw std::runtime_error("Failed to allocate output buffer");
         }
 
@@ -317,7 +322,8 @@ class Reader::Impl
                     free(output);
                     inflate_cleanup(&inflate_state);
                     fclose(f);
-                    if (use_checkpoint) free_checkpoint(&checkpoint);
+                    if (use_checkpoint)
+                        free_checkpoint(&checkpoint);
                     throw std::runtime_error("Failed to grow buffer");
                 }
                 output = new_buffer;
@@ -332,7 +338,8 @@ class Reader::Impl
                 free(output);
                 inflate_cleanup(&inflate_state);
                 fclose(f);
-                if (use_checkpoint) free_checkpoint(&checkpoint);
+                if (use_checkpoint)
+                    free_checkpoint(&checkpoint);
                 throw std::runtime_error("Failed during read phase");
             }
 
@@ -388,7 +395,8 @@ class Reader::Impl
 
         inflate_cleanup(&inflate_state);
         fclose(f);
-        if (use_checkpoint) free_checkpoint(&checkpoint);
+        if (use_checkpoint)
+            free_checkpoint(&checkpoint);
 
         // wrap in smart pointer for automatic cleanup
         Reader::Buffer buffer(output, std::free);
@@ -483,8 +491,8 @@ class Reader::Impl
             }
             if (ret != Z_OK)
             {
-                spdlog::debug("inflate() failed with error: {} ({})", ret, 
-                              state->zs.msg ? state->zs.msg : "no message");
+                spdlog::debug(
+                    "inflate() failed with error: {} ({})", ret, state->zs.msg ? state->zs.msg : "no message");
                 return -1;
             }
         }
@@ -509,16 +517,16 @@ class Reader::Impl
             spdlog::debug("Failed to prepare file lookup query");
             return -1;
         }
-        
+
         sqlite3_bind_text(file_stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
-        
+
         int file_id = -1;
         if (sqlite3_step(file_stmt) == SQLITE_ROW)
         {
             file_id = sqlite3_column_int(file_stmt, 0);
         }
         sqlite3_finalize(file_stmt);
-        
+
         if (file_id == -1)
         {
             spdlog::debug("File not found in database: {}", gz_path_);
@@ -527,10 +535,10 @@ class Reader::Impl
 
         sqlite3_stmt *stmt;
         const char *sql = "SELECT uc_offset, c_offset, bits, dict_compressed "
-                         "FROM checkpoints "
-                         "WHERE file_id = ? AND uc_offset <= ? "
-                         "ORDER BY uc_offset DESC "
-                         "LIMIT 1";
+                          "FROM checkpoints "
+                          "WHERE file_id = ? AND uc_offset <= ? "
+                          "ORDER BY uc_offset DESC "
+                          "LIMIT 1";
 
         if (sqlite3_prepare_v2(db_, sql, -1, &stmt, NULL) != SQLITE_OK)
         {
@@ -547,14 +555,15 @@ class Reader::Impl
             checkpoint->uc_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
             checkpoint->c_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 1));
             checkpoint->bits = sqlite3_column_int(stmt, 2);
-            
+
             checkpoint->dict_compressed_size = static_cast<size_t>(sqlite3_column_bytes(stmt, 3));
             checkpoint->dict_compressed = static_cast<unsigned char *>(malloc(checkpoint->dict_compressed_size));
             if (checkpoint->dict_compressed)
             {
                 memcpy(checkpoint->dict_compressed, sqlite3_column_blob(stmt, 3), checkpoint->dict_compressed_size);
                 ret = 0;
-                spdlog::debug("Found checkpoint at uc_offset={} for target={}", checkpoint->uc_offset, target_uc_offset);
+                spdlog::debug(
+                    "Found checkpoint at uc_offset={} for target={}", checkpoint->uc_offset, target_uc_offset);
             }
             else
             {
@@ -570,28 +579,31 @@ class Reader::Impl
         return ret;
     }
 
-    int decompress_window(const unsigned char *compressed, size_t compressed_size, unsigned char *window, size_t *window_size) const
+    int decompress_window(const unsigned char *compressed,
+                          size_t compressed_size,
+                          unsigned char *window,
+                          size_t *window_size) const
     {
         z_stream zs;
         memset(&zs, 0, sizeof(zs));
-        
+
         if (inflateInit(&zs) != Z_OK)
         {
             return -1;
         }
-        
+
         zs.next_in = const_cast<unsigned char *>(compressed);
         zs.avail_in = static_cast<uInt>(compressed_size);
         zs.next_out = window;
         zs.avail_out = static_cast<uInt>(*window_size);
-        
+
         int ret = inflate(&zs, Z_FINISH);
         if (ret != Z_STREAM_END)
         {
             inflateEnd(&zs);
             return -1;
         }
-        
+
         *window_size = *window_size - zs.avail_out;
         inflateEnd(&zs);
         return 0;
@@ -615,9 +627,11 @@ class Reader::Impl
 
         // If we have partial bits, read the extra byte (following zran approach)
         int ch = 0;
-        if (checkpoint->bits != 0) {
+        if (checkpoint->bits != 0)
+        {
             ch = fgetc(f);
-            if (ch == EOF) {
+            if (ch == EOF)
+            {
                 return -1;
             }
         }
@@ -630,7 +644,7 @@ class Reader::Impl
 
         // Reset to raw mode (following zran: inflateReset2(&index->strm, RAW))
         state->zs.avail_in = 0;
-        if (inflateReset2(&state->zs, -15) != Z_OK)  // RAW mode
+        if (inflateReset2(&state->zs, -15) != Z_OK) // RAW mode
         {
             inflateEnd(&state->zs);
             return -1;
@@ -672,7 +686,7 @@ class Reader::Impl
             state->zs.next_in = state->in;
             state->zs.avail_in = static_cast<uInt>(n);
         }
-        
+
         return 0;
     }
 
@@ -693,17 +707,17 @@ class Reader::Impl
         {
             return -1;
         }
-        
+
         // Check gzip magic number
         if (header[0] != 0x1f || header[1] != 0x8b)
         {
             return -1; // Not a gzip file
         }
-        
+
         // Skip compression method, flags, mtime, xfl, os
         int deflate_start = 10;
         unsigned char flags = header[3];
-        
+
         // Skip extra fields if present
         if (flags & 0x04) // FEXTRA
         {
@@ -715,29 +729,33 @@ class Reader::Impl
                 return -1;
             deflate_start += 2 + len;
         }
-        
+
         // Skip original filename if present
         if (flags & 0x08) // FNAME
         {
             int c;
-            do {
+            do
+            {
                 c = fgetc(f);
-                if (c == EOF) return -1;
+                if (c == EOF)
+                    return -1;
                 deflate_start++;
             } while (c != 0);
         }
-        
-        // Skip comment if present  
+
+        // Skip comment if present
         if (flags & 0x10) // FCOMMENT
         {
             int c;
-            do {
+            do
+            {
                 c = fgetc(f);
-                if (c == EOF) return -1;
+                if (c == EOF)
+                    return -1;
                 deflate_start++;
             } while (c != 0);
         }
-        
+
         // Skip header CRC if present
         if (flags & 0x02) // FHCRC
         {
@@ -745,7 +763,7 @@ class Reader::Impl
                 return -1;
             deflate_start += 2;
         }
-        
+
         return deflate_start;
     }
 
