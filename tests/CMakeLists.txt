@@ -10,6 +10,20 @@ CPMAddPackage(
   VERSION 2.4.11
 )
 
+CPMAddPackage(
+  NAME unity
+  GITHUB_REPOSITORY ThrowTheSwitch/Unity
+  VERSION 2.6.0
+  DOWNLOAD_ONLY YES
+)
+
+if(TARGET unity)
+  add_library(unity_lib ALIAS unity)
+else()
+  add_library(unity_lib STATIC ${unity_SOURCE_DIR}/src/unity.c)
+  target_include_directories(unity_lib PUBLIC ${unity_SOURCE_DIR}/src)
+endif()
+
 include(${CMAKE_SOURCE_DIR}/cmake/CPM.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
 
@@ -38,11 +52,10 @@ target_include_directories(testing_utilities
 # Targets
 ##########################################
 
-## Test Reader
+## Test Reader (C++ API)
 
 add_executable(test_reader
     test_reader.cpp
-    testing_utilities.cpp
 )
 target_link_libraries(test_reader
     PRIVATE
@@ -64,55 +77,29 @@ endif()
 
 add_test(NAME test_reader COMMAND test_reader)
 
-## Test Opaque API
+## Test Reader C API
 
-add_executable(test_opaque_api
-    test_opaque_api.cpp
+add_executable(test_reader_c
+    test_reader.c
 )
-target_link_libraries(test_opaque_api
+target_link_libraries(test_reader_c
     PRIVATE
     dft_utils
-    doctest::doctest
+    unity_lib
     testing_utilities
 )
-target_include_directories(test_opaque_api
+target_include_directories(test_reader_c
     PRIVATE
     ${CMAKE_BINARY_DIR}/include
 )
-target_set_warnings(test_opaque_api)
 
 # Apply coverage flags if enabled
 if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(test_opaque_api PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-    target_link_libraries(test_opaque_api PRIVATE --coverage)
+    target_compile_options(test_reader_c PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(test_reader_c PRIVATE --coverage)
 endif()
 
-add_test(NAME test_opaque_api COMMAND test_opaque_api)
-
-## Test RAII API
-
-add_executable(test_raii_api
-    test_raii_api.cpp
-)
-target_link_libraries(test_raii_api
-    PRIVATE
-    dft_utils
-    doctest::doctest
-    testing_utilities
-)
-target_include_directories(test_raii_api
-    PRIVATE
-    ${CMAKE_BINARY_DIR}/include
-)
-target_set_warnings(test_raii_api)
-
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(test_raii_api PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-    target_link_libraries(test_raii_api PRIVATE --coverage)
-endif()
-
-add_test(NAME test_raii_api COMMAND test_raii_api)
+add_test(NAME test_reader_c COMMAND test_reader_c)
 
 ##########################################
 # Package Discovery Tests

@@ -101,3 +101,79 @@ std::string TestEnvironment::get_index_path(const std::string& gz_file) {
     return gz_file + ".idx";
 }
 } // namespace dft_utils_test
+
+// C API implementations
+extern "C" {
+
+test_environment_handle_t test_environment_create(void) {
+    return test_environment_create_with_lines(100);
+}
+
+test_environment_handle_t test_environment_create_with_lines(size_t lines) {
+    try {
+        auto* env = new dft_utils_test::TestEnvironment(lines);
+        if (env->is_valid()) {
+            return reinterpret_cast<test_environment_handle_t>(env);
+        } else {
+            delete env;
+            return nullptr;
+        }
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void test_environment_destroy(test_environment_handle_t env) {
+    if (env) {
+        auto* cpp_env = reinterpret_cast<dft_utils_test::TestEnvironment*>(env);
+        delete cpp_env;
+    }
+}
+
+int test_environment_is_valid(test_environment_handle_t env) {
+    if (!env) return 0;
+    auto* cpp_env = reinterpret_cast<dft_utils_test::TestEnvironment*>(env);
+    return cpp_env->is_valid() ? 1 : 0;
+}
+
+const char* test_environment_get_dir(test_environment_handle_t env) {
+    if (!env) return nullptr;
+    auto* cpp_env = reinterpret_cast<dft_utils_test::TestEnvironment*>(env);
+    return cpp_env->get_dir().c_str();
+}
+
+char* test_environment_create_test_gzip_file(test_environment_handle_t env) {
+    if (!env) return nullptr;
+    auto* cpp_env = reinterpret_cast<dft_utils_test::TestEnvironment*>(env);
+    std::string gz_file = cpp_env->create_test_gzip_file();
+    if (gz_file.empty()) {
+        return nullptr;
+    }
+    char* result = static_cast<char*>(malloc(gz_file.length() + 1));
+    if (result) {
+        strcpy(result, gz_file.c_str());
+    }
+    return result;
+}
+
+char* test_environment_get_index_path(test_environment_handle_t env, const char* gz_file) {
+    if (!env || !gz_file) return nullptr;
+    auto* cpp_env = reinterpret_cast<dft_utils_test::TestEnvironment*>(env);
+    std::string idx_path = cpp_env->get_index_path(gz_file);
+    char* result = static_cast<char*>(malloc(idx_path.length() + 1));
+    if (result) {
+        strcpy(result, idx_path.c_str());
+    }
+    return result;
+}
+
+int compress_file_to_gzip_c(const char* input_file, const char* output_file) {
+    if (!input_file || !output_file) return 0;
+    try {
+        return dft_utils_test::compress_file_to_gzip(input_file, output_file) ? 1 : 0;
+    } catch (...) {
+        return 0;
+    }
+}
+
+}
