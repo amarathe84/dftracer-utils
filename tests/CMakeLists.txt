@@ -101,6 +101,31 @@ endif()
 
 add_test(NAME test_reader_c COMMAND test_reader_c)
 
+# Test Robustness
+
+add_executable(test_reader_robustness
+    test_reader_robustness.cpp
+)
+target_link_libraries(test_reader_robustness
+    PRIVATE
+    dft_utils
+    doctest::doctest
+    testing_utilities
+)
+target_include_directories(test_reader_robustness
+    PRIVATE
+    ${CMAKE_BINARY_DIR}/include
+)
+target_set_warnings(test_reader_robustness)
+
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_reader_robustness PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(test_reader_robustness PRIVATE --coverage)
+endif()
+
+add_test(NAME test_reader_robustness COMMAND test_reader_robustness)
+
 ##########################################
 # Package Discovery Tests
 ##########################################

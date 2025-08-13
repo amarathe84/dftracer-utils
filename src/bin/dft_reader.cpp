@@ -32,6 +32,11 @@ int main(int argc, char **argv)
         .default_value<std::string>("info");
     program.add_argument("--check").help("Check if index is valid").flag();
 
+    program.add_argument("--read-buffer-size")
+        .help("Size of the read buffer in bytes (default: 1MB)")
+        .default_value<size_t>(1 * 1024 * 1024)
+        .scan<'d', size_t>();
+
     try
     {
         program.parse_args(argc, argv);
@@ -51,6 +56,9 @@ int main(int argc, char **argv)
     bool force_rebuild = program.get<bool>("--force");
     bool check_rebuild = program.get<bool>("--check");
     std::string log_level_str = program.get<std::string>("--log-level");
+
+    // @todo: delete this later
+    size_t read_buffer_size = program.get<size_t>("--read-buffer-size");
 
     // stderr-based logger to ensure logs don't interfere with data output
     auto logger = spdlog::stderr_color_mt("stderr");
@@ -123,14 +131,14 @@ int main(int argc, char **argv)
                 end_bytes_ = max_bytes;
             }
 
-            constexpr size_t BUFFER_SIZE = 1 * 1024; // 64KB buffer
-            char buffer[BUFFER_SIZE];
+            spdlog::info("Using read buffer size: {} bytes", read_buffer_size);
+            auto buffer = std::make_unique<char[]>(read_buffer_size);
             size_t bytes_written;
             size_t total_bytes = 0;
 
-            while (reader.read(start_bytes_, end_bytes_, buffer, BUFFER_SIZE, &bytes_written))
+            while (reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
             {
-                fwrite(buffer, 1, bytes_written, stdout);
+                fwrite(buffer.get(), 1, bytes_written, stdout);
                 total_bytes += bytes_written;
             }
             

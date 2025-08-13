@@ -56,6 +56,11 @@ build:
 	@mkdir -p build
 	@cd build && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
+build-debug:
+	@echo "Building project in debug mode..."
+	@mkdir -p build_debug
+	@cd build_debug && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
 build-release:
 	@echo "Building project in release mode..."
 	@mkdir -p build
@@ -73,4 +78,4 @@ install-debug: build
 # Clean all builds
 clean:
 	@echo "Cleaning all build directories..."
-	@rm -rf build build_test build_coverage install
+	@rm -rf build build_debug build_test build_coverage install

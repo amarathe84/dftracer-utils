@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Enable optimization
-set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+# set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Release flags" FORCE)
 # Enable cross-platform large file support
 add_definitions(-D_FILE_OFFSET_BITS=64)

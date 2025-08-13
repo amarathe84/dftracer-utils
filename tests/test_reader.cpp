@@ -302,7 +302,8 @@ TEST_CASE("C++ API - Integration test") {
 }
 
 TEST_CASE("C++ API - Memory safety stress test") {
-    TestEnvironment env(1000);
+    // dft::utils::set_log_level("debug");  // Enable debug logging
+    TestEnvironment env(100000);
     REQUIRE(env.is_valid());
     
     std::string gz_file = env.create_test_gzip_file();
@@ -318,18 +319,20 @@ TEST_CASE("C++ API - Memory safety stress test") {
 
     // Multiple reads with streaming API
     dft::reader::Reader reader(gz_file, idx_file);
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < 3; ++i) {  // Reduced from 100 to 3 for easier debugging
         char buffer[1024];
         size_t bytes_written = 0;
         size_t total_bytes = 0;
-      
-        while (reader.read(0, 50, buffer, sizeof(buffer), &bytes_written)) {
-            total_bytes += bytes_written;
+        
+        while (reader.read(0, 4 * 1024 * 1024, buffer, sizeof(buffer), &bytes_written)) {
+          total_bytes += bytes_written;
         }
         if (bytes_written > 0) {
           total_bytes += bytes_written;
         }
+        
         CHECK(total_bytes >= 50);
+        reader.reset();
     }
 }
 

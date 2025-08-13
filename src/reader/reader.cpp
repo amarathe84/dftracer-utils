@@ -130,7 +130,8 @@ class Reader::Impl
         if (!streaming_state_.is_active || 
             streaming_state_.current_gz_path != gz_path ||
             streaming_state_.start_bytes != start_bytes ||
-            streaming_state_.target_end_bytes != end_bytes)
+            streaming_state_.target_end_bytes != end_bytes ||
+            streaming_state_.is_finished)
         {
             initialize_streaming_session(gz_path, start_bytes, end_bytes);
         }
@@ -139,6 +140,16 @@ class Reader::Impl
             return false;
         }
         return stream_data_chunk(buffer, buffer_size, bytes_written);
+    }
+
+    void reset()
+    {
+        if (!is_open_ || !db_)
+        {
+            throw std::runtime_error("Reader is not open");
+        }
+
+        streaming_state_ = {};
     }
 
 public:
@@ -159,7 +170,7 @@ public:
   private:
     static constexpr size_t INFLATE_CHUNK_SIZE = 16384; // 16 KB
     static constexpr size_t SKIP_BUFFER_SIZE = 65536; // 64 KB
-    static constexpr size_t INCOMPLETE_BUFFER_SIZE = 32768; // 32 KB
+    #define INCOMPLETE_BUFFER_SIZE 2 * 1024 * 1024 // 2 MB, big enough to hold multiple JSON lines
     unsigned char skip_buffer[SKIP_BUFFER_SIZE];
 
     struct InflateState
@@ -652,78 +663,107 @@ public:
         }
 
         *bytes_written = 0;
-        size_t total_read = 0;
 
-        // Read data in chunks, ensuring we don't exceed buffer size
-        while (total_read < buffer_size)
+        // Unified algorithm for all buffer sizes to ensure consistency
+        // Step 1: Read new data if incomplete buffer is empty
+        if (streaming_state_.incomplete_buffer_size == 0)
         {
-            // Check if we've reached the target end
-            if (streaming_state_.current_position >= streaming_state_.target_end_bytes)
+            char temp_buffer[INCOMPLETE_BUFFER_SIZE];
+            size_t total_read = 0;
+
+            while (total_read < INCOMPLETE_BUFFER_SIZE)
             {
-                // Look for a complete JSON boundary to finish cleanly
-                if (total_read > 0 && find_json_boundary_in_buffer(buffer, total_read))
+                // Check if we've reached the target end
+                if (streaming_state_.current_position >= streaming_state_.target_end_bytes)
                 {
+                    // Look for a complete JSON boundary to finish cleanly
+                    if (total_read > 0 && find_json_boundary_in_buffer(temp_buffer, total_read))
+                    {
+                        break;
+                    }
+                    // If no boundary found and we're past target, we're done
+                    streaming_state_.is_finished = true;
                     break;
                 }
-                // If no boundary found and we're past target, we're done
-                streaming_state_.is_finished = true;
-                break;
-            }
 
-            size_t chunk_size = buffer_size - total_read;
-            size_t bytes_read;
-            
-            int result = inflate_read(streaming_state_.inflate_state.get(),
-                                    reinterpret_cast<unsigned char *>(buffer + total_read),
-                                    chunk_size, &bytes_read);
-            
-            if (result != 0)
-            {
-                throw std::runtime_error("Failed during streaming read phase");
-            }
+                size_t bytes_read;
+                int result = inflate_read(streaming_state_.inflate_state.get(),
+                                        reinterpret_cast<unsigned char *>(temp_buffer + total_read),
+                                        INCOMPLETE_BUFFER_SIZE - total_read, &bytes_read);
 
-            if (bytes_read == 0)
-            {
-                // Check if we've reached EOF or there's an error
-                if (feof(streaming_state_.file_handle))
+                if (result != 0)
                 {
-                    spdlog::debug("Reached EOF during streaming read phase");
+                    throw std::runtime_error("Failed during streaming read phase");
                 }
-                else if (ferror(streaming_state_.file_handle))
+
+                if (bytes_read == 0)
                 {
-                    throw std::runtime_error("File error during streaming read phase");
+                    // Check if we've reached EOF or there's an error
+                    if (feof(streaming_state_.file_handle))
+                    {
+                        spdlog::debug("Reached EOF during streaming read phase");
+                    }
+                    else if (ferror(streaming_state_.file_handle))
+                    {
+                        throw std::runtime_error("File error during streaming read phase");
+                    }
+                    // EOF reached
+                    streaming_state_.is_finished = true;
+                    break;
                 }
-                // EOF reached
-                streaming_state_.is_finished = true;
-                break;
+
+                total_read += bytes_read;
+                streaming_state_.current_position += bytes_read;
+                
+                spdlog::debug("Read {} bytes from compressed stream, total: {}", bytes_read, total_read);
             }
 
-            total_read += bytes_read;
-            streaming_state_.current_position += bytes_read;
+            // Add read data to incomplete buffer
+            if (total_read > 0)
+            {
+                std::copy(temp_buffer, temp_buffer + total_read, streaming_state_.incomplete_buffer);
+                streaming_state_.incomplete_buffer_size = total_read;
+                
+                spdlog::debug("Added {} bytes to incomplete buffer", total_read);
+            }
         }
 
-        // Ensure we end on a complete JSON line boundary
-        if (total_read > 0)
+        // Step 2: Serve data from incomplete buffer to user buffer
+        size_t bytes_to_copy = 0;
+        if (streaming_state_.incomplete_buffer_size > 0)
         {
-            total_read = adjust_to_json_boundary(buffer, total_read);
+            bytes_to_copy = std::min(buffer_size, streaming_state_.incomplete_buffer_size);
+            
+            // Adjust to JSON boundary
+            bytes_to_copy = adjust_to_json_boundary(streaming_state_.incomplete_buffer, bytes_to_copy);
+            
+            // Copy data to user buffer
+            std::copy(streaming_state_.incomplete_buffer,
+                     streaming_state_.incomplete_buffer + bytes_to_copy, buffer);
+            
+            // Shift remaining data (queue behavior)
+            if (bytes_to_copy < streaming_state_.incomplete_buffer_size)
+            {
+                std::memmove(streaming_state_.incomplete_buffer,
+                           streaming_state_.incomplete_buffer + bytes_to_copy,
+                           streaming_state_.incomplete_buffer_size - bytes_to_copy);
+            }
+            streaming_state_.incomplete_buffer_size -= bytes_to_copy;
+            
+            spdlog::debug("Served {} bytes to user buffer, {} bytes remaining in incomplete buffer", 
+                         bytes_to_copy, streaming_state_.incomplete_buffer_size);
         }
 
-        // Don't null-terminate the buffer as it may not be expected by the caller
-        // The caller should handle null termination if needed
+        *bytes_written = bytes_to_copy;
         
-        *bytes_written = total_read;
+        spdlog::debug("Streamed {} bytes (incomplete buffer: {}) (position: {} / {})",
+                     bytes_to_copy, streaming_state_.incomplete_buffer_size, 
+                     streaming_state_.current_position, streaming_state_.target_end_bytes);
 
         // Check if we have more data to stream
-        bool has_more = !streaming_state_.is_finished && 
-                       streaming_state_.current_position < streaming_state_.target_end_bytes;
-
-        spdlog::debug("Streamed {} bytes (position: {} / {}), has_more: {}", 
-                     total_read, streaming_state_.current_position, 
-                     streaming_state_.target_end_bytes, has_more);
-
-        if (!has_more) {
-          cleanup_streaming_state();
-        }
+        bool has_more = (streaming_state_.incomplete_buffer_size > 0) ||
+                       (!streaming_state_.is_finished && 
+                        streaming_state_.current_position < streaming_state_.target_end_bytes);
 
         return has_more;
     }
@@ -748,8 +788,8 @@ public:
             if (buffer[i - 1] == '}' && buffer[i] == '\n')
             {
                 // Adjust current position based on what we're keeping vs discarding
-                size_t bytes_to_discard = buffer_size - (static_cast<size_t>(i) + 1);
-                streaming_state_.current_position -= bytes_to_discard;
+                // size_t bytes_to_discard = buffer_size - (static_cast<size_t>(i) + 1);
+                // streaming_state_.current_position -= bytes_to_discard;
                 return static_cast<size_t>(i) + 1; // +1 to include newline
             }
         }
@@ -787,7 +827,8 @@ public:
         size_t actual_start_bytes; // Adjusted start (beginning of JSON line)
         bool is_active;  // True if streaming is in progress
         bool is_finished;  // True if reached end of range
-        unsigned char incomplete_buffer[INCOMPLETE_BUFFER_SIZE];  // Buffer for incomplete JSON line
+        char incomplete_buffer[INCOMPLETE_BUFFER_SIZE];  // Buffer for incomplete JSON line
+        size_t incomplete_buffer_size;
 
         std::unique_ptr<InflateState> inflate_state;
         std::unique_ptr<CheckpointInfo> checkpoint;
@@ -797,8 +838,10 @@ public:
         StreamingState() : start_bytes(0), current_position(0), 
                           target_end_bytes(0), actual_start_bytes(0),
                           is_active(false), is_finished(false),
-                          file_handle(nullptr), decompression_initialized(false) {}
-        
+                          incomplete_buffer_size(0),
+                          file_handle(nullptr), decompression_initialized(false)
+                          {}
+
         void reset() {
             current_gz_path.clear();
             start_bytes = 0;
@@ -806,6 +849,7 @@ public:
             target_end_bytes = 0;
             actual_start_bytes = 0;
             std::fill(std::begin(incomplete_buffer), std::end(incomplete_buffer), 0);
+            incomplete_buffer_size = 0;
             is_active = false;
             is_finished = false;           
             if (file_handle) {
@@ -853,6 +897,11 @@ bool Reader::read(size_t start_bytes, size_t end_bytes,
                   char *buffer, size_t buffer_size, size_t *bytes_written)
 {
     return pImpl_->read(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+}
+
+void Reader::reset()
+{
+    pImpl_->reset();
 }
 
 bool Reader::is_valid() const
@@ -951,6 +1000,14 @@ extern "C"
         {
             spdlog::error("Failed to read: {}", e.what());
             return -1;
+        }
+    }
+
+    void dft_reader_reset(dft_reader_handle_t reader)
+    {
+        if (reader)
+        {
+            static_cast<dft::reader::Reader *>(reader)->reset();
         }
     }
 

@@ -57,6 +57,12 @@ extern "C"
                        size_t buffer_size,
                        size_t *bytes_written);
 
+    /**
+     * Reset the reader to the initial state
+     * @param reader DFT reader handle
+     */
+    void dft_reader_reset(dft_reader_handle_t reader);
+
 #ifdef __cplusplus
 } // extern "C"
 
@@ -151,6 +157,11 @@ class Reader
      */
     bool read(size_t start_bytes, size_t end_bytes,
              char *buffer, size_t buffer_size, size_t *bytes_written);
+
+    /**
+     * Reset the reader to the initial state
+     */
+    void reset();
 
     /**
      * Check if the reader is valid
