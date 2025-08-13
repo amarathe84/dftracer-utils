@@ -20,7 +20,10 @@ int main(int argc, char **argv)
     program.add_description("DFTracer utility for reading and indexing gzipped files");
     program.add_argument("file").help("Gzipped file to process").required();
     program.add_argument("-i", "--index").help("Index file to use").default_value<std::string>("");
-    program.add_argument("-s", "--start").help("Start position in bytes").default_value<int64_t>(-1).scan<'d', int64_t>();
+    program.add_argument("-s", "--start")
+        .help("Start position in bytes")
+        .default_value<int64_t>(-1)
+        .scan<'d', int64_t>();
     program.add_argument("-e", "--end").help("End position in bytes").default_value<int64_t>(-1).scan<'d', int64_t>();
     program.add_argument("-c", "--chunk-size")
         .help("Chunk size for indexing in megabytes (default: 32)")
@@ -137,28 +140,31 @@ int main(int argc, char **argv)
             size_t bytes_written;
             size_t total_bytes = 0;
 
-
-            if (raw_mode) {
+            if (raw_mode)
+            {
                 spdlog::debug("Using raw mode");
                 while (reader.read_raw(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
                 {
                     fwrite(buffer.get(), 1, bytes_written, stdout);
                     total_bytes += bytes_written;
                 }
-            } else {
+            }
+            else
+            {
                 spdlog::debug("Using JSON lines aware mode");
                 while (reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
                 {
-                              fwrite(buffer.get(), 1, bytes_written, stdout);
-                              total_bytes += bytes_written;
-                          }
-            }
-
-                if (bytes_written > 0) {
                     fwrite(buffer.get(), 1, bytes_written, stdout);
                     total_bytes += bytes_written;
                 }
-                
+            }
+
+            if (bytes_written > 0)
+            {
+                fwrite(buffer.get(), 1, bytes_written, stdout);
+                total_bytes += bytes_written;
+            }
+
             spdlog::debug("Successfully read {} bytes from range", total_bytes);
         }
         catch (const std::runtime_error &e)

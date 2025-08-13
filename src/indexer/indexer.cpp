@@ -388,8 +388,8 @@ bool Indexer::Impl::need_rebuild() const
             if (current_sha256 != stored_sha256)
             {
                 spdlog::info("Index rebuild needed: file SHA256 changed ({} vs {})",
-                              current_sha256.substr(0, 16) + "...",
-                              stored_sha256.substr(0, 16) + "...");
+                             current_sha256.substr(0, 16) + "...",
+                             stored_sha256.substr(0, 16) + "...");
                 return true;
             }
         }
