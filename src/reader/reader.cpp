@@ -4,10 +4,10 @@
 #include <cstring>
 #include <memory>
 #include <spdlog/spdlog.h>
-#include <sqlite3.h>
 #include <zlib.h>
 
 #include <dft_utils/reader/reader.h>
+#include <dft_utils/indexer/indexer.h>
 #include <dft_utils/utils/platform_compat.h>
 
 // Forward declarations  
@@ -20,81 +20,11 @@ struct InflateState
     size_t c_off;
 };
 
-struct CheckpointInfo
-{
-    size_t uc_offset;
-    size_t c_offset;
-    int bits;
-    std::vector<unsigned char> dict_compressed;
-    size_t dict_compressed_size;
-};
-
 namespace dft
 {
 namespace reader
 {
 
-class DatabaseHelper
-{
-public:
-    explicit DatabaseHelper(sqlite3* db) : db_(db) {}
-    
-    int find_file_id(const std::string& gz_path) {
-        const char* sql = "SELECT id FROM files WHERE logical_name = ? LIMIT 1";
-        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt = prepare_statement(sql);
-        sqlite3_bind_text(stmt.get(), 1, gz_path.c_str(), -1, SQLITE_STATIC);
-        
-        if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-            return sqlite3_column_int(stmt.get(), 0);
-        }
-        return -1;
-    }
-    
-    bool find_checkpoint(int file_id, size_t target_offset, CheckpointInfo* result) {
-        const char* sql = "SELECT uc_offset, c_offset, bits, dict_compressed "
-                         "FROM checkpoints WHERE file_id = ? AND uc_offset <= ? "
-                         "ORDER BY uc_offset DESC LIMIT 1";
-        
-        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt = prepare_statement(sql);
-        sqlite3_bind_int(stmt.get(), 1, file_id);
-        sqlite3_bind_int64(stmt.get(), 2, static_cast<sqlite3_int64>(target_offset));
-        
-        if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-            result->uc_offset = static_cast<size_t>(sqlite3_column_int64(stmt.get(), 0));
-            result->c_offset = static_cast<size_t>(sqlite3_column_int64(stmt.get(), 1));
-            result->bits = sqlite3_column_int(stmt.get(), 2);
-            
-            size_t dict_size = static_cast<size_t>(sqlite3_column_bytes(stmt.get(), 3));
-            result->dict_compressed.resize(dict_size);
-            memcpy(result->dict_compressed.data(), sqlite3_column_blob(stmt.get(), 3), dict_size);
-            
-            return true;
-        }
-        return false;
-    }
-    
-    size_t get_max_bytes() {
-        const char* sql = "SELECT MAX(uc_offset + uc_size) FROM chunks";
-        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt = prepare_statement(sql);
-        
-        if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-            sqlite3_int64 max_val = sqlite3_column_int64(stmt.get(), 0);
-            return (max_val >= 0) ? static_cast<size_t>(max_val) : 0;
-        }
-        return 0;
-    }
-    
-private:
-    sqlite3* db_;
-    
-    std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> prepare_statement(const char* sql) {
-        sqlite3_stmt* stmt;
-        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, NULL) != SQLITE_OK) {
-            throw std::runtime_error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
-        }
-        return std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)>(stmt, sqlite3_finalize);
-    }
-};
 
 class ReaderError : public std::runtime_error
 {
@@ -251,7 +181,7 @@ protected:
     bool is_finished_;
     
     std::unique_ptr<InflateState> inflate_state_;
-    std::unique_ptr<CheckpointInfo> checkpoint_;
+    std::unique_ptr<dft::indexer::CheckpointInfo> checkpoint_;
     FILE* file_handle_;
     bool decompression_initialized_;
     
@@ -277,7 +207,7 @@ public:
     bool is_finished() const { return is_finished_; }
     
     virtual void initialize(const std::string& gz_path, size_t start_bytes, size_t end_bytes,
-                          DatabaseHelper& db_helper) = 0;
+                          dft::indexer::Indexer& indexer) = 0;
     virtual size_t stream_chunk(char* buffer, size_t buffer_size) = 0;
     
     virtual void reset() {
@@ -309,16 +239,16 @@ protected:
     }
     
     void initialize_compression(const std::string& gz_path, size_t start_bytes, 
-                              DatabaseHelper& db_helper) {
+                              dft::indexer::Indexer& indexer) {
         file_handle_ = open_file(gz_path);
         inflate_state_.reset(new InflateState());
         bool use_checkpoint = false;
         
         // Try to find checkpoint
-        int file_id = db_helper.find_file_id(gz_path);
+        int file_id = indexer.find_file_id(gz_path);
         if (file_id != -1) {
-            checkpoint_.reset(new CheckpointInfo());
-            if (db_helper.find_checkpoint(file_id, start_bytes, checkpoint_.get())) {
+            checkpoint_.reset(new dft::indexer::CheckpointInfo());
+            if (indexer.find_checkpoint(file_id, start_bytes, *checkpoint_)) {
                 if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_, checkpoint_.get()) == 0) {
                     use_checkpoint = true;
                     spdlog::debug("Using checkpoint at uncompressed offset {} for target {}", 
@@ -346,7 +276,7 @@ protected:
         }
     }
     
-    int inflate_init_from_checkpoint(InflateState* state, FILE* f, const CheckpointInfo* checkpoint) const {
+    int inflate_init_from_checkpoint(InflateState* state, FILE* f, const dft::indexer::CheckpointInfo* checkpoint) const {
         memset(state, 0, sizeof(*state));
         state->file = f;
         state->c_off = checkpoint->c_offset;
@@ -466,7 +396,7 @@ public:
     }
     
     void initialize(const std::string& gz_path, size_t start_bytes, size_t end_bytes,
-                   DatabaseHelper& db_helper) override {
+                   dft::indexer::Indexer& indexer) override {
         spdlog::debug("Initializing JSON streaming session for range [{}, {}] from {}", 
                      start_bytes, end_bytes, gz_path);
         
@@ -481,7 +411,7 @@ public:
         is_finished_ = false;
         incomplete_buffer_size_ = 0;
         
-        initialize_compression(gz_path, start_bytes, db_helper);
+        initialize_compression(gz_path, start_bytes, indexer);
         
         // Find the actual start position (beginning of a complete JSON line)
         actual_start_bytes_ = find_json_line_start(start_bytes);
@@ -682,7 +612,7 @@ public:
     RawStreamingSession() : BaseStreamingSession() {}
     
     void initialize(const std::string& gz_path, size_t start_bytes, size_t end_bytes,
-                   DatabaseHelper& db_helper) override {
+                   dft::indexer::Indexer& indexer) override {
         spdlog::debug("Initializing raw streaming session for range [{}, {}] from {}", 
                      start_bytes, end_bytes, gz_path);
         
@@ -697,7 +627,7 @@ public:
         is_active_ = true;
         is_finished_ = false;
         
-        initialize_compression(gz_path, start_bytes, db_helper);
+        initialize_compression(gz_path, start_bytes, indexer);
         
         // Skip to the start position
         size_t current_pos = checkpoint_ ? checkpoint_->uc_offset : 0;
@@ -748,17 +678,17 @@ public:
 class StreamingSessionFactory
 {
 private:
-    DatabaseHelper& db_helper_;
+    dft::indexer::Indexer& indexer_;
     
 public:
-    explicit StreamingSessionFactory(DatabaseHelper& db_helper) 
-        : db_helper_(db_helper) {}
+    explicit StreamingSessionFactory(dft::indexer::Indexer& indexer) 
+        : indexer_(indexer) {}
     
     std::unique_ptr<JsonStreamingSession> create_json_session(
         const std::string& gz_path, size_t start_bytes, size_t end_bytes) {
         
         std::unique_ptr<JsonStreamingSession> session(new JsonStreamingSession());
-        session->initialize(gz_path, start_bytes, end_bytes, db_helper_);
+        session->initialize(gz_path, start_bytes, end_bytes, indexer_);
         return session;
     }
     
@@ -766,7 +696,7 @@ public:
         const std::string& gz_path, size_t start_bytes, size_t end_bytes) {
         
         std::unique_ptr<RawStreamingSession> session(new RawStreamingSession());
-        session->initialize(gz_path, start_bytes, end_bytes, db_helper_);
+        session->initialize(gz_path, start_bytes, end_bytes, indexer_);
         return session;
     }
     
@@ -789,28 +719,31 @@ class Reader::Impl
 {
   public:
     Impl(const std::string &gz_path, const std::string &idx_path)
-        : gz_path_(gz_path), idx_path_(idx_path), db_(nullptr), is_open_(false)
+        : gz_path_(gz_path), idx_path_(idx_path), is_open_(false)
     {
-        if (sqlite3_open(idx_path.c_str(), &db_) != SQLITE_OK)
-        {
-            throw ReaderError(ReaderError::DATABASE_ERROR, "Failed to open index database: " + std::string(sqlite3_errmsg(db_)));
+        try {
+            // Create indexer instance - will auto-build index if needed
+            indexer_.reset(new dft::indexer::Indexer(gz_path, idx_path, 1.0));
+            if (indexer_->need_rebuild()) {
+                indexer_->build();
+            }
+            is_open_ = true;
+            
+            // Initialize session factory using indexer directly
+            session_factory_.reset(new StreamingSessionFactory(*indexer_));
+            
+            spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
         }
-        is_open_ = true;
-        
-        // Initialize new architecture components
-        db_helper_.reset(new DatabaseHelper(db_));
-        session_factory_.reset(new StreamingSessionFactory(*db_helper_));
-        
-        spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
+        catch (const std::exception& e) {
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR, 
+                            "Failed to initialize reader with indexer: " + std::string(e.what()));
+        }
     }
 
     ~Impl()
     {
         cleanup_streaming_state();
-        if (is_open_ && db_)
-        {
-            sqlite3_close(db_);
-        }
+        // Indexer will be automatically destroyed by unique_ptr
         spdlog::debug("Successfully destroyed DFT reader");
     }
 
@@ -818,10 +751,12 @@ class Reader::Impl
     Impl &operator=(const Impl &) = delete;
 
     Impl(Impl &&other) noexcept
-        : gz_path_(std::move(other.gz_path_)), idx_path_(std::move(other.idx_path_)), db_(other.db_),
-          is_open_(other.is_open_)
+        : gz_path_(std::move(other.gz_path_)), idx_path_(std::move(other.idx_path_)), 
+          is_open_(other.is_open_), indexer_(std::move(other.indexer_)),
+          session_factory_(std::move(other.session_factory_)),
+          json_session_(std::move(other.json_session_)), 
+          raw_session_(std::move(other.raw_session_))
     {
-        other.db_ = nullptr;
         other.is_open_ = false;
     }
 
@@ -829,15 +764,14 @@ class Reader::Impl
     {
         if (this != &other)
         {
-            if (is_open_ && db_)
-            {
-                sqlite3_close(db_);
-            }
+            cleanup_streaming_state();
             gz_path_ = std::move(other.gz_path_);
             idx_path_ = std::move(other.idx_path_);
-            db_ = other.db_;
             is_open_ = other.is_open_;
-            other.db_ = nullptr;
+            indexer_ = std::move(other.indexer_);
+            session_factory_ = std::move(other.session_factory_);
+            json_session_ = std::move(other.json_session_);
+            raw_session_ = std::move(other.raw_session_);
             other.is_open_ = false;
         }
         return *this;
@@ -845,13 +779,12 @@ class Reader::Impl
 
     size_t get_max_bytes() const
     {
-        if (!is_open_ || !db_)
+        if (!is_open_ || !indexer_)
         {
             throw std::runtime_error("Reader is not open");
         }
 
-        DatabaseHelper db_helper(db_);
-        size_t max_bytes = db_helper.get_max_bytes();
+        size_t max_bytes = static_cast<size_t>(indexer_->get_max_bytes());
         
         if (max_bytes > 0) {
             spdlog::debug("Maximum bytes available: {}", max_bytes);
@@ -868,7 +801,7 @@ class Reader::Impl
                 char *buffer,
                 size_t buffer_size)
     {
-        if (!is_open_ || !db_)
+        if (!is_open_ || !indexer_)
         {
             throw ReaderError(ReaderError::INITIALIZATION_ERROR, "Reader is not open");
         }
@@ -893,7 +826,7 @@ class Reader::Impl
                     char *buffer,
                     size_t buffer_size)
     {
-        if (!is_open_ || !db_)
+        if (!is_open_ || !indexer_)
         {
             throw ReaderError(ReaderError::INITIALIZATION_ERROR, "Reader is not open");
         }
@@ -914,7 +847,7 @@ class Reader::Impl
 
     void reset()
     {
-        if (!is_open_ || !db_)
+        if (!is_open_ || !indexer_)
         {
             throw std::runtime_error("Reader is not open");
         }
@@ -935,7 +868,7 @@ class Reader::Impl
   public:
     bool is_valid() const
     {
-        return is_open_ && db_ != nullptr;
+        return is_open_ && indexer_ != nullptr;
     }
     const std::string &get_gz_path() const
     {
@@ -949,7 +882,7 @@ class Reader::Impl
   private:
     static constexpr size_t INFLATE_CHUNK_SIZE = 16384; // 16 KB
     static constexpr size_t SKIP_BUFFER_SIZE = 65536;   // 64 KB
-#define INCOMPLETE_BUFFER_SIZE 2 * 1024 * 1024          // 2 MB, big enough to hold multiple JSON lines
+    static constexpr size_t INCOMPLETE_BUFFER_SIZE = 2 * 1024 * 1024; // 2 MB, big enough to hold multiple JSON lines
     unsigned char skip_buffer[SKIP_BUFFER_SIZE];
 
 
@@ -968,16 +901,15 @@ class Reader::Impl
         return CompressionManager::inflate_read(state, out, out_size, bytes_read);
     }
 
-    int find_checkpoint(size_t target_uc_offset, CheckpointInfo *checkpoint) const
+    int find_checkpoint(size_t target_uc_offset, dft::indexer::CheckpointInfo *checkpoint) const
     {
-        if (!is_open_ || !db_)
+        if (!is_open_ || !indexer_)
         {
             spdlog::debug("Reader not open for checkpoint lookup");
             return -1;
         }
 
-        DatabaseHelper db_helper(db_);
-        int file_id = db_helper.find_file_id(gz_path_);
+        int file_id = indexer_->find_file_id(gz_path_);
         
         if (file_id == -1)
         {
@@ -985,7 +917,7 @@ class Reader::Impl
             return -1;
         }
 
-        if (db_helper.find_checkpoint(file_id, target_uc_offset, checkpoint))
+        if (indexer_->find_checkpoint(file_id, target_uc_offset, *checkpoint))
         {
             if (checkpoint->dict_compressed.size() > 0)
             {
@@ -1040,7 +972,7 @@ class Reader::Impl
         return 0;
     }
 
-    int inflate_init_from_checkpoint(InflateState *state, FILE *f, const CheckpointInfo *checkpoint) const
+    int inflate_init_from_checkpoint(InflateState *state, FILE *f, const dft::indexer::CheckpointInfo *checkpoint) const
     {
         memset(state, 0, sizeof(*state));
         state->file = f;
@@ -1130,7 +1062,7 @@ class Reader::Impl
         return 0;
     }
 
-    void free_checkpoint(CheckpointInfo *checkpoint) const
+    void free_checkpoint(dft::indexer::CheckpointInfo *checkpoint) const
     {
         if (checkpoint)
         {
@@ -1168,7 +1100,7 @@ class Reader::Impl
         bool use_checkpoint = false;
 
         // Try to find a checkpoint near the start position
-        streaming_state_.checkpoint.reset(new CheckpointInfo());
+        streaming_state_.checkpoint.reset(new dft::indexer::CheckpointInfo());
         if (find_checkpoint(start_bytes, streaming_state_.checkpoint.get()) == 0)
         {
             if (inflate_init_from_checkpoint(streaming_state_.inflate_state.get(),
@@ -1481,7 +1413,7 @@ class Reader::Impl
         bool use_checkpoint = false;
 
         // Try to find a checkpoint near the start position
-        raw_streaming_state_.checkpoint.reset(new CheckpointInfo());
+        raw_streaming_state_.checkpoint.reset(new dft::indexer::CheckpointInfo());
         if (find_checkpoint(start_bytes, raw_streaming_state_.checkpoint.get()) == 0)
         {
             if (inflate_init_from_checkpoint(raw_streaming_state_.inflate_state.get(),
@@ -1620,11 +1552,10 @@ class Reader::Impl
 
     std::string gz_path_;
     std::string idx_path_;
-    sqlite3 *db_;
     bool is_open_;
     
-    // New architecture components
-    std::unique_ptr<DatabaseHelper> db_helper_;
+    // Indexer-based architecture components
+    std::unique_ptr<dft::indexer::Indexer> indexer_;
     std::unique_ptr<StreamingSessionFactory> session_factory_;
     std::unique_ptr<JsonStreamingSession> json_session_;
     std::unique_ptr<RawStreamingSession> raw_session_;
@@ -1643,7 +1574,7 @@ class Reader::Impl
         size_t incomplete_buffer_size;
 
         std::unique_ptr<InflateState> inflate_state;
-        std::unique_ptr<CheckpointInfo> checkpoint;
+        std::unique_ptr<dft::indexer::CheckpointInfo> checkpoint;
         FILE *file_handle;
         bool decompression_initialized;
 
@@ -1686,7 +1617,7 @@ class Reader::Impl
         bool is_finished;        // True if reached end of range
 
         std::unique_ptr<InflateState> inflate_state;
-        std::unique_ptr<CheckpointInfo> checkpoint;
+        std::unique_ptr<dft::indexer::CheckpointInfo> checkpoint;
         FILE *file_handle;
         bool decompression_initialized;
 

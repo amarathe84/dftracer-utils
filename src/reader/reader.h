@@ -86,6 +86,9 @@ extern "C"
 #include <memory>
 #include <string>
 
+// Forward declaration for indexer
+namespace dft { namespace indexer { class Indexer; struct CheckpointInfo; } }
+
 namespace dft
 {
 namespace reader

@@ -103,6 +103,8 @@ class Indexer::Impl
 
     uint64_t get_max_bytes() const;
     uint64_t get_num_lines() const;
+    int find_file_id(const std::string &gz_path) const;
+    bool find_checkpoint(int file_id, size_t target_offset, CheckpointInfo &checkpoint) const;
 
   private:
     static const char *SQL_SCHEMA;
@@ -974,6 +976,90 @@ uint64_t Indexer::Impl::get_num_lines() const
     return total_lines;
 }
 
+int Indexer::Impl::find_file_id(const std::string &gz_path) const
+{
+    if (!index_exists_and_valid(idx_path_))
+    {
+        return -1;
+    }
+
+    sqlite3 *db;
+    if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK)
+    {
+        throw std::runtime_error("Cannot open index database: " + std::string(sqlite3_errmsg(db)));
+    }
+
+    sqlite3_stmt *stmt;
+    const char *sql = "SELECT id FROM files WHERE logical_name = ? LIMIT 1";
+    int file_id = -1;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_text(stmt, 1, gz_path.c_str(), -1, SQLITE_STATIC);
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            file_id = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    else
+    {
+        sqlite3_close(db);
+        throw std::runtime_error("Failed to prepare find_file_id statement: " + std::string(sqlite3_errmsg(db)));
+    }
+
+    sqlite3_close(db);
+    return file_id;
+}
+
+bool Indexer::Impl::find_checkpoint(int file_id, size_t target_offset, CheckpointInfo &checkpoint) const
+{
+    if (!index_exists_and_valid(idx_path_))
+    {
+        return false;
+    }
+
+    sqlite3 *db;
+    if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK)
+    {
+        throw std::runtime_error("Cannot open index database: " + std::string(sqlite3_errmsg(db)));
+    }
+
+    sqlite3_stmt *stmt;
+    const char *sql = "SELECT uc_offset, c_offset, bits, dict_compressed "
+                     "FROM checkpoints WHERE file_id = ? AND uc_offset <= ? "
+                     "ORDER BY uc_offset DESC LIMIT 1";
+    bool found = false;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_int(stmt, 1, file_id);
+        sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(target_offset));
+
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            checkpoint.uc_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
+            checkpoint.c_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 1));
+            checkpoint.bits = sqlite3_column_int(stmt, 2);
+
+            size_t dict_size = static_cast<size_t>(sqlite3_column_bytes(stmt, 3));
+            checkpoint.dict_compressed.resize(dict_size);
+            std::memcpy(checkpoint.dict_compressed.data(), sqlite3_column_blob(stmt, 3), dict_size);
+            
+            found = true;
+        }
+        sqlite3_finalize(stmt);
+    }
+    else
+    {
+        sqlite3_close(db);
+        throw std::runtime_error("Failed to prepare find_checkpoint statement: " + std::string(sqlite3_errmsg(db)));
+    }
+
+    sqlite3_close(db);
+    return found;
+}
+
 void Indexer::Impl::build()
 {
     spdlog::debug("Building index for {} with {:.1f} MB chunks...", gz_path_, chunk_size_mb_);
@@ -1134,6 +1220,15 @@ uint64_t Indexer::get_num_lines() const
     return pImpl_->get_num_lines();
 }
 
+int Indexer::find_file_id(const std::string &gz_path) const
+{
+    return pImpl_->find_file_id(gz_path);
+}
+
+bool Indexer::find_checkpoint(int file_id, size_t target_offset, CheckpointInfo &checkpoint) const
+{
+    return pImpl_->find_checkpoint(file_id, target_offset, checkpoint);
+}
 
 } // namespace indexer
 } // namespace dft

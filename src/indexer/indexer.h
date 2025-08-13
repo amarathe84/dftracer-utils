@@ -65,11 +65,30 @@ extern "C"
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace dft
 {
 namespace indexer
 {
+
+/**
+ * Information about a checkpoint in the compressed file
+ * Used by the reader for efficient random access
+ */
+struct CheckpointInfo
+{
+    size_t uc_offset;      // Uncompressed offset
+    size_t c_offset;       // Compressed offset
+    int bits;              // Bit position
+    std::vector<unsigned char> dict_compressed; // Compressed dictionary (RAII managed)
+    
+    CheckpointInfo() = default;
+    CheckpointInfo(const CheckpointInfo&) = default;
+    CheckpointInfo(CheckpointInfo&&) = default;
+    CheckpointInfo& operator=(const CheckpointInfo&) = default;
+    CheckpointInfo& operator=(CheckpointInfo&&) = default;
+};
 
 /**
  * DFT indexer
@@ -168,6 +187,24 @@ class Indexer
      * @throws std::runtime_error on database error
      */
     uint64_t get_num_lines() const;
+
+    /**
+     * Find the database file ID for a given gzip path
+     * @param gz_path Path to the gzipped file
+     * @return file ID, or -1 if not found
+     * @throws std::runtime_error on database error
+     */
+    int find_file_id(const std::string &gz_path) const;
+
+    /**
+     * Find the best checkpoint for a given uncompressed offset
+     * @param file_id Database file ID (from find_file_id)
+     * @param target_offset Target uncompressed offset
+     * @param checkpoint Output parameter for checkpoint information
+     * @return true if checkpoint found, false otherwise
+     * @throws std::runtime_error on database error
+     */
+    bool find_checkpoint(int file_id, size_t target_offset, CheckpointInfo &checkpoint) const;
 
   private:
     class Impl;
