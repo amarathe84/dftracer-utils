@@ -128,9 +128,8 @@ if(APPLE)
 else()
   set_target_properties(dft_utils_reader_ext PROPERTIES
       INSTALL_RPATH_USE_LINK_PATH TRUE
-      BUILD_WITH_INSTALL_RPATH FALSE
-      # INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/lib64:$ORIGIN/../lib:$ORIGIN/../lib64"
-      INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64"
+      BUILD_WITH_INSTALL_RPATH TRUE
+      INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64;$ORIGIN/../../lib;$ORIGIN/dft_utils/lib"
   )
 endif()
 

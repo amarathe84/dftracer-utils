@@ -15,7 +15,7 @@ import dft_utils
 
 
 class PythonTestEnvironment:
-    """Test environment manager similar to C++ TestEnvironment"""
+    """Test environment manager"""
     
     def __init__(self, lines=100):
         self.lines = lines
@@ -84,7 +84,9 @@ class TestDFTracerReader:
     def test_import(self):
         """Test that we can import the module and classes"""
         assert hasattr(dft_utils, 'DFTracerReader')
-        assert hasattr(dft_utils, 'DFTracerRangeIterator')
+        assert hasattr(dft_utils, 'DFTracerLineRangeIterator')
+        assert hasattr(dft_utils, 'DFTracerRawRangeIterator')
+        assert hasattr(dft_utils, 'dft_reader_raw_range')
         assert hasattr(dft_utils, 'dft_reader_range')
         assert hasattr(dft_utils, 'set_log_level')
     
@@ -165,7 +167,7 @@ class TestDFTracerReader:
             
             # Test default iterator
             chunk_count = 0
-            for chunk in reader.iterator():
+            for chunk in reader.iter():
                 chunk_count += 1
                 if chunk_count >= 2:
                     break
@@ -295,7 +297,7 @@ class TestDFTracerReader:
                 pytest.skip("File too small for raw iterator testing")
             
             # Test default raw iterator
-            raw_iter = reader.raw_iterator()
+            raw_iter = reader.raw_iter()
             assert hasattr(raw_iter, '__iter__')
             assert hasattr(raw_iter, '__next__')
             
@@ -407,12 +409,10 @@ class TestDFTracerReader:
         with dft_utils.DFTracerReader(trace_file) as reader:
             # Test that raw methods exist
             assert hasattr(reader, 'read_raw')
-            assert hasattr(reader, 'raw_iterator')
             assert hasattr(reader, 'raw_iter')
             
             # Test that they are callable
             assert callable(reader.read_raw)
-            assert callable(reader.raw_iterator)
             assert callable(reader.raw_iter)
             
             # Test basic functionality without errors
@@ -422,7 +422,7 @@ class TestDFTracerReader:
                 assert isinstance(data, str)
                 assert len(data) > 0
                 
-                raw_iter = reader.raw_iterator()
+                raw_iter = reader.raw_iter()
                 assert raw_iter is not None
                 
                 custom_iter = reader.raw_iter(1024)
