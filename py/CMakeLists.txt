@@ -103,7 +103,7 @@ else()
 endif()
 
 # target_include_directories(dft_utils_reader_ext PRIVATE ${PYREADER_INCLUDE_DIR})
-target_link_libraries(dft_utils_reader_ext PRIVATE dft_utils::static)
+target_link_libraries(dft_utils_reader_ext PRIVATE dft_utils::shared)
 
 # get_target_property(DFT_READER_LINK_LIBS dft_reader::static INTERFACE_LINK_LIBRARIES)
 # if(DFT_READER_LINK_LIBS)
