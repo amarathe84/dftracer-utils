@@ -28,12 +28,14 @@ set(DFTRACER_UTILS_HEADERS
   reader/reader.h
   utils/platform_compat.h
   utils/filesystem.h
+  utils/file.h
   utils/logger.h
 )
 
 set(DFTRACER_UTILS_SOURCES
   indexer/indexer.cpp
   reader/reader.cpp
+  utils/file.cpp
   utils/logger.cpp
 )
 

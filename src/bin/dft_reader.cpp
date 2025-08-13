@@ -107,6 +107,7 @@ int main(int argc, char **argv)
 
         if (force_rebuild || !fs::exists(idx_path))
         {
+            spdlog::info("Building index for file: {}", gz_path);
             indexer.build();
         }
     }

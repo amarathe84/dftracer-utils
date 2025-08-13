@@ -12,6 +12,7 @@
 #include <zlib.h>
 
 #include <dft_utils/indexer/indexer.h>
+#include <dft_utils/utils/file.h>
 #include <dft_utils/utils/filesystem.h>
 #include <dft_utils/utils/platform_compat.h>
 
@@ -221,19 +222,7 @@ std::string Indexer::Impl::calculate_file_sha256(const std::string &file_path) c
 
 time_t Indexer::Impl::get_file_mtime(const std::string &file_path) const
 {
-    try
-    {
-        auto ftime = fs::last_write_time(file_path);
-        auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-            ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
-        return std::chrono::system_clock::to_time_t(sctp);
-    }
-    catch (const fs::filesystem_error &)
-    {
-        return 0;
-    }
-
-    return 0;
+    return dft::utils::get_file_modification_time(file_path);
 }
 
 bool Indexer::Impl::index_exists_and_valid(const std::string &idx_path) const
