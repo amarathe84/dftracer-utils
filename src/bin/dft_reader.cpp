@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 
             if (raw_mode) {
                 spdlog::debug("Using raw mode");
-                while (reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
+                while (reader.read_raw(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
                 {
                     fwrite(buffer.get(), 1, bytes_written, stdout);
                     total_bytes += bytes_written;
@@ -152,8 +152,13 @@ int main(int argc, char **argv)
                               fwrite(buffer.get(), 1, bytes_written, stdout);
                               total_bytes += bytes_written;
                           }
-            
             }
+
+                if (bytes_written > 0) {
+                    fwrite(buffer.get(), 1, bytes_written, stdout);
+                    total_bytes += bytes_written;
+                }
+                
             spdlog::debug("Successfully read {} bytes from range", total_bytes);
         }
         catch (const std::runtime_error &e)
