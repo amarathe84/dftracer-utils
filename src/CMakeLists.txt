@@ -177,6 +177,11 @@ if(TARGET picosha2)
     list(APPEND INSTALLABLE_TARGETS picosha2)
 endif()
 
+# Add spdlog if it's our own target (CPM-built)
+if(TARGET spdlog::spdlog)
+    list(APPEND INSTALLABLE_TARGETS spdlog::spdlog)
+endif()
+
 install(TARGETS ${INSTALLABLE_TARGETS}
     EXPORT dft_utilsTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
