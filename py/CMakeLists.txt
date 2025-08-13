@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15...3.26)
 
-project(dft_reader C CXX)
+project(dft_utils C CXX)
 
 if (NOT SKBUILD)
   message(WARNING "\
@@ -65,65 +65,45 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# Include the utility modules before adding subdirectory
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/CompilerWarnings.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/InstallHelpers.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/CPM.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/Dependencies.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/Utils.cmake)
 
-# Set RPATH settings to avoid library path conflicts
-set(CMAKE_SKIP_BUILD_RPATH FALSE)
-set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+# # # Create the package-style include directory structure in build directory
+# set(PYREADER_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
+# file(MAKE_DIRECTORY ${PYREADER_INCLUDE_DIR}/dftracer_utils)
+# file(COPY ${CMAKE_BINARY_DIR}/include DESTINATION ${PYREADER_INCLUDE_DIR}/dftracer_utils)
 
-# Override installation destinations for Python build BEFORE add_subdirectory
-# Move libraries and headers to dft_reader directory instead of site-packages root
-set(CMAKE_INSTALL_LIBDIR "dft_reader/lib" CACHE STRING "Library install directory" FORCE)
-set(CMAKE_INSTALL_INCLUDEDIR "dft_reader/include" CACHE STRING "Include install directory" FORCE)
+# set(READER_HEADERS
+#     indexer.h
+#     reader.h
+#     platform_compat.h
+#     filesystem.h
+#     utils.h
+# )
 
-# For binaries, install them to a subdirectory to avoid conflicts
-# This works regardless of whether user has venv or not
-set(CMAKE_INSTALL_BINDIR "dft_reader/bin" CACHE STRING "Binary install directory" FORCE)
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/dftracer_utils)
-
-# Create the package-style include directory structure in build directory
-set(PYREADER_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
-file(MAKE_DIRECTORY ${PYREADER_INCLUDE_DIR}/dftracer_utils/reader)
-
-set(READER_HEADERS
-    indexer.h
-    reader.h
-    platform_compat.h
-    filesystem.h
-    utils.h
-)
-
-foreach(header ${READER_HEADERS})
-    configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/../reader/${header}
-        ${PYREADER_INCLUDE_DIR}/dftracer_utils/reader/${header}
-        COPYONLY
-    )
-endforeach()
+# foreach(header ${READER_HEADERS})
+#     configure_file(
+#         # ${CMAKE_CURRENT_SOURCE_DIR}/../reader/${header}
+#         ${CMAKE_}
+#         ${PYREADER_INCLUDE_DIR}/dftracer_utils/reader/${header}
+#         COPYONLY
+#     )
+# endforeach()
 
 if (APPLE)
   nanobind_add_module(
-    dft_reader_ext
+    dft_utils_reader_ext
     NB_STATIC STABLE_ABI
     src/reader_ext.cpp
   )
 else()
   nanobind_add_module(
-    dft_reader_ext
+    dft_utils_reader_ext
     NB_STATIC STABLE_ABI LTO
     src/reader_ext.cpp
   )
 endif()
 
-target_include_directories(dft_reader_ext PRIVATE ${PYREADER_INCLUDE_DIR})
-target_link_libraries(dft_reader_ext PRIVATE dft_reader::static)
+# target_include_directories(dft_utils_reader_ext PRIVATE ${PYREADER_INCLUDE_DIR})
+target_link_libraries(dft_utils_reader_ext PRIVATE dft_utils::static)
 
 # get_target_property(DFT_READER_LINK_LIBS dft_reader::static INTERFACE_LINK_LIBRARIES)
 # if(DFT_READER_LINK_LIBS)
@@ -139,14 +119,14 @@ target_link_libraries(dft_reader_ext PRIVATE dft_reader::static)
 
 # Set RPATH for the extension module
 if(APPLE)
-  set_target_properties(dft_reader_ext PROPERTIES
+  set_target_properties(dft_utils_reader_ext PROPERTIES
     INSTALL_RPATH "@loader_path;@loader_path/lib"
     BUILD_RPATH "@loader_path;@loader_path/lib"
     BUILD_WITH_INSTALL_RPATH FALSE
     INSTALL_RPATH_USE_LINK_PATH TRUE
   )
 else()
-  set_target_properties(dft_reader_ext PROPERTIES
+  set_target_properties(dft_utils_reader_ext PROPERTIES
       INSTALL_RPATH_USE_LINK_PATH TRUE
       BUILD_WITH_INSTALL_RPATH FALSE
       # INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/lib64:$ORIGIN/../lib:$ORIGIN/../lib64"
@@ -154,4 +134,4 @@ else()
   )
 endif()
 
-install(TARGETS dft_reader_ext LIBRARY DESTINATION dft_reader)
+install(TARGETS dft_utils_reader_ext LIBRARY DESTINATION dft_utils)

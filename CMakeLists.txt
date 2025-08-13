@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(dftracer_utils)
+project(dft_utils)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 11)
@@ -18,7 +18,11 @@ endif()
 # Constants
 set(INSTALL_BINARY_DIR bin)
 set(INSTALL_LIB_DIR lib)
-set(INSTALL_INCLUDE_DIR include/${CMAKE_PROJECT_NAME})
+if(DFTRACER_PYTHON_BUILD)
+    set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR})
+else()
+    set(INSTALL_INCLUDE_DIR include/${CMAKE_PROJECT_NAME})
+endif()
 
 # Override installation directories for Python build
 if(SKBUILD)
@@ -26,6 +30,7 @@ if(SKBUILD)
     set(CMAKE_INSTALL_INCLUDEDIR "dft_utils/include" CACHE STRING "Include install directory" FORCE)
     set(CMAKE_INSTALL_BINDIR "dft_utils/bin" CACHE STRING "Binary install directory" FORCE)
 endif()
+
 option(DFTRACER_UTILS_USE_LOCAL_PACKAGES "Use local packages" OFF)
 option(DFTRACER_UTILS_TESTS "Build tests" OFF)
 option(DFTRACER_UTILS_COVERAGE "Enable coverage reporting" OFF)

@@ -2,10 +2,10 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 
-#include <dft_utils/reader/indexer.h>
+#include <dft_utils/indexer/indexer.h>
 #include <dft_utils/reader/reader.h>
-#include <dft_utils/reader/utils.h>
-#include <dft_utils/reader/filesystem.h>
+#include <dft_utils/utils/logger.h>
+#include <dft_utils/utils/filesystem.h>
 
 #include <algorithm>
 #include <cctype>
@@ -13,6 +13,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace nb = nanobind;
 
@@ -258,27 +259,29 @@ class DFTracerReader
         }
 
         try {
-            auto result = reader_->read_range_bytes(start_bytes, end_bytes);
-            return trim_trailing(result.first.get(), result.second);
+            std::string result;
+            const size_t buffer_size = 64 * 1024; // 64KB buffer
+            std::vector<char> buffer(buffer_size);
+            
+            // Stream data until no more available
+            while (true)
+            {
+                size_t bytes_read = reader_->read(start_bytes, end_bytes, buffer.data(), buffer.size());
+                
+                if (bytes_read == 0)
+                {
+                    break; // No more data available
+                }
+                
+                result.append(buffer.data(), bytes_read);
+            }
+            
+            return result;
         } catch (const std::runtime_error& e) {
             throw std::runtime_error("Failed to read data range: " + std::string(e.what()));
         }
     }
 
-    std::string read_mb(double start_mb, double end_mb)
-    {
-        if (!is_open_)
-        {
-            throw std::runtime_error("Reader is not open");
-        }
-
-        try {
-            auto result = reader_->read_range_megabytes(start_mb, end_mb);
-            return trim_trailing(result.first.get(), result.second);
-        } catch (const std::runtime_error& e) {
-            throw std::runtime_error("Failed to read data range: " + std::string(e.what()));
-        }
-    }
 
     DFTracerReader &__enter__()
     {
@@ -387,7 +390,7 @@ dft_reader_range(DFTracerReader &reader, uint64_t start, uint64_t end, uint64_t 
     return DFTracerRangeIterator(&reader, start, end, step);
 }
 
-NB_MODULE(dft_reader_ext, m)
+NB_MODULE(dft_utils_reader_ext, m)
 {
     m.doc() = "DFTracer utilities reader extension";
 
@@ -416,11 +419,6 @@ NB_MODULE(dft_reader_ext, m)
         .def("set_default_step", &DFTracerReader::set_default_step, "step_bytes"_a, "Set default step for iteration")
         .def("get_default_step", &DFTracerReader::get_default_step, "Get current default step")
         .def("read", &DFTracerReader::read, "start_bytes"_a, "end_bytes"_a, "Read a range of bytes from the gzip file")
-        .def("read_mb",
-             &DFTracerReader::read_mb,
-             "start_mb"_a,
-             "end_mb"_a,
-             "Read a range of megabytes from the gzip file")
         .def("open", &DFTracerReader::open, "Open the index database")
         .def("close", &DFTracerReader::close, "Close the index database")
         .def("__enter__", &DFTracerReader::__enter__, nb::rv_policy::reference_internal, "Enter context manager")
