@@ -177,9 +177,9 @@ if(TARGET picosha2)
     list(APPEND INSTALLABLE_TARGETS picosha2)
 endif()
 
-# Add spdlog if it's our own target (CPM-built)
-if(TARGET spdlog::spdlog)
-    list(APPEND INSTALLABLE_TARGETS spdlog::spdlog)
+# Add spdlog if it's our own target (CPM-built)  
+if(TARGET spdlog)
+    list(APPEND INSTALLABLE_TARGETS spdlog)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS}
