@@ -174,8 +174,8 @@ class Indexer::Impl
 
     // Database cleanup helpers
     int cleanup_existing_data(sqlite3 *db, int file_id) const;
-    int insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, uint64_t total_lines) const;
-    int process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t checkpoint_size, uint64_t &total_lines_out) const;
+    int insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, uint64_t total_lines, uint64_t total_uc_size) const;
+    int process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t checkpoint_size, uint64_t &total_lines_out, uint64_t &total_uc_size_out) const;
     void save_chunk(sqlite3_stmt *stmt, int file_id, size_t chunk_idx, size_t chunk_start_c_off, 
                    size_t chunk_c_size, size_t chunk_start_uc_off, size_t chunk_uc_size, size_t events) const;
 
@@ -229,6 +229,7 @@ const char *Indexer::Impl::SQL_SCHEMA = "CREATE TABLE IF NOT EXISTS files ("
                                         "  file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
                                         "  checkpoint_size INTEGER NOT NULL,"
                                         "  total_lines INTEGER NOT NULL DEFAULT 0,"
+                                        "  total_uc_size INTEGER NOT NULL DEFAULT 0,"
                                         "  PRIMARY KEY(file_id)"
                                         ");";
 
@@ -348,11 +349,11 @@ int Indexer::Impl::cleanup_existing_data(sqlite3 *db, int file_id) const
     return 0;
 }
 
-int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, uint64_t total_lines) const
+int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, uint64_t total_lines, uint64_t total_uc_size) const
 {
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db,
-                           "INSERT INTO metadata(file_id, checkpoint_size, total_lines) VALUES(?, ?, ?);",
+                           "INSERT INTO metadata(file_id, checkpoint_size, total_lines, total_uc_size) VALUES(?, ?, ?, ?);",
                            -1,
                            &stmt,
                            nullptr) != SQLITE_OK)
@@ -364,6 +365,7 @@ int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, 
     sqlite3_bind_int(stmt, 1, file_id);
     sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(chunk_size));
     sqlite3_bind_int64(stmt, 3, static_cast<int64_t>(total_lines));
+    sqlite3_bind_int64(stmt, 4, static_cast<int64_t>(total_uc_size));
     
     int result = sqlite3_step(stmt);
     if (result != SQLITE_DONE)
@@ -372,7 +374,7 @@ int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, 
     }
     else
     {
-        spdlog::debug("Successfully inserted metadata for file_id {}: chunk_size={}, total_lines={}", file_id, chunk_size, total_lines);
+        spdlog::debug("Successfully inserted metadata for file_id {}: chunk_size={}, total_lines={}, total_uc_size={}", file_id, chunk_size, total_lines, total_uc_size);
     }
     sqlite3_finalize(stmt);
     return (result == SQLITE_DONE) ? 0 : -1;
@@ -392,7 +394,7 @@ void Indexer::Impl::save_chunk(sqlite3_stmt *stmt, int file_id, size_t chunk_idx
     sqlite3_reset(stmt);
 }
 
-int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t checkpoint_size, uint64_t &total_lines_out) const
+int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t checkpoint_size, uint64_t &total_lines_out, uint64_t &total_uc_size_out) const
 {
     // Reset file pointer to beginning for gzip decompression
     if (fseeko(fp, 0, SEEK_SET) != 0)
@@ -437,8 +439,9 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t che
 
             if (bytes_read == 0)
             {
-                // Save final checkpoint if there's remaining data
-                if (current_uc_off > checkpoint_start_uc_off)
+                // Save final checkpoint if there's remaining data and it's safe to do so
+                if (current_uc_off > checkpoint_start_uc_off && 
+                    current_uc_off > checkpoint_size) // Only create final checkpoint for reasonably large files
                 {
                     size_t checkpoint_uc_size = current_uc_off - checkpoint_start_uc_off;
                     size_t checkpoint_c_size = c_off - checkpoint_start_c_off;
@@ -454,7 +457,7 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t che
                         {
                             sqlite3_bind_int(st_checkpoint, 1, file_id);
                             sqlite3_bind_int64(st_checkpoint, 2, static_cast<int64_t>(checkpoint_idx));
-                            sqlite3_bind_int64(st_checkpoint, 3, static_cast<int64_t>(checkpoint_start_uc_off));
+                            sqlite3_bind_int64(st_checkpoint, 3, static_cast<int64_t>(current_uc_off));
                             sqlite3_bind_int64(st_checkpoint, 4, static_cast<int64_t>(checkpoint_uc_size));
                             sqlite3_bind_int64(st_checkpoint, 5, static_cast<int64_t>(checkpoint_data.c_offset));
                             sqlite3_bind_int64(st_checkpoint, 6, static_cast<int64_t>(checkpoint_c_size));
@@ -488,18 +491,14 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t che
 
             current_uc_off += bytes_read;
 
-            // Create checkpoints at checkpoint_size intervals when we have complete lines
+            // Create checkpoints at deflate boundaries when we have enough data
+            // Only create checkpoints when we're at a stable deflate boundary
             if ((current_uc_off - checkpoint_start_uc_off) >= checkpoint_size && 
-                checkpoint_has_complete_line && last_newline_pos != SIZE_MAX &&
-                (inflate_state.zs.data_type & 0xc0) == 0x80 && current_uc_off >= ZLIB_WINDOW_SIZE)
+                (inflate_state.zs.data_type & 0xc0) == 0x80 && current_uc_off >= ZLIB_WINDOW_SIZE &&
+                inflate_state.zs.avail_out == 0)
             {
-                // End checkpoint at the last complete line boundary
-                size_t checkpoint_end_uc_off = current_uc_off - bytes_read + last_newline_pos + 1;
-                size_t checkpoint_uc_size = checkpoint_end_uc_off - checkpoint_start_uc_off;
-                size_t checkpoint_c_size = c_off - checkpoint_start_c_off;
-
                 CheckpointData checkpoint_data;
-                if (create_checkpoint(&inflate_state, &checkpoint_data, checkpoint_end_uc_off) == 0)
+                if (create_checkpoint(&inflate_state, &checkpoint_data, current_uc_off) == 0)
                 {
                     unsigned char *compressed_dict = nullptr;
                     size_t compressed_dict_size = 0;
@@ -508,53 +507,42 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t che
                     {
                         sqlite3_bind_int(st_checkpoint, 1, file_id);
                         sqlite3_bind_int64(st_checkpoint, 2, static_cast<int64_t>(checkpoint_idx));
-                        sqlite3_bind_int64(st_checkpoint, 3, static_cast<int64_t>(checkpoint_start_uc_off));
-                        sqlite3_bind_int64(st_checkpoint, 4, static_cast<int64_t>(checkpoint_uc_size));
+                        sqlite3_bind_int64(st_checkpoint, 3, static_cast<int64_t>(current_uc_off));
+                        sqlite3_bind_int64(st_checkpoint, 4, static_cast<int64_t>(current_uc_off - checkpoint_start_uc_off));
                         sqlite3_bind_int64(st_checkpoint, 5, static_cast<int64_t>(checkpoint_data.c_offset));
-                        sqlite3_bind_int64(st_checkpoint, 6, static_cast<int64_t>(checkpoint_c_size));
+                        sqlite3_bind_int64(st_checkpoint, 6, static_cast<int64_t>(checkpoint_data.c_offset - checkpoint_start_c_off));
                         sqlite3_bind_int(st_checkpoint, 7, checkpoint_data.bits);
                         sqlite3_bind_blob(st_checkpoint, 8, compressed_dict, static_cast<int>(compressed_dict_size), SQLITE_TRANSIENT);
                         sqlite3_bind_int64(st_checkpoint, 9, static_cast<int64_t>(current_lines));
                         sqlite3_step(st_checkpoint);
                         sqlite3_reset(st_checkpoint);
 
-                        spdlog::debug("Checkpoint {}: uc_off={}-{} ({} bytes), lines={} (at deflate boundary)",
-                                      checkpoint_idx, checkpoint_start_uc_off, checkpoint_end_uc_off, checkpoint_uc_size, current_lines);
+                        spdlog::debug("Checkpoint {}: uc_offset={}, c_offset={}, bits={} (at deflate boundary)",
+                                      checkpoint_idx, current_uc_off, checkpoint_data.c_offset, checkpoint_data.bits);
 
                         free(compressed_dict);
 
-                        // Start new checkpoint after the last complete line
+                        // Start new checkpoint
                         checkpoint_idx++;
-                        checkpoint_start_uc_off = checkpoint_end_uc_off;
+                        checkpoint_start_uc_off = current_uc_off;
                         checkpoint_start_c_off = checkpoint_data.c_offset;
-                        current_lines = 0;
-                        checkpoint_has_complete_line = 0;
-
-                        // Count remaining lines in buffer for next checkpoint
-                        for (size_t i = last_newline_pos + 1; i < bytes_read; i++)
-                        {
-                            if (buffer[i] == '\n')
-                            {
-                                current_lines++;
-                                checkpoint_has_complete_line = 1;
-                            }
-                        }
                     }
                     else
                     {
-                        spdlog::debug("Failed to compress window for checkpoint at offset {}", checkpoint_end_uc_off);
+                        spdlog::debug("Failed to compress window for checkpoint at offset {}", current_uc_off);
                     }
                 }
                 else
                 {
-                    spdlog::debug("Failed to create checkpoint at uc_offset={}", checkpoint_end_uc_off);
+                    spdlog::debug("Failed to create checkpoint at uc_offset={}", current_uc_off);
                 }
             }
         }
 
         inflate_cleanup_simple(&inflate_state);
         total_lines_out = total_lines;
-        spdlog::debug("Indexing complete: created {} checkpoints, {} total lines", checkpoint_idx + 1, total_lines);
+        total_uc_size_out = current_uc_off;
+        spdlog::debug("Indexing complete: created {} checkpoints, {} total lines, {} total UC bytes", checkpoint_idx + 1, total_lines, current_uc_off);
         return 0;
     }
     catch (const std::exception &e)
@@ -776,8 +764,10 @@ int Indexer::Impl::create_checkpoint(InflateState *state, CheckpointData *checkp
 
     // Try to get the sliding window dictionary from zlib
     // This contains the last 32KB of uncompressed data
+    // Only attempt this when the zlib state is stable
     unsigned have = 0;
-    if (inflateGetDictionary(&state->zs, checkpoint->window, &have) == Z_OK && have > 0)
+    if ((state->zs.data_type & 0xc0) == 0x80 && state->zs.avail_out == 0 &&
+        inflateGetDictionary(&state->zs, checkpoint->window, &have) == Z_OK && have > 0)
     {
         // Got dictionary successfully
         if (have < 32768)
@@ -901,9 +891,10 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
         return -2;
     }
 
-    // Process chunks and get total line count
+    // Process chunks and get total line count and uncompressed size
     uint64_t total_lines = 0;
-    int result = process_chunks(fp, db, file_id, chunk_size, total_lines);
+    uint64_t total_uc_size = 0;
+    int result = process_chunks(fp, db, file_id, chunk_size, total_lines, total_uc_size);
     fclose(fp);
     
     if (result != 0)
@@ -912,8 +903,8 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
         return result;
     }
 
-    // Insert metadata with total_lines
-    if (insert_metadata(db, file_id, chunk_size, total_lines) != 0)
+    // Insert metadata with total_lines and total_uc_size
+    if (insert_metadata(db, file_id, chunk_size, total_lines, total_uc_size) != 0)
     {
         sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
         return -2;
@@ -949,6 +940,23 @@ uint64_t Indexer::Impl::get_max_bytes() const
             max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
         }
         sqlite3_finalize(stmt);
+    }
+    
+    // If no checkpoints exist (max_bytes is 0), fall back to metadata table
+    if (max_bytes == 0)
+    {
+        const char *metadata_sql = "SELECT total_uc_size FROM metadata WHERE file_id = "
+                                   "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)";
+        if (sqlite3_prepare_v2(db, metadata_sql, -1, &stmt, nullptr) == SQLITE_OK)
+        {
+            sqlite3_bind_text(stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
+            if (sqlite3_step(stmt) == SQLITE_ROW)
+            {
+                max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
+                spdlog::debug("No checkpoints found, using metadata total_uc_size: {}", max_bytes);
+            }
+            sqlite3_finalize(stmt);
+        }
     }
 
     sqlite3_close(db);
@@ -1030,6 +1038,12 @@ bool Indexer::Impl::find_checkpoint(int file_id, size_t target_offset, Checkpoin
         return false;
     }
 
+    // For target offset 0, always decompress from beginning of file (no checkpoint)
+    if (target_offset == 0)
+    {
+        return false;
+    }
+
     sqlite3 *db;
     if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK)
     {
@@ -1037,7 +1051,7 @@ bool Indexer::Impl::find_checkpoint(int file_id, size_t target_offset, Checkpoin
     }
 
     sqlite3_stmt *stmt;
-    const char *sql = "SELECT uc_offset, c_offset, bits, dict_compressed "
+    const char *sql = "SELECT checkpoint_idx, uc_offset, uc_size, c_offset, c_size, bits, dict_compressed, num_lines "
                      "FROM checkpoints WHERE file_id = ? AND uc_offset <= ? "
                      "ORDER BY uc_offset DESC LIMIT 1";
     bool found = false;
@@ -1049,13 +1063,18 @@ bool Indexer::Impl::find_checkpoint(int file_id, size_t target_offset, Checkpoin
 
         if (sqlite3_step(stmt) == SQLITE_ROW)
         {
-            checkpoint.uc_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
-            checkpoint.c_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 1));
-            checkpoint.bits = sqlite3_column_int(stmt, 2);
+            checkpoint.checkpoint_idx = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
+            checkpoint.uc_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 1));
+            checkpoint.uc_size = static_cast<size_t>(sqlite3_column_int64(stmt, 2));
+            checkpoint.c_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 3));
+            checkpoint.c_size = static_cast<size_t>(sqlite3_column_int64(stmt, 4));
+            checkpoint.bits = sqlite3_column_int(stmt, 5);
 
-            size_t dict_size = static_cast<size_t>(sqlite3_column_bytes(stmt, 3));
+            size_t dict_size = static_cast<size_t>(sqlite3_column_bytes(stmt, 6));
             checkpoint.dict_compressed.resize(dict_size);
-            std::memcpy(checkpoint.dict_compressed.data(), sqlite3_column_blob(stmt, 3), dict_size);
+            std::memcpy(checkpoint.dict_compressed.data(), sqlite3_column_blob(stmt, 6), dict_size);
+            
+            checkpoint.num_lines = static_cast<size_t>(sqlite3_column_int64(stmt, 7));
             
             found = true;
         }
