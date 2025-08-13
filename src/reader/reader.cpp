@@ -385,7 +385,7 @@ protected:
 class JsonStreamingSession : public BaseStreamingSession
 {
 private:
-    static const size_t INCOMPLETE_BUFFER_SIZE = 2 * 1024 * 1024;
+    static const size_t INCOMPLETE_BUFFER_SIZE = 2 * 1024 * 1024; // 2 MB
     char incomplete_buffer_[INCOMPLETE_BUFFER_SIZE];
     size_t incomplete_buffer_size_;
     size_t actual_start_bytes_;

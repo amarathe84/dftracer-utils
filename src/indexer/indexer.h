@@ -53,6 +53,41 @@ extern "C"
     uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer);
 
     /**
+     * Find the database file ID for a given gzip path
+     * @param indexer DFT indexer handle
+     * @param gz_path Path to the gzipped file
+     * @return file ID, or -1 if not found or on error
+     */
+    int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char *gz_path);
+
+    /**
+     * Find the best checkpoint for a given uncompressed offset
+     * @param indexer DFT indexer handle
+     * @param file_id Database file ID (from dft_indexer_find_file_id)
+     * @param target_offset Target uncompressed offset
+     * @param uc_offset Output: uncompressed offset of checkpoint
+     * @param c_offset Output: compressed offset of checkpoint
+     * @param bits Output: bit position of checkpoint
+     * @param dict_compressed Output: compressed dictionary data (caller must free)
+     * @param dict_size Output: size of compressed dictionary
+     * @return 1 if checkpoint found, 0 if not found, -1 on error
+     */
+    int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, 
+                                   int file_id, 
+                                   uint64_t target_offset,
+                                   uint64_t *uc_offset,
+                                   uint64_t *c_offset,
+                                   int *bits,
+                                   unsigned char **dict_compressed,
+                                   size_t *dict_size);
+
+    /**
+     * Free memory allocated by dft_indexer_find_checkpoint
+     * @param dict_compressed Dictionary data to free
+     */
+    void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed);
+
+    /**
      * Destroy a DFT indexer instance and free all associated resources
      * @param indexer Opaque handle to the indexer instance
      */

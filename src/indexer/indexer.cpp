@@ -1338,6 +1338,88 @@ extern "C"
         }
     }
 
+    int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char *gz_path)
+    {
+        if (!indexer || !gz_path)
+        {
+            return -1;
+        }
+
+        try
+        {
+            auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+            return cpp_indexer->find_file_id(std::string(gz_path));
+        }
+        catch (const std::exception &e)
+        {
+            spdlog::error("Failed to find file ID: {}", e.what());
+            return -1;
+        }
+    }
+
+    int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, 
+                                   int file_id, 
+                                   uint64_t target_offset,
+                                   uint64_t *uc_offset,
+                                   uint64_t *c_offset,
+                                   int *bits,
+                                   unsigned char **dict_compressed,
+                                   size_t *dict_size)
+    {
+        if (!indexer || !uc_offset || !c_offset || !bits || !dict_compressed || !dict_size)
+        {
+            return -1;
+        }
+
+        try
+        {
+            auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+            dft::indexer::CheckpointInfo checkpoint;
+            
+            if (cpp_indexer->find_checkpoint(file_id, static_cast<size_t>(target_offset), checkpoint))
+            {
+                *uc_offset = static_cast<uint64_t>(checkpoint.uc_offset);
+                *c_offset = static_cast<uint64_t>(checkpoint.c_offset);
+                *bits = checkpoint.bits;
+                *dict_size = checkpoint.dict_compressed.size();
+                
+                // Allocate and copy dictionary data for C API caller
+                if (*dict_size > 0)
+                {
+                    *dict_compressed = static_cast<unsigned char*>(malloc(*dict_size));
+                    if (*dict_compressed == nullptr)
+                    {
+                        return -1;
+                    }
+                    std::memcpy(*dict_compressed, checkpoint.dict_compressed.data(), *dict_size);
+                }
+                else
+                {
+                    *dict_compressed = nullptr;
+                }
+                
+                return 1; // Found
+            }
+            else
+            {
+                return 0; // Not found
+            }
+        }
+        catch (const std::exception &e)
+        {
+            spdlog::error("Failed to find checkpoint: {}", e.what());
+            return -1;
+        }
+    }
+
+    void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed)
+    {
+        if (dict_compressed)
+        {
+            free(dict_compressed);
+        }
+    }
+
     void dft_indexer_destroy(dft_indexer_handle_t indexer)
     {
         if (indexer)
