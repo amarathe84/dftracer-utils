@@ -30,8 +30,8 @@
 #endif
 #endif
 
-// check for std::__fs::filesystem (Clang with C++11/14)
-#if !defined(DFT_USE_STD_FS) && defined(__has_include)
+// check for std::__fs::filesystem (Clang with C++11/14, but not on Apple platforms)
+#if !defined(DFT_USE_STD_FS) && defined(__has_include) && !defined(__APPLE__)
 #if __has_include(<filesystem>)
 // check if std::__fs::filesystem exists (common in Clang with C++11/14)
 #if defined(__clang__) && __clang_major__ >= 7
