@@ -497,14 +497,52 @@ public:
                             "Streaming session not properly initialized");
         }
         
-        // Fill incomplete buffer if empty
-        if (incomplete_buffer_size_ == 0) {
-            fill_incomplete_buffer();
-        }
+        // Keep trying to fill buffer and serve complete JSON lines
+        int attempts = 0;
+        const int max_attempts = 10; // Prevent infinite loops
         
-        // Serve data from incomplete buffer
-        if (incomplete_buffer_size_ > 0) {
-            return serve_data_from_buffer(buffer, buffer_size);
+        while (attempts < max_attempts) {
+            attempts++;
+            
+            // Fill incomplete buffer if empty
+            if (incomplete_buffer_size_ == 0) {
+                fill_incomplete_buffer();
+                if (incomplete_buffer_size_ == 0) {
+                    // No more data available
+                    break;
+                }
+            }
+            
+            // Try to serve complete JSON lines
+            size_t bytes_to_copy = std::min(buffer_size, incomplete_buffer_size_);
+            bytes_to_copy = adjust_to_json_boundary(bytes_to_copy);
+            
+            if (bytes_to_copy > 0) {
+                // We have complete JSON lines to serve
+                memcpy(buffer, incomplete_buffer_, bytes_to_copy);
+                
+                // Shift remaining data
+                if (bytes_to_copy < incomplete_buffer_size_) {
+                    memmove(incomplete_buffer_, incomplete_buffer_ + bytes_to_copy, 
+                           incomplete_buffer_size_ - bytes_to_copy);
+                }
+                incomplete_buffer_size_ -= bytes_to_copy;
+                
+                return bytes_to_copy;
+            }
+            
+            // If we can't serve complete JSON lines and we're finished, serve what we have
+            if (is_finished_) {
+                if (incomplete_buffer_size_ > 0) {
+                    size_t remaining = std::min(buffer_size, incomplete_buffer_size_);
+                    memcpy(buffer, incomplete_buffer_, remaining);
+                    incomplete_buffer_size_ = 0;
+                    return remaining;
+                }
+                break;
+            }
+            
+            // Need more data for complete JSON lines - continue the loop
         }
         
         // Return 0 to indicate end of stream
@@ -596,34 +634,17 @@ private:
         }
     }
     
-    size_t serve_data_from_buffer(char* buffer, size_t buffer_size) {
-        size_t bytes_to_copy = std::min(buffer_size, incomplete_buffer_size_);
-        bytes_to_copy = adjust_to_json_boundary(bytes_to_copy);
-        
-        memcpy(buffer, incomplete_buffer_, bytes_to_copy);
-        
-        // Shift remaining data
-        if (bytes_to_copy < incomplete_buffer_size_) {
-            memmove(incomplete_buffer_, incomplete_buffer_ + bytes_to_copy, 
-                   incomplete_buffer_size_ - bytes_to_copy);
-        }
-        incomplete_buffer_size_ -= bytes_to_copy;
-        
-        return bytes_to_copy;
-    }
     
     size_t adjust_to_json_boundary(size_t buffer_size) {
-        // Don't adjust if we don't have any complete JSON objects
-        // This ensures we never return 0 when there's data unless truly finished
+        // Find the last complete JSON boundary in the buffer
         for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i > 0; i--) {
             if (incomplete_buffer_[i - 1] == '}' && incomplete_buffer_[i] == '\n') {
                 return static_cast<size_t>(i) + 1;
             }
         }
-        // If no JSON boundary found but we have data and aren't finished,
-        // return all the data (don't cut off incomplete JSON)
-        if (!is_finished_ && buffer_size > 0) {
-            return buffer_size;
+        // If no JSON boundary found and we're not finished, return 0 to buffer more data
+        if (!is_finished_) {
+            return 0;
         }
         // Only return partial data if we're at the end of stream
         return buffer_size;
