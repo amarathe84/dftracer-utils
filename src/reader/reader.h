@@ -58,6 +58,26 @@ extern "C"
                        size_t *bytes_written);
 
     /**
+     * Read raw bytes from a gzip file using the index database (streaming)
+     * Returns data without caring about JSON line boundaries. Call repeatedly until returns 0.
+     * @param reader DFT reader handle
+     * @param gz_path Path to the gzip file
+     * @param start_bytes Start position in bytes
+     * @param end_bytes End position in bytes
+     * @param buffer User-provided buffer for raw data
+     * @param buffer_size Size of user-provided buffer
+     * @param bytes_written Pointer to store actual bytes written to buffer
+     * @return 1 if more data available, 0 if done, -1 on error
+     */
+    int dft_reader_read_raw(dft_reader_handle_t reader,
+                           const char *gz_path,
+                           size_t start_bytes,
+                           size_t end_bytes,
+                           char *buffer,
+                           size_t buffer_size,
+                           size_t *bytes_written);
+
+    /**
      * Reset the reader to the initial state
      * @param reader DFT reader handle
      */
@@ -157,6 +177,35 @@ class Reader
      */
     bool read(size_t start_bytes, size_t end_bytes,
              char *buffer, size_t buffer_size, size_t *bytes_written);
+
+    /**
+     * Read raw bytes from the gzip file using the index database (streaming)
+     * Returns data without caring about JSON line boundaries. Call repeatedly until returns false.
+     * @param gz_path Path to the gzip file (can be different from constructor)
+     * @param start_bytes Start position in bytes
+     * @param end_bytes End position in bytes
+     * @param buffer User-provided buffer for raw data
+     * @param buffer_size Size of user-provided buffer
+     * @param bytes_written Pointer to store actual bytes written to buffer
+     * @return true if more data available, false if done
+     * @throws std::runtime_error if operation fails
+     */
+    bool read_raw(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
+                 char *buffer, size_t buffer_size, size_t *bytes_written);
+
+    /**
+     * Read raw bytes from the gzip file using the stored gz_path (streaming)
+     * Returns data without caring about JSON line boundaries. Call repeatedly until returns false.
+     * @param start_bytes Start position in bytes
+     * @param end_bytes End position in bytes
+     * @param buffer User-provided buffer for raw data
+     * @param buffer_size Size of user-provided buffer
+     * @param bytes_written Pointer to store actual bytes written to buffer
+     * @return true if more data available, false if done
+     * @throws std::runtime_error if operation fails
+     */
+    bool read_raw(size_t start_bytes, size_t end_bytes,
+                 char *buffer, size_t buffer_size, size_t *bytes_written);
 
     /**
      * Reset the reader to the initial state

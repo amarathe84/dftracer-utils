@@ -142,6 +142,39 @@ class Reader::Impl
         return stream_data_chunk(buffer, buffer_size, bytes_written);
     }
 
+    bool read_raw(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
+                 char *buffer, size_t buffer_size, size_t *bytes_written)
+    {
+        if (!is_open_ || !db_)
+        {
+            throw std::runtime_error("Reader is not open");
+        }
+
+        if (!buffer || !bytes_written || buffer_size == 0)
+        {
+            throw std::invalid_argument("Invalid buffer parameters");
+        }
+
+        if (start_bytes >= end_bytes)
+        {
+            throw std::invalid_argument("start_bytes must be less than end_bytes");
+        }
+        *bytes_written = 0;
+        if (!raw_streaming_state_.is_active || 
+            raw_streaming_state_.current_gz_path != gz_path ||
+            raw_streaming_state_.start_bytes != start_bytes ||
+            raw_streaming_state_.target_end_bytes != end_bytes ||
+            raw_streaming_state_.is_finished)
+        {
+            initialize_raw_streaming_session(gz_path, start_bytes, end_bytes);
+        }
+        if (raw_streaming_state_.is_finished)
+        {
+            return false;
+        }
+        return stream_raw_data_chunk(buffer, buffer_size, bytes_written);
+    }
+
     void reset()
     {
         if (!is_open_ || !db_)
@@ -150,6 +183,7 @@ class Reader::Impl
         }
 
         streaming_state_ = {};
+        raw_streaming_state_ = {};
     }
 
 public:
@@ -799,6 +833,169 @@ public:
         return buffer_size;
     }
 
+    void initialize_raw_streaming_session(const std::string &gz_path, size_t start_bytes, size_t end_bytes)
+    {
+        spdlog::debug("Initializing raw streaming session for range [{}, {}] from {}", 
+                      start_bytes, end_bytes, gz_path);
+
+        // Clean up any existing raw state
+        if (raw_streaming_state_.is_active) {
+            raw_streaming_state_.reset();
+        }
+
+        // Setup new raw session
+        raw_streaming_state_.current_gz_path = gz_path;
+        raw_streaming_state_.start_bytes = start_bytes;
+        raw_streaming_state_.target_end_bytes = end_bytes;
+        raw_streaming_state_.current_position = start_bytes;
+        raw_streaming_state_.is_active = true;
+        raw_streaming_state_.is_finished = false;
+
+        // Open file
+        raw_streaming_state_.file_handle = fopen(gz_path.c_str(), "rb");
+        if (!raw_streaming_state_.file_handle)
+        {
+            spdlog::error("Failed to open file: {}", gz_path);
+            throw std::runtime_error("Failed to open file: " + gz_path);
+        }
+
+        // Initialize decompression state
+        raw_streaming_state_.inflate_state.reset(new InflateState());
+        bool use_checkpoint = false;
+
+        // Try to find a checkpoint near the start position
+        raw_streaming_state_.checkpoint.reset(new CheckpointInfo());
+        if (find_checkpoint(start_bytes, raw_streaming_state_.checkpoint.get()) == 0)
+        {
+            if (inflate_init_from_checkpoint(raw_streaming_state_.inflate_state.get(), 
+                                           raw_streaming_state_.file_handle, 
+                                           raw_streaming_state_.checkpoint.get()) == 0)
+            {
+                use_checkpoint = true;
+                spdlog::debug("Using checkpoint at uncompressed offset {} for raw target {}", 
+                             raw_streaming_state_.checkpoint->uc_offset, start_bytes);
+            }
+            else
+            {
+                spdlog::debug("Failed to initialize from checkpoint for raw read, falling back to sequential read");
+                free_checkpoint(raw_streaming_state_.checkpoint.get());
+                raw_streaming_state_.checkpoint.reset();
+            }
+        }
+        else
+        {
+            raw_streaming_state_.checkpoint.reset();
+        }
+
+        // Fallback to sequential read if no checkpoint or checkpoint failed
+        if (!use_checkpoint)
+        {
+            if (inflate_init(raw_streaming_state_.inflate_state.get(), raw_streaming_state_.file_handle, 0, 0) != 0)
+            {
+                throw std::runtime_error("Failed to initialize raw inflation");
+            }
+        }
+
+        // Skip to the start position
+        size_t current_pos = use_checkpoint ? raw_streaming_state_.checkpoint->uc_offset : 0;
+        if (start_bytes > current_pos)
+        {
+            skip_raw_bytes(start_bytes - current_pos);
+        }
+
+        raw_streaming_state_.decompression_initialized = true;
+        spdlog::debug("Raw streaming session initialized: start={}, target_end={}", 
+                     start_bytes, end_bytes);
+    }
+
+    void skip_raw_bytes(size_t bytes_to_skip)
+    {
+        if (bytes_to_skip == 0) return;
+        size_t remaining_skip = bytes_to_skip;
+        while (remaining_skip > 0)
+        {
+            size_t to_skip = (remaining_skip > SKIP_BUFFER_SIZE) ? SKIP_BUFFER_SIZE : remaining_skip;
+            size_t skipped;
+            int inflate_result = inflate_read(raw_streaming_state_.inflate_state.get(), skip_buffer, to_skip, &skipped);
+            if (inflate_result != 0)
+            {
+                throw std::runtime_error("Failed during raw skip phase");
+            }
+            if (skipped == 0)
+            {
+                if (feof(raw_streaming_state_.file_handle))
+                {
+                    spdlog::debug("Reached EOF during raw skip phase");
+                }
+                else if (ferror(raw_streaming_state_.file_handle))
+                {
+                    throw std::runtime_error("File error during raw skip phase");
+                }
+                break;
+            }
+            remaining_skip -= skipped;
+        }
+    }
+
+    bool stream_raw_data_chunk(char *buffer, size_t buffer_size, size_t *bytes_written)
+    {
+        if (!raw_streaming_state_.decompression_initialized)
+        {
+            throw std::runtime_error("Raw streaming session not properly initialized");
+        }
+
+        *bytes_written = 0;
+
+        // Check if we've reached the target end
+        if (raw_streaming_state_.current_position >= raw_streaming_state_.target_end_bytes)
+        {
+            raw_streaming_state_.is_finished = true;
+            return false;
+        }
+
+        // Calculate how much we can read without exceeding the target
+        size_t max_read = raw_streaming_state_.target_end_bytes - raw_streaming_state_.current_position;
+        size_t read_size = std::min(buffer_size, max_read);
+
+        size_t bytes_read;
+        int result = inflate_read(raw_streaming_state_.inflate_state.get(),
+                                reinterpret_cast<unsigned char *>(buffer),
+                                read_size, &bytes_read);
+
+        if (result != 0)
+        {
+            throw std::runtime_error("Failed during raw streaming read phase");
+        }
+
+        if (bytes_read == 0)
+        {
+            // Check if we've reached EOF or there's an error
+            if (feof(raw_streaming_state_.file_handle))
+            {
+                spdlog::debug("Reached EOF during raw streaming read phase");
+            }
+            else if (ferror(raw_streaming_state_.file_handle))
+            {
+                throw std::runtime_error("File error during raw streaming read phase");
+            }
+            // EOF reached
+            raw_streaming_state_.is_finished = true;
+            return false;
+        }
+
+        raw_streaming_state_.current_position += bytes_read;
+        *bytes_written = bytes_read;
+
+        spdlog::debug("Raw streamed {} bytes (position: {} / {})",
+                     bytes_read, raw_streaming_state_.current_position, raw_streaming_state_.target_end_bytes);
+
+        // Check if we have more data to stream
+        bool has_more = !raw_streaming_state_.is_finished && 
+                       raw_streaming_state_.current_position < raw_streaming_state_.target_end_bytes;
+
+        return has_more;
+    }
+
     void cleanup_streaming_state()
     {
         // Only clean up if we actually have initialized state
@@ -811,6 +1008,17 @@ public:
             free_checkpoint(streaming_state_.checkpoint.get());
         }
         streaming_state_.reset();
+
+        // Clean up raw streaming state too
+        if (raw_streaming_state_.decompression_initialized && raw_streaming_state_.inflate_state)
+        {
+            inflate_cleanup(raw_streaming_state_.inflate_state.get());
+        }
+        if (raw_streaming_state_.checkpoint)
+        {
+            free_checkpoint(raw_streaming_state_.checkpoint.get());
+        }
+        raw_streaming_state_.reset();
     }
 
     std::string gz_path_;
@@ -861,6 +1069,43 @@ public:
             decompression_initialized = false;
         }
     } streaming_state_;
+
+    // Raw streaming state management (similar to streaming_state_ but without JSON boundary handling)
+    struct RawStreamingState {
+        std::string current_gz_path;
+        size_t start_bytes;
+        size_t current_position;  // Current byte position in range
+        size_t target_end_bytes;  // End position in bytes
+        bool is_active;  // True if streaming is in progress
+        bool is_finished;  // True if reached end of range
+
+        std::unique_ptr<InflateState> inflate_state;
+        std::unique_ptr<CheckpointInfo> checkpoint;
+        FILE* file_handle;
+        bool decompression_initialized;
+
+        RawStreamingState() : start_bytes(0), current_position(0), 
+                          target_end_bytes(0),
+                          is_active(false), is_finished(false),
+                          file_handle(nullptr), decompression_initialized(false)
+                          {}
+
+        void reset() {
+            current_gz_path.clear();
+            start_bytes = 0;
+            current_position = 0;
+            target_end_bytes = 0;
+            is_active = false;
+            is_finished = false;           
+            if (file_handle) {
+                fclose(file_handle);
+                file_handle = nullptr;
+            }
+            inflate_state.reset();
+            checkpoint.reset();
+            decompression_initialized = false;
+        }
+    } raw_streaming_state_;
 };
 
 // ==============================================================================
@@ -897,6 +1142,18 @@ bool Reader::read(size_t start_bytes, size_t end_bytes,
                   char *buffer, size_t buffer_size, size_t *bytes_written)
 {
     return pImpl_->read(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+}
+
+bool Reader::read_raw(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
+                      char *buffer, size_t buffer_size, size_t *bytes_written)
+{
+    return pImpl_->read_raw(gz_path, start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+}
+
+bool Reader::read_raw(size_t start_bytes, size_t end_bytes,
+                      char *buffer, size_t buffer_size, size_t *bytes_written)
+{
+    return pImpl_->read_raw(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size, bytes_written);
 }
 
 void Reader::reset()
@@ -999,6 +1256,32 @@ extern "C"
         catch (const std::exception &e)
         {
             spdlog::error("Failed to read: {}", e.what());
+            return -1;
+        }
+    }
+
+    int dft_reader_read_raw(dft_reader_handle_t reader,
+                           const char *gz_path,
+                           size_t start_bytes,
+                           size_t end_bytes,
+                           char *buffer,
+                           size_t buffer_size,
+                           size_t *bytes_written)
+    {
+        if (!reader || !gz_path || !buffer || !bytes_written || buffer_size == 0)
+        {
+            return -1;
+        }
+
+        try
+        {
+            auto *cpp_reader = static_cast<dft::reader::Reader *>(reader);
+            bool has_more = cpp_reader->read_raw(gz_path, start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+            return has_more ? 1 : 0;
+        }
+        catch (const std::exception &e)
+        {
+            spdlog::error("Failed to read raw: {}", e.what());
             return -1;
         }
     }
