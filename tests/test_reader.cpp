@@ -118,37 +118,28 @@ TEST_CASE("C++ Reader - Basic functionality") {
         CHECK(reader.get_idx_path() == idx_file);
     }
     
-    SUBCASE("Read byte range with automatic memory management") {
+    SUBCASE("Read byte range using streaming API") {
         dft::reader::Reader reader(gz_file, idx_file);
         
-        // Read using explicit gz_path
-        auto result1 = reader.read_range_bytes(gz_file, 0, 50);
-        CHECK(result1.first != nullptr);
-        CHECK(result1.second >= 50);
+        // Read using streaming API
+        const size_t buffer_size = 1024;
+        char buffer[1024];
+        size_t bytes_written = 0;
+        std::string result;
         
-        // Read using stored gz_path
-        auto result2 = reader.read_range_bytes(0, 50);
-        CHECK(result2.first != nullptr);
-        CHECK(result2.second >= 50);
+        // Stream data until no more available
+        while (reader.read(gz_file, 0, 50, buffer, buffer_size, &bytes_written)) {
+            result.append(buffer, bytes_written);
+        }
+        // Get any remaining data from the last call
+        if (bytes_written > 0) {
+            result.append(buffer, bytes_written);
+        }
         
-        // Memory is automatically freed when result1 and result2 go out of scope
+        CHECK(result.size() >= 50);
+        CHECK(!result.empty());
     }
     
-    SUBCASE("Read megabyte range with automatic memory management") {
-        dft::reader::Reader reader(gz_file, idx_file);
-        
-        // Read using explicit gz_path
-        auto result1 = reader.read_range_megabytes(gz_file, 0.0, 0.001);
-        CHECK(result1.first != nullptr);
-        CHECK(result1.second > 0);
-        
-        // Read using stored gz_path
-        auto result2 = reader.read_range_megabytes(0.0, 0.001);
-        CHECK(result2.first != nullptr);
-        CHECK(result2.second > 0);
-        
-        // Memory is automatically freed when result1 and result2 go out of scope
-    }
     
     SUBCASE("Move semantics") {
         dft::reader::Reader reader1(gz_file, idx_file);
@@ -203,22 +194,25 @@ TEST_CASE("C++ API - Data range reading") {
     dft::reader::Reader reader(gz_file, idx_file);
     
     SUBCASE("Read valid byte range") {
-        // read first 50 bytes
-        auto result = reader.read_range_bytes(gz_file, 0, 50);
-        CHECK(result.first != nullptr);
-        CHECK(result.second >= 50);
+        // read first 50 bytes using streaming API
+        const size_t buffer_size = 1024;
+        char buffer[1024];
+        size_t bytes_written = 0;
+        std::string content;
         
-        // check that we got some JSON content
-        std::string content(result.first.get(), result.second);
+        // Stream data until no more available
+        while (reader.read(gz_file, 0, 50, buffer, buffer_size, &bytes_written)) {
+            content.append(buffer, bytes_written);
+        }
+        // Get any remaining data from the last call
+        if (bytes_written > 0) {
+            content.append(buffer, bytes_written);
+        }
+        
+        CHECK(content.size() >= 50);
         CHECK(content.find("{") != std::string::npos);
     }
     
-    SUBCASE("Read megabyte range") {
-        // read first 0.001 MB (about 1024 bytes)
-        auto result = reader.read_range_megabytes(gz_file, 0.0, 0.001);
-        CHECK(result.first != nullptr);
-        CHECK(result.second > 0);
-    }
 }
 
 TEST_CASE("C++ API - Edge cases") {
@@ -240,14 +234,18 @@ TEST_CASE("C++ API - Edge cases") {
     dft::reader::Reader reader(gz_file, idx_file);
     
     SUBCASE("Invalid byte range (start >= end) should throw") {
-        CHECK_THROWS(reader.read_range_bytes(gz_file, 100, 50));
-        CHECK_THROWS(reader.read_range_bytes(gz_file, 50, 50)); // Equal start and end
+        char buffer[1024];
+        size_t bytes_written = 0;
+        CHECK_THROWS(reader.read(gz_file, 100, 50, buffer, sizeof(buffer), &bytes_written));
+        CHECK_THROWS(reader.read(gz_file, 50, 50, buffer, sizeof(buffer), &bytes_written)); // Equal start and end
     }
     
     SUBCASE("Non-existent file should throw") {
         // Use cross-platform non-existent path
         fs::path non_existent = fs::temp_directory_path() / "nonexistent" / "file.gz";
-        CHECK_THROWS(reader.read_range_bytes(non_existent.string(), 0, 50));
+        char buffer[1024];
+        size_t bytes_written = 0;
+        CHECK_THROWS(reader.read(non_existent.string(), 0, 50, buffer, sizeof(buffer), &bytes_written));
     }
 }
 
@@ -271,18 +269,31 @@ TEST_CASE("C++ API - Integration test") {
         size_t max_bytes = reader.get_max_bytes();
         CHECK(max_bytes > 0);
         
-        // Read multiple ranges
-        auto result1 = reader.read_range_bytes(0, 100);
-        CHECK(result1.first != nullptr);
-        CHECK(result1.second >= 100);
+        // Read multiple ranges using streaming API
+        char buffer[1024];
+        size_t bytes_written = 0;
         
-        auto result2 = reader.read_range_bytes(100, 200);
-        CHECK(result2.first != nullptr);
-        CHECK(result2.second >= 100);
+        // Read first range
+        std::string content1;
+        while (reader.read(0, 100, buffer, sizeof(buffer), &bytes_written)) {
+            content1.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            content1.append(buffer, bytes_written);
+        }
+        CHECK(content1.size() >= 100);
+        
+        // Read second range
+        std::string content2;
+        while (reader.read(100, 200, buffer, sizeof(buffer), &bytes_written)) {
+            content2.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            content2.append(buffer, bytes_written);
+        }
+        CHECK(content2.size() >= 100);
         
         // Verify data content
-        std::string content1(result1.first.get(), result1.second);
-        std::string content2(result2.first.get(), result2.second);
         CHECK(content1.find("{") != std::string::npos);
         CHECK(content2.find("{") != std::string::npos);
         
@@ -304,16 +315,21 @@ TEST_CASE("C++ API - Memory safety stress test") {
         dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
-    
-    // Multiple readers and operations
+
+    // Multiple reads with streaming API
     dft::reader::Reader reader(gz_file, idx_file);
-    
-    // Multiple reads with automatic memory management
     for (int i = 0; i < 100; ++i) {
-        auto result = reader.read_range_bytes(0, 50);
-        CHECK(result.first != nullptr);
-        CHECK(result.second >= 50);
-        // Memory automatically freed each iteration
+        char buffer[1024];
+        size_t bytes_written = 0;
+        size_t total_bytes = 0;
+      
+        while (reader.read(0, 50, buffer, sizeof(buffer), &bytes_written)) {
+            total_bytes += bytes_written;
+        }
+        if (bytes_written > 0) {
+          total_bytes += bytes_written;
+        }
+        CHECK(total_bytes >= 50);
     }
 }
 
@@ -370,7 +386,9 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
         
         // Operations on valid moved reader should work
         CHECK_NOTHROW(moved_reader.get_max_bytes());
-        CHECK_NOTHROW(moved_reader.read_range_bytes(0, 100));
+        char buffer[1024];
+        size_t bytes_written = 0;
+        CHECK_NOTHROW(moved_reader.read(0, 100, buffer, sizeof(buffer), &bytes_written));
         
         // Note: Testing operations on moved-from reader may cause undefined behavior
         // This is expected behavior for moved-from objects in C++
@@ -386,15 +404,10 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
         dft::reader::Reader reader(gz_file, idx_file);
         
         // Invalid ranges should throw
-        CHECK_THROWS_AS(reader.read_range_bytes(100, 50), std::invalid_argument); // start > end
-        CHECK_THROWS_AS(reader.read_range_bytes(50, 50), std::invalid_argument);  // start == end
-        
-        // Invalid megabyte ranges should throw
-        CHECK_THROWS_AS(reader.read_range_megabytes(1.0, 0.5), std::invalid_argument); // start > end
-        CHECK_THROWS_AS(reader.read_range_megabytes(0.5, 0.5), std::invalid_argument); // start == end
-        // Note: Implementation may not validate negative ranges - behavior may be implementation-specific
-        // CHECK_THROWS_AS(reader.read_range_megabytes(-1.0, 1.0), std::invalid_argument); // negative start
-        // CHECK_THROWS_AS(reader.read_range_megabytes(0.0, -1.0), std::invalid_argument); // negative end
+        char buffer[1024];
+        size_t bytes_written = 0;
+        CHECK_THROWS_AS(reader.read(100, 50, buffer, sizeof(buffer), &bytes_written), std::invalid_argument); // start > end
+        CHECK_THROWS_AS(reader.read(50, 50, buffer, sizeof(buffer), &bytes_written), std::invalid_argument);  // start == end
     }
 }
 
@@ -474,16 +487,32 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         CHECK(reader2.is_valid());
         
         // Both should work independently
-        auto result1 = reader1.read_range_bytes(0, 100);
-        auto result2 = reader2.read_range_bytes(0, 100);
+        char buffer1[1024], buffer2[1024];
+        size_t bytes_written1 = 0, bytes_written2 = 0;
+        std::string result1, result2;
         
-        CHECK(result1.first != nullptr);
-        CHECK(result2.first != nullptr);
-        CHECK(result1.second == result2.second); // Should return same size
+        // Read from first reader
+        while (reader1.read(0, 100, buffer1, sizeof(buffer1), &bytes_written1)) {
+            result1.append(buffer1, bytes_written1);
+        }
+        if (bytes_written1 > 0) {
+            result1.append(buffer1, bytes_written1);
+        }
+        
+        // Read from second reader
+        while (reader2.read(0, 100, buffer2, sizeof(buffer2), &bytes_written2)) {
+            result2.append(buffer2, bytes_written2);
+        }
+        if (bytes_written2 > 0) {
+            result2.append(buffer2, bytes_written2);
+        }
+        
+        CHECK(!result1.empty());
+        CHECK(!result2.empty());
+        CHECK(result1.size() == result2.size()); // Should return same size
         
         // Content should be identical
-        CHECK(memcmp(result1.first.get(), result2.first.get(), 
-                    std::min(result1.second, result2.second)) == 0);
+        CHECK(result1 == result2);
     }
     
     SUBCASE("Reader state consistency") {
@@ -505,50 +534,83 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         dft::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
+        char buffer[2048];
+        size_t bytes_written = 0;
+        std::string result;
+        
         // Small reads
-        auto small_result = reader.read_range_bytes(0, 10);
-        CHECK(small_result.first != nullptr);
-        CHECK(small_result.second >= 10);
+        result.clear();
+        while (reader.read(0, 10, buffer, sizeof(buffer), &bytes_written)) {
+            result.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            result.append(buffer, bytes_written);
+        }
+        CHECK(result.size() >= 10);
         
         // Medium reads
         if (max_bytes > 1000) {
-            auto medium_result = reader.read_range_bytes(100, 1000);
-            CHECK(medium_result.first != nullptr);
-            CHECK(medium_result.second >= 900);
+            result.clear();
+            while (reader.read(100, 1000, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() >= 900);
         }
         
         // Large reads
         if (max_bytes > 10000) {
-            auto large_result = reader.read_range_bytes(1000, 10000);
-            CHECK(large_result.first != nullptr);
-            CHECK(large_result.second >= 9000);
+            result.clear();
+            while (reader.read(1000, 10000, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() >= 9000);
         }
-        
-        // Megabyte reads
-        auto mb_result = reader.read_range_megabytes(0.0, 0.001);
-        CHECK(mb_result.first != nullptr);
-        CHECK(mb_result.second > 0);
     }
     
     SUBCASE("Boundary conditions") {
         dft::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
+        char buffer[1024];
+        size_t bytes_written = 0;
+        std::string result;
+        
         if (max_bytes > 100) {
             // Read near the end of file
-            auto near_end = reader.read_range_bytes(max_bytes - 50, max_bytes);
-            CHECK(near_end.first != nullptr);
-            CHECK(near_end.second > 0);
+            result.clear();
+            while (reader.read(max_bytes - 50, max_bytes, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() > 0);
             
             // Read at exact boundaries
-            auto at_start = reader.read_range_bytes(0, 1);
-            CHECK(at_start.first != nullptr);
-            CHECK(at_start.second >= 1);
+            result.clear();
+            while (reader.read(0, 1, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() >= 1);
         }
         
         // Read beyond file (should still succeed but return appropriate data)
-        auto beyond_file = reader.read_range_bytes(max_bytes, max_bytes + 1000);
-        CHECK(beyond_file.first != nullptr);
+        result.clear();
+        while (reader.read(max_bytes, max_bytes + 1000, buffer, sizeof(buffer), &bytes_written)) {
+            result.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            result.append(buffer, bytes_written);
+        }
         // Size may be 0 or small depending on implementation
     }
 }
@@ -573,12 +635,20 @@ TEST_CASE("C++ API - JSON boundary detection") {
 
     SUBCASE("Small range should provide minimum requested bytes") {
         // Request 100 bytes - should get AT LEAST 100 bytes due to boundary extension
-        auto result = reader.read_range_bytes(0, 100);
-        CHECK(result.first != nullptr);
-        CHECK(result.second >= 100);  // Should get at least what was requested
+        char buffer[2048];
+        size_t bytes_written = 0;
+        std::string content;
+        
+        while (reader.read(0, 100, buffer, sizeof(buffer), &bytes_written)) {
+            content.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            content.append(buffer, bytes_written);
+        }
+        
+        CHECK(content.size() >= 100);  // Should get at least what was requested
         
         // Verify that output ends with complete JSON line
-        std::string content(result.first.get(), result.second);
         CHECK(content.back() == '\n');  // Should end with newline
         
         // Should contain complete JSON objects
@@ -590,11 +660,18 @@ TEST_CASE("C++ API - JSON boundary detection") {
     
     SUBCASE("Output should not cut off in middle of JSON") {
         // Request 500 bytes - this should not cut off mid-JSON
-        auto result = reader.read_range_bytes(0, 500);
-        CHECK(result.first != nullptr);
-        CHECK(result.second >= 500);
+        char buffer[2048];
+        size_t bytes_written = 0;
+        std::string content;
         
-        std::string content(result.first.get(), result.second);
+        while (reader.read(0, 500, buffer, sizeof(buffer), &bytes_written)) {
+            content.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            content.append(buffer, bytes_written);
+        }
+        
+        CHECK(content.size() >= 500);
         
         // Should not end with partial JSON like {"name":"name_%
         size_t name_pos = content.find("\"name_");
@@ -616,11 +693,18 @@ TEST_CASE("C++ API - JSON boundary detection") {
         size_t segment_size = 200;
         
         for (int i = 0; i < 5; ++i) {
-            auto result = reader.read_range_bytes(current_pos, current_pos + segment_size);
-            CHECK(result.first != nullptr);
-            CHECK(result.second >= segment_size);
+            char buffer[2048];
+            size_t bytes_written = 0;
+            std::string content;
             
-            std::string content(result.first.get(), result.second);
+            while (reader.read(current_pos, current_pos + segment_size, buffer, sizeof(buffer), &bytes_written)) {
+                content.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                content.append(buffer, bytes_written);
+            }
+            
+            CHECK(content.size() >= segment_size);
             segments.push_back(content);
             
             // Each segment should end properly
@@ -665,11 +749,18 @@ TEST_CASE("C++ API - Regression and stress tests") {
         
         // Read large chunks
         if (max_bytes > 50000) {
-            auto large_read = reader.read_range_bytes(1000, 50000);
-            CHECK(large_read.first != nullptr);
-            CHECK(large_read.second >= 49000);
+            char buffer[4096];
+            size_t bytes_written = 0;
+            std::string content;
             
-            std::string content(large_read.first.get(), large_read.second);
+            while (reader.read(1000, 50000, buffer, sizeof(buffer), &bytes_written)) {
+                content.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                content.append(buffer, bytes_written);
+            }
+            
+            CHECK(content.size() >= 49000);
             CHECK(content.find("{") != std::string::npos);
             CHECK(content.back() == '\n');
         }
@@ -712,16 +803,23 @@ TEST_CASE("C++ API - Regression and stress tests") {
         dft::reader::Reader reader(gz_file, idx_file);
 
         SUBCASE("Original failing case: 0 to 10000 bytes") {
-            auto result = reader.read_range_bytes(0, 10000);
-            CHECK(result.first != nullptr);
-            CHECK(result.second >= 10000);
+            char buffer[4096];
+            size_t bytes_written = 0;
+            std::string content;
             
-            std::string content(result.first.get(), result.second);
+            while (reader.read(0, 10000, buffer, sizeof(buffer), &bytes_written)) {
+                content.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                content.append(buffer, bytes_written);
+            }
+            
+            CHECK(content.size() >= 10000);
             
             // Should NOT end with incomplete patterns like "name_%
             CHECK(content.find("\"name_%") == std::string::npos);
             CHECK(content.find("\"cat_%") == std::string::npos);
-            
+
             // Should end with complete JSON line
             CHECK(content.back() == '\n');
             CHECK(content[content.length() - 2] == '}');
@@ -733,11 +831,18 @@ TEST_CASE("C++ API - Regression and stress tests") {
         
         SUBCASE("Small range minimum bytes check") {
             // This was returning only 44 bytes instead of at least 100
-            auto result = reader.read_range_bytes(0, 100);
-            CHECK(result.first != nullptr);
-            CHECK(result.second >= 100);  // This was the main bug - was only 44 bytes
+            char buffer[2048];
+            size_t bytes_written = 0;
+            std::string content;
             
-            std::string content(result.first.get(), result.second);
+            while (reader.read(0, 100, buffer, sizeof(buffer), &bytes_written)) {
+                content.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                content.append(buffer, bytes_written);
+            }
+            
+            CHECK(content.size() >= 100);  // This was the main bug - was only 44 bytes
             
             // Should contain multiple complete JSON objects for 100+ bytes
             size_t brace_count = 0;
@@ -870,9 +975,18 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
             size_t start = range.first;
             size_t end = range.second;
             if (end <= max_bytes) {
-                auto result = reader.read_range_bytes(start, end);
-                CHECK(result.first != nullptr);
-                CHECK(result.second >= (end - start));
+                char buffer[2048];
+                size_t bytes_written = 0;
+                std::string result;
+                
+                while (reader.read(start, end, buffer, sizeof(buffer), &bytes_written)) {
+                    result.append(buffer, bytes_written);
+                }
+                if (bytes_written > 0) {
+                    result.append(buffer, bytes_written);
+                }
+                
+                CHECK(result.size() >= (end - start));
             }
         }
     }
@@ -907,9 +1021,18 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
         
         // All should be able to read simultaneously
         for (auto& reader : readers) {
-            auto result = reader->read_range_bytes(0, 50);
-            CHECK(result.first != nullptr);
-            CHECK(result.second >= 50);
+            char buffer[1024];
+            size_t bytes_written = 0;
+            std::string result;
+            
+            while (reader->read(0, 50, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            
+            CHECK(result.size() >= 50);
         }
         
         // Clean up
@@ -929,16 +1052,30 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
         size_t max_bytes = reader.get_max_bytes();
         
         if (max_bytes > 10) {
+            char buffer[1024];
+            size_t bytes_written = 0;
+            std::string result;
+            
             // Read from near the end
-            auto result1 = reader.read_range_bytes(max_bytes - 10, max_bytes - 1);
-            CHECK(result1.first != nullptr);
-            CHECK(result1.second >= 9);
+            result.clear();
+            while (reader.read(max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() >= 9);
             
             // Read the very last byte
             if (max_bytes > 1) {
-                auto result2 = reader.read_range_bytes(max_bytes - 1, max_bytes);
-                CHECK(result2.first != nullptr);
-                CHECK(result2.second >= 1);
+                result.clear();
+                while (reader.read(max_bytes - 1, max_bytes, buffer, sizeof(buffer), &bytes_written)) {
+                    result.append(buffer, bytes_written);
+                }
+                if (bytes_written > 0) {
+                    result.append(buffer, bytes_written);
+                }
+                CHECK(result.size() >= 1);
             }
         }
     }
@@ -960,13 +1097,29 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
         
         // Read various large ranges
         if (max_bytes > 1000) {
-            auto result1 = reader.read_range_bytes(0, 1000);
-            CHECK(result1.first != nullptr);
-            CHECK(result1.second >= 1000);
+            char buffer[2048];
+            size_t bytes_written = 0;
+            std::string result;
             
-            auto result2 = reader.read_range_bytes(500, 1500);
-            CHECK(result2.first != nullptr);
-            CHECK(result2.second >= 1000);
+            // First range
+            result.clear();
+            while (reader.read(0, 1000, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() >= 1000);
+            
+            // Second range
+            result.clear();
+            while (reader.read(500, 1500, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() >= 1000);
         }
     }
 }

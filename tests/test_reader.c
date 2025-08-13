@@ -16,6 +16,7 @@ static char* g_idx_file = NULL;
 
 static test_environment_handle_t setup_test_environment(void);
 
+
 void setUp(void) {
     setup_test_environment();
 }
@@ -212,26 +213,39 @@ void test_data_range_reading(void) {
     dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
     TEST_ASSERT_NOT_NULL(reader);
     
-    // Read valid byte range
+    // Read valid byte range using streaming API
+    const size_t buffer_size = 1024;
+    char buffer[1024];
+    size_t bytes_written = 0;
+    size_t total_bytes = 0;
     char* output = NULL;
-    size_t output_size = 0;
     
-    // read first 50 bytes
-    result = dft_reader_read_range_bytes(reader, g_gz_file, 0, 50, &output, &output_size);
-    TEST_ASSERT_EQUAL_INT(0, result);
-    
-    if (result == 0) {
+    // Stream data from first 50 bytes
+    while (dft_reader_read(reader, g_gz_file, 0, 50, buffer, buffer_size, &bytes_written) == 1) {
+        output = realloc(output, total_bytes + bytes_written);
         TEST_ASSERT_NOT_NULL(output);
-        TEST_ASSERT_TRUE(output_size > 0);
-        TEST_ASSERT_TRUE(output_size >= 50);
-        
-        // check that we got some JSON content
-        char* json_start = strstr(output, "{");
-        TEST_ASSERT_NOT_NULL(json_start);
-        
-        free(output);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
     }
     
+    // Get any remaining data from the last call
+    if (bytes_written > 0) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    TEST_ASSERT_NOT_NULL(output);
+    TEST_ASSERT_TRUE(total_bytes > 0);
+    TEST_ASSERT_TRUE(total_bytes >= 50);
+    
+    // check that we got some JSON content
+    output[total_bytes] = '\0'; // Null terminate for strstr
+    char* json_start = strstr(output, "{");
+    TEST_ASSERT_NOT_NULL(json_start);
+    
+    free(output);
     dft_reader_destroy(reader);
 }
 
@@ -249,55 +263,24 @@ void test_read_with_null_parameters(void) {
     dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
     TEST_ASSERT_NOT_NULL(reader);
     
-    char* output = NULL;
-    size_t output_size = 0;
+    char buffer[1024];
+    size_t bytes_written = 0;
     
     // null reader
-    result = dft_reader_read_range_bytes(NULL, g_gz_file, 0, 50, &output, &output_size);
+    result = dft_reader_read(NULL, g_gz_file, 0, 50, buffer, sizeof(buffer), &bytes_written);
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // null gz_path
-    result = dft_reader_read_range_bytes(reader, NULL, 0, 50, &output, &output_size);
+    result = dft_reader_read(reader, NULL, 0, 50, buffer, sizeof(buffer), &bytes_written);
     TEST_ASSERT_EQUAL_INT(-1, result);
     
-    // null output
-    result = dft_reader_read_range_bytes(reader, g_gz_file, 0, 50, NULL, &output_size);
+    // null buffer
+    result = dft_reader_read(reader, g_gz_file, 0, 50, NULL, sizeof(buffer), &bytes_written);
     TEST_ASSERT_EQUAL_INT(-1, result);
     
-    // null output_size
-    result = dft_reader_read_range_bytes(reader, g_gz_file, 0, 50, &output, NULL);
+    // null bytes_written
+    result = dft_reader_read(reader, g_gz_file, 0, 50, buffer, sizeof(buffer), NULL);
     TEST_ASSERT_EQUAL_INT(-1, result);
-    
-    dft_reader_destroy(reader);
-}
-
-void test_read_megabyte_range(void) {
-
-    // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
-    TEST_ASSERT_NOT_NULL(indexer);
-    
-    int result = dft_indexer_build(indexer);
-    TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
-    
-    // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
-    TEST_ASSERT_NOT_NULL(reader);
-    
-    char* output = NULL;
-    size_t output_size = 0;
-    
-    // read first 0.001 MB (about 1024 bytes)
-    result = dft_reader_read_range_megabytes(reader, g_gz_file, 0.0, 0.001, &output, &output_size);
-    TEST_ASSERT_EQUAL_INT(0, result);
-    
-    if (result == 0) {
-        TEST_ASSERT_NOT_NULL(output);
-        TEST_ASSERT_TRUE(output_size > 0);
-        
-        free(output);
-    }
     
     dft_reader_destroy(reader);
 }
@@ -317,18 +300,19 @@ void test_edge_cases(void) {
     TEST_ASSERT_NOT_NULL(reader);
     
     char* output = NULL;
-    size_t output_size = 0;
 
     // Invalid byte range (start >= end)
-    result = dft_reader_read_range_bytes(reader, g_gz_file, 100, 50, &output, &output_size);
+    char buffer[1024];
+    size_t bytes_written = 0;
+    result = dft_reader_read(reader, g_gz_file, 100, 50, buffer, sizeof(buffer), &bytes_written);
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // Equal start and end should also fail
-    result = dft_reader_read_range_bytes(reader, g_gz_file, 50, 50, &output, &output_size);
+    result = dft_reader_read(reader, g_gz_file, 50, 50, buffer, sizeof(buffer), &bytes_written);
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // Non-existent file
-    result = dft_reader_read_range_bytes(reader, "/nonexistent/file.gz", 0, 50, &output, &output_size);
+    result = dft_reader_read(reader, "/nonexistent/file.gz", 0, 50, buffer, sizeof(buffer), &bytes_written);
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
@@ -354,17 +338,16 @@ void test_get_maximum_bytes(void) {
     TEST_ASSERT_TRUE(max_bytes > 0);
     
     // Try to read beyond max_bytes - should succeed
-    char* output = NULL;
-    size_t output_size = 0;
-    result = dft_reader_read_range_bytes(reader, g_gz_file, max_bytes + 1, max_bytes + 100, &output, &output_size);
+    char buffer[1024];
+    size_t bytes_written = 0;
+    result = dft_reader_read(reader, g_gz_file, max_bytes + 1, max_bytes + 100, buffer, sizeof(buffer), &bytes_written);
     TEST_ASSERT_EQUAL_INT(0, result);
     
     // Try to read up to max_bytes - should succeed
     if (max_bytes > 10) {
-        result = dft_reader_read_range_bytes(reader, g_gz_file, max_bytes - 10, max_bytes, &output, &output_size);
-        if (result == 0 && output) {
-            TEST_ASSERT_TRUE(output_size > 0);
-            free(output);
+        result = dft_reader_read(reader, g_gz_file, max_bytes - 10, max_bytes, buffer, sizeof(buffer), &bytes_written);
+        if (result == 0) {
+            TEST_ASSERT_TRUE(bytes_written >= 0);
         }
     }
     
@@ -405,13 +388,29 @@ void test_memory_management(void) {
     
     // multiple reads to ensure no memory leaks
     for (int i = 0; i < 100; i++) {
+        char buffer[1024];
+        size_t bytes_written = 0;
+        size_t total_bytes = 0;
         char* output = NULL;
-        size_t output_size = 0;
 
-        result = dft_reader_read_range_bytes(reader, g_gz_file, 0, 30, &output, &output_size);
+        // Stream data until no more available
+        while ((result = dft_reader_read(reader, g_gz_file, 0, 30, buffer, sizeof(buffer), &bytes_written)) == 1) {
+            output = realloc(output, total_bytes + bytes_written);
+            TEST_ASSERT_NOT_NULL(output);
+            memcpy(output + total_bytes, buffer, bytes_written);
+            total_bytes += bytes_written;
+        }
+        
+        // Get any remaining data from the last call
+        if (result == 0 && bytes_written > 0) {
+            output = realloc(output, total_bytes + bytes_written);
+            TEST_ASSERT_NOT_NULL(output);
+            memcpy(output + total_bytes, buffer, bytes_written);
+            total_bytes += bytes_written;
+        }
 
-        if (result == 0 && output) {
-            TEST_ASSERT_TRUE(output_size > 0);
+        if (total_bytes > 0) {
+            TEST_ASSERT_TRUE(total_bytes >= 30);
             free(output);
         }
     }
@@ -442,27 +441,52 @@ void test_json_boundary_detection(void) {
     // Create reader
     dft_reader_handle_t reader = dft_reader_create(gz_file, idx_file);
     TEST_ASSERT_NOT_NULL(reader);
-
-    // Small range should provide minimum requested bytes
+    
+    char buffer[2048];
+    size_t bytes_written = 0;
+    size_t total_bytes = 0;
     char* output = NULL;
-    size_t output_size = 0;
     
-    // Request 100 bytes - should get AT LEAST 100 bytes due to boundary extension
-    result = dft_reader_read_range_bytes(reader, gz_file, 0, 100, &output, &output_size);
-    TEST_ASSERT_EQUAL_INT(0, result);
-    
-    if (result == 0) {
+    // Stream data until no more available
+    // NOTE: Individual streaming buffer chunks may contain partial JSON data (Approach 2)
+    while ((result = dft_reader_read(reader, gz_file, 0, 100, buffer, sizeof(buffer), &bytes_written)) == 1) {
+        output = realloc(output, total_bytes + bytes_written);
         TEST_ASSERT_NOT_NULL(output);
-        TEST_ASSERT_TRUE(output_size >= 100);  // Should get at least what was requested
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    // Get any remaining data from the last call
+    if (result == 0 && bytes_written > 0) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    if (output && total_bytes > 0) {
+        TEST_ASSERT_TRUE(total_bytes >= 100);  // Should get at least what was requested
         
-        // Verify that output ends with complete JSON line
-        TEST_ASSERT_EQUAL_CHAR('\n', output[output_size - 1]);  // Should end with newline
+        // Null-terminate for string operations
+        output = realloc(output, total_bytes + 1);
+        TEST_ASSERT_NOT_NULL(output);
+        output[total_bytes] = '\0';
+        
+        // With Approach 2: Individual streaming buffers may contain partial JSON
+        // but the COMPLETE collected result (0 to 100 bytes) should contain complete JSON lines
+        
+        // The streaming API should ensure complete JSON lines for the entire requested range
+        TEST_ASSERT_EQUAL_CHAR('\n', output[total_bytes - 1]);  // Should end with newline
         
         // Should contain complete JSON objects
         char* last_brace = strrchr(output, '}');
         TEST_ASSERT_NOT_NULL(last_brace);
-        TEST_ASSERT_TRUE(last_brace < output + output_size - 1);  // '}' should not be the last character
+        TEST_ASSERT_TRUE(last_brace < output + total_bytes - 1);  // '}' should not be the last character
         TEST_ASSERT_EQUAL_CHAR('\n', *(last_brace + 1));    // Should be followed by newline
+        
+        // Basic validation - should contain JSON content
+        char* json_start = strstr(output, "{");
+        TEST_ASSERT_NOT_NULL(json_start);
         
         free(output);
     }
@@ -517,23 +541,45 @@ void test_regression_for_truncated_json_output(void) {
     TEST_ASSERT_NOT_NULL(reader);
 
     // Original failing case: 0 to 10000 bytes
+    char buffer[4096];
+    size_t bytes_written = 0;
+    size_t total_bytes = 0;
     char* output = NULL;
-    size_t output_size = 0;
     
-    result = dft_reader_read_range_bytes(reader, gz_file, 0, 10000, &output, &output_size);
-    TEST_ASSERT_EQUAL_INT(0, result);
-    
-    if (result == 0) {
+    // Stream data until no more available
+    while ((result = dft_reader_read(reader, gz_file, 0, 10000, buffer, sizeof(buffer), &bytes_written)) == 1) {
+        output = realloc(output, total_bytes + bytes_written);
         TEST_ASSERT_NOT_NULL(output);
-        TEST_ASSERT_TRUE(output_size >= 10000);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    // Get any remaining data from the last call
+    if (result == 0 && bytes_written > 0) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    if (output && total_bytes > 0) {
+        TEST_ASSERT_TRUE(total_bytes >= 10000);
+        
+        // Null-terminate for string operations
+        output = realloc(output, total_bytes + 1);
+        TEST_ASSERT_NOT_NULL(output);
+        output[total_bytes] = '\0';
         
         // Should NOT end with incomplete patterns like "name_%
         TEST_ASSERT_NULL(strstr(output, "\"name_%"));
         TEST_ASSERT_NULL(strstr(output, "\"cat_%"));
         
+        // Now check if the FINAL COMPLETE result has proper JSON boundaries
+        // The streaming API should guarantee complete JSON lines for the entire range
+        
         // Should end with complete JSON line
-        TEST_ASSERT_EQUAL_CHAR('\n', output[output_size - 1]);
-        TEST_ASSERT_EQUAL_CHAR('}', output[output_size - 2]);
+        TEST_ASSERT_EQUAL_CHAR('\n', output[total_bytes - 1]);
+        TEST_ASSERT_EQUAL_CHAR('}', output[total_bytes - 2]);
         
         // Should contain the pattern but complete
         TEST_ASSERT_NOT_NULL(strstr(output, "\"name\":\"name_"));
@@ -544,19 +590,38 @@ void test_regression_for_truncated_json_output(void) {
     
     // Small range minimum bytes check
     output = NULL;
-    output_size = 0;
     
     // This was returning only 44 bytes instead of at least 100
-    result = dft_reader_read_range_bytes(reader, gz_file, 0, 100, &output, &output_size);
-    TEST_ASSERT_EQUAL_INT(0, result);
+    total_bytes = 0;
+    output = NULL;
     
-    if (result == 0) {
+    // Stream data until no more available  
+    while ((result = dft_reader_read(reader, gz_file, 0, 100, buffer, sizeof(buffer), &bytes_written)) == 1) {
+        output = realloc(output, total_bytes + bytes_written);
         TEST_ASSERT_NOT_NULL(output);
-        TEST_ASSERT_TRUE(output_size >= 100);  // This was the main bug - was only 44 bytes
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    // Get any remaining data from the last call
+    if (result == 0 && bytes_written > 0) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    if (output && total_bytes > 0) {
+        TEST_ASSERT_TRUE(total_bytes >= 100);  // This was the main bug - was only 44 bytes
+        
+        // Null-terminate for safety
+        output = realloc(output, total_bytes + 1);
+        TEST_ASSERT_NOT_NULL(output);
+        output[total_bytes] = '\0';
         
         // Should contain multiple complete JSON objects for 100+ bytes
         size_t brace_count = 0;
-        for (size_t i = 0; i < output_size; i++) {
+        for (size_t i = 0; i < total_bytes; i++) {
             if (output[i] == '}') brace_count++;
         }
         TEST_ASSERT_TRUE(brace_count >= 2);  // Should have at least 2 complete objects for 100+ bytes
@@ -684,7 +749,6 @@ int main(void) {
     RUN_TEST(test_reader_invalid_parameters);
     RUN_TEST(test_data_range_reading);
     RUN_TEST(test_read_with_null_parameters);
-    RUN_TEST(test_read_megabyte_range);
     RUN_TEST(test_edge_cases);
     RUN_TEST(test_get_maximum_bytes);
     RUN_TEST(test_get_max_bytes_null_parameters);

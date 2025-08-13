@@ -19,6 +19,13 @@ endif()
 set(INSTALL_BINARY_DIR bin)
 set(INSTALL_LIB_DIR lib)
 set(INSTALL_INCLUDE_DIR include/${CMAKE_PROJECT_NAME})
+
+# Override installation directories for Python build
+if(SKBUILD)
+    set(CMAKE_INSTALL_LIBDIR "dft_utils/lib" CACHE STRING "Library install directory" FORCE)
+    set(CMAKE_INSTALL_INCLUDEDIR "dft_utils/include" CACHE STRING "Include install directory" FORCE)
+    set(CMAKE_INSTALL_BINDIR "dft_utils/bin" CACHE STRING "Binary install directory" FORCE)
+endif()
 option(DFTRACER_UTILS_USE_LOCAL_PACKAGES "Use local packages" OFF)
 option(DFTRACER_UTILS_TESTS "Build tests" OFF)
 option(DFTRACER_UTILS_COVERAGE "Enable coverage reporting" OFF)
@@ -31,8 +38,11 @@ include(cmake/Utils.cmake)
 
 set_coverage_compiler_flags(DFTRACER_UTILS_TESTS AND DFTRACER_UTILS_COVERAGE)
 
-set(DFTRACER_PYTHON_BUILD OFF CACHE BOOL "Building for Python" FORCE)
 add_subdirectory(src)
+
+if (SKBUILD)
+  add_subdirectory(py)
+endif()
 
 if(DFTRACER_UTILS_TESTS)
   enable_testing()

@@ -141,10 +141,6 @@ class Indexer::Impl
                         size_t window_size,
                         unsigned char **compressed,
                         size_t *compressed_size) const;
-    int decompress_window(const unsigned char *compressed,
-                          size_t compressed_size,
-                          unsigned char *window,
-                          size_t *window_size) const;
     int save_checkpoint(sqlite3 *db, int file_id, const CheckpointData *checkpoint) const;
     int find_gzip_deflate_start(FILE *f) const;
 
@@ -392,8 +388,8 @@ bool Indexer::Impl::need_rebuild() const
             if (current_sha256 != stored_sha256)
             {
                 spdlog::info("Index rebuild needed: file SHA256 changed ({} vs {})",
-                             current_sha256.substr(0, 16) + "...",
-                             stored_sha256.substr(0, 16) + "...");
+                              current_sha256.substr(0, 16) + "...",
+                              stored_sha256.substr(0, 16) + "...");
                 return true;
             }
         }
@@ -571,36 +567,6 @@ int Indexer::Impl::compress_window(const unsigned char *window,
 
     *compressed_size = max_compressed - zs.avail_out;
     deflateEnd(&zs);
-    return 0;
-}
-
-int Indexer::Impl::decompress_window(const unsigned char *compressed,
-                                     size_t compressed_size,
-                                     unsigned char *window,
-                                     size_t *window_size) const
-{
-    z_stream zs;
-    memset(&zs, 0, sizeof(zs));
-
-    if (inflateInit(&zs) != Z_OK)
-    {
-        return -1;
-    }
-
-    zs.next_in = const_cast<unsigned char *>(compressed);
-    zs.avail_in = static_cast<uInt>(compressed_size);
-    zs.next_out = window;
-    zs.avail_out = static_cast<uInt>(*window_size);
-
-    int ret = inflate(&zs, Z_FINISH);
-    if (ret != Z_STREAM_END)
-    {
-        inflateEnd(&zs);
-        return -1;
-    }
-
-    *window_size = *window_size - zs.avail_out;
-    inflateEnd(&zs);
     return 0;
 }
 
