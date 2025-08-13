@@ -1145,6 +1145,67 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
             CHECK(segments[i].size() == expected_size);
         }
     }
+    
+    SUBCASE("Full file read comparison: raw vs JSON-boundary aware") {
+        dft::reader::Reader reader1(gz_file, idx_file);
+        dft::reader::Reader reader2(gz_file, idx_file);
+        
+        size_t max_bytes = reader1.get_max_bytes();
+        char buffer[4096];
+        size_t bytes_written = 0;
+        
+        // Read entire file with raw API
+        std::string raw_content;
+        while (reader1.read_raw(0, max_bytes, buffer, sizeof(buffer), &bytes_written)) {
+            raw_content.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            raw_content.append(buffer, bytes_written);
+        }
+        
+        // Read entire file with JSON-boundary aware API
+        std::string json_content;
+        while (reader2.read(0, max_bytes, buffer, sizeof(buffer), &bytes_written)) {
+            json_content.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            json_content.append(buffer, bytes_written);
+        }
+        
+        // Both should read the entire file
+        CHECK(raw_content.size() == max_bytes);
+        CHECK(json_content.size() == max_bytes);
+        
+        // Total bytes should be identical when reading full file
+        CHECK(raw_content.size() == json_content.size());
+        
+        // Content should be identical when reading full file
+        CHECK(raw_content == json_content);
+        
+        // Both should end with complete JSON lines
+        if (!raw_content.empty() && !json_content.empty()) {
+            CHECK(raw_content.back() == '\n');
+            CHECK(json_content.back() == '\n');
+            
+            // Find last JSON line in both
+            size_t raw_last_newline = raw_content.rfind('\n', raw_content.size() - 2);
+            size_t json_last_newline = json_content.rfind('\n', json_content.size() - 2);
+            
+            if (raw_last_newline != std::string::npos && json_last_newline != std::string::npos) {
+                std::string raw_last_line = raw_content.substr(raw_last_newline + 1);
+                std::string json_last_line = json_content.substr(json_last_newline + 1);
+                
+                // Last JSON lines should be identical
+                CHECK(raw_last_line == json_last_line);
+                
+                // Should contain valid JSON structure
+                CHECK(raw_last_line.find('{') != std::string::npos);
+                CHECK(raw_last_line.find('}') != std::string::npos);
+                CHECK(json_last_line.find('{') != std::string::npos);
+                CHECK(json_last_line.find('}') != std::string::npos);
+            }
+        }
+    }
 }
 
 TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {

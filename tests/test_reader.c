@@ -1054,6 +1054,140 @@ void test_reader_raw_null_parameters(void) {
     dft_reader_destroy(reader);
 }
 
+void test_reader_full_file_comparison_raw_vs_json_boundary(void) {
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    TEST_ASSERT_NOT_NULL(indexer);
+    
+    int result = dft_indexer_build(indexer);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    dft_indexer_destroy(indexer);
+    
+    // Create two readers
+    dft_reader_handle_t reader1 = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader2 = dft_reader_create(g_gz_file, g_idx_file);
+    TEST_ASSERT_NOT_NULL(reader1);
+    TEST_ASSERT_NOT_NULL(reader2);
+    
+    // Get max bytes
+    size_t max_bytes;
+    result = dft_reader_get_max_bytes(reader1, &max_bytes);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    TEST_ASSERT_TRUE(max_bytes > 0);
+    
+    char buffer[4096];
+    size_t bytes_written = 0;
+    
+    // Read entire file with raw API
+    size_t raw_total_bytes = 0;
+    char* raw_content = NULL;
+    
+    while (dft_reader_read_raw(reader1, g_gz_file, 0, max_bytes, buffer, sizeof(buffer), &bytes_written) == 1) {
+        raw_content = realloc(raw_content, raw_total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(raw_content);
+        memcpy(raw_content + raw_total_bytes, buffer, bytes_written);
+        raw_total_bytes += bytes_written;
+    }
+    if (bytes_written > 0) {
+        raw_content = realloc(raw_content, raw_total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(raw_content);
+        memcpy(raw_content + raw_total_bytes, buffer, bytes_written);
+        raw_total_bytes += bytes_written;
+    }
+    
+    // Read entire file with JSON-boundary aware API
+    size_t json_total_bytes = 0;
+    char* json_content = NULL;
+    
+    while (dft_reader_read(reader2, g_gz_file, 0, max_bytes, buffer, sizeof(buffer), &bytes_written) == 1) {
+        json_content = realloc(json_content, json_total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(json_content);
+        memcpy(json_content + json_total_bytes, buffer, bytes_written);
+        json_total_bytes += bytes_written;
+    }
+    if (bytes_written > 0) {
+        json_content = realloc(json_content, json_total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(json_content);
+        memcpy(json_content + json_total_bytes, buffer, bytes_written);
+        json_total_bytes += bytes_written;
+    }
+    
+    // Both should read the entire file
+    TEST_ASSERT_EQUAL_size_t(max_bytes, raw_total_bytes);
+    TEST_ASSERT_EQUAL_size_t(max_bytes, json_total_bytes);
+    
+    // Total bytes should be identical when reading full file
+    TEST_ASSERT_EQUAL_size_t(raw_total_bytes, json_total_bytes);
+    
+    // Content should be identical when reading full file
+    TEST_ASSERT_EQUAL_MEMORY(raw_content, json_content, raw_total_bytes);
+    
+    // Both should end with complete JSON lines
+    if (raw_total_bytes > 0 && json_total_bytes > 0) {
+        TEST_ASSERT_EQUAL_CHAR('\n', raw_content[raw_total_bytes - 1]);
+        TEST_ASSERT_EQUAL_CHAR('\n', json_content[json_total_bytes - 1]);
+        
+        // Find last JSON line in both (look for second-to-last newline)
+        char* raw_last_newline = NULL;
+        char* json_last_newline = NULL;
+        
+        // Find second-to-last newline in raw content
+        for (size_t i = raw_total_bytes - 2; i > 0; i--) {
+            if (raw_content[i] == '\n') {
+                raw_last_newline = &raw_content[i];
+                break;
+            }
+        }
+        
+        // Find second-to-last newline in json content  
+        for (size_t i = json_total_bytes - 2; i > 0; i--) {
+            if (json_content[i] == '\n') {
+                json_last_newline = &json_content[i];
+                break;
+            }
+        }
+        
+        if (raw_last_newline && json_last_newline) {
+            // Calculate last line lengths
+            size_t raw_last_line_len = (raw_content + raw_total_bytes - 1) - raw_last_newline;
+            size_t json_last_line_len = (json_content + json_total_bytes - 1) - json_last_newline;
+            
+            // Last JSON lines should be identical
+            TEST_ASSERT_EQUAL_size_t(raw_last_line_len, json_last_line_len);
+            TEST_ASSERT_EQUAL_MEMORY(raw_last_newline, json_last_newline, raw_last_line_len);
+            
+            // Should contain valid JSON structure (look for { and } in last line)
+            char* raw_last_line_start = raw_last_newline + 1;
+            char* json_last_line_start = json_last_newline + 1;
+            size_t actual_line_len = raw_last_line_len - 1; // exclude newline
+            
+            int raw_has_brace_open = 0, raw_has_brace_close = 0;
+            int json_has_brace_open = 0, json_has_brace_close = 0;
+            
+            for (size_t i = 0; i < actual_line_len; i++) {
+                if (raw_last_line_start[i] == '{') raw_has_brace_open = 1;
+                if (raw_last_line_start[i] == '}') raw_has_brace_close = 1;
+                if (json_last_line_start[i] == '{') json_has_brace_open = 1;
+                if (json_last_line_start[i] == '}') json_has_brace_close = 1;
+            }
+            
+            TEST_ASSERT_TRUE(raw_has_brace_open);
+            TEST_ASSERT_TRUE(raw_has_brace_close);
+            TEST_ASSERT_TRUE(json_has_brace_open);
+            TEST_ASSERT_TRUE(json_has_brace_close);
+        }
+    }
+    
+    // Debug output (will be visible if test fails)
+    printf("Full file comparison: raw_size=%zu, json_size=%zu, max_bytes=%zu\n", 
+           raw_total_bytes, json_total_bytes, max_bytes);
+    
+    free(raw_content);
+    free(json_content);
+    dft_reader_destroy(reader1);
+    dft_reader_destroy(reader2);
+}
+
 int main(void) {
     UNITY_BEGIN();
     
@@ -1097,6 +1231,7 @@ int main(void) {
     RUN_TEST(test_reader_raw_small_buffer);
     RUN_TEST(test_reader_raw_multiple_ranges);
     RUN_TEST(test_reader_raw_null_parameters);
+    RUN_TEST(test_reader_full_file_comparison_raw_vs_json_boundary);
     
     // Clean up global test environment
     if (g_env) {
