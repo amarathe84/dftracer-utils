@@ -113,7 +113,7 @@ class DFTracerReader
         }
     }
 
-    class ByteIterator
+    class LineIterator
     {
       private:
         DFTracerReader *reader_;
@@ -122,25 +122,25 @@ class DFTracerReader
         uint64_t step_;
 
       public:
-        ByteIterator(DFTracerReader *reader, uint64_t step) : reader_(reader), current_pos_(0), step_(step)
+        LineIterator(DFTracerReader *reader, uint64_t step) : reader_(reader), current_pos_(0), step_(step)
         {
             max_bytes_ = reader_->get_max_bytes();
         }
 
-        ByteIterator begin()
+        LineIterator begin()
         {
             current_pos_ = 0;
             return *this;
         }
 
-        ByteIterator end()
+        LineIterator end()
         {
-            ByteIterator end_iter = *this;
+            LineIterator end_iter = *this;
             end_iter.current_pos_ = max_bytes_;
             return end_iter;
         }
 
-        bool operator!=(const ByteIterator &other) const
+        bool operator!=(const LineIterator &other) const
         {
             return current_pos_ < other.current_pos_;
         }
@@ -151,13 +151,13 @@ class DFTracerReader
             return reader_->read(current_pos_, end_pos);
         }
 
-        ByteIterator &operator++()
+        LineIterator &operator++()
         {
             current_pos_ = std::min(current_pos_ + step_, max_bytes_);
             return *this;
         }
 
-        ByteIterator iter()
+        LineIterator iter()
         {
             current_pos_ = 0;
             return *this;
@@ -179,16 +179,82 @@ class DFTracerReader
         }
     };
 
-    ByteIterator iterator()
+    class RawIterator
+    {
+      private:
+        DFTracerReader *reader_;
+        uint64_t current_pos_;
+        uint64_t max_bytes_;
+        uint64_t step_;
+
+      public:
+        RawIterator(DFTracerReader *reader, uint64_t step) : reader_(reader), current_pos_(0), step_(step)
+        {
+            max_bytes_ = reader_->get_max_bytes();
+        }
+
+        RawIterator begin()
+        {
+            current_pos_ = 0;
+            return *this;
+        }
+
+        RawIterator end()
+        {
+            RawIterator end_iter = *this;
+            end_iter.current_pos_ = max_bytes_;
+            return end_iter;
+        }
+
+        bool operator!=(const RawIterator &other) const
+        {
+            return current_pos_ < other.current_pos_;
+        }
+
+        std::string operator*()
+        {
+            uint64_t end_pos = std::min(current_pos_ + step_, max_bytes_);
+            return reader_->read_raw(current_pos_, end_pos);
+        }
+
+        RawIterator &operator++()
+        {
+            current_pos_ = std::min(current_pos_ + step_, max_bytes_);
+            return *this;
+        }
+
+        RawIterator iter()
+        {
+            current_pos_ = 0;
+            return *this;
+        }
+
+        std::string next()
+        {
+            if (current_pos_ >= max_bytes_)
+            {
+                throw nb::stop_iteration();
+            }
+
+            uint64_t end_pos = std::min(current_pos_ + step_, max_bytes_);
+
+            // Read whatever is available, even if it's less than the step
+            std::string result = reader_->read_raw(current_pos_, end_pos);
+            current_pos_ = end_pos;
+            return result;
+        }
+    };
+
+    LineIterator iterator()
     {
         if (!is_open_)
         {
             throw std::runtime_error("Reader is not open");
         }
-        return ByteIterator(this, 1024 * 1024);
+        return LineIterator(this, 1024 * 1024);
     }
 
-    ByteIterator iter(uint64_t step_bytes)
+    LineIterator iter(uint64_t step_bytes)
     {
         if (!is_open_)
         {
@@ -198,7 +264,29 @@ class DFTracerReader
         {
             throw std::invalid_argument("step must be greater than 0");
         }
-        return ByteIterator(this, step_bytes);
+        return LineIterator(this, step_bytes);
+    }
+
+    RawIterator raw_iterator()
+    {
+        if (!is_open_)
+        {
+            throw std::runtime_error("Reader is not open");
+        }
+        return RawIterator(this, 1024 * 1024);
+    }
+
+    RawIterator raw_iter(uint64_t step_bytes)
+    {
+        if (!is_open_)
+        {
+            throw std::runtime_error("Reader is not open");
+        }
+        if (step_bytes == 0)
+        {
+            throw std::invalid_argument("step must be greater than 0");
+        }
+        return RawIterator(this, step_bytes);
     }
 
     DFTracerReader &__iter__()
@@ -279,6 +367,37 @@ class DFTracerReader
             return result;
         } catch (const std::runtime_error& e) {
             throw std::runtime_error("Failed to read data range: " + std::string(e.what()));
+        }
+    }
+
+    std::string read_raw(uint64_t start_bytes, uint64_t end_bytes)
+    {
+        if (!is_open_)
+        {
+            throw std::runtime_error("Reader is not open");
+        }
+
+        try {
+            std::string result;
+            const size_t buffer_size = 64 * 1024; // 64KB buffer
+            std::vector<char> buffer(buffer_size);
+            
+            // Stream data until no more available
+            while (true)
+            {
+                size_t bytes_read = reader_->read_raw(start_bytes, end_bytes, buffer.data(), buffer.size());
+                
+                if (bytes_read == 0)
+                {
+                    break; // No more data available
+                }
+                
+                result.append(buffer.data(), bytes_read);
+            }
+            
+            return result;
+        } catch (const std::runtime_error& e) {
+            throw std::runtime_error("Failed to read raw data range: " + std::string(e.what()));
         }
     }
 
@@ -394,9 +513,13 @@ NB_MODULE(dft_utils_reader_ext, m)
 {
     m.doc() = "DFTracer utilities reader extension";
 
-    nb::class_<DFTracerReader::ByteIterator>(m, "ByteIterator")
-        .def("__iter__", &DFTracerReader::ByteIterator::iter, "Get iterator")
-        .def("__next__", &DFTracerReader::ByteIterator::next, "Get next chunk");
+    nb::class_<DFTracerReader::LineIterator>(m, "LineIterator")
+        .def("__iter__", &DFTracerReader::LineIterator::iter, "Get line-aware iterator")
+        .def("__next__", &DFTracerReader::LineIterator::next, "Get next chunk with line processing");
+
+    nb::class_<DFTracerReader::RawIterator>(m, "RawIterator")
+        .def("__iter__", &DFTracerReader::RawIterator::iter, "Get raw iterator")
+        .def("__next__", &DFTracerReader::RawIterator::next, "Get next raw chunk without processing");
 
     nb::class_<DFTracerRangeIterator>(m, "DFTracerRangeIterator")
         .def("__iter__", &DFTracerRangeIterator::__iter__, nb::rv_policy::reference_internal, "Get iterator")
@@ -412,13 +535,16 @@ NB_MODULE(dft_utils_reader_ext, m)
              "index_path"_a = nb::none(),
              "Create a DFTracer reader for a gzip file and its index")
         .def("get_max_bytes", &DFTracerReader::get_max_bytes, "Get the maximum byte position available in the file")
-        .def("iterator", &DFTracerReader::iterator, "Get iterator with default 1MB step")
-        .def("iter", &DFTracerReader::iter, "step_bytes"_a, "Get iterator with custom step in bytes")
+        .def("iterator", &DFTracerReader::iterator, "Get line-aware iterator with default 1MB step")
+        .def("iter", &DFTracerReader::iter, "step_bytes"_a, "Get line-aware iterator with custom step in bytes")
+        .def("raw_iterator", &DFTracerReader::raw_iterator, "Get raw iterator with default 1MB step")
+        .def("raw_iter", &DFTracerReader::raw_iter, "step_bytes"_a, "Get raw iterator with custom step in bytes")
         .def("__iter__", &DFTracerReader::__iter__, nb::rv_policy::reference_internal, "Get iterator for the reader")
         .def("__next__", &DFTracerReader::__next__, "Get next chunk with default step")
         .def("set_default_step", &DFTracerReader::set_default_step, "step_bytes"_a, "Set default step for iteration")
         .def("get_default_step", &DFTracerReader::get_default_step, "Get current default step")
         .def("read", &DFTracerReader::read, "start_bytes"_a, "end_bytes"_a, "Read a range of bytes from the gzip file")
+        .def("read_raw", &DFTracerReader::read_raw, "start_bytes"_a, "end_bytes"_a, "Read raw bytes from the gzip file without JSON line processing")
         .def("open", &DFTracerReader::open, "Open the index database")
         .def("close", &DFTracerReader::close, "Close the index database")
         .def("__enter__", &DFTracerReader::__enter__, nb::rv_policy::reference_internal, "Enter context manager")

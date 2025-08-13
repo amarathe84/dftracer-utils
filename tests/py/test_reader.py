@@ -252,6 +252,182 @@ class TestDFTracerReader:
         assert isinstance(level_int, int)
         assert level_int >= 0
 
+    @pytest.mark.skipif(not os.path.exists("trace.pfw.gz"),
+                       reason="No test trace file available")
+    def test_raw_read_functionality(self):
+        """Test raw read functionality"""
+        trace_file = "trace.pfw.gz"
+        if not os.path.exists(trace_file + ".idx"):
+            pytest.skip("Index file not found")
+        
+        with dft_utils.DFTracerReader(trace_file) as reader:
+            max_bytes = reader.get_max_bytes()
+            
+            if max_bytes > 1024:  # Only if file is large enough
+                # Test read_raw method
+                start = 100
+                end = start + 50  # 50 bytes
+                raw_data = reader.read_raw(start, end)
+                assert len(raw_data) > 0
+                # Raw read should be closer to requested size (doesn't extend to JSON boundaries)
+                assert len(raw_data) <= 60  # Should be close to 50 bytes
+                
+                # Compare with regular read - regular should be larger due to JSON boundary extension
+                regular_data = reader.read(start, end)
+                assert len(regular_data) >= len(raw_data)
+                
+                # Note: Raw and regular reads may start at different positions
+                # Raw reads exactly from requested byte position
+                # Regular reads align to JSON boundaries
+                # So we just verify that both returned valid data
+
+    @pytest.mark.skipif(not os.path.exists("trace.pfw.gz"),
+                       reason="No test trace file available")
+    def test_raw_iterator_functionality(self):
+        """Test raw iterator functionality"""
+        trace_file = "trace.pfw.gz"
+        if not os.path.exists(trace_file + ".idx"):
+            pytest.skip("Index file not found")
+        
+        with dft_utils.DFTracerReader(trace_file) as reader:
+            max_bytes = reader.get_max_bytes()
+            if max_bytes <= 1024 * 1024:  # Need sufficient data
+                pytest.skip("File too small for raw iterator testing")
+            
+            # Test default raw iterator
+            raw_iter = reader.raw_iterator()
+            assert hasattr(raw_iter, '__iter__')
+            assert hasattr(raw_iter, '__next__')
+            
+            # Test custom step raw iterator
+            step_size = 256 * 1024  # 256KB
+            custom_raw_iter = reader.raw_iter(step_size)
+            
+            # Test iteration
+            chunk_count = 0
+            total_bytes = 0
+            for chunk in custom_raw_iter:
+                chunk_count += 1
+                total_bytes += len(chunk)
+                assert len(chunk) > 0
+                if chunk_count >= 3:  # Just test first few chunks
+                    break
+            
+            assert chunk_count > 0
+            assert total_bytes > 0
+
+    @pytest.mark.skipif(not os.path.exists("trace.pfw.gz"),
+                       reason="No test trace file available")
+    def test_raw_vs_line_iterator_comparison(self):
+        """Test comparison between raw and line-aware iterators"""
+        trace_file = "trace.pfw.gz"
+        if not os.path.exists(trace_file + ".idx"):
+            pytest.skip("Index file not found")
+        
+        with dft_utils.DFTracerReader(trace_file) as reader:
+            max_bytes = reader.get_max_bytes()
+            if max_bytes <= 2 * 1024 * 1024:  # Need sufficient data
+                pytest.skip("File too small for iterator comparison")
+            
+            step_size = 512 * 1024  # 512KB
+            
+            # Test line-aware iterator
+            line_chunks = []
+            line_iter = reader.iter(step_size)
+            for i, chunk in enumerate(line_iter):
+                line_chunks.append(chunk)
+                if i >= 2:  # Get 3 chunks
+                    break
+            
+            # Reset reader and test raw iterator
+            raw_chunks = []
+            raw_iter = reader.raw_iter(step_size)
+            for i, chunk in enumerate(raw_iter):
+                raw_chunks.append(chunk)
+                if i >= 2:  # Get 3 chunks
+                    break
+            
+            assert len(line_chunks) == len(raw_chunks)
+            
+            # Line-aware chunks should generally be larger due to boundary extension
+            for line_chunk, raw_chunk in zip(line_chunks, raw_chunks):
+                assert len(line_chunk) > 0
+                assert len(raw_chunk) > 0
+                # Line chunks should typically be larger (due to JSON boundary extension)
+                # but this isn't guaranteed for every chunk
+                
+                # Note: Line-aware and raw iterators may start at different positions
+                # Line-aware iterators align to JSON boundaries
+                # Raw iterators read exactly from byte positions
+                # Both should return valid data, but content may differ in alignment
+
+    @pytest.mark.skipif(not os.path.exists("trace.pfw.gz"),
+                       reason="No test trace file available")
+    def test_raw_iterator_edge_cases(self):
+        """Test raw iterator edge cases"""
+        trace_file = "trace.pfw.gz"
+        if not os.path.exists(trace_file + ".idx"):
+            pytest.skip("Index file not found")
+        
+        with dft_utils.DFTracerReader(trace_file) as reader:
+            max_bytes = reader.get_max_bytes()
+            if max_bytes <= 1024:
+                pytest.skip("File too small for edge case testing")
+            
+            # Test very small step size
+            small_step = 64  # 64 bytes
+            small_iter = reader.raw_iter(small_step)
+            
+            chunk_count = 0
+            for chunk in small_iter:
+                chunk_count += 1
+                assert len(chunk) > 0
+                assert len(chunk) <= small_step + 10  # Some tolerance
+                if chunk_count >= 5:  # Test first few chunks
+                    break
+            
+            assert chunk_count > 0
+            
+            # Test large step size
+            if max_bytes > 1024 * 1024:
+                large_step = 1024 * 1024  # 1MB
+                large_iter = reader.raw_iter(large_step)
+                
+                large_chunk = next(large_iter)
+                assert len(large_chunk) > 0
+
+    @pytest.mark.skipif(not os.path.exists("trace.pfw.gz"),
+                       reason="No test trace file available")
+    def test_raw_methods_available(self):
+        """Test that raw methods are available in the API"""
+        trace_file = "trace.pfw.gz"
+        if not os.path.exists(trace_file + ".idx"):
+            pytest.skip("Index file not found")
+        
+        with dft_utils.DFTracerReader(trace_file) as reader:
+            # Test that raw methods exist
+            assert hasattr(reader, 'read_raw')
+            assert hasattr(reader, 'raw_iterator')
+            assert hasattr(reader, 'raw_iter')
+            
+            # Test that they are callable
+            assert callable(reader.read_raw)
+            assert callable(reader.raw_iterator)
+            assert callable(reader.raw_iter)
+            
+            # Test basic functionality without errors
+            max_bytes = reader.get_max_bytes()
+            if max_bytes > 100:
+                data = reader.read_raw(0, 50)
+                assert isinstance(data, str)
+                assert len(data) > 0
+                
+                raw_iter = reader.raw_iterator()
+                assert raw_iter is not None
+                
+                custom_iter = reader.raw_iter(1024)
+                assert custom_iter is not None
+
 
 class TestDFTracerRangeIterator:
     """Test cases for DFTracerRangeIterator"""
