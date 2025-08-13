@@ -129,9 +129,6 @@ int main(int argc, char **argv)
             auto max_bytes = reader.get_max_bytes();
             if (end_bytes_ > max_bytes)
             {
-                spdlog::warn("End bytes exceed maximum available bytes, clamping to max value {} B ({} MB)",
-                             max_bytes,
-                             max_bytes / (1024 * 1024));
                 end_bytes_ = max_bytes;
             }
 

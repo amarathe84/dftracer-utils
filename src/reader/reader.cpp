@@ -10,10 +10,761 @@
 #include <dft_utils/reader/reader.h>
 #include <dft_utils/utils/platform_compat.h>
 
+// Forward declarations  
+struct InflateState
+{
+    z_stream zs;
+    FILE *file;
+    unsigned char in[16384]; // 16 KB
+    int bits;
+    size_t c_off;
+};
+
+struct CheckpointInfo
+{
+    size_t uc_offset;
+    size_t c_offset;
+    int bits;
+    std::vector<unsigned char> dict_compressed;
+    size_t dict_compressed_size;
+};
+
 namespace dft
 {
 namespace reader
 {
+
+class DatabaseHelper
+{
+public:
+    explicit DatabaseHelper(sqlite3* db) : db_(db) {}
+    
+    int find_file_id(const std::string& gz_path) {
+        const char* sql = "SELECT id FROM files WHERE logical_name = ? LIMIT 1";
+        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt = prepare_statement(sql);
+        sqlite3_bind_text(stmt.get(), 1, gz_path.c_str(), -1, SQLITE_STATIC);
+        
+        if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+            return sqlite3_column_int(stmt.get(), 0);
+        }
+        return -1;
+    }
+    
+    bool find_checkpoint(int file_id, size_t target_offset, CheckpointInfo* result) {
+        const char* sql = "SELECT uc_offset, c_offset, bits, dict_compressed "
+                         "FROM checkpoints WHERE file_id = ? AND uc_offset <= ? "
+                         "ORDER BY uc_offset DESC LIMIT 1";
+        
+        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt = prepare_statement(sql);
+        sqlite3_bind_int(stmt.get(), 1, file_id);
+        sqlite3_bind_int64(stmt.get(), 2, static_cast<sqlite3_int64>(target_offset));
+        
+        if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+            result->uc_offset = static_cast<size_t>(sqlite3_column_int64(stmt.get(), 0));
+            result->c_offset = static_cast<size_t>(sqlite3_column_int64(stmt.get(), 1));
+            result->bits = sqlite3_column_int(stmt.get(), 2);
+            
+            size_t dict_size = static_cast<size_t>(sqlite3_column_bytes(stmt.get(), 3));
+            result->dict_compressed.resize(dict_size);
+            memcpy(result->dict_compressed.data(), sqlite3_column_blob(stmt.get(), 3), dict_size);
+            
+            return true;
+        }
+        return false;
+    }
+    
+    size_t get_max_bytes() {
+        const char* sql = "SELECT MAX(uc_offset + uc_size) FROM chunks";
+        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt = prepare_statement(sql);
+        
+        if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+            sqlite3_int64 max_val = sqlite3_column_int64(stmt.get(), 0);
+            return (max_val >= 0) ? static_cast<size_t>(max_val) : 0;
+        }
+        return 0;
+    }
+    
+private:
+    sqlite3* db_;
+    
+    std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> prepare_statement(const char* sql) {
+        sqlite3_stmt* stmt;
+        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, NULL) != SQLITE_OK) {
+            throw std::runtime_error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+        }
+        return std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)>(stmt, sqlite3_finalize);
+    }
+};
+
+class ReaderError : public std::runtime_error
+{
+public:
+    enum Type {
+        DATABASE_ERROR,
+        FILE_IO_ERROR,
+        COMPRESSION_ERROR,
+        INVALID_ARGUMENT,
+        INITIALIZATION_ERROR
+    };
+    
+    ReaderError(Type type, const std::string& message) 
+        : std::runtime_error(format_message(type, message)), type_(type) {}
+    
+    Type get_type() const { return type_; }
+    
+private:
+    Type type_;
+    
+    static std::string format_message(Type type, const std::string& message) {
+        const char* prefix = "";
+        switch (type) {
+            case DATABASE_ERROR: prefix = "Database error"; break;
+            case FILE_IO_ERROR: prefix = "File I/O error"; break;
+            case COMPRESSION_ERROR: prefix = "Compression error"; break;
+            case INVALID_ARGUMENT: prefix = "Invalid argument"; break;
+            case INITIALIZATION_ERROR: prefix = "Initialization error"; break;
+        }
+        return std::string(prefix) + ": " + message;
+    }
+};
+
+class CompressionManager
+{
+public:
+    class InflationSession {
+    public:
+        explicit InflationSession(InflateState* state, bool owns = false) 
+            : state_(state), owns_state_(owns) {}
+        
+        ~InflationSession() {
+            if (owns_state_ && state_) {
+                inflateEnd(&state_->zs);
+            }
+        }
+        
+        int read(unsigned char* output, size_t output_size, size_t* bytes_read) {
+            return inflate_read(state_, output, output_size, bytes_read);
+        }
+        
+        void skip(size_t bytes_to_skip, unsigned char* skip_buffer, size_t skip_buffer_size) {
+            if (bytes_to_skip == 0) return;
+            
+            size_t remaining_skip = bytes_to_skip;
+            while (remaining_skip > 0) {
+                size_t to_skip = (remaining_skip > skip_buffer_size) ? skip_buffer_size : remaining_skip;
+                size_t skipped;
+                int result = read(skip_buffer, to_skip, &skipped);
+                if (result != 0) {
+                    throw std::runtime_error("Failed during skip phase");
+                }
+                if (skipped == 0) {
+                    break;
+                }
+                remaining_skip -= skipped;
+            }
+        }
+        
+    private:
+        InflateState* state_;
+        bool owns_state_;
+        
+        InflationSession(const InflationSession&); // deleted
+        InflationSession& operator=(const InflationSession&); // deleted
+    };
+    
+    static int inflate_init(InflateState *state, FILE *f, size_t c_off, int bits) {
+        memset(state, 0, sizeof(*state));
+        state->file = f;
+        state->c_off = c_off;
+        state->bits = bits;
+
+        if (inflateInit2(&state->zs, 15 + 16) != Z_OK) {
+            return -1;
+        }
+
+        if (fseeko(f, static_cast<off_t>(c_off), SEEK_SET) != 0) {
+            spdlog::error("Failed to seek to compressed offset: {}", c_off);
+            inflateEnd(&state->zs);
+            return -1;
+        }
+
+        return 0;
+    }
+    
+    static void inflate_cleanup(InflateState *state) {
+        inflateEnd(&state->zs);
+    }
+    
+    static int inflate_read(InflateState *state, unsigned char *out, size_t out_size, size_t *bytes_read) {
+        state->zs.next_out = out;
+        state->zs.avail_out = static_cast<uInt>(out_size);
+        *bytes_read = 0;
+
+        while (state->zs.avail_out > 0) {
+            if (state->zs.avail_in == 0) {
+                size_t n = fread(state->in, 1, sizeof(state->in), state->file);
+                if (n == 0) {
+                    if (ferror(state->file)) {
+                        spdlog::error("Error reading from file during inflate_read");
+                        return -1;
+                    }
+                    break; // EOF
+                }
+                state->zs.next_in = state->in;
+                state->zs.avail_in = static_cast<uInt>(n);
+            }
+
+            int ret = inflate(&state->zs, Z_NO_FLUSH);
+            if (ret == Z_STREAM_END) {
+                break;
+            }
+            if (ret != Z_OK) {
+                spdlog::debug("inflate() failed with error: {} ({})", 
+                             ret, state->zs.msg ? state->zs.msg : "no message");
+                return -1;
+            }
+        }
+
+        *bytes_read = out_size - state->zs.avail_out;
+        return 0;
+    }
+};
+
+static void validate_read_parameters(const char* buffer, size_t* bytes_written, 
+                                   size_t buffer_size, size_t start_bytes, size_t end_bytes) {
+    if (!buffer || !bytes_written || buffer_size == 0) {
+        throw std::invalid_argument("Invalid buffer parameters");
+    }
+    if (start_bytes >= end_bytes) {
+        throw std::invalid_argument("start_bytes must be less than end_bytes");
+    }
+}
+
+class BaseStreamingSession
+{
+protected:
+    std::string current_gz_path_;
+    size_t start_bytes_;
+    size_t current_position_;
+    size_t target_end_bytes_;
+    bool is_active_;
+    bool is_finished_;
+    
+    std::unique_ptr<InflateState> inflate_state_;
+    std::unique_ptr<CheckpointInfo> checkpoint_;
+    FILE* file_handle_;
+    bool decompression_initialized_;
+    
+    static const size_t SKIP_BUFFER_SIZE = 65536;
+    unsigned char skip_buffer_[SKIP_BUFFER_SIZE];
+    
+public:
+    BaseStreamingSession()
+        : start_bytes_(0), current_position_(0), target_end_bytes_(0), 
+          is_active_(false), is_finished_(false), file_handle_(nullptr),
+          decompression_initialized_(false) {}
+    
+    virtual ~BaseStreamingSession() {
+        reset();
+    }
+    
+    bool matches(const std::string& gz_path, size_t start_bytes, size_t end_bytes) const {
+        return current_gz_path_ == gz_path && 
+               start_bytes_ == start_bytes && 
+               target_end_bytes_ == end_bytes;
+    }
+    
+    bool is_finished() const { return is_finished_; }
+    
+    virtual void initialize(const std::string& gz_path, size_t start_bytes, size_t end_bytes,
+                          DatabaseHelper& db_helper) = 0;
+    virtual bool stream_chunk(char* buffer, size_t buffer_size, size_t* bytes_written) = 0;
+    
+    virtual void reset() {
+        current_gz_path_.clear();
+        start_bytes_ = 0;
+        current_position_ = 0;
+        target_end_bytes_ = 0;
+        is_active_ = false;
+        is_finished_ = false;
+        if (file_handle_) {
+            fclose(file_handle_);
+            file_handle_ = nullptr;
+        }
+        if (decompression_initialized_ && inflate_state_) {
+            CompressionManager::inflate_cleanup(inflate_state_.get());
+        }
+        inflate_state_.reset();
+        checkpoint_.reset();
+        decompression_initialized_ = false;
+    }
+    
+protected:
+    FILE* open_file(const std::string& path) {
+        FILE* file = fopen(path.c_str(), "rb");
+        if (!file) {
+            throw ReaderError(ReaderError::FILE_IO_ERROR, "Failed to open file: " + path);
+        }
+        return file;
+    }
+    
+    void initialize_compression(const std::string& gz_path, size_t start_bytes, 
+                              DatabaseHelper& db_helper) {
+        file_handle_ = open_file(gz_path);
+        inflate_state_.reset(new InflateState());
+        bool use_checkpoint = false;
+        
+        // Try to find checkpoint
+        int file_id = db_helper.find_file_id(gz_path);
+        if (file_id != -1) {
+            checkpoint_.reset(new CheckpointInfo());
+            if (db_helper.find_checkpoint(file_id, start_bytes, checkpoint_.get())) {
+                if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_, checkpoint_.get()) == 0) {
+                    use_checkpoint = true;
+                    spdlog::debug("Using checkpoint at uncompressed offset {} for target {}", 
+                                 checkpoint_->uc_offset, start_bytes);
+                }
+            }
+        }
+        
+        // Fallback to sequential read
+        if (!use_checkpoint) {
+            checkpoint_.reset();
+            if (CompressionManager::inflate_init(inflate_state_.get(), file_handle_, 0, 0) != 0) {
+                throw ReaderError(ReaderError::COMPRESSION_ERROR, "Failed to initialize inflation");
+            }
+        }
+        
+        decompression_initialized_ = true;
+    }
+    
+    void skip_to_position(size_t target_position) {
+        size_t current_pos = checkpoint_ ? checkpoint_->uc_offset : 0;
+        if (target_position > current_pos) {
+            CompressionManager::InflationSession session(inflate_state_.get(), false);
+            session.skip(target_position - current_pos, skip_buffer_, SKIP_BUFFER_SIZE);
+        }
+    }
+    
+    int inflate_init_from_checkpoint(InflateState* state, FILE* f, const CheckpointInfo* checkpoint) const {
+        memset(state, 0, sizeof(*state));
+        state->file = f;
+        state->c_off = checkpoint->c_offset;
+        state->bits = checkpoint->bits;
+
+        spdlog::debug("Checkpoint c_offset: {}, bits: {}", checkpoint->c_offset, checkpoint->bits);
+
+        // Position file exactly like zran: seek to point->in - (point->bits ? 1 : 0)
+        off_t seek_pos = static_cast<off_t>(checkpoint->c_offset) - (checkpoint->bits ? 1 : 0);
+        if (fseeko(f, seek_pos, SEEK_SET) != 0) {
+            spdlog::error("Failed to seek to checkpoint position: {}", seek_pos);
+            return -1;
+        }
+
+        // If we have partial bits, read the extra byte (following zran approach)
+        int ch = 0;
+        if (checkpoint->bits != 0) {
+            ch = fgetc(f);
+            if (ch == EOF) {
+                spdlog::error("Failed to read byte at checkpoint position");
+                return -1;
+            }
+        }
+
+        // Initialize raw deflate stream (not gzip wrapper) following zran approach
+        if (inflateInit2(&state->zs, -15) != Z_OK) {
+            return -1;
+        }
+
+        // Reset to raw mode (following zran: inflateReset2(&index->strm, RAW))
+        state->zs.avail_in = 0;
+        if (inflateReset2(&state->zs, -15) != Z_OK) { // RAW mode
+            inflateEnd(&state->zs);
+            return -1;
+        }
+
+        // Prime with partial bits if needed (following zran: INFLATEPRIME)
+        if (checkpoint->bits != 0) {
+            int prime_value = ch >> (8 - checkpoint->bits);
+            spdlog::debug("Applying inflatePrime with {} bits, value: {}", checkpoint->bits, prime_value);
+            if (inflatePrime(&state->zs, checkpoint->bits, prime_value) != Z_OK) {
+                spdlog::error("inflatePrime failed with {} bits, value: {}", checkpoint->bits, prime_value);
+                inflateEnd(&state->zs);
+                return -1;
+            }
+        }
+
+        // Decompress the saved dictionary
+        unsigned char window[32768];
+        size_t window_size = 32768;
+        if (decompress_window(checkpoint->dict_compressed.data(), checkpoint->dict_compressed.size(), 
+                             window, &window_size) != 0) {
+            inflateEnd(&state->zs);
+            return -1;
+        }
+
+        // Set dictionary (following zran: inflateSetDictionary)
+        if (inflateSetDictionary(&state->zs, window, static_cast<uInt>(window_size)) != Z_OK) {
+            spdlog::error("inflateSetDictionary failed");
+            inflateEnd(&state->zs);
+            return -1;
+        }
+
+        // Prime the input buffer for subsequent reads
+        size_t n = fread(state->in, 1, sizeof(state->in), state->file);
+        if (n > 0) {
+            state->zs.next_in = state->in;
+            state->zs.avail_in = static_cast<uInt>(n);
+        } else if (ferror(state->file)) {
+            spdlog::error("Error reading from file during checkpoint initialization");
+            return -1;
+        }
+
+        return 0;
+    }
+    
+    int decompress_window(const unsigned char *compressed, size_t compressed_size, 
+                         unsigned char *window, size_t *window_size) const {
+        z_stream zs;
+        memset(&zs, 0, sizeof(zs));
+
+        if (inflateInit(&zs) != Z_OK) {
+            spdlog::error("Failed to initialize inflate for window decompression");
+            return -1;
+        }
+
+        zs.next_in = const_cast<unsigned char *>(compressed);
+        zs.avail_in = static_cast<uInt>(compressed_size);
+        zs.next_out = window;
+        zs.avail_out = static_cast<uInt>(*window_size);
+
+        int ret = inflate(&zs, Z_FINISH);
+        if (ret != Z_STREAM_END) {
+            spdlog::error("inflate failed during window decompression with error: {} ({})", 
+                         ret, zs.msg ? zs.msg : "no message");
+            inflateEnd(&zs);
+            return -1;
+        }
+
+        *window_size = *window_size - zs.avail_out;
+        inflateEnd(&zs);
+        return 0;
+    }
+};
+
+class JsonStreamingSession : public BaseStreamingSession
+{
+private:
+    static const size_t INCOMPLETE_BUFFER_SIZE = 2 * 1024 * 1024;
+    char incomplete_buffer_[INCOMPLETE_BUFFER_SIZE];
+    size_t incomplete_buffer_size_;
+    size_t actual_start_bytes_;
+    
+public:
+    JsonStreamingSession() : BaseStreamingSession(), incomplete_buffer_size_(0), actual_start_bytes_(0) {
+        memset(incomplete_buffer_, 0, sizeof(incomplete_buffer_));
+    }
+    
+    void initialize(const std::string& gz_path, size_t start_bytes, size_t end_bytes,
+                   DatabaseHelper& db_helper) override {
+        spdlog::debug("Initializing JSON streaming session for range [{}, {}] from {}", 
+                     start_bytes, end_bytes, gz_path);
+        
+        if (is_active_) {
+            reset();
+        }
+        
+        current_gz_path_ = gz_path;
+        start_bytes_ = start_bytes;
+        target_end_bytes_ = end_bytes;
+        is_active_ = true;
+        is_finished_ = false;
+        incomplete_buffer_size_ = 0;
+        
+        initialize_compression(gz_path, start_bytes, db_helper);
+        
+        // Find the actual start position (beginning of a complete JSON line)
+        actual_start_bytes_ = find_json_line_start(start_bytes);
+        current_position_ = actual_start_bytes_;
+        
+        spdlog::debug("JSON streaming session initialized: actual_start={}, target_end={}", 
+                     actual_start_bytes_, end_bytes);
+    }
+    
+    bool stream_chunk(char* buffer, size_t buffer_size, size_t* bytes_written) override {
+        if (!decompression_initialized_) {
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR, 
+                            "Streaming session not properly initialized");
+        }
+        
+        *bytes_written = 0;
+        
+        // Fill incomplete buffer if empty
+        if (incomplete_buffer_size_ == 0) {
+            fill_incomplete_buffer();
+        }
+        
+        // Serve data from incomplete buffer
+        if (incomplete_buffer_size_ > 0) {
+            *bytes_written = serve_data_from_buffer(buffer, buffer_size);
+        }
+        
+        // Check if we have more data
+        bool has_more = (incomplete_buffer_size_ > 0) ||
+                       (!is_finished_ && current_position_ < target_end_bytes_);
+        
+        return has_more;
+    }
+    
+    void reset() override {
+        BaseStreamingSession::reset();
+        memset(incomplete_buffer_, 0, sizeof(incomplete_buffer_));
+        incomplete_buffer_size_ = 0;
+        actual_start_bytes_ = 0;
+    }
+    
+private:
+    size_t find_json_line_start(size_t target_start) {
+        size_t current_pos = checkpoint_ ? checkpoint_->uc_offset : 0;
+        size_t actual_start = target_start;
+        
+        if (target_start <= current_pos) {
+            return target_start;
+        }
+        
+        // Search for JSON line start
+        size_t search_start = (target_start >= 512) ? target_start - 512 : current_pos;
+        
+        if (search_start > current_pos) {
+            skip_to_position(search_start);
+            current_pos = search_start;
+        }
+        
+        // Read data to find start of complete JSON line
+        unsigned char search_buffer[2048];
+        size_t search_bytes;
+        if (CompressionManager::inflate_read(inflate_state_.get(), search_buffer, 
+                                           sizeof(search_buffer) - 1, &search_bytes) == 0) {
+            size_t relative_target = target_start - current_pos;
+            if (relative_target < search_bytes) {
+                for (int64_t i = static_cast<int64_t>(relative_target); i >= 0; i--) {
+                    if (i == 0 || search_buffer[i - 1] == '\n') {
+                        actual_start = current_pos + static_cast<size_t>(i);
+                        spdlog::debug("Found JSON line start at position {} (requested {})", 
+                                     actual_start, target_start);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Restart compression and skip to actual start
+        restart_compression();
+        if (actual_start > (checkpoint_ ? checkpoint_->uc_offset : 0)) {
+            skip_to_position(actual_start);
+        }
+        
+        return actual_start;
+    }
+    
+    void fill_incomplete_buffer() {
+        char temp_buffer[INCOMPLETE_BUFFER_SIZE];
+        size_t total_read = 0;
+        
+        while (total_read < INCOMPLETE_BUFFER_SIZE) {
+            if (current_position_ >= target_end_bytes_) {
+                if (total_read > 0 && find_json_boundary_in_buffer(temp_buffer, total_read)) {
+                    break;
+                }
+                is_finished_ = true;
+                break;
+            }
+            
+            size_t bytes_read;
+            int result = CompressionManager::inflate_read(inflate_state_.get(),
+                                                        reinterpret_cast<unsigned char*>(temp_buffer + total_read),
+                                                        INCOMPLETE_BUFFER_SIZE - total_read,
+                                                        &bytes_read);
+            
+            if (result != 0 || bytes_read == 0) {
+                is_finished_ = true;
+                break;
+            }
+            
+            total_read += bytes_read;
+            current_position_ += bytes_read;
+        }
+        
+        if (total_read > 0) {
+            memcpy(incomplete_buffer_, temp_buffer, total_read);
+            incomplete_buffer_size_ = total_read;
+        }
+    }
+    
+    size_t serve_data_from_buffer(char* buffer, size_t buffer_size) {
+        size_t bytes_to_copy = std::min(buffer_size, incomplete_buffer_size_);
+        bytes_to_copy = adjust_to_json_boundary(bytes_to_copy);
+        
+        memcpy(buffer, incomplete_buffer_, bytes_to_copy);
+        
+        // Shift remaining data
+        if (bytes_to_copy < incomplete_buffer_size_) {
+            memmove(incomplete_buffer_, incomplete_buffer_ + bytes_to_copy, 
+                   incomplete_buffer_size_ - bytes_to_copy);
+        }
+        incomplete_buffer_size_ -= bytes_to_copy;
+        
+        return bytes_to_copy;
+    }
+    
+    size_t adjust_to_json_boundary(size_t buffer_size) {
+        for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i > 0; i--) {
+            if (incomplete_buffer_[i - 1] == '}' && incomplete_buffer_[i] == '\n') {
+                return static_cast<size_t>(i) + 1;
+            }
+        }
+        return buffer_size;
+    }
+    
+    bool find_json_boundary_in_buffer(const char* buffer, size_t buffer_size) {
+        for (size_t i = 1; i < buffer_size; i++) {
+            if (buffer[i - 1] == '}' && buffer[i] == '\n') {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    void restart_compression() {
+        CompressionManager::inflate_cleanup(inflate_state_.get());
+        
+        bool use_checkpoint = (checkpoint_ != nullptr);
+        if (use_checkpoint) {
+            if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_, checkpoint_.get()) != 0) {
+                throw ReaderError(ReaderError::COMPRESSION_ERROR, 
+                                "Failed to reinitialize from checkpoint");
+            }
+        } else {
+            if (CompressionManager::inflate_init(inflate_state_.get(), file_handle_, 0, 0) != 0) {
+                throw ReaderError(ReaderError::COMPRESSION_ERROR, "Failed to reinitialize inflation");
+            }
+        }
+    }
+};
+
+class RawStreamingSession : public BaseStreamingSession
+{
+public:
+    RawStreamingSession() : BaseStreamingSession() {}
+    
+    void initialize(const std::string& gz_path, size_t start_bytes, size_t end_bytes,
+                   DatabaseHelper& db_helper) override {
+        spdlog::debug("Initializing raw streaming session for range [{}, {}] from {}", 
+                     start_bytes, end_bytes, gz_path);
+        
+        if (is_active_) {
+            reset();
+        }
+        
+        current_gz_path_ = gz_path;
+        start_bytes_ = start_bytes;
+        target_end_bytes_ = end_bytes;
+        current_position_ = start_bytes;
+        is_active_ = true;
+        is_finished_ = false;
+        
+        initialize_compression(gz_path, start_bytes, db_helper);
+        
+        // Skip to the start position
+        size_t current_pos = checkpoint_ ? checkpoint_->uc_offset : 0;
+        if (start_bytes > current_pos) {
+            skip_to_position(start_bytes);
+        }
+        
+        spdlog::debug("Raw streaming session initialized: start={}, target_end={}", 
+                     start_bytes, end_bytes);
+    }
+    
+    bool stream_chunk(char* buffer, size_t buffer_size, size_t* bytes_written) override {
+        if (!decompression_initialized_) {
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR,
+                            "Raw streaming session not properly initialized");
+        }
+        
+        *bytes_written = 0;
+        
+        // Check if we've reached the target end
+        if (current_position_ >= target_end_bytes_) {
+            is_finished_ = true;
+            return false;
+        }
+        
+        // Calculate how much we can read without exceeding the target
+        size_t max_read = target_end_bytes_ - current_position_;
+        size_t read_size = std::min(buffer_size, max_read);
+        
+        size_t bytes_read;
+        int result = CompressionManager::inflate_read(inflate_state_.get(),
+                                                    reinterpret_cast<unsigned char*>(buffer),
+                                                    read_size,
+                                                    &bytes_read);
+        
+        if (result != 0 || bytes_read == 0) {
+            is_finished_ = true;
+            return false;
+        }
+        
+        current_position_ += bytes_read;
+        *bytes_written = bytes_read;
+        
+        spdlog::debug("Raw streamed {} bytes (position: {} / {})",
+                     bytes_read, current_position_, target_end_bytes_);
+        
+        // Check if we have more data to stream
+        bool has_more = !is_finished_ && current_position_ < target_end_bytes_;
+        return has_more;
+    }
+};
+
+class StreamingSessionFactory
+{
+private:
+    DatabaseHelper& db_helper_;
+    
+public:
+    explicit StreamingSessionFactory(DatabaseHelper& db_helper) 
+        : db_helper_(db_helper) {}
+    
+    std::unique_ptr<JsonStreamingSession> create_json_session(
+        const std::string& gz_path, size_t start_bytes, size_t end_bytes) {
+        
+        std::unique_ptr<JsonStreamingSession> session(new JsonStreamingSession());
+        session->initialize(gz_path, start_bytes, end_bytes, db_helper_);
+        return session;
+    }
+    
+    std::unique_ptr<RawStreamingSession> create_raw_session(
+        const std::string& gz_path, size_t start_bytes, size_t end_bytes) {
+        
+        std::unique_ptr<RawStreamingSession> session(new RawStreamingSession());
+        session->initialize(gz_path, start_bytes, end_bytes, db_helper_);
+        return session;
+    }
+    
+    bool needs_new_json_session(const JsonStreamingSession* current,
+                               const std::string& gz_path, size_t start_bytes, size_t end_bytes) const {
+        return !current || 
+               !current->matches(gz_path, start_bytes, end_bytes) ||
+               current->is_finished();
+    }
+    
+    bool needs_new_raw_session(const RawStreamingSession* current,
+                              const std::string& gz_path, size_t start_bytes, size_t end_bytes) const {
+        return !current || 
+               !current->matches(gz_path, start_bytes, end_bytes) ||
+               current->is_finished();
+    }
+};
 
 class Reader::Impl
 {
@@ -23,9 +774,14 @@ class Reader::Impl
     {
         if (sqlite3_open(idx_path.c_str(), &db_) != SQLITE_OK)
         {
-            throw std::runtime_error("Failed to open index database: " + std::string(sqlite3_errmsg(db_)));
+            throw ReaderError(ReaderError::DATABASE_ERROR, "Failed to open index database: " + std::string(sqlite3_errmsg(db_)));
         }
         is_open_ = true;
+        
+        // Initialize new architecture components
+        db_helper_.reset(new DatabaseHelper(db_));
+        session_factory_.reset(new StreamingSessionFactory(*db_helper_));
+        
         spdlog::debug("Successfully created DFT reader for gz: {} and index: {}", gz_path, idx_path);
     }
 
@@ -75,37 +831,15 @@ class Reader::Impl
             throw std::runtime_error("Reader is not open");
         }
 
-        sqlite3_stmt *stmt;
-        const char *sql = "SELECT MAX(uc_offset + uc_size) FROM chunks";
-
-        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, NULL) != SQLITE_OK)
-        {
-            throw std::runtime_error("Failed to prepare max bytes query: " + std::string(sqlite3_errmsg(db_)));
+        DatabaseHelper db_helper(db_);
+        size_t max_bytes = db_helper.get_max_bytes();
+        
+        if (max_bytes > 0) {
+            spdlog::debug("Maximum bytes available: {}", max_bytes);
+        } else {
+            spdlog::debug("No chunks found, maximum bytes: 0");
         }
-
-        size_t max_bytes = 0;
-        if (sqlite3_step(stmt) == SQLITE_ROW)
-        {
-            sqlite3_int64 max_val = sqlite3_column_int64(stmt, 0);
-            if (max_val >= 0)
-            {
-                max_bytes = static_cast<size_t>(max_val);
-                spdlog::debug("Maximum bytes available: {}", max_bytes);
-            }
-            else
-            {
-                // no chunks found or empty result
-                max_bytes = 0;
-                spdlog::debug("No chunks found, maximum bytes: 0");
-            }
-        }
-        else
-        {
-            sqlite3_finalize(stmt);
-            throw std::runtime_error("Failed to execute max bytes query: " + std::string(sqlite3_errmsg(db_)));
-        }
-
-        sqlite3_finalize(stmt);
+        
         return max_bytes;
     }
 
@@ -118,30 +852,22 @@ class Reader::Impl
     {
         if (!is_open_ || !db_)
         {
-            throw std::runtime_error("Reader is not open");
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR, "Reader is not open");
         }
 
-        if (!buffer || !bytes_written || buffer_size == 0)
-        {
-            throw std::invalid_argument("Invalid buffer parameters");
+        validate_read_parameters(buffer, bytes_written, buffer_size, start_bytes, end_bytes);
+        
+        // Create or reuse JSON streaming session
+        if (session_factory_->needs_new_json_session(json_session_.get(), gz_path, start_bytes, end_bytes)) {
+            json_session_ = session_factory_->create_json_session(gz_path, start_bytes, end_bytes);
         }
-
-        if (start_bytes >= end_bytes)
-        {
-            throw std::invalid_argument("start_bytes must be less than end_bytes");
-        }
-        *bytes_written = 0;
-        if (!streaming_state_.is_active || streaming_state_.current_gz_path != gz_path ||
-            streaming_state_.start_bytes != start_bytes || streaming_state_.target_end_bytes != end_bytes ||
-            streaming_state_.is_finished)
-        {
-            initialize_streaming_session(gz_path, start_bytes, end_bytes);
-        }
-        if (streaming_state_.is_finished)
-        {
+        
+        if (json_session_->is_finished()) {
+            *bytes_written = 0;
             return false;
         }
-        return stream_data_chunk(buffer, buffer_size, bytes_written);
+        
+        return json_session_->stream_chunk(buffer, buffer_size, bytes_written);
     }
 
     bool read_raw(const std::string &gz_path,
@@ -153,30 +879,22 @@ class Reader::Impl
     {
         if (!is_open_ || !db_)
         {
-            throw std::runtime_error("Reader is not open");
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR, "Reader is not open");
         }
 
-        if (!buffer || !bytes_written || buffer_size == 0)
-        {
-            throw std::invalid_argument("Invalid buffer parameters");
+        validate_read_parameters(buffer, bytes_written, buffer_size, start_bytes, end_bytes);
+        
+        // Create or reuse raw streaming session
+        if (session_factory_->needs_new_raw_session(raw_session_.get(), gz_path, start_bytes, end_bytes)) {
+            raw_session_ = session_factory_->create_raw_session(gz_path, start_bytes, end_bytes);
         }
-
-        if (start_bytes >= end_bytes)
-        {
-            throw std::invalid_argument("start_bytes must be less than end_bytes");
-        }
-        *bytes_written = 0;
-        if (!raw_streaming_state_.is_active || raw_streaming_state_.current_gz_path != gz_path ||
-            raw_streaming_state_.start_bytes != start_bytes || raw_streaming_state_.target_end_bytes != end_bytes ||
-            raw_streaming_state_.is_finished)
-        {
-            initialize_raw_streaming_session(gz_path, start_bytes, end_bytes);
-        }
-        if (raw_streaming_state_.is_finished)
-        {
+        
+        if (raw_session_->is_finished()) {
+            *bytes_written = 0;
             return false;
         }
-        return stream_raw_data_chunk(buffer, buffer_size, bytes_written);
+        
+        return raw_session_->stream_chunk(buffer, buffer_size, bytes_written);
     }
 
     void reset()
@@ -186,6 +904,15 @@ class Reader::Impl
             throw std::runtime_error("Reader is not open");
         }
 
+        // Reset new session architecture
+        if (json_session_) {
+            json_session_->reset();
+        }
+        if (raw_session_) {
+            raw_session_->reset();
+        }
+        
+        // Reset legacy sessions
         streaming_state_ = {};
         raw_streaming_state_ = {};
     }
@@ -210,91 +937,20 @@ class Reader::Impl
 #define INCOMPLETE_BUFFER_SIZE 2 * 1024 * 1024          // 2 MB, big enough to hold multiple JSON lines
     unsigned char skip_buffer[SKIP_BUFFER_SIZE];
 
-    struct InflateState
-    {
-        z_stream zs;
-        FILE *file;
-        unsigned char in[INFLATE_CHUNK_SIZE];
-        int bits;
-        size_t c_off;
-    };
-
-    struct CheckpointInfo
-    {
-        size_t uc_offset;
-        size_t c_offset;
-        int bits;
-        // unsigned char *dict_compressed;
-        std::vector<unsigned char> dict_compressed;
-        size_t dict_compressed_size;
-    };
 
     int inflate_init(InflateState *state, FILE *f, size_t c_off, int bits) const
     {
-        memset(state, 0, sizeof(*state));
-        state->file = f;
-        state->c_off = c_off;
-        state->bits = bits;
-
-        if (inflateInit2(&state->zs, 15 + 16) != Z_OK)
-        {
-            return -1;
-        }
-
-        if (fseeko(f, static_cast<off_t>(c_off), SEEK_SET) != 0)
-        {
-            spdlog::error("Failed to seek to compressed offset: {}", c_off);
-            inflateEnd(&state->zs);
-            return -1;
-        }
-
-        return 0;
+        return CompressionManager::inflate_init(state, f, c_off, bits);
     }
 
     void inflate_cleanup(InflateState *state) const
     {
-        inflateEnd(&state->zs);
+        CompressionManager::inflate_cleanup(state);
     }
 
     int inflate_read(InflateState *state, unsigned char *out, size_t out_size, size_t *bytes_read) const
     {
-        state->zs.next_out = out;
-        state->zs.avail_out = static_cast<uInt>(out_size);
-        *bytes_read = 0;
-
-        while (state->zs.avail_out > 0)
-        {
-            if (state->zs.avail_in == 0)
-            {
-                size_t n = fread(state->in, 1, sizeof(state->in), state->file);
-                if (n == 0)
-                {
-                    if (ferror(state->file))
-                    {
-                        spdlog::error("Error reading from file during inflate_read");
-                        return -1;
-                    }
-                    break; // EOF
-                }
-                state->zs.next_in = state->in;
-                state->zs.avail_in = static_cast<uInt>(n);
-            }
-
-            int ret = inflate(&state->zs, Z_NO_FLUSH);
-            if (ret == Z_STREAM_END)
-            {
-                break;
-            }
-            if (ret != Z_OK)
-            {
-                spdlog::debug(
-                    "inflate() failed with error: {} ({})", ret, state->zs.msg ? state->zs.msg : "no message");
-                return -1;
-            }
-        }
-
-        *bytes_read = out_size - state->zs.avail_out;
-        return 0;
+        return CompressionManager::inflate_read(state, out, out_size, bytes_read);
     }
 
     int find_checkpoint(size_t target_uc_offset, CheckpointInfo *checkpoint) const
@@ -305,66 +961,27 @@ class Reader::Impl
             return -1;
         }
 
-        // First get the file_id for the current gz file
-        sqlite3_stmt *file_stmt;
-        const char *file_sql = "SELECT id FROM files WHERE logical_name = ? LIMIT 1";
-        if (sqlite3_prepare_v2(db_, file_sql, -1, &file_stmt, NULL) != SQLITE_OK)
-        {
-            spdlog::debug("Failed to prepare file lookup query");
-            return -1;
-        }
-
-        sqlite3_bind_text(file_stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
-
-        int file_id = -1;
-        if (sqlite3_step(file_stmt) == SQLITE_ROW)
-        {
-            file_id = sqlite3_column_int(file_stmt, 0);
-        }
-        sqlite3_finalize(file_stmt);
-
+        DatabaseHelper db_helper(db_);
+        int file_id = db_helper.find_file_id(gz_path_);
+        
         if (file_id == -1)
         {
             spdlog::debug("File not found in database: {}", gz_path_);
             return -1;
         }
 
-        sqlite3_stmt *stmt;
-        const char *sql = "SELECT uc_offset, c_offset, bits, dict_compressed "
-                          "FROM checkpoints "
-                          "WHERE file_id = ? AND uc_offset <= ? "
-                          "ORDER BY uc_offset DESC "
-                          "LIMIT 1";
-
-        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, NULL) != SQLITE_OK)
+        if (db_helper.find_checkpoint(file_id, target_uc_offset, checkpoint))
         {
-            spdlog::debug("Failed to prepare checkpoint query");
-            return -1;
-        }
-
-        sqlite3_bind_int(stmt, 1, file_id);
-        sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(target_uc_offset));
-
-        int ret = -1;
-        if (sqlite3_step(stmt) == SQLITE_ROW)
-        {
-            checkpoint->uc_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
-            checkpoint->c_offset = static_cast<size_t>(sqlite3_column_int64(stmt, 1));
-            checkpoint->bits = sqlite3_column_int(stmt, 2);
-
-            checkpoint->dict_compressed_size = static_cast<size_t>(sqlite3_column_bytes(stmt, 3));
-            checkpoint->dict_compressed.resize(checkpoint->dict_compressed_size);
-            memcpy(checkpoint->dict_compressed.data(), sqlite3_column_blob(stmt, 3), checkpoint->dict_compressed_size);
             if (checkpoint->dict_compressed.size() > 0)
             {
-                ret = 0;
-                spdlog::debug(
-                    "Found checkpoint at uc_offset={} for target={}", checkpoint->uc_offset, target_uc_offset);
+                spdlog::debug("Found checkpoint at uc_offset={} for target={}", 
+                             checkpoint->uc_offset, target_uc_offset);
+                return 0;
             }
             else
             {
                 spdlog::error("Failed to allocate memory for checkpoint dictionary of size {}",
-                              checkpoint->dict_compressed_size);
+                              checkpoint->dict_compressed.size());
             }
         }
         else
@@ -372,8 +989,7 @@ class Reader::Impl
             spdlog::debug("No checkpoint found for target uc_offset={}", target_uc_offset);
         }
 
-        sqlite3_finalize(stmt);
-        return ret;
+        return -1;
     }
 
     int decompress_window(const unsigned char *compressed,
@@ -645,33 +1261,8 @@ class Reader::Impl
 
     void skip_bytes(size_t bytes_to_skip)
     {
-        if (bytes_to_skip == 0)
-            return;
-        size_t remaining_skip = bytes_to_skip;
-        while (remaining_skip > 0)
-        {
-            size_t to_skip = (remaining_skip > SKIP_BUFFER_SIZE) ? SKIP_BUFFER_SIZE : remaining_skip;
-            size_t skipped;
-            int inflate_result = inflate_read(streaming_state_.inflate_state.get(), skip_buffer, to_skip, &skipped);
-            if (inflate_result != 0)
-            {
-                throw std::runtime_error("Failed during skip phase");
-            }
-            if (skipped == 0)
-            {
-                // Check if we've reached EOF or there's an error
-                if (feof(streaming_state_.file_handle))
-                {
-                    spdlog::debug("Reached EOF during skip phase");
-                }
-                else if (ferror(streaming_state_.file_handle))
-                {
-                    throw std::runtime_error("File error during skip phase");
-                }
-                break;
-            }
-            remaining_skip -= skipped;
-        }
+        CompressionManager::InflationSession session(streaming_state_.inflate_state.get(), false);
+        session.skip(bytes_to_skip, skip_buffer, SKIP_BUFFER_SIZE);
     }
 
     void restart_decompression()
@@ -921,32 +1512,8 @@ class Reader::Impl
 
     void skip_raw_bytes(size_t bytes_to_skip)
     {
-        if (bytes_to_skip == 0)
-            return;
-        size_t remaining_skip = bytes_to_skip;
-        while (remaining_skip > 0)
-        {
-            size_t to_skip = (remaining_skip > SKIP_BUFFER_SIZE) ? SKIP_BUFFER_SIZE : remaining_skip;
-            size_t skipped;
-            int inflate_result = inflate_read(raw_streaming_state_.inflate_state.get(), skip_buffer, to_skip, &skipped);
-            if (inflate_result != 0)
-            {
-                throw std::runtime_error("Failed during raw skip phase");
-            }
-            if (skipped == 0)
-            {
-                if (feof(raw_streaming_state_.file_handle))
-                {
-                    spdlog::debug("Reached EOF during raw skip phase");
-                }
-                else if (ferror(raw_streaming_state_.file_handle))
-                {
-                    throw std::runtime_error("File error during raw skip phase");
-                }
-                break;
-            }
-            remaining_skip -= skipped;
-        }
+        CompressionManager::InflationSession session(raw_streaming_state_.inflate_state.get(), false);
+        session.skip(bytes_to_skip, skip_buffer, SKIP_BUFFER_SIZE);
     }
 
     bool stream_raw_data_chunk(char *buffer, size_t buffer_size, size_t *bytes_written)
@@ -1040,8 +1607,14 @@ class Reader::Impl
     std::string idx_path_;
     sqlite3 *db_;
     bool is_open_;
+    
+    // New architecture components
+    std::unique_ptr<DatabaseHelper> db_helper_;
+    std::unique_ptr<StreamingSessionFactory> session_factory_;
+    std::unique_ptr<JsonStreamingSession> json_session_;
+    std::unique_ptr<RawStreamingSession> raw_session_;
 
-    // Streaming state management
+    // Legacy streaming state management (to be removed)
     struct StreamingState
     {
         std::string current_gz_path;
