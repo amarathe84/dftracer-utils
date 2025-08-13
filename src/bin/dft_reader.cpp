@@ -31,7 +31,7 @@ int main(int argc, char **argv)
         .help("Set logging level (trace, debug, info, warn, error, critical, off)")
         .default_value<std::string>("info");
     program.add_argument("--check").help("Check if index is valid").flag();
-
+    program.add_argument("--raw").help("Use raw reading mode").flag();
     program.add_argument("--read-buffer-size")
         .help("Size of the read buffer in bytes (default: 1MB)")
         .default_value<size_t>(1 * 1024 * 1024)
@@ -55,6 +55,7 @@ int main(int argc, char **argv)
     double chunk_size_mb = program.get<double>("--chunk-size");
     bool force_rebuild = program.get<bool>("--force");
     bool check_rebuild = program.get<bool>("--check");
+    bool raw_mode = program.get<bool>("--raw");
     std::string log_level_str = program.get<std::string>("--log-level");
 
     // @todo: delete this later
@@ -131,17 +132,28 @@ int main(int argc, char **argv)
                 end_bytes_ = max_bytes;
             }
 
-            spdlog::info("Using read buffer size: {} bytes", read_buffer_size);
+            spdlog::debug("Using read buffer size: {} bytes", read_buffer_size);
             auto buffer = std::make_unique<char[]>(read_buffer_size);
             size_t bytes_written;
             size_t total_bytes = 0;
 
-            while (reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
-            {
-                fwrite(buffer.get(), 1, bytes_written, stdout);
-                total_bytes += bytes_written;
-            }
+
+            if (raw_mode) {
+                spdlog::debug("Using raw mode");
+                while (reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
+                {
+                    fwrite(buffer.get(), 1, bytes_written, stdout);
+                    total_bytes += bytes_written;
+                }
+            } else {
+                spdlog::debug("Using JSON lines aware mode");
+                while (reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size, &bytes_written))
+                {
+                              fwrite(buffer.get(), 1, bytes_written, stdout);
+                              total_bytes += bytes_written;
+                          }
             
+            }
             spdlog::debug("Successfully read {} bytes from range", total_bytes);
         }
         catch (const std::runtime_error &e)

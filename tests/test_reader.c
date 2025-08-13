@@ -727,6 +727,333 @@ void test_logger_backward_compatibility(void) {
     TEST_ASSERT_EQUAL_INT(-1, dft_set_log_level(NULL));
 }
 
+void test_reader_raw_basic_functionality(void) {
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    TEST_ASSERT_NOT_NULL(indexer);
+    
+    int result = dft_indexer_build(indexer);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    dft_indexer_destroy(indexer);
+    
+    // Create reader
+    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    TEST_ASSERT_NOT_NULL(reader);
+    
+    // Read using raw API
+    const size_t buffer_size = 1024;
+    char buffer[1024];
+    size_t bytes_written = 0;
+    size_t total_bytes = 0;
+    char* raw_result = NULL;
+    
+    // Stream raw data until no more available
+    while (dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, buffer_size, &bytes_written) == 1) {
+        raw_result = realloc(raw_result, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(raw_result);
+        memcpy(raw_result + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    // Get any remaining data from the last call
+    if (bytes_written > 0) {
+        raw_result = realloc(raw_result, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(raw_result);
+        memcpy(raw_result + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    TEST_ASSERT_TRUE(total_bytes >= 50);
+    TEST_ASSERT_NOT_NULL(raw_result);
+    
+    // Raw read should not care about JSON boundaries, so size should be closer to requested
+    TEST_ASSERT_TRUE(total_bytes <= 60); // Should be much closer to 50 than regular read
+    
+    free(raw_result);
+    dft_reader_destroy(reader);
+}
+
+void test_reader_raw_vs_regular_comparison(void) {
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    TEST_ASSERT_NOT_NULL(indexer);
+    
+    int result = dft_indexer_build(indexer);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    dft_indexer_destroy(indexer);
+    
+    // Create two readers
+    dft_reader_handle_t reader1 = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader2 = dft_reader_create(g_gz_file, g_idx_file);
+    TEST_ASSERT_NOT_NULL(reader1);
+    TEST_ASSERT_NOT_NULL(reader2);
+    
+    const size_t buffer_size = 1024;
+    char buffer1[1024], buffer2[1024];
+    size_t bytes_written1 = 0, bytes_written2 = 0;
+    size_t total_bytes1 = 0, total_bytes2 = 0;
+    char* raw_result = NULL;
+    char* regular_result = NULL;
+    
+    // Raw read
+    while (dft_reader_read_raw(reader1, g_gz_file, 0, 100, buffer1, buffer_size, &bytes_written1) == 1) {
+        raw_result = realloc(raw_result, total_bytes1 + bytes_written1);
+        TEST_ASSERT_NOT_NULL(raw_result);
+        memcpy(raw_result + total_bytes1, buffer1, bytes_written1);
+        total_bytes1 += bytes_written1;
+    }
+    if (bytes_written1 > 0) {
+        raw_result = realloc(raw_result, total_bytes1 + bytes_written1);
+        TEST_ASSERT_NOT_NULL(raw_result);
+        memcpy(raw_result + total_bytes1, buffer1, bytes_written1);
+        total_bytes1 += bytes_written1;
+    }
+    
+    // Regular read
+    while (dft_reader_read(reader2, g_gz_file, 0, 100, buffer2, buffer_size, &bytes_written2) == 1) {
+        regular_result = realloc(regular_result, total_bytes2 + bytes_written2);
+        TEST_ASSERT_NOT_NULL(regular_result);
+        memcpy(regular_result + total_bytes2, buffer2, bytes_written2);
+        total_bytes2 += bytes_written2;
+    }
+    if (bytes_written2 > 0) {
+        regular_result = realloc(regular_result, total_bytes2 + bytes_written2);
+        TEST_ASSERT_NOT_NULL(regular_result);
+        memcpy(regular_result + total_bytes2, buffer2, bytes_written2);
+        total_bytes2 += bytes_written2;
+    }
+    
+    // Raw read should be closer to requested size (100 bytes)
+    TEST_ASSERT_EQUAL_size_t(100, total_bytes1);
+    TEST_ASSERT_TRUE(total_bytes2 >= 100);
+    
+    // Regular read should be larger due to JSON boundary extension
+    TEST_ASSERT_TRUE(total_bytes2 > total_bytes1);
+    
+    // Regular read should end with complete JSON line
+    TEST_ASSERT_EQUAL_CHAR('\n', regular_result[total_bytes2 - 1]);
+    
+    // Both should start with same data
+    size_t min_size = (total_bytes1 < total_bytes2) ? total_bytes1 : total_bytes2;
+    TEST_ASSERT_EQUAL_MEMORY(raw_result, regular_result, min_size);
+    
+    free(raw_result);
+    free(regular_result);
+    dft_reader_destroy(reader1);
+    dft_reader_destroy(reader2);
+}
+
+void test_reader_raw_edge_cases(void) {
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    TEST_ASSERT_NOT_NULL(indexer);
+    
+    int result = dft_indexer_build(indexer);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    dft_indexer_destroy(indexer);
+    
+    // Create reader
+    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    TEST_ASSERT_NOT_NULL(reader);
+    
+    size_t max_bytes;
+    result = dft_reader_get_max_bytes(reader, &max_bytes);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    
+    char buffer[1024];
+    size_t bytes_written = 0;
+    size_t total_bytes = 0;
+    char* output = NULL;
+    
+    // Single byte read
+    while (dft_reader_read_raw(reader, g_gz_file, 0, 1, buffer, sizeof(buffer), &bytes_written) == 1) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    if (bytes_written > 0) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    TEST_ASSERT_EQUAL_size_t(1, total_bytes);
+    free(output);
+    
+    // Read near end of file
+    if (max_bytes > 10) {
+        output = NULL;
+        total_bytes = 0;
+        
+        while (dft_reader_read_raw(reader, g_gz_file, max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer), &bytes_written) == 1) {
+            output = realloc(output, total_bytes + bytes_written);
+            TEST_ASSERT_NOT_NULL(output);
+            memcpy(output + total_bytes, buffer, bytes_written);
+            total_bytes += bytes_written;
+        }
+        if (bytes_written > 0) {
+            output = realloc(output, total_bytes + bytes_written);
+            TEST_ASSERT_NOT_NULL(output);
+            memcpy(output + total_bytes, buffer, bytes_written);
+            total_bytes += bytes_written;
+        }
+        TEST_ASSERT_EQUAL_size_t(9, total_bytes);
+        free(output);
+    }
+    
+    // Invalid ranges should still return error
+    result = dft_reader_read_raw(reader, g_gz_file, 100, 50, buffer, sizeof(buffer), &bytes_written);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+    
+    result = dft_reader_read_raw(reader, g_gz_file, 50, 50, buffer, sizeof(buffer), &bytes_written);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+    
+    dft_reader_destroy(reader);
+}
+
+void test_reader_raw_small_buffer(void) {
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    TEST_ASSERT_NOT_NULL(indexer);
+    
+    int result = dft_indexer_build(indexer);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    dft_indexer_destroy(indexer);
+    
+    // Create reader
+    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    TEST_ASSERT_NOT_NULL(reader);
+    
+    // Use very small buffer to test streaming behavior
+    const size_t small_buffer_size = 16;
+    char small_buffer[16];
+    size_t bytes_written = 0;
+    size_t total_bytes = 0;
+    size_t total_calls = 0;
+    char* output = NULL;
+    
+    while (dft_reader_read_raw(reader, g_gz_file, 0, 200, small_buffer, small_buffer_size, &bytes_written) == 1) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, small_buffer, bytes_written);
+        total_bytes += bytes_written;
+        total_calls++;
+        TEST_ASSERT_TRUE(bytes_written <= small_buffer_size);
+        if (total_calls > 50) break; // Safety guard
+    }
+    if (bytes_written > 0) {
+        output = realloc(output, total_bytes + bytes_written);
+        TEST_ASSERT_NOT_NULL(output);
+        memcpy(output + total_bytes, small_buffer, bytes_written);
+        total_bytes += bytes_written;
+    }
+    
+    TEST_ASSERT_EQUAL_size_t(200, total_bytes);
+    TEST_ASSERT_TRUE(total_calls > 1); // Should require multiple calls with small buffer
+    
+    free(output);
+    dft_reader_destroy(reader);
+}
+
+void test_reader_raw_multiple_ranges(void) {
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    TEST_ASSERT_NOT_NULL(indexer);
+    
+    int result = dft_indexer_build(indexer);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    dft_indexer_destroy(indexer);
+    
+    // Create reader
+    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    TEST_ASSERT_NOT_NULL(reader);
+    
+    size_t max_bytes;
+    result = dft_reader_get_max_bytes(reader, &max_bytes);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    
+    char buffer[1024];
+    size_t bytes_written = 0;
+    
+    // Define ranges to test
+    struct {
+        size_t start;
+        size_t end;
+    } ranges[] = {
+        {0, 50},
+        {50, 100},
+        {100, 150}
+    };
+    size_t num_ranges = sizeof(ranges) / sizeof(ranges[0]);
+    
+    for (size_t i = 0; i < num_ranges; i++) {
+        if (ranges[i].end <= max_bytes) {
+            size_t total_bytes = 0;
+            char* segment = NULL;
+            
+            while (dft_reader_read_raw(reader, g_gz_file, ranges[i].start, ranges[i].end, buffer, sizeof(buffer), &bytes_written) == 1) {
+                segment = realloc(segment, total_bytes + bytes_written);
+                TEST_ASSERT_NOT_NULL(segment);
+                memcpy(segment + total_bytes, buffer, bytes_written);
+                total_bytes += bytes_written;
+            }
+            if (bytes_written > 0) {
+                segment = realloc(segment, total_bytes + bytes_written);
+                TEST_ASSERT_NOT_NULL(segment);
+                memcpy(segment + total_bytes, buffer, bytes_written);
+                total_bytes += bytes_written;
+            }
+            
+            size_t expected_size = ranges[i].end - ranges[i].start;
+            TEST_ASSERT_EQUAL_size_t(expected_size, total_bytes);
+            
+            free(segment);
+        }
+    }
+    
+    dft_reader_destroy(reader);
+}
+
+void test_reader_raw_null_parameters(void) {
+    // Build index first
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    TEST_ASSERT_NOT_NULL(indexer);
+    
+    int result = dft_indexer_build(indexer);
+    TEST_ASSERT_EQUAL_INT(0, result);
+    dft_indexer_destroy(indexer);
+    
+    // Create reader
+    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    TEST_ASSERT_NOT_NULL(reader);
+    
+    char buffer[1024];
+    size_t bytes_written = 0;
+    
+    // null reader
+    result = dft_reader_read_raw(NULL, g_gz_file, 0, 50, buffer, sizeof(buffer), &bytes_written);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+    
+    // null gz_path
+    result = dft_reader_read_raw(reader, NULL, 0, 50, buffer, sizeof(buffer), &bytes_written);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+    
+    // null buffer
+    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, NULL, sizeof(buffer), &bytes_written);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+    
+    // null bytes_written
+    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, sizeof(buffer), NULL);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+    
+    // zero buffer size
+    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, 0, &bytes_written);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+    
+    dft_reader_destroy(reader);
+}
+
 int main(void) {
     UNITY_BEGIN();
     
@@ -762,6 +1089,14 @@ int main(void) {
     RUN_TEST(test_logger_set_get_level_string);
     RUN_TEST(test_logger_set_get_level_int);
     RUN_TEST(test_logger_backward_compatibility);
+    
+    // Raw reader tests
+    RUN_TEST(test_reader_raw_basic_functionality);
+    RUN_TEST(test_reader_raw_vs_regular_comparison);
+    RUN_TEST(test_reader_raw_edge_cases);
+    RUN_TEST(test_reader_raw_small_buffer);
+    RUN_TEST(test_reader_raw_multiple_ranges);
+    RUN_TEST(test_reader_raw_null_parameters);
     
     // Clean up global test environment
     if (g_env) {

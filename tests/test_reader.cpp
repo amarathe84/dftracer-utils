@@ -936,6 +936,217 @@ TEST_CASE("C++ Logger - Comprehensive functionality") {
     }
 }
 
+TEST_CASE("C++ Reader - Raw reading functionality") {
+    TestEnvironment env;
+    REQUIRE(env.is_valid());
+    
+    std::string gz_file = env.create_test_gzip_file();
+    REQUIRE(!gz_file.empty());
+    
+    std::string idx_file = env.get_index_path(gz_file);
+    
+    // Build index first
+    {
+        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        indexer.build();
+    }
+    
+    SUBCASE("Basic raw read functionality") {
+        dft::reader::Reader reader(gz_file, idx_file);
+        
+        // Read using raw API
+        const size_t buffer_size = 1024;
+        char buffer[1024];
+        size_t bytes_written = 0;
+        std::string raw_result;
+        
+        // Stream raw data until no more available
+        while (reader.read_raw(gz_file, 0, 50, buffer, buffer_size, &bytes_written)) {
+            raw_result.append(buffer, bytes_written);
+        }
+        // Get any remaining data from the last call
+        if (bytes_written > 0) {
+            raw_result.append(buffer, bytes_written);
+        }
+        
+        CHECK(raw_result.size() >= 50);
+        CHECK(!raw_result.empty());
+        
+        // Raw read should not care about JSON boundaries, so size should be closer to requested
+        CHECK(raw_result.size() <= 60); // Should be much closer to 50 than regular read
+    }
+    
+    SUBCASE("Compare raw vs regular read") {
+        dft::reader::Reader reader1(gz_file, idx_file);
+        dft::reader::Reader reader2(gz_file, idx_file);
+        
+        const size_t buffer_size = 1024;
+        char buffer1[1024], buffer2[1024];
+        size_t bytes_written1 = 0, bytes_written2 = 0;
+        std::string raw_result, regular_result;
+        
+        // Raw read
+        while (reader1.read_raw(0, 100, buffer1, buffer_size, &bytes_written1)) {
+            raw_result.append(buffer1, bytes_written1);
+        }
+        if (bytes_written1 > 0) {
+            raw_result.append(buffer1, bytes_written1);
+        }
+        
+        // Regular read  
+        while (reader2.read(0, 100, buffer2, buffer_size, &bytes_written2)) {
+            regular_result.append(buffer2, bytes_written2);
+        }
+        if (bytes_written2 > 0) {
+            regular_result.append(buffer2, bytes_written2);
+        }
+        
+        // Raw read should be closer to requested size (100 bytes)
+        CHECK(raw_result.size() == 100);
+        CHECK(regular_result.size() >= 100);
+        
+        // Regular read should be larger due to JSON boundary extension
+        CHECK(regular_result.size() > raw_result.size());
+        
+        // Regular read should end with complete JSON line
+        CHECK(regular_result.back() == '\n');
+        
+        // Raw read may not end with newline (doesn't care about boundaries)
+        // (but could happen to end with newline depending on data)
+        
+        // Both should start with same data
+        size_t min_size = std::min(raw_result.size(), regular_result.size());
+        CHECK(raw_result.substr(0, min_size) == regular_result.substr(0, min_size));
+    }
+    
+    SUBCASE("Raw read with different overloads") {
+        dft::reader::Reader reader(gz_file, idx_file);
+        
+        const size_t buffer_size = 512;
+        char buffer1[512], buffer2[512];
+        size_t bytes_written1 = 0, bytes_written2 = 0;
+        std::string result1, result2;
+        
+        // Test explicit gz_path overload
+        while (reader.read_raw(gz_file, 0, 75, buffer1, buffer_size, &bytes_written1)) {
+            result1.append(buffer1, bytes_written1);
+        }
+        if (bytes_written1 > 0) {
+            result1.append(buffer1, bytes_written1);
+        }
+        
+        reader.reset();
+
+        // Test stored gz_path overload
+        while (reader.read_raw(0, 75, buffer2, buffer_size, &bytes_written2)) {
+            result2.append(buffer2, bytes_written2);
+        }
+        if (bytes_written2 > 0) {
+            result2.append(buffer2, bytes_written2);
+        }
+        
+        // Both should return identical results
+        CHECK(result1.size() == 75);
+        CHECK(result1.size() == result2.size());
+        CHECK(result1 == result2);
+    }
+    
+    SUBCASE("Raw read edge cases") {
+        dft::reader::Reader reader(gz_file, idx_file);
+        size_t max_bytes = reader.get_max_bytes();
+        
+        char buffer[1024];
+        size_t bytes_written = 0;
+        std::string result;
+        
+        // Single byte read
+        result.clear();
+        while (reader.read_raw(0, 1, buffer, sizeof(buffer), &bytes_written)) {
+            result.append(buffer, bytes_written);
+        }
+        if (bytes_written > 0) {
+            result.append(buffer, bytes_written);
+        }
+        CHECK(result.size() == 1);
+        
+        // Read near end of file
+        if (max_bytes > 10) {
+            result.clear();
+            while (reader.read_raw(max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer), &bytes_written)) {
+                result.append(buffer, bytes_written);
+            }
+            if (bytes_written > 0) {
+                result.append(buffer, bytes_written);
+            }
+            CHECK(result.size() == 9);
+        }
+        
+        // Invalid ranges should still throw
+        CHECK_THROWS(reader.read_raw(100, 50, buffer, sizeof(buffer), &bytes_written));
+        CHECK_THROWS(reader.read_raw(50, 50, buffer, sizeof(buffer), &bytes_written));
+    }
+    
+    SUBCASE("Raw read with small buffer") {
+        dft::reader::Reader reader(gz_file, idx_file);
+        
+        // Use very small buffer to test streaming behavior
+        const size_t small_buffer_size = 16;
+        char small_buffer[16];
+        size_t bytes_written = 0;
+        std::string result;
+        size_t total_calls = 0;
+        
+        while (reader.read_raw(0, 200, small_buffer, small_buffer_size, &bytes_written)) {
+            result.append(small_buffer, bytes_written);
+            total_calls++;
+            CHECK(bytes_written <= small_buffer_size);
+            if (total_calls > 50) break; // Safety guard
+        }
+        if (bytes_written > 0) {
+            result.append(small_buffer, bytes_written);
+        }
+        
+        CHECK(result.size() == 200);
+        CHECK(total_calls > 1); // Should require multiple calls with small buffer
+    }
+    
+    SUBCASE("Raw read multiple ranges") {
+        dft::reader::Reader reader(gz_file, idx_file);
+        size_t max_bytes = reader.get_max_bytes();
+        
+        char buffer[1024];
+        size_t bytes_written = 0;
+        
+        // Read multiple non-overlapping ranges
+        std::vector<std::string> segments;
+        std::vector<std::pair<size_t, size_t>> ranges = {
+            {0, 50},
+            {50, 100}, 
+            {100, 150}
+        };
+        
+        for (const auto& range : ranges) {
+            if (range.second <= max_bytes) {
+                std::string segment;
+                while (reader.read_raw(range.first, range.second, buffer, sizeof(buffer), &bytes_written)) {
+                    segment.append(buffer, bytes_written);
+                }
+                if (bytes_written > 0) {
+                    segment.append(buffer, bytes_written);
+                }
+                
+                CHECK(segment.size() >= (range.second - range.first));
+                segments.push_back(segment);
+            }
+        }
+
+        for (size_t i = 0; i < segments.size(); ++i) {
+            size_t expected_size = ranges[i].second - ranges[i].first;
+            CHECK(segments[i].size() == expected_size);
+        }
+    }
+}
+
 TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     TestEnvironment env(1000);
     REQUIRE(env.is_valid());
