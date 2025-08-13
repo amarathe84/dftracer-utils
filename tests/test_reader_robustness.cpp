@@ -18,6 +18,11 @@
 
 using namespace dft_utils_test;
 
+size_t count_json_lines(const std::string& content);
+bool validate_json_lines(const std::string& content);
+std::string get_last_json_line(const std::string& content);
+size_t extract_id_from_json(const std::string& line);
+
 // Helper to create large JSON test data
 class LargeTestEnvironment {
 private:
