@@ -87,7 +87,14 @@ extern "C"
 #include <string>
 
 // Forward declaration for indexer
-namespace dft { namespace indexer { class Indexer; struct CheckpointInfo; } }
+namespace dft
+{
+namespace indexer
+{
+class Indexer;
+struct CheckpointInfo;
+} // namespace indexer
+} // namespace dft
 
 namespace dft
 {
@@ -157,11 +164,7 @@ class Reader
      * @return Number of bytes read, 0 indicates end of stream
      * @throws std::runtime_error if operation fails
      */
-    size_t read(const std::string &gz_path,
-                size_t start_bytes,
-                size_t end_bytes,
-                char *buffer,
-                size_t buffer_size);
+    size_t read(const std::string &gz_path, size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size);
 
     /**
      * Read a range of bytes from the gzip file using the stored gz_path (streaming)
@@ -186,11 +189,7 @@ class Reader
      * @return Number of bytes read, 0 indicates end of stream
      * @throws std::runtime_error if operation fails
      */
-    size_t read_raw(const std::string &gz_path,
-                    size_t start_bytes,
-                    size_t end_bytes,
-                    char *buffer,
-                    size_t buffer_size);
+    size_t read_raw(const std::string &gz_path, size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size);
 
     /**
      * Read raw bytes from the gzip file using the stored gz_path (streaming)

@@ -72,14 +72,14 @@ extern "C"
      * @param dict_size Output: size of compressed dictionary
      * @return 1 if checkpoint found, 0 if not found, -1 on error
      */
-    int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, 
-                                   int file_id, 
-                                   uint64_t target_offset,
-                                   uint64_t *uc_offset,
-                                   uint64_t *c_offset,
-                                   int *bits,
-                                   unsigned char **dict_compressed,
-                                   size_t *dict_size);
+    int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
+                                    int file_id,
+                                    uint64_t target_offset,
+                                    uint64_t *uc_offset,
+                                    uint64_t *c_offset,
+                                    int *bits,
+                                    unsigned char **dict_compressed,
+                                    size_t *dict_size);
 
     /**
      * Free memory allocated by dft_indexer_find_checkpoint
@@ -118,16 +118,16 @@ static constexpr size_t ZLIB_WINDOW_SIZE = 32768; // 32KB - Standard zlib window
  */
 struct CheckpointInfo
 {
-    size_t uc_offset;      // Uncompressed offset
-    size_t c_offset;       // Compressed offset
-    int bits;              // Bit position
+    size_t uc_offset;                           // Uncompressed offset
+    size_t c_offset;                            // Compressed offset
+    int bits;                                   // Bit position
     std::vector<unsigned char> dict_compressed; // Compressed dictionary (RAII managed)
-    
+
     CheckpointInfo() = default;
-    CheckpointInfo(const CheckpointInfo&) = default;
-    CheckpointInfo(CheckpointInfo&&) = default;
-    CheckpointInfo& operator=(const CheckpointInfo&) = default;
-    CheckpointInfo& operator=(CheckpointInfo&&) = default;
+    CheckpointInfo(const CheckpointInfo &) = default;
+    CheckpointInfo(CheckpointInfo &&) = default;
+    CheckpointInfo &operator=(const CheckpointInfo &) = default;
+    CheckpointInfo &operator=(CheckpointInfo &&) = default;
 };
 
 /**

@@ -11,10 +11,12 @@
 
 #include <chrono>
 
-namespace dft {
-namespace utils {
+namespace dft
+{
+namespace utils
+{
 
-time_t get_file_modification_time(const std::string& file_path)
+time_t get_file_modification_time(const std::string &file_path)
 {
 #if defined(DFT_USE_STD_FS)
     // Use std::filesystem when available and working
@@ -26,12 +28,14 @@ time_t get_file_modification_time(const std::string& file_path)
     // Fallback to platform-specific stat
 #ifdef _WIN32
     struct _stat64 st;
-    if (_stat64(file_path.c_str(), &st) == 0) {
+    if (_stat64(file_path.c_str(), &st) == 0)
+    {
         return st.st_mtime;
     }
 #else
     struct stat st;
-    if (stat(file_path.c_str(), &st) == 0) {
+    if (stat(file_path.c_str(), &st) == 0)
+    {
         return st.st_mtime;
     }
 #endif
