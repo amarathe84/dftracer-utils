@@ -230,9 +230,9 @@ public:
     }
 };
 
-static void validate_read_parameters(const char* buffer, size_t* bytes_written, 
-                                   size_t buffer_size, size_t start_bytes, size_t end_bytes) {
-    if (!buffer || !bytes_written || buffer_size == 0) {
+static void validate_read_parameters(const char* buffer, size_t buffer_size, 
+                                   size_t start_bytes, size_t end_bytes) {
+    if (!buffer || buffer_size == 0) {
         throw std::invalid_argument("Invalid buffer parameters");
     }
     if (start_bytes >= end_bytes) {
@@ -278,7 +278,7 @@ public:
     
     virtual void initialize(const std::string& gz_path, size_t start_bytes, size_t end_bytes,
                           DatabaseHelper& db_helper) = 0;
-    virtual bool stream_chunk(char* buffer, size_t buffer_size, size_t* bytes_written) = 0;
+    virtual size_t stream_chunk(char* buffer, size_t buffer_size) = 0;
     
     virtual void reset() {
         current_gz_path_.clear();
@@ -491,13 +491,11 @@ public:
                      actual_start_bytes_, end_bytes);
     }
     
-    bool stream_chunk(char* buffer, size_t buffer_size, size_t* bytes_written) override {
+    size_t stream_chunk(char* buffer, size_t buffer_size) override {
         if (!decompression_initialized_) {
             throw ReaderError(ReaderError::INITIALIZATION_ERROR, 
                             "Streaming session not properly initialized");
         }
-        
-        *bytes_written = 0;
         
         // Fill incomplete buffer if empty
         if (incomplete_buffer_size_ == 0) {
@@ -506,14 +504,11 @@ public:
         
         // Serve data from incomplete buffer
         if (incomplete_buffer_size_ > 0) {
-            *bytes_written = serve_data_from_buffer(buffer, buffer_size);
+            return serve_data_from_buffer(buffer, buffer_size);
         }
         
-        // Check if we have more data
-        bool has_more = (incomplete_buffer_size_ > 0) ||
-                       (!is_finished_ && current_position_ < target_end_bytes_);
-        
-        return has_more;
+        // Return 0 to indicate end of stream
+        return 0;
     }
     
     void reset() override {
@@ -618,11 +613,19 @@ private:
     }
     
     size_t adjust_to_json_boundary(size_t buffer_size) {
+        // Don't adjust if we don't have any complete JSON objects
+        // This ensures we never return 0 when there's data unless truly finished
         for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i > 0; i--) {
             if (incomplete_buffer_[i - 1] == '}' && incomplete_buffer_[i] == '\n') {
                 return static_cast<size_t>(i) + 1;
             }
         }
+        // If no JSON boundary found but we have data and aren't finished,
+        // return all the data (don't cut off incomplete JSON)
+        if (!is_finished_ && buffer_size > 0) {
+            return buffer_size;
+        }
+        // Only return partial data if we're at the end of stream
         return buffer_size;
     }
     
@@ -685,18 +688,16 @@ public:
                      start_bytes, end_bytes);
     }
     
-    bool stream_chunk(char* buffer, size_t buffer_size, size_t* bytes_written) override {
+    size_t stream_chunk(char* buffer, size_t buffer_size) override {
         if (!decompression_initialized_) {
             throw ReaderError(ReaderError::INITIALIZATION_ERROR,
                             "Raw streaming session not properly initialized");
         }
         
-        *bytes_written = 0;
-        
         // Check if we've reached the target end
         if (current_position_ >= target_end_bytes_) {
             is_finished_ = true;
-            return false;
+            return 0;
         }
         
         // Calculate how much we can read without exceeding the target
@@ -711,18 +712,15 @@ public:
         
         if (result != 0 || bytes_read == 0) {
             is_finished_ = true;
-            return false;
+            return 0;
         }
         
         current_position_ += bytes_read;
-        *bytes_written = bytes_read;
         
         spdlog::debug("Raw streamed {} bytes (position: {} / {})",
                      bytes_read, current_position_, target_end_bytes_);
         
-        // Check if we have more data to stream
-        bool has_more = !is_finished_ && current_position_ < target_end_bytes_;
-        return has_more;
+        return bytes_read;
     }
 };
 
@@ -843,19 +841,18 @@ class Reader::Impl
         return max_bytes;
     }
 
-    bool read(const std::string &gz_path,
-              size_t start_bytes,
-              size_t end_bytes,
-              char *buffer,
-              size_t buffer_size,
-              size_t *bytes_written)
+    size_t read(const std::string &gz_path,
+                size_t start_bytes,
+                size_t end_bytes,
+                char *buffer,
+                size_t buffer_size)
     {
         if (!is_open_ || !db_)
         {
             throw ReaderError(ReaderError::INITIALIZATION_ERROR, "Reader is not open");
         }
 
-        validate_read_parameters(buffer, bytes_written, buffer_size, start_bytes, end_bytes);
+        validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes);
         
         // Create or reuse JSON streaming session
         if (session_factory_->needs_new_json_session(json_session_.get(), gz_path, start_bytes, end_bytes)) {
@@ -863,26 +860,24 @@ class Reader::Impl
         }
         
         if (json_session_->is_finished()) {
-            *bytes_written = 0;
-            return false;
+            return 0;
         }
         
-        return json_session_->stream_chunk(buffer, buffer_size, bytes_written);
+        return json_session_->stream_chunk(buffer, buffer_size);
     }
 
-    bool read_raw(const std::string &gz_path,
-                  size_t start_bytes,
-                  size_t end_bytes,
-                  char *buffer,
-                  size_t buffer_size,
-                  size_t *bytes_written)
+    size_t read_raw(const std::string &gz_path,
+                    size_t start_bytes,
+                    size_t end_bytes,
+                    char *buffer,
+                    size_t buffer_size)
     {
         if (!is_open_ || !db_)
         {
             throw ReaderError(ReaderError::INITIALIZATION_ERROR, "Reader is not open");
         }
 
-        validate_read_parameters(buffer, bytes_written, buffer_size, start_bytes, end_bytes);
+        validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes);
         
         // Create or reuse raw streaming session
         if (session_factory_->needs_new_raw_session(raw_session_.get(), gz_path, start_bytes, end_bytes)) {
@@ -890,11 +885,10 @@ class Reader::Impl
         }
         
         if (raw_session_->is_finished()) {
-            *bytes_written = 0;
-            return false;
+            return 0;
         }
         
-        return raw_session_->stream_chunk(buffer, buffer_size, bytes_written);
+        return raw_session_->stream_chunk(buffer, buffer_size);
     }
 
     void reset()
@@ -1725,34 +1719,32 @@ size_t Reader::get_max_bytes() const
     return pImpl_->get_max_bytes();
 }
 
-bool Reader::read(const std::string &gz_path,
-                  size_t start_bytes,
-                  size_t end_bytes,
-                  char *buffer,
-                  size_t buffer_size,
-                  size_t *bytes_written)
+size_t Reader::read(const std::string &gz_path,
+                    size_t start_bytes,
+                    size_t end_bytes,
+                    char *buffer,
+                    size_t buffer_size)
 {
-    return pImpl_->read(gz_path, start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+    return pImpl_->read(gz_path, start_bytes, end_bytes, buffer, buffer_size);
 }
 
-bool Reader::read(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size, size_t *bytes_written)
+size_t Reader::read(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size)
 {
-    return pImpl_->read(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+    return pImpl_->read(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size);
 }
 
-bool Reader::read_raw(const std::string &gz_path,
-                      size_t start_bytes,
-                      size_t end_bytes,
-                      char *buffer,
-                      size_t buffer_size,
-                      size_t *bytes_written)
+size_t Reader::read_raw(const std::string &gz_path,
+                        size_t start_bytes,
+                        size_t end_bytes,
+                        char *buffer,
+                        size_t buffer_size)
 {
-    return pImpl_->read_raw(gz_path, start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+    return pImpl_->read_raw(gz_path, start_bytes, end_bytes, buffer, buffer_size);
 }
 
-bool Reader::read_raw(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size, size_t *bytes_written)
+size_t Reader::read_raw(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size)
 {
-    return pImpl_->read_raw(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size, bytes_written);
+    return pImpl_->read_raw(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer, buffer_size);
 }
 
 void Reader::reset()
@@ -1838,10 +1830,9 @@ extern "C"
                         size_t start_bytes,
                         size_t end_bytes,
                         char *buffer,
-                        size_t buffer_size,
-                        size_t *bytes_written)
+                        size_t buffer_size)
     {
-        if (!reader || !gz_path || !buffer || !bytes_written || buffer_size == 0)
+        if (!reader || !gz_path || !buffer || buffer_size == 0)
         {
             return -1;
         }
@@ -1849,8 +1840,8 @@ extern "C"
         try
         {
             auto *cpp_reader = static_cast<dft::reader::Reader *>(reader);
-            bool has_more = cpp_reader->read(gz_path, start_bytes, end_bytes, buffer, buffer_size, bytes_written);
-            return has_more ? 1 : 0;
+            size_t bytes_read = cpp_reader->read(gz_path, start_bytes, end_bytes, buffer, buffer_size);
+            return static_cast<int>(bytes_read);
         }
         catch (const std::exception &e)
         {
@@ -1864,10 +1855,9 @@ extern "C"
                             size_t start_bytes,
                             size_t end_bytes,
                             char *buffer,
-                            size_t buffer_size,
-                            size_t *bytes_written)
+                            size_t buffer_size)
     {
-        if (!reader || !gz_path || !buffer || !bytes_written || buffer_size == 0)
+        if (!reader || !gz_path || !buffer || buffer_size == 0)
         {
             return -1;
         }
@@ -1875,8 +1865,8 @@ extern "C"
         try
         {
             auto *cpp_reader = static_cast<dft::reader::Reader *>(reader);
-            bool has_more = cpp_reader->read_raw(gz_path, start_bytes, end_bytes, buffer, buffer_size, bytes_written);
-            return has_more ? 1 : 0;
+            size_t bytes_read = cpp_reader->read_raw(gz_path, start_bytes, end_bytes, buffer, buffer_size);
+            return static_cast<int>(bytes_read);
         }
         catch (const std::exception &e)
         {

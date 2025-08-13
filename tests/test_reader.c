@@ -216,24 +216,16 @@ void test_data_range_reading(void) {
     // Read valid byte range using streaming API
     const size_t buffer_size = 1024;
     char buffer[1024];
-    size_t bytes_written = 0;
     size_t total_bytes = 0;
     char* output = NULL;
     
     // Stream data from first 50 bytes
-    while (dft_reader_read(reader, g_gz_file, 0, 50, buffer, buffer_size, &bytes_written) == 1) {
-        output = realloc(output, total_bytes + bytes_written);
+    int bytes_read;
+    while ((bytes_read = dft_reader_read(reader, g_gz_file, 0, 50, buffer, buffer_size)) > 0) {
+        output = realloc(output, total_bytes + bytes_read);
         TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
-    }
-    
-    // Get any remaining data from the last call
-    if (bytes_written > 0) {
-        output = realloc(output, total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
+        memcpy(output + total_bytes, buffer, bytes_read);
+        total_bytes += bytes_read;
     }
     
     TEST_ASSERT_NOT_NULL(output);
@@ -264,22 +256,17 @@ void test_read_with_null_parameters(void) {
     TEST_ASSERT_NOT_NULL(reader);
     
     char buffer[1024];
-    size_t bytes_written = 0;
     
     // null reader
-    result = dft_reader_read(NULL, g_gz_file, 0, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read(NULL, g_gz_file, 0, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // null gz_path
-    result = dft_reader_read(reader, NULL, 0, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read(reader, NULL, 0, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // null buffer
-    result = dft_reader_read(reader, g_gz_file, 0, 50, NULL, sizeof(buffer), &bytes_written);
-    TEST_ASSERT_EQUAL_INT(-1, result);
-    
-    // null bytes_written
-    result = dft_reader_read(reader, g_gz_file, 0, 50, buffer, sizeof(buffer), NULL);
+    result = dft_reader_read(reader, g_gz_file, 0, 50, NULL, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
@@ -298,21 +285,18 @@ void test_edge_cases(void) {
     // Create reader
     dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
     TEST_ASSERT_NOT_NULL(reader);
-    
-    char* output = NULL;
 
     // Invalid byte range (start >= end)
     char buffer[1024];
-    size_t bytes_written = 0;
-    result = dft_reader_read(reader, g_gz_file, 100, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read(reader, g_gz_file, 100, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // Equal start and end should also fail
-    result = dft_reader_read(reader, g_gz_file, 50, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read(reader, g_gz_file, 50, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // Non-existent file
-    result = dft_reader_read(reader, "/nonexistent/file.gz", 0, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read(reader, "/nonexistent/file.gz", 0, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
@@ -337,17 +321,16 @@ void test_get_maximum_bytes(void) {
     TEST_ASSERT_EQUAL_INT(0, result);
     TEST_ASSERT_TRUE(max_bytes > 0);
     
-    // Try to read beyond max_bytes - should succeed
+    // Try to read beyond max_bytes - should return 0 (no more data)
     char buffer[1024];
-    size_t bytes_written = 0;
-    result = dft_reader_read(reader, g_gz_file, max_bytes + 1, max_bytes + 100, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read(reader, g_gz_file, max_bytes + 1, max_bytes + 100, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(0, result);
     
     // Try to read up to max_bytes - should succeed
     if (max_bytes > 10) {
-        result = dft_reader_read(reader, g_gz_file, max_bytes - 10, max_bytes, buffer, sizeof(buffer), &bytes_written);
-        if (result == 0) {
-            TEST_ASSERT_TRUE(bytes_written >= 0);
+        result = dft_reader_read(reader, g_gz_file, max_bytes - 10, max_bytes, buffer, sizeof(buffer));
+        if (result >= 0) {
+            TEST_ASSERT_TRUE(result >= 0);
         }
     }
     
@@ -389,24 +372,16 @@ void test_memory_management(void) {
     // multiple reads to ensure no memory leaks
     for (int i = 0; i < 100; i++) {
         char buffer[1024];
-        size_t bytes_written = 0;
         size_t total_bytes = 0;
         char* output = NULL;
 
         // Stream data until no more available
-        while ((result = dft_reader_read(reader, g_gz_file, 0, 30, buffer, sizeof(buffer), &bytes_written)) == 1) {
-            output = realloc(output, total_bytes + bytes_written);
+        int bytes_read;
+        while ((bytes_read = dft_reader_read(reader, g_gz_file, 0, 30, buffer, sizeof(buffer))) > 0) {
+            output = realloc(output, total_bytes + bytes_read);
             TEST_ASSERT_NOT_NULL(output);
-            memcpy(output + total_bytes, buffer, bytes_written);
-            total_bytes += bytes_written;
-        }
-        
-        // Get any remaining data from the last call
-        if (result == 0 && bytes_written > 0) {
-            output = realloc(output, total_bytes + bytes_written);
-            TEST_ASSERT_NOT_NULL(output);
-            memcpy(output + total_bytes, buffer, bytes_written);
-            total_bytes += bytes_written;
+            memcpy(output + total_bytes, buffer, bytes_read);
+            total_bytes += bytes_read;
         }
 
         if (total_bytes > 0) {
@@ -443,25 +418,17 @@ void test_json_boundary_detection(void) {
     TEST_ASSERT_NOT_NULL(reader);
     
     char buffer[2048];
-    size_t bytes_written = 0;
     size_t total_bytes = 0;
     char* output = NULL;
     
     // Stream data until no more available
     // NOTE: Individual streaming buffer chunks may contain partial JSON data (Approach 2)
-    while ((result = dft_reader_read(reader, gz_file, 0, 100, buffer, sizeof(buffer), &bytes_written)) == 1) {
-        output = realloc(output, total_bytes + bytes_written);
+    int bytes_read;
+    while ((bytes_read = dft_reader_read(reader, gz_file, 0, 100, buffer, sizeof(buffer))) > 0) {
+        output = realloc(output, total_bytes + bytes_read);
         TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
-    }
-    
-    // Get any remaining data from the last call
-    if (result == 0 && bytes_written > 0) {
-        output = realloc(output, total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
+        memcpy(output + total_bytes, buffer, bytes_read);
+        total_bytes += bytes_read;
     }
     
     if (output && total_bytes > 0) {
@@ -542,24 +509,16 @@ void test_regression_for_truncated_json_output(void) {
 
     // Original failing case: 0 to 10000 bytes
     char buffer[4096];
-    size_t bytes_written = 0;
     size_t total_bytes = 0;
     char* output = NULL;
     
     // Stream data until no more available
-    while ((result = dft_reader_read(reader, gz_file, 0, 10000, buffer, sizeof(buffer), &bytes_written)) == 1) {
-        output = realloc(output, total_bytes + bytes_written);
+    int bytes_read;
+    while ((bytes_read = dft_reader_read(reader, gz_file, 0, 10000, buffer, sizeof(buffer))) > 0) {
+        output = realloc(output, total_bytes + bytes_read);
         TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
-    }
-    
-    // Get any remaining data from the last call
-    if (result == 0 && bytes_written > 0) {
-        output = realloc(output, total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
+        memcpy(output + total_bytes, buffer, bytes_read);
+        total_bytes += bytes_read;
     }
     
     if (output && total_bytes > 0) {
@@ -596,19 +555,11 @@ void test_regression_for_truncated_json_output(void) {
     output = NULL;
     
     // Stream data until no more available  
-    while ((result = dft_reader_read(reader, gz_file, 0, 100, buffer, sizeof(buffer), &bytes_written)) == 1) {
-        output = realloc(output, total_bytes + bytes_written);
+    while ((bytes_read = dft_reader_read(reader, gz_file, 0, 100, buffer, sizeof(buffer))) > 0) {
+        output = realloc(output, total_bytes + bytes_read);
         TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
-    }
-    
-    // Get any remaining data from the last call
-    if (result == 0 && bytes_written > 0) {
-        output = realloc(output, total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
+        memcpy(output + total_bytes, buffer, bytes_read);
+        total_bytes += bytes_read;
     }
     
     if (output && total_bytes > 0) {
@@ -743,24 +694,16 @@ void test_reader_raw_basic_functionality(void) {
     // Read using raw API
     const size_t buffer_size = 1024;
     char buffer[1024];
-    size_t bytes_written = 0;
     size_t total_bytes = 0;
     char* raw_result = NULL;
     
     // Stream raw data until no more available
-    while (dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, buffer_size, &bytes_written) == 1) {
-        raw_result = realloc(raw_result, total_bytes + bytes_written);
+    int bytes_read;
+    while ((bytes_read = dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, buffer_size)) > 0) {
+        raw_result = realloc(raw_result, total_bytes + bytes_read);
         TEST_ASSERT_NOT_NULL(raw_result);
-        memcpy(raw_result + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
-    }
-    
-    // Get any remaining data from the last call
-    if (bytes_written > 0) {
-        raw_result = realloc(raw_result, total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(raw_result);
-        memcpy(raw_result + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
+        memcpy(raw_result + total_bytes, buffer, bytes_read);
+        total_bytes += bytes_read;
     }
     
     TEST_ASSERT_TRUE(total_bytes >= 50);
@@ -790,37 +733,26 @@ void test_reader_raw_vs_regular_comparison(void) {
     
     const size_t buffer_size = 1024;
     char buffer1[1024], buffer2[1024];
-    size_t bytes_written1 = 0, bytes_written2 = 0;
     size_t total_bytes1 = 0, total_bytes2 = 0;
     char* raw_result = NULL;
     char* regular_result = NULL;
     
     // Raw read
-    while (dft_reader_read_raw(reader1, g_gz_file, 0, 100, buffer1, buffer_size, &bytes_written1) == 1) {
-        raw_result = realloc(raw_result, total_bytes1 + bytes_written1);
+    int bytes_read1;
+    while ((bytes_read1 = dft_reader_read_raw(reader1, g_gz_file, 0, 100, buffer1, buffer_size)) > 0) {
+        raw_result = realloc(raw_result, total_bytes1 + bytes_read1);
         TEST_ASSERT_NOT_NULL(raw_result);
-        memcpy(raw_result + total_bytes1, buffer1, bytes_written1);
-        total_bytes1 += bytes_written1;
-    }
-    if (bytes_written1 > 0) {
-        raw_result = realloc(raw_result, total_bytes1 + bytes_written1);
-        TEST_ASSERT_NOT_NULL(raw_result);
-        memcpy(raw_result + total_bytes1, buffer1, bytes_written1);
-        total_bytes1 += bytes_written1;
+        memcpy(raw_result + total_bytes1, buffer1, bytes_read1);
+        total_bytes1 += bytes_read1;
     }
     
     // Regular read
-    while (dft_reader_read(reader2, g_gz_file, 0, 100, buffer2, buffer_size, &bytes_written2) == 1) {
-        regular_result = realloc(regular_result, total_bytes2 + bytes_written2);
+    int bytes_read2;
+    while ((bytes_read2 = dft_reader_read(reader2, g_gz_file, 0, 100, buffer2, buffer_size)) > 0) {
+        regular_result = realloc(regular_result, total_bytes2 + bytes_read2);
         TEST_ASSERT_NOT_NULL(regular_result);
-        memcpy(regular_result + total_bytes2, buffer2, bytes_written2);
-        total_bytes2 += bytes_written2;
-    }
-    if (bytes_written2 > 0) {
-        regular_result = realloc(regular_result, total_bytes2 + bytes_written2);
-        TEST_ASSERT_NOT_NULL(regular_result);
-        memcpy(regular_result + total_bytes2, buffer2, bytes_written2);
-        total_bytes2 += bytes_written2;
+        memcpy(regular_result + total_bytes2, buffer2, bytes_read2);
+        total_bytes2 += bytes_read2;
     }
     
     // Raw read should be closer to requested size (100 bytes)
@@ -861,22 +793,16 @@ void test_reader_raw_edge_cases(void) {
     TEST_ASSERT_EQUAL_INT(0, result);
     
     char buffer[1024];
-    size_t bytes_written = 0;
     size_t total_bytes = 0;
     char* output = NULL;
     
     // Single byte read
-    while (dft_reader_read_raw(reader, g_gz_file, 0, 1, buffer, sizeof(buffer), &bytes_written) == 1) {
-        output = realloc(output, total_bytes + bytes_written);
+    int bytes_read;
+    while ((bytes_read = dft_reader_read_raw(reader, g_gz_file, 0, 1, buffer, sizeof(buffer))) > 0) {
+        output = realloc(output, total_bytes + bytes_read);
         TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
-    }
-    if (bytes_written > 0) {
-        output = realloc(output, total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, buffer, bytes_written);
-        total_bytes += bytes_written;
+        memcpy(output + total_bytes, buffer, bytes_read);
+        total_bytes += bytes_read;
     }
     TEST_ASSERT_EQUAL_size_t(1, total_bytes);
     free(output);
@@ -886,27 +812,21 @@ void test_reader_raw_edge_cases(void) {
         output = NULL;
         total_bytes = 0;
         
-        while (dft_reader_read_raw(reader, g_gz_file, max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer), &bytes_written) == 1) {
-            output = realloc(output, total_bytes + bytes_written);
+        while ((bytes_read = dft_reader_read_raw(reader, g_gz_file, max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer))) > 0) {
+            output = realloc(output, total_bytes + bytes_read);
             TEST_ASSERT_NOT_NULL(output);
-            memcpy(output + total_bytes, buffer, bytes_written);
-            total_bytes += bytes_written;
-        }
-        if (bytes_written > 0) {
-            output = realloc(output, total_bytes + bytes_written);
-            TEST_ASSERT_NOT_NULL(output);
-            memcpy(output + total_bytes, buffer, bytes_written);
-            total_bytes += bytes_written;
+            memcpy(output + total_bytes, buffer, bytes_read);
+            total_bytes += bytes_read;
         }
         TEST_ASSERT_EQUAL_size_t(9, total_bytes);
         free(output);
     }
     
     // Invalid ranges should still return error
-    result = dft_reader_read_raw(reader, g_gz_file, 100, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read_raw(reader, g_gz_file, 100, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
-    result = dft_reader_read_raw(reader, g_gz_file, 50, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read_raw(reader, g_gz_file, 50, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
@@ -928,25 +848,19 @@ void test_reader_raw_small_buffer(void) {
     // Use very small buffer to test streaming behavior
     const size_t small_buffer_size = 16;
     char small_buffer[16];
-    size_t bytes_written = 0;
     size_t total_bytes = 0;
     size_t total_calls = 0;
     char* output = NULL;
     
-    while (dft_reader_read_raw(reader, g_gz_file, 0, 200, small_buffer, small_buffer_size, &bytes_written) == 1) {
-        output = realloc(output, total_bytes + bytes_written);
+    int bytes_read;
+    while ((bytes_read = dft_reader_read_raw(reader, g_gz_file, 0, 200, small_buffer, small_buffer_size)) > 0) {
+        output = realloc(output, total_bytes + bytes_read);
         TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, small_buffer, bytes_written);
-        total_bytes += bytes_written;
+        memcpy(output + total_bytes, small_buffer, bytes_read);
+        total_bytes += bytes_read;
         total_calls++;
-        TEST_ASSERT_TRUE(bytes_written <= small_buffer_size);
+        TEST_ASSERT_TRUE(bytes_read <= small_buffer_size);
         if (total_calls > 50) break; // Safety guard
-    }
-    if (bytes_written > 0) {
-        output = realloc(output, total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(output);
-        memcpy(output + total_bytes, small_buffer, bytes_written);
-        total_bytes += bytes_written;
     }
     
     TEST_ASSERT_EQUAL_size_t(200, total_bytes);
@@ -974,7 +888,6 @@ void test_reader_raw_multiple_ranges(void) {
     TEST_ASSERT_EQUAL_INT(0, result);
     
     char buffer[1024];
-    size_t bytes_written = 0;
     
     // Define ranges to test
     struct {
@@ -992,17 +905,12 @@ void test_reader_raw_multiple_ranges(void) {
             size_t total_bytes = 0;
             char* segment = NULL;
             
-            while (dft_reader_read_raw(reader, g_gz_file, ranges[i].start, ranges[i].end, buffer, sizeof(buffer), &bytes_written) == 1) {
-                segment = realloc(segment, total_bytes + bytes_written);
+            int bytes_read;
+            while ((bytes_read = dft_reader_read_raw(reader, g_gz_file, ranges[i].start, ranges[i].end, buffer, sizeof(buffer))) > 0) {
+                segment = realloc(segment, total_bytes + bytes_read);
                 TEST_ASSERT_NOT_NULL(segment);
-                memcpy(segment + total_bytes, buffer, bytes_written);
-                total_bytes += bytes_written;
-            }
-            if (bytes_written > 0) {
-                segment = realloc(segment, total_bytes + bytes_written);
-                TEST_ASSERT_NOT_NULL(segment);
-                memcpy(segment + total_bytes, buffer, bytes_written);
-                total_bytes += bytes_written;
+                memcpy(segment + total_bytes, buffer, bytes_read);
+                total_bytes += bytes_read;
             }
             
             size_t expected_size = ranges[i].end - ranges[i].start;
@@ -1029,26 +937,21 @@ void test_reader_raw_null_parameters(void) {
     TEST_ASSERT_NOT_NULL(reader);
     
     char buffer[1024];
-    size_t bytes_written = 0;
     
     // null reader
-    result = dft_reader_read_raw(NULL, g_gz_file, 0, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read_raw(NULL, g_gz_file, 0, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // null gz_path
-    result = dft_reader_read_raw(reader, NULL, 0, 50, buffer, sizeof(buffer), &bytes_written);
+    result = dft_reader_read_raw(reader, NULL, 0, 50, buffer, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // null buffer
-    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, NULL, sizeof(buffer), &bytes_written);
-    TEST_ASSERT_EQUAL_INT(-1, result);
-    
-    // null bytes_written
-    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, sizeof(buffer), NULL);
+    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, NULL, sizeof(buffer));
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     // zero buffer size
-    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, 0, &bytes_written);
+    result = dft_reader_read_raw(reader, g_gz_file, 0, 50, buffer, 0);
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
@@ -1076,40 +979,29 @@ void test_reader_full_file_comparison_raw_vs_json_boundary(void) {
     TEST_ASSERT_TRUE(max_bytes > 0);
     
     char buffer[4096];
-    size_t bytes_written = 0;
     
     // Read entire file with raw API
     size_t raw_total_bytes = 0;
     char* raw_content = NULL;
     
-    while (dft_reader_read_raw(reader1, g_gz_file, 0, max_bytes, buffer, sizeof(buffer), &bytes_written) == 1) {
-        raw_content = realloc(raw_content, raw_total_bytes + bytes_written);
+    int bytes_read1;
+    while ((bytes_read1 = dft_reader_read_raw(reader1, g_gz_file, 0, max_bytes, buffer, sizeof(buffer))) > 0) {
+        raw_content = realloc(raw_content, raw_total_bytes + bytes_read1);
         TEST_ASSERT_NOT_NULL(raw_content);
-        memcpy(raw_content + raw_total_bytes, buffer, bytes_written);
-        raw_total_bytes += bytes_written;
-    }
-    if (bytes_written > 0) {
-        raw_content = realloc(raw_content, raw_total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(raw_content);
-        memcpy(raw_content + raw_total_bytes, buffer, bytes_written);
-        raw_total_bytes += bytes_written;
+        memcpy(raw_content + raw_total_bytes, buffer, bytes_read1);
+        raw_total_bytes += bytes_read1;
     }
     
     // Read entire file with JSON-boundary aware API
     size_t json_total_bytes = 0;
     char* json_content = NULL;
     
-    while (dft_reader_read(reader2, g_gz_file, 0, max_bytes, buffer, sizeof(buffer), &bytes_written) == 1) {
-        json_content = realloc(json_content, json_total_bytes + bytes_written);
+    int bytes_read2;
+    while ((bytes_read2 = dft_reader_read(reader2, g_gz_file, 0, max_bytes, buffer, sizeof(buffer))) > 0) {
+        json_content = realloc(json_content, json_total_bytes + bytes_read2);
         TEST_ASSERT_NOT_NULL(json_content);
-        memcpy(json_content + json_total_bytes, buffer, bytes_written);
-        json_total_bytes += bytes_written;
-    }
-    if (bytes_written > 0) {
-        json_content = realloc(json_content, json_total_bytes + bytes_written);
-        TEST_ASSERT_NOT_NULL(json_content);
-        memcpy(json_content + json_total_bytes, buffer, bytes_written);
-        json_total_bytes += bytes_written;
+        memcpy(json_content + json_total_bytes, buffer, bytes_read2);
+        json_total_bytes += bytes_read2;
     }
     
     // Both should read the entire file

@@ -50,6 +50,12 @@ test-coverage:
 		echo "Coverage build not found. Run 'make coverage' first."; \
 	fi
 
+format:
+	@echo "Formatting code..."
+	@clang-format -i -style=file ./src/*/*.{cpp,h}
+	@clang-format -i -style=file ./tests/*/*.{cpp,h}
+	@clang-format -i -style=file ./py/src/*.{cpp,h}
+
 # Normal build
 build:
 	@echo "Building project..."
