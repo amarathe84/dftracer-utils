@@ -157,15 +157,16 @@ public:
     }
 
   private:
-    static constexpr size_t CHUNK_SIZE = 16384;
-    static constexpr size_t SKIP_BUFFER_SIZE = 65536;
+    static constexpr size_t INFLATE_CHUNK_SIZE = 16384; // 16 KB
+    static constexpr size_t SKIP_BUFFER_SIZE = 65536; // 64 KB
+    static constexpr size_t INCOMPLETE_BUFFER_SIZE = 32768; // 32 KB
     unsigned char skip_buffer[SKIP_BUFFER_SIZE];
 
     struct InflateState
     {
         z_stream zs;
         FILE *file;
-        unsigned char in[CHUNK_SIZE];
+        unsigned char in[INFLATE_CHUNK_SIZE];
         int bits;
         size_t c_off;
     };
@@ -786,8 +787,8 @@ public:
         size_t actual_start_bytes; // Adjusted start (beginning of JSON line)
         bool is_active;  // True if streaming is in progress
         bool is_finished;  // True if reached end of range
-        std::string incomplete_line;  // Buffer for incomplete JSON line
-        
+        unsigned char incomplete_buffer[INCOMPLETE_BUFFER_SIZE];  // Buffer for incomplete JSON line
+
         std::unique_ptr<InflateState> inflate_state;
         std::unique_ptr<CheckpointInfo> checkpoint;
         FILE* file_handle;
@@ -804,7 +805,7 @@ public:
             current_position = 0;
             target_end_bytes = 0;
             actual_start_bytes = 0;
-            incomplete_line.clear();
+            std::fill(std::begin(incomplete_buffer), std::end(incomplete_buffer), 0);
             is_active = false;
             is_finished = false;           
             if (file_handle) {
