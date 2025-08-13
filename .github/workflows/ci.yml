@@ -16,9 +16,15 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest, macos-latest]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
     
     - name: Install dependencies (Ubuntu)
       if: runner.os == 'Linux'
@@ -40,6 +46,16 @@ jobs:
       if: matrix.os != 'ubuntu-22.04'
       run: |
         make test
+    
+    - name: Run Python tests (with venv)
+      run: |
+        make test-py
+    
+    - name: Run Python tests (without venv)
+      run: |
+        pip install --upgrade pip setuptools wheel
+        pip install -e ".[dev]"
+        pytest tests/py/test_reader.py -v
     
     - name: Upload coverage reports to Codecov (Unix)
       if: matrix.os == 'ubuntu-22.04'

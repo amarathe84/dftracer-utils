@@ -127,6 +127,27 @@ endif()
 add_test(NAME test_reader_robustness COMMAND test_reader_robustness)
 
 ##########################################
+# Python Tests (SKBUILD only)
+##########################################
+
+if(SKBUILD)
+    # Find Python interpreter
+    find_package(Python COMPONENTS Interpreter REQUIRED)
+    
+    # Add Python tests
+    add_test(NAME test_python_reader
+        COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/py/test_reader.py -v
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    # Set test environment
+    set_tests_properties(test_python_reader
+        PROPERTIES
+        ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/py/src"
+    )
+endif()
+
+##########################################
 # Package Discovery Tests
 ##########################################
 

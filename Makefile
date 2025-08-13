@@ -1,4 +1,4 @@
-.PHONY: coverage coverage-clean coverage-view test test-coverage build clean help
+.PHONY: coverage coverage-clean coverage-view test test-coverage test-py build clean help
 
 # Default target
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  coverage-view   - Open coverage report in browser (macOS/Linux)"
 	@echo "  test           - Build and run tests without coverage"
 	@echo "  test-coverage  - Run tests with coverage (requires prior coverage build)"
+	@echo "  test-py        - Run Python tests in isolated venv"
 	@echo "  build          - Build project normally"
 	@echo "  clean          - Clean all build directories"
 	@echo "  help           - Show this help"
@@ -50,6 +51,17 @@ test-coverage:
 		echo "Coverage build not found. Run 'make coverage' first."; \
 	fi
 
+# Run Python tests in isolated environment
+test-py:
+	@echo "Running Python tests in isolated environment..."
+	@rm -rf .venv_test_py
+	@python3 -m venv .venv_test_py
+	@.venv_test_py/bin/pip install --upgrade pip setuptools wheel
+	@.venv_test_py/bin/pip install -e .[dev]
+	@.venv_test_py/bin/pytest tests/py/test_reader.py -v
+	@rm -rf .venv_test_py
+	@echo "Python tests completed successfully!"
+
 format:
 	@echo "Formatting code..."
 	@clang-format -i -style=file ./src/*/*.{cpp,h}
@@ -84,4 +96,4 @@ install-debug: build
 # Clean all builds
 clean:
 	@echo "Cleaning all build directories..."
-	@rm -rf build build_debug build_test build_coverage install
+	@rm -rf build build_debug build_test build_coverage install .venv_test_py

@@ -51,3 +51,4 @@ install
 build_*
 coverage/
 .venv
+__pycache__/
