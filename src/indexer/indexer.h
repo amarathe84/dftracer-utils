@@ -73,6 +73,11 @@ namespace indexer
 {
 
 /**
+ * Constants for zlib decompression and checkpoint management
+ */
+static constexpr size_t ZLIB_WINDOW_SIZE = 32768; // 32KB - Standard zlib window size
+
+/**
  * Information about a checkpoint in the compressed file
  * Used by the reader for efficient random access
  */

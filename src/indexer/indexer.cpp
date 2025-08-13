@@ -121,7 +121,7 @@ class Indexer::Impl
         size_t uc_offset;
         size_t c_offset;
         int bits;
-        unsigned char window[32768];
+        unsigned char window[ZLIB_WINDOW_SIZE];
     };
 
     // RAII wrapper for SQLite statements
@@ -482,7 +482,7 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chu
             current_uc_off += bytes_read;
 
             // Create checkpoint at deflate block boundaries
-            if ((inflate_state.zs.data_type & 0xc0) == 0x80 && current_uc_off >= 32768 &&
+            if ((inflate_state.zs.data_type & 0xc0) == 0x80 && current_uc_off >= ZLIB_WINDOW_SIZE &&
                 (last_checkpoint_uc_off == 0 || current_uc_off - last_checkpoint_uc_off >= checkpoint_interval))
             {
                 spdlog::debug("Deflate block boundary detected at uc_offset={}, data_type=0x{:02x}",
@@ -769,11 +769,11 @@ int Indexer::Impl::create_checkpoint(InflateState *state, CheckpointData *checkp
     if (inflateGetDictionary(&state->zs, checkpoint->window, &have) == Z_OK && have > 0)
     {
         // Got dictionary successfully
-        if (have < 32768)
+        if (have < ZLIB_WINDOW_SIZE)
         {
             // If less than 32KB available, right-align and pad with zeros
-            memmove(checkpoint->window + (32768 - have), checkpoint->window, have);
-            memset(checkpoint->window, 0, 32768 - have);
+            memmove(checkpoint->window + (ZLIB_WINDOW_SIZE - have), checkpoint->window, have);
+            memset(checkpoint->window, 0, ZLIB_WINDOW_SIZE - have);
         }
 
         spdlog::debug("Created checkpoint: uc_offset={}, c_offset={}, bits={}, dict_size={}",
@@ -835,7 +835,7 @@ int Indexer::Impl::save_checkpoint(sqlite3 *db, int file_id, const CheckpointDat
     unsigned char *compressed_window;
     size_t compressed_size;
 
-    if (compress_window(checkpoint->window, 32768, &compressed_window, &compressed_size) != 0)
+    if (compress_window(checkpoint->window, ZLIB_WINDOW_SIZE, &compressed_window, &compressed_size) != 0)
     {
         spdlog::debug("Failed to compress window for checkpoint");
         return -1;
