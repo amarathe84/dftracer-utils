@@ -101,6 +101,9 @@ class Indexer::Impl
         return chunk_size_mb_;
     }
 
+    uint64_t get_max_bytes() const;
+    uint64_t get_num_lines() const;
+
   private:
     static const char *SQL_SCHEMA;
 
@@ -168,8 +171,8 @@ class Indexer::Impl
 
     // Database cleanup helpers
     int cleanup_existing_data(sqlite3 *db, int file_id) const;
-    int insert_metadata(sqlite3 *db, int file_id, size_t chunk_size) const;
-    int process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chunk_size) const;
+    int insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, uint64_t total_lines) const;
+    int process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chunk_size, uint64_t &total_lines_out) const;
     void save_chunk(sqlite3_stmt *stmt, int file_id, size_t chunk_idx, size_t chunk_start_c_off, 
                    size_t chunk_c_size, size_t chunk_start_uc_off, size_t chunk_uc_size, size_t events) const;
 
@@ -232,6 +235,7 @@ const char *Indexer::Impl::SQL_SCHEMA = "CREATE TABLE IF NOT EXISTS files ("
                                         "  file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
                                         "  chunk_size INTEGER NOT NULL,"
                                         "  checkpoint_interval INTEGER NOT NULL DEFAULT 33554432,"
+                                        "  total_lines INTEGER NOT NULL DEFAULT 0,"
                                         "  PRIMARY KEY(file_id)"
                                         ");";
 
@@ -335,32 +339,50 @@ int Indexer::Impl::cleanup_existing_data(sqlite3 *db, int file_id) const
         sqlite3_stmt *stmt = nullptr;
         if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK)
         {
+            spdlog::error("Failed to prepare cleanup statement '{}': {}", query, sqlite3_errmsg(db));
             return -1;
         }
         sqlite3_bind_int(stmt, 1, file_id);
-        sqlite3_step(stmt);
+        int result = sqlite3_step(stmt);
+        if (result != SQLITE_DONE)
+        {
+            spdlog::error("Failed to execute cleanup statement '{}' for file_id {}: {} - {}", query, file_id, result, sqlite3_errmsg(db));
+            sqlite3_finalize(stmt);
+            return -1;
+        }
         sqlite3_finalize(stmt);
     }
+    spdlog::debug("Successfully cleaned up existing data for file_id {}", file_id);
     return 0;
 }
 
-int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size) const
+int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size, uint64_t total_lines) const
 {
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db,
-                           "INSERT INTO metadata(file_id, chunk_size, checkpoint_interval) VALUES(?, ?, ?);",
+                           "INSERT INTO metadata(file_id, chunk_size, checkpoint_interval, total_lines) VALUES(?, ?, ?, ?);",
                            -1,
                            &stmt,
                            nullptr) != SQLITE_OK)
     {
+        spdlog::error("Failed to prepare metadata insert statement: {}", sqlite3_errmsg(db));
         return -1;
     }
 
     sqlite3_bind_int(stmt, 1, file_id);
     sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(chunk_size));
-    sqlite3_bind_int64(stmt, 3, 33554432); // 32MB checkpoint interval
+    sqlite3_bind_int64(stmt, 3, static_cast<int64_t>(chunk_size));
+    sqlite3_bind_int64(stmt, 4, static_cast<int64_t>(total_lines));
     
     int result = sqlite3_step(stmt);
+    if (result != SQLITE_DONE)
+    {
+        spdlog::error("Failed to insert metadata for file_id {}: {} - {}", file_id, result, sqlite3_errmsg(db));
+    }
+    else
+    {
+        spdlog::debug("Successfully inserted metadata for file_id {}: chunk_size={}, total_lines={}", file_id, chunk_size, total_lines);
+    }
     sqlite3_finalize(stmt);
     return (result == SQLITE_DONE) ? 0 : -1;
 }
@@ -379,7 +401,7 @@ void Indexer::Impl::save_chunk(sqlite3_stmt *stmt, int file_id, size_t chunk_idx
     sqlite3_reset(stmt);
 }
 
-int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chunk_size) const
+int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chunk_size, uint64_t &total_lines_out) const
 {
     // Reset file pointer to beginning for gzip decompression
     if (fseeko(fp, 0, SEEK_SET) != 0)
@@ -406,10 +428,11 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chu
         size_t chunk_start_c_off = 0;
         size_t current_uc_off = 0;
         size_t current_events = 0;
+        uint64_t total_lines = 0;
         unsigned char buffer[65536];
         int chunk_has_complete_event = 0;
 
-        const size_t checkpoint_interval = 33554432; // 32MB
+        const size_t checkpoint_interval = chunk_size;
         size_t last_checkpoint_uc_off = 0;
 
         spdlog::debug("Building chunk index with chunk_size={} bytes, checkpoint interval={} bytes", 
@@ -441,13 +464,14 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chu
                 break;
             }
 
-            // Count newlines for event tracking
+            // Count newlines for event tracking and total lines
             size_t last_newline_pos = SIZE_MAX;
             for (size_t i = 0; i < bytes_read; i++)
             {
                 if (buffer[i] == '\n')
                 {
                     current_events++;
+                    total_lines++;
                     chunk_has_complete_event = 1;
                     last_newline_pos = i;
                 }
@@ -516,7 +540,8 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t chu
         }
 
         inflate_cleanup_simple(&inflate_state);
-        spdlog::debug("Indexing complete: created {} chunks", chunk_idx + 1);
+        total_lines_out = total_lines;
+        spdlog::debug("Indexing complete: created {} chunks, {} total lines", chunk_idx + 1, total_lines);
         return 0;
     }
     catch (const std::exception &e)
@@ -863,16 +888,9 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
         return -2;
     }
 
-    // Insert metadata
-    if (insert_metadata(db, file_id, chunk_size) != 0)
-    {
-        fclose(fp);
-        sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
-        return -2;
-    }
-
-    // Process chunks
-    int result = process_chunks(fp, db, file_id, chunk_size);
+    // Process chunks and get total line count
+    uint64_t total_lines = 0;
+    int result = process_chunks(fp, db, file_id, chunk_size, total_lines);
     fclose(fp);
     
     if (result != 0)
@@ -881,13 +899,94 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id, const std::str
         return result;
     }
 
+    // Insert metadata with total_lines
+    if (insert_metadata(db, file_id, chunk_size, total_lines) != 0)
+    {
+        sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+        return -2;
+    }
+
     sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
     return 0;
+}
+
+uint64_t Indexer::Impl::get_max_bytes() const
+{
+    if (!index_exists_and_valid(idx_path_))
+    {
+        return 0;
+    }
+
+    sqlite3 *db;
+    if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK)
+    {
+        throw std::runtime_error("Cannot open index database: " + std::string(sqlite3_errmsg(db)));
+    }
+
+    sqlite3_stmt *stmt;
+    const char *sql = "SELECT MAX(uc_offset + uc_size) FROM chunks WHERE file_id = "
+                      "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)";
+    uint64_t max_bytes = 0;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_text(stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    sqlite3_close(db);
+    return max_bytes;
+}
+
+uint64_t Indexer::Impl::get_num_lines() const
+{
+    if (!index_exists_and_valid(idx_path_))
+    {
+        return 0;
+    }
+
+    sqlite3 *db;
+    if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK)
+    {
+        throw std::runtime_error("Cannot open index database: " + std::string(sqlite3_errmsg(db)));
+    }
+
+    sqlite3_stmt *stmt;
+    const char *sql = "SELECT total_lines FROM metadata WHERE file_id = "
+                      "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)";
+    uint64_t total_lines = 0;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_text(stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            total_lines = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    sqlite3_close(db);
+    return total_lines;
 }
 
 void Indexer::Impl::build()
 {
     spdlog::debug("Building index for {} with {:.1f} MB chunks...", gz_path_, chunk_size_mb_);
+
+    // If force rebuild is enabled, delete the existing database file to ensure clean schema
+    if (force_rebuild_ && fs::exists(idx_path_))
+    {
+        spdlog::debug("Force rebuild enabled, removing existing index file: {}", idx_path_);
+        if (!fs::remove(idx_path_))
+        {
+            spdlog::warn("Failed to remove existing index file: {}", idx_path_);
+        }
+    }
 
     // open database
     if (sqlite3_open(idx_path_.c_str(), &db_) != SQLITE_OK)
@@ -1025,6 +1124,16 @@ double Indexer::get_chunk_size_mb() const
     return pImpl_->get_chunk_size_mb();
 }
 
+uint64_t Indexer::get_max_bytes() const
+{
+    return pImpl_->get_max_bytes();
+}
+
+uint64_t Indexer::get_num_lines() const
+{
+    return pImpl_->get_num_lines();
+}
+
 
 } // namespace indexer
 } // namespace dft
@@ -1093,6 +1202,44 @@ extern "C"
         {
             spdlog::error("Failed to check if rebuild is needed: {}", e.what());
             return -1;
+        }
+    }
+
+    uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer)
+    {
+        if (!indexer)
+        {
+            return 0;
+        }
+
+        try
+        {
+            auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+            return cpp_indexer->get_max_bytes();
+        }
+        catch (const std::exception &e)
+        {
+            spdlog::error("Failed to get max bytes: {}", e.what());
+            return 0;
+        }
+    }
+
+    uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer)
+    {
+        if (!indexer)
+        {
+            return 0;
+        }
+
+        try
+        {
+            auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+            return cpp_indexer->get_num_lines();
+        }
+        catch (const std::exception &e)
+        {
+            spdlog::error("Failed to get number of lines: {}", e.what());
+            return 0;
         }
     }
 

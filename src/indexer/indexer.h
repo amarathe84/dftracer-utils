@@ -39,6 +39,20 @@ extern "C"
     int dft_indexer_need_rebuild(dft_indexer_handle_t indexer);
 
     /**
+     * Get the maximum uncompressed bytes in the indexed file
+     * @param indexer DFT indexer handle
+     * @return maximum uncompressed bytes, or 0 if index doesn't exist or on error
+     */
+    uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer);
+
+    /**
+     * Get the total number of lines in the indexed file
+     * @param indexer DFT indexer handle
+     * @return total number of lines, or 0 if index doesn't exist or on error
+     */
+    uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer);
+
+    /**
      * Destroy a DFT indexer instance and free all associated resources
      * @param indexer Opaque handle to the indexer instance
      */
@@ -79,7 +93,7 @@ class Indexer
      * Create a new DFT indexer instance
      * @param gz_path Path to the gzipped trace file
      * @param idx_path Path to the index file
-     * @param chunk_size_mb Chunk size for indexing in megabytes
+     * @param chunk_size_mb Chunk size for indexing in megabytes (also used for checkpoint interval)
      * @param force_rebuild Force rebuild even if index exists and chunk size matches
      * @throws std::runtime_error if indexer creation fails
      */
@@ -136,10 +150,24 @@ class Indexer
     const std::string &get_idx_path() const;
 
     /**
-     * Get the chunk size in megabytes
+     * Get the chunk size in megabytes (also used for checkpoint interval)
      * @return chunk size in megabytes
      */
     double get_chunk_size_mb() const;
+
+    /**
+     * Get the maximum uncompressed bytes in the indexed file
+     * @return maximum uncompressed bytes, or 0 if index doesn't exist
+     * @throws std::runtime_error on database error
+     */
+    uint64_t get_max_bytes() const;
+
+    /**
+     * Get the total number of lines in the indexed file
+     * @return total number of lines, or 0 if index doesn't exist
+     * @throws std::runtime_error on database error
+     */
+    uint64_t get_num_lines() const;
 
   private:
     class Impl;
