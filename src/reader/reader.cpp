@@ -878,7 +878,6 @@ class Reader::Impl
     {
         if (this != &other)
         {
-            // Session cleanup is handled automatically by RAII
             gz_path_ = std::move(other.gz_path_);
             idx_path_ = std::move(other.idx_path_);
             is_open_ = other.is_open_;
@@ -995,7 +994,6 @@ class Reader::Impl
     std::string idx_path_;
     bool is_open_;
 
-    // Indexer-based architecture components
     std::unique_ptr<dft::indexer::Indexer> indexer_;
     std::unique_ptr<StreamingSessionFactory> session_factory_;
     std::unique_ptr<JsonStreamingSession> json_session_;

@@ -88,6 +88,59 @@ extern "C"
     void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed);
 
     /**
+     * Get all checkpoints for a given file as arrays
+     * @param indexer DFT indexer handle
+     * @param file_id Database file ID (from dft_indexer_find_file_id)
+     * @param count Output: number of checkpoints
+     * @param checkpoint_indices Output: array of checkpoint indices (caller must free)
+     * @param uc_offsets Output: array of uncompressed offsets (caller must free)
+     * @param uc_sizes Output: array of uncompressed sizes (caller must free)
+     * @param c_offsets Output: array of compressed offsets (caller must free)
+     * @param c_sizes Output: array of compressed sizes (caller must free)
+     * @param bits_array Output: array of bit positions (caller must free)
+     * @param dict_sizes Output: array of dictionary sizes (caller must free)
+     * @param dict_data Output: array of dictionary data pointers (caller must free each and the array)
+     * @param num_lines_array Output: array of line counts (caller must free)
+     * @return 0 on success, -1 on error
+     */
+    int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
+                                    int file_id,
+                                    size_t *count,
+                                    uint64_t **checkpoint_indices,
+                                    uint64_t **uc_offsets,
+                                    uint64_t **uc_sizes,
+                                    uint64_t **c_offsets,
+                                    uint64_t **c_sizes,
+                                    int **bits_array,
+                                    size_t **dict_sizes,
+                                    unsigned char ***dict_data,
+                                    uint64_t **num_lines_array);
+
+    /**
+     * Free memory allocated by dft_indexer_get_checkpoints
+     * @param count Number of checkpoints
+     * @param checkpoint_indices Checkpoint indices array to free
+     * @param uc_offsets Uncompressed offsets array to free
+     * @param uc_sizes Uncompressed sizes array to free
+     * @param c_offsets Compressed offsets array to free
+     * @param c_sizes Compressed sizes array to free
+     * @param bits_array Bits array to free
+     * @param dict_sizes Dictionary sizes array to free
+     * @param dict_data Dictionary data array to free (frees each dictionary and the array)
+     * @param num_lines_array Line counts array to free
+     */
+    void dft_indexer_free_checkpoints(size_t count,
+                                      uint64_t *checkpoint_indices,
+                                      uint64_t *uc_offsets,
+                                      uint64_t *uc_sizes,
+                                      uint64_t *c_offsets,
+                                      uint64_t *c_sizes,
+                                      int *bits_array,
+                                      size_t *dict_sizes,
+                                      unsigned char **dict_data,
+                                      uint64_t *num_lines_array);
+
+    /**
      * Destroy a DFT indexer instance and free all associated resources
      * @param indexer Opaque handle to the indexer instance
      */
@@ -114,14 +167,18 @@ static constexpr size_t ZLIB_WINDOW_SIZE = 32768; // 32KB - Standard zlib window
 
 /**
  * Information about a checkpoint in the compressed file
- * Used by the reader for efficient random access
+ * Now includes chunk information for unified access
  */
 struct CheckpointInfo
 {
+    size_t checkpoint_idx;                      // Checkpoint index
     size_t uc_offset;                           // Uncompressed offset
+    size_t uc_size;                             // Uncompressed size (from chunk)
     size_t c_offset;                            // Compressed offset
+    size_t c_size;                              // Compressed size (from chunk)
     int bits;                                   // Bit position
-    std::vector<unsigned char> dict_compressed; // Compressed dictionary (RAII managed)
+    std::vector<unsigned char> dict_compressed; // Compressed dictionary
+    size_t num_lines;                           // Number of lines in this chunk
 
     CheckpointInfo() = default;
     CheckpointInfo(const CheckpointInfo &) = default;
@@ -245,6 +302,14 @@ class Indexer
      * @throws std::runtime_error on database error
      */
     bool find_checkpoint(int file_id, size_t target_offset, CheckpointInfo &checkpoint) const;
+
+    /**
+     * Get all checkpoints for a given file as a list
+     * @param file_id Database file ID (from find_file_id)
+     * @return vector of all checkpoints ordered by uncompressed offset
+     * @throws std::runtime_error on database error
+     */
+    std::vector<CheckpointInfo> get_checkpoints(int file_id) const;
 
   private:
     class Impl;
