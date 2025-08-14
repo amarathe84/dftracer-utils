@@ -80,6 +80,7 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <stdexcept>
 
 // Forward declaration for indexer
 namespace dftracer {
@@ -226,6 +227,31 @@ class Reader {
    * @return index file path
    */
   const std::string &get_idx_path() const;
+
+
+class Error : public std::runtime_error {
+ public:
+  enum Type {
+    DATABASE_ERROR,
+    FILE_IO_ERROR,
+    COMPRESSION_ERROR,
+    INVALID_ARGUMENT,
+    INITIALIZATION_ERROR,
+    READ_ERROR,
+    UNKNOWN_ERROR,
+  };
+
+  Error(Type type, const std::string &message)
+      : std::runtime_error(format_message(type, message)), type_(type) {}
+
+  Type get_type() const { return type_; }
+
+ private:
+  Type type_;
+
+  static std::string format_message(Type type, const std::string &message);
+};
+
 
  private:
   class Impl;

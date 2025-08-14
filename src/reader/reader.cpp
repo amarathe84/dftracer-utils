@@ -22,48 +22,7 @@ struct InflateState {
 namespace dftracer {
 namespace utils {
 namespace reader {
-
-class ReaderError : public std::runtime_error {
- public:
-  enum Type {
-    DATABASE_ERROR,
-    FILE_IO_ERROR,
-    COMPRESSION_ERROR,
-    INVALID_ARGUMENT,
-    INITIALIZATION_ERROR
-  };
-
-  ReaderError(Type type, const std::string &message)
-      : std::runtime_error(format_message(type, message)), type_(type) {}
-
-  Type get_type() const { return type_; }
-
- private:
-  Type type_;
-
-  static std::string format_message(Type type, const std::string &message) {
-    const char *prefix = "";
-    switch (type) {
-      case DATABASE_ERROR:
-        prefix = "Database error";
-        break;
-      case FILE_IO_ERROR:
-        prefix = "File I/O error";
-        break;
-      case COMPRESSION_ERROR:
-        prefix = "Compression error";
-        break;
-      case INVALID_ARGUMENT:
-        prefix = "Invalid argument";
-        break;
-      case INITIALIZATION_ERROR:
-        prefix = "Initialization error";
-        break;
-    }
-    return std::string(prefix) + ": " + message;
-  }
-};
-
+  
 class CompressionManager {
  public:
   class InflationSession {
@@ -168,12 +127,18 @@ class CompressionManager {
 };
 
 static void validate_read_parameters(const char *buffer, size_t buffer_size,
-                                     size_t start_bytes, size_t end_bytes) {
+                                     size_t start_bytes, size_t end_bytes, size_t max_bytes = SIZE_MAX) {
   if (!buffer || buffer_size == 0) {
-    throw std::invalid_argument("Invalid buffer parameters");
+    throw Reader::Error(Reader::Error::INVALID_ARGUMENT, "Invalid buffer parameters");
   }
   if (start_bytes >= end_bytes) {
-    throw std::invalid_argument("start_bytes must be less than end_bytes");
+    throw Reader::Error(Reader::Error::INVALID_ARGUMENT, "start_bytes must be less than end_bytes");
+  }
+  if (max_bytes != SIZE_MAX && end_bytes > max_bytes) {
+    throw Reader::Error(Reader::Error::INVALID_ARGUMENT, "end_bytes exceeds maximum available bytes");
+  }
+  if (max_bytes != SIZE_MAX && start_bytes > max_bytes) {
+    throw Reader::Error(Reader::Error::INVALID_ARGUMENT, "start_bytes exceeds maximum available bytes");
   }
 }
 
@@ -241,8 +206,8 @@ class BaseStreamingSession {
   FILE *open_file(const std::string &path) {
     FILE *file = fopen(path.c_str(), "rb");
     if (!file) {
-      throw ReaderError(ReaderError::FILE_IO_ERROR,
-                        "Failed to open file: " + path);
+      throw Reader::Error(Reader::Error::FILE_IO_ERROR,
+                          "Failed to open file: " + path);
     }
     return file;
   }
@@ -273,8 +238,8 @@ class BaseStreamingSession {
       checkpoint_.reset();
       if (CompressionManager::inflate_init(inflate_state_.get(), file_handle_,
                                            0, 0) != 0) {
-        throw ReaderError(ReaderError::COMPRESSION_ERROR,
-                          "Failed to initialize inflation");
+        throw Reader::Error(Reader::Error::COMPRESSION_ERROR,
+                            "Failed to initialize inflation");
       }
     }
 
@@ -406,19 +371,15 @@ class BaseStreamingSession {
   }
 };
 
-class JsonStreamingSession : public BaseStreamingSession {
+class LineStreamingSession : public BaseStreamingSession {
  private:
-  static const size_t INCOMPLETE_BUFFER_SIZE = 2 * 1024 * 1024;  // 2 MB
-  char incomplete_buffer_[INCOMPLETE_BUFFER_SIZE];
-  size_t incomplete_buffer_size_;
+  std::vector<char> partial_line_buffer_;        // Partial line from previous read
   size_t actual_start_bytes_;
 
  public:
-  JsonStreamingSession()
+  LineStreamingSession()
       : BaseStreamingSession(),
-        incomplete_buffer_size_(0),
         actual_start_bytes_(0) {
-    memset(incomplete_buffer_, 0, sizeof(incomplete_buffer_));
   }
 
   void initialize(const std::string &gz_path, size_t start_bytes,
@@ -436,12 +397,11 @@ class JsonStreamingSession : public BaseStreamingSession {
     target_end_bytes_ = end_bytes;
     is_active_ = true;
     is_finished_ = false;
-    incomplete_buffer_size_ = 0;
 
     initialize_compression(gz_path, start_bytes, indexer);
 
-    // Find the actual start position (beginning of a complete JSON line)
-    actual_start_bytes_ = find_json_line_start(start_bytes);
+    // Find the actual start position (beginning of a complete line)
+    actual_start_bytes_ = find_line_start(start_bytes);
     current_position_ = actual_start_bytes_;
 
     spdlog::debug(
@@ -449,74 +409,78 @@ class JsonStreamingSession : public BaseStreamingSession {
         actual_start_bytes_, end_bytes);
   }
 
+  // size_t read_until_first_line
+
   size_t stream_chunk(char *buffer, size_t buffer_size) override {
     if (!decompression_initialized_) {
-      throw ReaderError(ReaderError::INITIALIZATION_ERROR,
+      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
                         "Streaming session not properly initialized");
     }
 
-    // Keep trying to fill buffer and serve complete JSON lines
-    int attempts = 0;
-    const int max_attempts = 10;  // Prevent infinite loops
-
-    while (attempts < max_attempts) {
-      attempts++;
-
-      // Fill incomplete buffer if empty
-      if (incomplete_buffer_size_ == 0) {
-        fill_incomplete_buffer();
-        if (incomplete_buffer_size_ == 0) {
-          // No more data available
-          break;
-        }
-      }
-
-      // Try to serve complete JSON lines
-      size_t bytes_to_copy = std::min(buffer_size, incomplete_buffer_size_);
-      bytes_to_copy = adjust_to_json_boundary(bytes_to_copy);
-
-      if (bytes_to_copy > 0) {
-        // We have complete JSON lines to serve
-        memcpy(buffer, incomplete_buffer_, bytes_to_copy);
-
-        // Shift remaining data
-        if (bytes_to_copy < incomplete_buffer_size_) {
-          memmove(incomplete_buffer_, incomplete_buffer_ + bytes_to_copy,
-                  incomplete_buffer_size_ - bytes_to_copy);
-        }
-        incomplete_buffer_size_ -= bytes_to_copy;
-
-        return bytes_to_copy;
-      }
-
-      // If we can't serve complete JSON lines and we're finished, serve what we
-      // have
-      if (is_finished_) {
-        if (incomplete_buffer_size_ > 0) {
-          size_t remaining = std::min(buffer_size, incomplete_buffer_size_);
-          memcpy(buffer, incomplete_buffer_, remaining);
-          incomplete_buffer_size_ = 0;
-          return remaining;
-        }
-        break;
-      }
-
-      // Need more data for complete JSON lines - continue the loop
+    // Check if we've reached the target end
+    if (current_position_ >= target_end_bytes_) {
+      is_finished_ = true;
+      return 0;
     }
 
-    // Return 0 to indicate end of stream
-    return 0;
+    // if we have partial lines then add it to bytes_to_read
+    // partial line length is also need to be less than buffer size ALWAYS
+    std::vector<char> temp_buffer(buffer_size);
+    size_t bytes_to_read = buffer_size;
+    if (!partial_line_buffer_.empty()) {
+      // prepend partial buffer
+      std::memcpy(temp_buffer.data(), partial_line_buffer_.data(), partial_line_buffer_.size());
+      bytes_to_read -= partial_line_buffer_.size();
+    }
+
+    // Calculate how much we can read without exceeding the target
+    bytes_to_read = std::min(target_end_bytes_ - current_position_, bytes_to_read);
+    size_t read_size = std::min(buffer_size, bytes_to_read);
+
+    size_t bytes_read = 0;
+    if (bytes_to_read > 0) {
+      int result = CompressionManager::inflate_read(
+          inflate_state_.get(), reinterpret_cast<unsigned char *>(temp_buffer.data() + partial_line_buffer_.size()),
+          read_size, &bytes_read);
+
+      if (result != 0 || bytes_read == 0) {
+        is_finished_ = true;
+        return 0;
+      }
+    }
+
+    spdlog::debug("Read {} bytes from compressed stream", bytes_read);
+
+    current_position_ += bytes_read;
+
+    // chopped using adjust_to_boundary
+    size_t adjusted_size = adjust_to_boundary(temp_buffer.data(), bytes_read);
+
+    if (adjusted_size == 0) {
+      // No complete line found, we need to read more data
+      spdlog::error("No complete line found, need to read more data, try increasing the end bytes");
+      is_finished_ = true;
+      return 0;
+    }
+
+    // copy the adjusted buffer to the output
+    std::memcpy(buffer, temp_buffer.data(), adjusted_size);
+    if (adjusted_size < bytes_read) {
+      partial_line_buffer_ = std::vector<char>(bytes_read - adjusted_size);
+      std::memcpy(partial_line_buffer_.data(), temp_buffer.data() + adjusted_size, partial_line_buffer_.size());
+    }
+
+    return adjusted_size;
   }
 
   void reset() override {
     BaseStreamingSession::reset();
-    memset(incomplete_buffer_, 0, sizeof(incomplete_buffer_));
-    incomplete_buffer_size_ = 0;
+    partial_line_buffer_ = std::vector<char>();
     actual_start_bytes_ = 0;
   }
 
  private:
-  size_t find_json_line_start(size_t target_start) {
+  size_t find_line_start(size_t target_start) {
     size_t current_pos = checkpoint_ ? checkpoint_->uc_offset : 0;
     size_t actual_start = target_start;
 
@@ -524,7 +488,7 @@ class JsonStreamingSession : public BaseStreamingSession {
       return target_start;
     }
 
-    // Search for JSON line start
+    // Search for line start
     size_t search_start =
         (target_start >= 512) ? target_start - 512 : current_pos;
 
@@ -561,45 +525,10 @@ class JsonStreamingSession : public BaseStreamingSession {
     return actual_start;
   }
 
-  void fill_incomplete_buffer() {
-    char temp_buffer[INCOMPLETE_BUFFER_SIZE];
-    size_t total_read = 0;
-
-    while (total_read < INCOMPLETE_BUFFER_SIZE) {
-      if (current_position_ >= target_end_bytes_) {
-        if (total_read > 0 &&
-            find_json_boundary_in_buffer(temp_buffer, total_read)) {
-          break;
-        }
-        is_finished_ = true;
-        break;
-      }
-
-      size_t bytes_read;
-      int result = CompressionManager::inflate_read(
-          inflate_state_.get(),
-          reinterpret_cast<unsigned char *>(temp_buffer + total_read),
-          INCOMPLETE_BUFFER_SIZE - total_read, &bytes_read);
-
-      if (result != 0 || bytes_read == 0) {
-        is_finished_ = true;
-        break;
-      }
-
-      total_read += bytes_read;
-      current_position_ += bytes_read;
-    }
-
-    if (total_read > 0) {
-      memcpy(incomplete_buffer_, temp_buffer, total_read);
-      incomplete_buffer_size_ = total_read;
-    }
-  }
-
-  size_t adjust_to_json_boundary(size_t buffer_size) {
-    // Find the last complete JSON boundary in the buffer
+  size_t adjust_to_boundary(char* buffer, size_t buffer_size) {
+    // Find the last complete boundary in the buffer
     for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i > 0; i--) {
-      if (incomplete_buffer_[i - 1] == '}' && incomplete_buffer_[i] == '\n') {
+      if (buffer[i] == '\n') {
         return static_cast<size_t>(i) + 1;
       }
     }
@@ -612,15 +541,6 @@ class JsonStreamingSession : public BaseStreamingSession {
     return buffer_size;
   }
 
-  bool find_json_boundary_in_buffer(const char *buffer, size_t buffer_size) {
-    for (size_t i = 1; i < buffer_size; i++) {
-      if (buffer[i - 1] == '}' && buffer[i] == '\n') {
-        return true;
-      }
-    }
-    return false;
-  }
-
   void restart_compression() {
     CompressionManager::inflate_cleanup(inflate_state_.get());
 
@@ -628,13 +548,13 @@ class JsonStreamingSession : public BaseStreamingSession {
     if (use_checkpoint) {
       if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
                                        checkpoint_.get()) != 0) {
-        throw ReaderError(ReaderError::COMPRESSION_ERROR,
+        throw Reader::Error(Reader::Error::COMPRESSION_ERROR,
                           "Failed to reinitialize from checkpoint");
       }
     } else {
       if (CompressionManager::inflate_init(inflate_state_.get(), file_handle_,
                                            0, 0) != 0) {
-        throw ReaderError(ReaderError::COMPRESSION_ERROR,
+        throw Reader::Error(Reader::Error::COMPRESSION_ERROR,
                           "Failed to reinitialize inflation");
       }
     }
@@ -676,8 +596,8 @@ class RawStreamingSession : public BaseStreamingSession {
 
   size_t stream_chunk(char *buffer, size_t buffer_size) override {
     if (!decompression_initialized_) {
-      throw ReaderError(ReaderError::INITIALIZATION_ERROR,
-                        "Raw streaming session not properly initialized");
+      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
+                          "Raw streaming session not properly initialized");
     }
 
     // Check if we've reached the target end
@@ -717,9 +637,9 @@ class StreamingSessionFactory {
   explicit StreamingSessionFactory(dftracer::utils::indexer::Indexer &indexer)
       : indexer_(indexer) {}
 
-  std::unique_ptr<JsonStreamingSession> create_json_session(
+  std::unique_ptr<LineStreamingSession> create_line_session(
       const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
-    std::unique_ptr<JsonStreamingSession> session(new JsonStreamingSession());
+    std::unique_ptr<LineStreamingSession> session(new LineStreamingSession());
     session->initialize(gz_path, start_bytes, end_bytes, indexer_);
     return session;
   }
@@ -731,9 +651,9 @@ class StreamingSessionFactory {
     return session;
   }
 
-  bool needs_new_json_session(const JsonStreamingSession *current,
-                              const std::string &gz_path, size_t start_bytes,
-                              size_t end_bytes) const {
+  bool needs_new_line_session(const LineStreamingSession *current,
+                               const std::string &gz_path, size_t start_bytes,
+                               size_t end_bytes) const {
     return !current || !current->matches(gz_path, start_bytes, end_bytes) ||
            current->is_finished();
   }
@@ -764,8 +684,8 @@ class Reader::Impl {
       spdlog::debug("Successfully created DFT reader for gz: {} and index: {}",
                     gz_path, idx_path);
     } catch (const std::exception &e) {
-      throw ReaderError(
-          ReaderError::INITIALIZATION_ERROR,
+      throw Reader::Error(
+          Reader::Error::INITIALIZATION_ERROR,
           "Failed to initialize reader with indexer: " + std::string(e.what()));
     }
   }
@@ -781,7 +701,7 @@ class Reader::Impl {
         is_open_(other.is_open_),
         indexer_(std::move(other.indexer_)),
         session_factory_(std::move(other.session_factory_)),
-        json_session_(std::move(other.json_session_)),
+        line_session_(std::move(other.line_session_)),
         raw_session_(std::move(other.raw_session_)) {
     other.is_open_ = false;
   }
@@ -793,7 +713,7 @@ class Reader::Impl {
       is_open_ = other.is_open_;
       indexer_ = std::move(other.indexer_);
       session_factory_ = std::move(other.session_factory_);
-      json_session_ = std::move(other.json_session_);
+      line_session_ = std::move(other.line_session_);
       raw_session_ = std::move(other.raw_session_);
       other.is_open_ = false;
     }
@@ -819,34 +739,38 @@ class Reader::Impl {
   size_t read(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
               char *buffer, size_t buffer_size) {
     if (!is_open_ || !indexer_) {
-      throw ReaderError(ReaderError::INITIALIZATION_ERROR,
-                        "Reader is not open");
+      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
+                          "Reader is not open");
     }
 
-    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes);
+    if (end_bytes > indexer_->get_max_bytes()) {
+      end_bytes = indexer_->get_max_bytes();
+    }
 
-    // Create or reuse JSON streaming session
-    if (session_factory_->needs_new_json_session(json_session_.get(), gz_path,
+    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes, indexer_->get_max_bytes());
+
+    // Create or reuse line streaming session
+    if (session_factory_->needs_new_line_session(line_session_.get(), gz_path,
                                                  start_bytes, end_bytes)) {
-      json_session_ = session_factory_->create_json_session(
+      line_session_ = session_factory_->create_line_session(
           gz_path, start_bytes, end_bytes);
     }
 
-    if (json_session_->is_finished()) {
+    if (line_session_->is_finished()) {
       return 0;
     }
 
-    return json_session_->stream_chunk(buffer, buffer_size);
+    return line_session_->stream_chunk(buffer, buffer_size);
   }
 
   size_t read_raw(const std::string &gz_path, size_t start_bytes,
                   size_t end_bytes, char *buffer, size_t buffer_size) {
     if (!is_open_ || !indexer_) {
-      throw ReaderError(ReaderError::INITIALIZATION_ERROR,
-                        "Reader is not open");
+      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
+                          "Reader is not open");
     }
 
-    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes);
+    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes, indexer_->get_max_bytes());
 
     // Create or reuse raw streaming session
     if (session_factory_->needs_new_raw_session(raw_session_.get(), gz_path,
@@ -866,8 +790,8 @@ class Reader::Impl {
     if (!is_open_ || !indexer_) {
       throw std::runtime_error("Reader is not open");
     }
-    if (json_session_) {
-      json_session_->reset();
+    if (line_session_) {
+      line_session_->reset();
     }
     if (raw_session_) {
       raw_session_->reset();
@@ -888,7 +812,7 @@ class Reader::Impl {
 
   std::unique_ptr<dftracer::utils::indexer::Indexer> indexer_;
   std::unique_ptr<StreamingSessionFactory> session_factory_;
-  std::unique_ptr<JsonStreamingSession> json_session_;
+  std::unique_ptr<LineStreamingSession> line_session_;
   std::unique_ptr<RawStreamingSession> raw_session_;
 };
 
@@ -943,6 +867,36 @@ const std::string &Reader::get_gz_path() const { return pImpl_->get_gz_path(); }
 const std::string &Reader::get_idx_path() const {
   return pImpl_->get_idx_path();
 }
+
+
+
+   std::string Reader::Error::format_message(Type type, const std::string &message) {
+    const char *prefix = "";
+    switch (type) {
+      case Reader::Error::DATABASE_ERROR:
+        prefix = "Database error";
+        break;
+      case Reader::Error::FILE_IO_ERROR:
+        prefix = "File I/O error";
+        break;
+      case Reader::Error::COMPRESSION_ERROR:
+        prefix = "Compression error";
+        break;
+      case Reader::Error::INVALID_ARGUMENT:
+        prefix = "Invalid argument";
+        break;
+      case Reader::Error::INITIALIZATION_ERROR:
+        prefix = "Initialization error";
+        break;
+      case Reader::Error::READ_ERROR:
+        prefix = "Read error";
+        break;
+      case Reader::Error::UNKNOWN_ERROR:
+        prefix = "Unknown error";
+        break;
+    }
+    return std::string(prefix) + ": " + message;
+  }
 
 }  // namespace reader
 }  // namespace utils

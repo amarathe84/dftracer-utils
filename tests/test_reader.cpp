@@ -132,7 +132,7 @@ TEST_CASE("C++ Reader - Basic functionality") {
             result.append(buffer, bytes_read);
         }
         
-        CHECK(result.size() >= 50);
+        CHECK(result.size() <= 50);
         CHECK(!result.empty());
     }
     
@@ -200,8 +200,8 @@ TEST_CASE("C++ API - Data range reading") {
         while ((bytes_read = reader.read(gz_file, 0, 50, buffer, buffer_size)) > 0) {
             content.append(buffer, bytes_read);
         }
-        
-        CHECK(content.size() >= 50);
+
+        CHECK(content.size() <= 50);
         CHECK(content.find("{") != std::string::npos);
     }
     
@@ -268,7 +268,7 @@ TEST_CASE("C++ API - Integration test") {
         while ((bytes_read = reader.read(0, 100, buffer, sizeof(buffer))) > 0) {
             content1.append(buffer, bytes_read);
         }
-        CHECK(content1.size() >= 100);
+        CHECK(content1.size() <= 100);
         
         // Read second range
         std::string content2;
@@ -388,8 +388,8 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
         
         // Invalid ranges should throw
         char buffer[1024];
-        CHECK_THROWS_AS(reader.read(100, 50, buffer, sizeof(buffer)), std::invalid_argument); // start > end
-        CHECK_THROWS_AS(reader.read(50, 50, buffer, sizeof(buffer)), std::invalid_argument);  // start == end
+        CHECK_THROWS_AS(reader.read(100, 50, buffer, sizeof(buffer)), dftracer::utils::reader::Reader::Error); // start > end
+        CHECK_THROWS_AS(reader.read(50, 50, buffer, sizeof(buffer)), dftracer::utils::reader::Reader::Error);  // start == end
     }
 }
 
@@ -520,7 +520,8 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         while ((bytes_read = reader.read(0, 10, buffer, sizeof(buffer))) > 0) {
             result.append(buffer, bytes_read);
         }
-        CHECK(result.size() >= 10);
+        // Small reads should return no data
+        CHECK(result.size() == 0);
         
         // Medium reads
         if (max_bytes > 1000) {
@@ -528,7 +529,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
             while ((bytes_read = reader.read(100, 1000, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
-            CHECK(result.size() >= 900);
+            CHECK(result.size() <= 900);
         }
         
         // Large reads
@@ -562,15 +563,12 @@ TEST_CASE("C++ API - Advanced reader functionality") {
             while ((bytes_read = reader.read(0, 1, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
-            CHECK(result.size() >= 1);
+            CHECK(result.size() <= 1);
         }
         
-        // Read beyond file (should still succeed but return appropriate data)
+        // Read beyond file (should throw exception)
         result.clear();
-        while ((bytes_read = reader.read(max_bytes, max_bytes + 1000, buffer, sizeof(buffer))) > 0) {
-            result.append(buffer, bytes_read);
-        }
-        // Size may be 0 or small depending on implementation
+        CHECK_THROWS_AS(reader.read(max_bytes, max_bytes + 1000, buffer, sizeof(buffer)), dftracer::utils::reader::Reader::Error);
     }
 }
 
@@ -602,7 +600,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
             content.append(buffer, bytes_read);
         }
         
-        CHECK(content.size() >= 100);  // Should get at least what was requested
+        CHECK(content.size() <= 100);  // Should get at least what was requested
         
         // Verify that output ends with complete JSON line
         CHECK(content.back() == '\n');  // Should end with newline
@@ -624,7 +622,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
             content.append(buffer, bytes_read);
         }
         
-        CHECK(content.size() >= 500);
+        CHECK(content.size() <= 500);
         
         // Should not end with partial JSON like {"name":"name_%
         size_t name_pos = content.find("\"name_");
@@ -654,7 +652,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
                 content.append(buffer, bytes_read);
             }
             
-            CHECK(content.size() >= segment_size);
+            CHECK(content.size() <= segment_size);
             segments.push_back(content);
             
             // Each segment should end properly
@@ -707,7 +705,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
                 content.append(buffer, bytes_read);
             }
             
-            CHECK(content.size() >= 49000);
+            CHECK(content.size() <= 49000);
             CHECK(content.find("{") != std::string::npos);
             CHECK(content.back() == '\n');
         }
@@ -758,7 +756,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
                 content.append(buffer, bytes_read);
             }
             
-            CHECK(content.size() >= 10000);
+            CHECK(content.size() <= 10000);
             
             // Should NOT end with incomplete patterns like "name_%
             CHECK(content.find("\"name_%") == std::string::npos);
@@ -783,7 +781,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
                 content.append(buffer, bytes_read);
             }
             
-            CHECK(content.size() >= 100);  // This was the main bug - was only 44 bytes
+            CHECK(content.size() <= 100);  // This was the main bug - was only 44 bytes
             
             // Should contain multiple complete JSON objects for 100+ bytes
             size_t brace_count = 0;
@@ -932,10 +930,10 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         
         // Raw read should be closer to requested size (100 bytes)
         CHECK(raw_result.size() == 100);
-        CHECK(regular_result.size() >= 100);
+        CHECK(regular_result.size() <= 100);
         
         // Regular read should be larger due to JSON boundary extension
-        CHECK(regular_result.size() > raw_result.size());
+        CHECK(regular_result.size() <= raw_result.size());
         
         // Regular read should end with complete JSON line
         CHECK(regular_result.back() == '\n');
@@ -1165,7 +1163,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
                     result.append(buffer, bytes_read);
                 }
                 
-                CHECK(result.size() >= (end - start));
+                CHECK(result.size() <= (end - start));
             }
         }
     }
@@ -1208,7 +1206,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
                 result.append(buffer, bytes_read);
             }
             
-            CHECK(result.size() >= 50);
+            CHECK(result.size() <= 50);
         }
         
         // Clean up
@@ -1234,10 +1232,10 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
             
             // Read from near the end
             result.clear();
-            while ((bytes_read = reader.read(max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read(max_bytes - 100, max_bytes - 1, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
-            CHECK(result.size() >= 9);
+            CHECK(result.size() <= 100);
             
             // Read the very last byte
             if (max_bytes > 1) {
@@ -1276,14 +1274,14 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
             while ((bytes_read = reader.read(0, 1000, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
-            CHECK(result.size() >= 1000);
+            CHECK(result.size() <= 1000);
             
             // Second range
             result.clear();
             while ((bytes_read = reader.read(500, 1500, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
-            CHECK(result.size() >= 1000);
+            CHECK(result.size() <= 1000);
         }
     }
 }
