@@ -15,7 +15,7 @@ option(DFTRACER_UTILS_TESTS "Build tests" OFF)
 option(DFTRACER_UTILS_COVERAGE "Enable coverage reporting" OFF)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 # Enable optimization
