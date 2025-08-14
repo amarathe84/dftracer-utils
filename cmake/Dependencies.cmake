@@ -10,7 +10,7 @@ function(need_spdlog)
       VERSION 1.12.0
       OPTIONS
         "SPDLOG_COMPILED_LIB ON"
-        "SPDLOG_BUILD_SHARED ON"
+        "SPDLOG_BUILD_SHARED OFF"
         "SPDLOG_INSTALL ON"
       FORCE YES
     )

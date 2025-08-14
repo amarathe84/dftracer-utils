@@ -23,16 +23,18 @@ if(NOT WIN32)
 endif()
 
 # Constants
-set(INSTALL_BINARY_DIR bin)
-set(INSTALL_LIB_DIR lib)
-set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR})
 
-# Override installation directories for Python build
-# if(SKBUILD)
-#     set(CMAKE_INSTALL_LIBDIR "dft_utils/lib" CACHE STRING "Library install directory" FORCE)
-#     set(CMAKE_INSTALL_INCLUDEDIR "dft_utils/include" CACHE STRING "Include install directory" FORCE)
-#     set(CMAKE_INSTALL_BINDIR "dft_utils/bin" CACHE STRING "Binary install directory" FORCE)
-# endif()
+if (SKBUILD)
+  # Override standard CMake install directories for Python package
+  set(CMAKE_INSTALL_LIBDIR "dftracer/utils/lib" CACHE STRING "Library install directory" FORCE)
+  set(CMAKE_INSTALL_BINDIR "${SKBUILD_SCRIPTS_DIR}" CACHE STRING "Binary install directory" FORCE)
+  set(CMAKE_INSTALL_INCLUDEDIR "dftracer/utils/include" CACHE STRING "Include install directory" FORCE)
+  set(CMAKE_INSTALL_RPATH "@loader_path/../dftracer/utils/lib" CACHE STRING "Library install directory" FORCE)
+  # Set RPATH properties for all targets
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+endif()
+
 
 option(DFTRACER_UTILS_USE_LOCAL_PACKAGES "Use local packages" OFF)
 option(DFTRACER_UTILS_TESTS "Build tests" OFF)

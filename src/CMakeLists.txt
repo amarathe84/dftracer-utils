@@ -60,7 +60,6 @@ link_zlib(dftracer_utils STATIC)
 target_include_directories(dftracer_utils 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_set_warnings(dftracer_utils)
 
@@ -84,7 +83,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
     INSTALL_RPATH_USE_LINK_PATH TRUE
     BUILD_WITH_INSTALL_RPATH TRUE
-    INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/../lib"
+    # INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/../lib"
 )
 target_link_libraries(dftracer_utils_shared 
     PRIVATE spdlog::spdlog picosha2
@@ -98,7 +97,6 @@ link_zlib(dftracer_utils_shared SHARED)
 target_include_directories(dftracer_utils_shared 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_set_warnings(dftracer_utils_shared)
 
@@ -116,7 +114,7 @@ endif()
 
 add_executable(dft_reader bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader PRIVATE spdlog::spdlog argparse::argparse ghc_filesystem picosha2)
+target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog argparse::argparse ghc_filesystem picosha2)
 
 # Link SQLite3 and zlib for executable (treat as shared since it's an executable)
 link_sqlite3(dft_reader STATIC)
@@ -179,29 +177,30 @@ if (SKBUILD)
       get_filename_component(source_name ${source_file} NAME_WE)
       if (APPLE)
         nanobind_add_module(
-          source_name
+          ${source_name}
           NB_STATIC STABLE_ABI
-          src/reader_ext.cpp
+          ${source_file}
         )
-        set_target_properties(source_name PROPERTIES
-          # INSTALL_RPATH "@loader_path;@loader_path/lib"
-          # BUILD_RPATH "@loader_path;@loader_path/lib"
+        set_target_properties(${source_name} PROPERTIES
+          INSTALL_RPATH "@loader_path;@loader_path/lib"
+          BUILD_RPATH "@loader_path;@loader_path/lib"
           BUILD_WITH_INSTALL_RPATH TRUE
           INSTALL_RPATH_USE_LINK_PATH TRUE
         )
       else()
         nanobind_add_module(
-          source_name
+          ${source_name}
           NB_STATIC STABLE_ABI LTO
-          src/reader_ext.cpp
+          ${source_file}
         )
-        set_target_properties(source_name PROPERTIES
+        set_target_properties(${source_name} PROPERTIES
           INSTALL_RPATH_USE_LINK_PATH TRUE
           BUILD_WITH_INSTALL_RPATH TRUE
           # INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64;$ORIGIN/../../lib;$ORIGIN/dft_utils/lib;$ORIGIN/../dft_utils/lib"
         )
       endif()
-      target_link_libraries(source_name PRIVATE dftracer_utils::shared)
+      target_link_libraries(${source_name} PRIVATE dftracer_utils::shared)
+      install(TARGETS ${source_name} LIBRARY DESTINATION dftracer/utils)
   endforeach()
 endif()
 
@@ -228,16 +227,11 @@ if(TARGET spdlog)
     list(APPEND INSTALLABLE_TARGETS spdlog)
 endif()
 
-install(TARGETS ${INSTALLABLE_TARGETS}
-    EXPORT dftracer_utilsTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)
 
 # Install headers
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/dftracer/utils/
-    DESTINATION ${INSTALL_INCLUDE_DIR}/dftracer/utils
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dftracer/utils
     FILES_MATCHING PATTERN "*.h"
 )
 
