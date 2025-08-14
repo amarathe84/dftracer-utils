@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace dft {
+namespace dftracer::utils {
 namespace indexer {
 
 class Indexer::Impl {
@@ -247,7 +247,7 @@ std::string Indexer::Impl::calculate_file_sha256(
 }
 
 time_t Indexer::Impl::get_file_mtime(const std::string &file_path) const {
-  return dft::utils::get_file_modification_time(file_path);
+  return dftracer::utils::utils::get_file_modification_time(file_path);
 }
 
 bool Indexer::Impl::index_exists_and_valid(const std::string &idx_path) const {
@@ -1205,13 +1205,13 @@ void Indexer::Impl::build() {
 }
 
 }  // namespace indexer
-}  // namespace dft
+}  // namespace dftracer::utils
 
 // ==============================================================================
 // C++ Public Interface Implementation
 // ==============================================================================
 
-namespace dft {
+namespace dftracer::utils {
 namespace indexer {
 
 Indexer::Indexer(const std::string &gz_path, const std::string &idx_path,
@@ -1265,7 +1265,7 @@ std::vector<CheckpointInfo> Indexer::get_checkpoints(int file_id) const {
 }
 
 }  // namespace indexer
-}  // namespace dft
+}  // namespace dftracer::utils
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)
@@ -1283,7 +1283,7 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
   }
 
   try {
-    auto *indexer = new dft::indexer::Indexer(gz_path, idx_path, chunk_size_mb,
+    auto *indexer = new dftracer::utils::indexer::Indexer(gz_path, idx_path, chunk_size_mb,
                                               force_rebuild != 0);
     return static_cast<dft_indexer_handle_t>(indexer);
   } catch (const std::exception &e) {
@@ -1298,7 +1298,7 @@ int dft_indexer_build(dft_indexer_handle_t indexer) {
   }
 
   try {
-    auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+    auto *cpp_indexer = static_cast<dftracer::utils::indexer::Indexer *>(indexer);
     cpp_indexer->build();
     return 0;
   } catch (const std::exception &e) {
@@ -1313,7 +1313,7 @@ int dft_indexer_need_rebuild(dft_indexer_handle_t indexer) {
   }
 
   try {
-    auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+    auto *cpp_indexer = static_cast<dftracer::utils::indexer::Indexer *>(indexer);
     return cpp_indexer->need_rebuild() ? 1 : 0;
   } catch (const std::exception &e) {
     spdlog::error("Failed to check if rebuild is needed: {}", e.what());
@@ -1327,7 +1327,7 @@ uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer) {
   }
 
   try {
-    auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+    auto *cpp_indexer = static_cast<dftracer::utils::indexer::Indexer *>(indexer);
     return cpp_indexer->get_max_bytes();
   } catch (const std::exception &e) {
     spdlog::error("Failed to get max bytes: {}", e.what());
@@ -1341,7 +1341,7 @@ uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
   }
 
   try {
-    auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+    auto *cpp_indexer = static_cast<dftracer::utils::indexer::Indexer *>(indexer);
     return cpp_indexer->get_num_lines();
   } catch (const std::exception &e) {
     spdlog::error("Failed to get number of lines: {}", e.what());
@@ -1356,7 +1356,7 @@ int dft_indexer_find_file_id(dft_indexer_handle_t indexer,
   }
 
   try {
-    auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+    auto *cpp_indexer = static_cast<dftracer::utils::indexer::Indexer *>(indexer);
     return cpp_indexer->find_file_id(gz_path);
   } catch (const std::exception &e) {
     spdlog::error("Failed to find file ID: {}", e.what());
@@ -1375,8 +1375,8 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, int file_id,
   }
 
   try {
-    auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
-    dft::indexer::CheckpointInfo checkpoint;
+    auto *cpp_indexer = static_cast<dftracer::utils::indexer::Indexer *>(indexer);
+    dftracer::utils::indexer::CheckpointInfo checkpoint;
 
     if (cpp_indexer->find_checkpoint(
             file_id, static_cast<size_t>(target_offset), checkpoint)) {
@@ -1420,7 +1420,7 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer, int file_id,
   }
 
   try {
-    auto *cpp_indexer = static_cast<dft::indexer::Indexer *>(indexer);
+    auto *cpp_indexer = static_cast<dftracer::utils::indexer::Indexer *>(indexer);
     auto checkpoints = cpp_indexer->get_checkpoints(file_id);
 
     *count = checkpoints.size();
@@ -1526,7 +1526,7 @@ void dft_indexer_free_checkpoints(size_t count, uint64_t *checkpoint_indices,
 
 void dft_indexer_destroy(dft_indexer_handle_t indexer) {
   if (indexer) {
-    delete static_cast<dft::indexer::Indexer *>(indexer);
+    delete static_cast<dftracer::utils::indexer::Indexer *>(indexer);
   }
 }
 

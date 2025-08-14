@@ -38,7 +38,7 @@ std::string trim_trailing(const char *data, size_t size)
 class DFTracerReader
 {
   private:
-    std::unique_ptr<dft::reader::Reader> reader_;
+    std::unique_ptr<dftracer::utils::reader::Reader> reader_;
     std::string gzip_path_;
     std::string index_path_;
     bool is_open_;
@@ -82,7 +82,7 @@ class DFTracerReader
         }
 
         try {
-            reader_ = std::make_unique<dft::reader::Reader>(gzip_path_, index_path_);
+            reader_ = std::make_unique<dftracer::utils::reader::Reader>(gzip_path_, index_path_);
             is_open_ = true;
             max_bytes_ = static_cast<uint64_t>(reader_->get_max_bytes());
         } catch (const std::runtime_error& e) {
@@ -468,16 +468,16 @@ NB_MODULE(dft_utils_reader_ext, m)
           "Create a raw range iterator for reading specific byte ranges with optional step size");
 
     m.def("set_log_level",
-          &dft::utils::set_log_level,
+          &dftracer::utils::utils::set_log_level,
           "level"_a,
           "Set the global log level using a string (trace, debug, info, warn, error, critical, off)");
 
     m.def("set_log_level_int",
-          &dft::utils::set_log_level_int,
+          &dftracer::utils::utils::set_log_level_int,
           "level"_a,
           "Set the global log level using an integer (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off)");
 
-    m.def("get_log_level_string", &dft::utils::get_log_level_string, "Get the current global log level as a string");
+    m.def("get_log_level_string", &dftracer::utils::utils::get_log_level_string, "Get the current global log level as a string");
 
-    m.def("get_log_level_int", &dft::utils::get_log_level_int, "Get the current global log level as an integer");
+    m.def("get_log_level_int", &dftracer::utils::utils::get_log_level_int, "Get the current global log level as an integer");
 }

@@ -27,22 +27,22 @@ TEST_CASE("C++ Indexer - Basic functionality") {
     SUBCASE("Constructor and destructor") {
         // Test automatic destruction
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
             CHECK(indexer.is_valid());
         } // indexer automatically destroyed here
         
         // Should be able to create another one
-        dft::indexer::Indexer indexer2(gz_file, idx_file, 1.0);
+        dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, 1.0);
         CHECK(indexer2.is_valid());
     }
     
     SUBCASE("Build index") {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
         CHECK_NOTHROW(indexer.build());
     }
     
     SUBCASE("Check rebuild needed") {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
         CHECK(indexer.need_rebuild()); // Should need rebuild initially
         
         indexer.build();
@@ -51,7 +51,7 @@ TEST_CASE("C++ Indexer - Basic functionality") {
     
     SUBCASE("Getter methods") {
         double chunk_size = 1.5;
-        dft::indexer::Indexer indexer(gz_file, idx_file, chunk_size);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, chunk_size);
         
         // Test getter methods
         CHECK(indexer.get_gz_path() == gz_file);
@@ -60,16 +60,16 @@ TEST_CASE("C++ Indexer - Basic functionality") {
     }
     
     SUBCASE("Move semantics") {
-        dft::indexer::Indexer indexer1(gz_file, idx_file, 1.0);
+        dftracer::utils::indexer::Indexer indexer1(gz_file, idx_file, 1.0);
         CHECK(indexer1.is_valid());
         
         // Move constructor
-        dft::indexer::Indexer indexer2 = std::move(indexer1);
+        dftracer::utils::indexer::Indexer indexer2 = std::move(indexer1);
         CHECK(indexer2.is_valid());
         CHECK_FALSE(indexer1.is_valid()); // indexer1 should be moved from
         
         // Move assignment
-        dft::indexer::Indexer indexer3(gz_file, idx_file, 2.0);
+        dftracer::utils::indexer::Indexer indexer3(gz_file, idx_file, 2.0);
         indexer3 = std::move(indexer2);
         CHECK(indexer3.is_valid());
         CHECK_FALSE(indexer2.is_valid()); // indexer2 should be moved from
@@ -87,31 +87,31 @@ TEST_CASE("C++ Reader - Basic functionality") {
     
     // Build index first
     {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
     
     SUBCASE("Constructor and destructor") {
         // Test automatic destruction
         {
-            dft::reader::Reader reader(gz_file, idx_file);
+            dftracer::utils::reader::Reader reader(gz_file, idx_file);
             CHECK(reader.is_valid());
             CHECK(reader.get_gz_path() == gz_file);
         } // reader automatically destroyed here
         
         // Should be able to create another one
-        dft::reader::Reader reader2(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader2(gz_file, idx_file);
         CHECK(reader2.is_valid());
     }
     
     SUBCASE("Get max bytes") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         CHECK(max_bytes > 0);
     }
     
     SUBCASE("Getter methods") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         
         // Test getter methods
         CHECK(reader.get_gz_path() == gz_file);
@@ -119,7 +119,7 @@ TEST_CASE("C++ Reader - Basic functionality") {
     }
     
     SUBCASE("Read byte range using streaming API") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         
         // Read using streaming API
         const size_t buffer_size = 1024;
@@ -138,16 +138,16 @@ TEST_CASE("C++ Reader - Basic functionality") {
     
     
     SUBCASE("Move semantics") {
-        dft::reader::Reader reader1(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader1(gz_file, idx_file);
         CHECK(reader1.is_valid());
         
         // Move constructor
-        dft::reader::Reader reader2 = std::move(reader1);
+        dftracer::utils::reader::Reader reader2 = std::move(reader1);
         CHECK(reader2.is_valid());
         CHECK_FALSE(reader1.is_valid()); // reader1 should be moved from
         
         // Move assignment
-        dft::reader::Reader reader3(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader3(gz_file, idx_file);
         reader3 = std::move(reader2);
         CHECK(reader3.is_valid());
         CHECK_FALSE(reader2.is_valid()); // reader2 should be moved from
@@ -156,7 +156,7 @@ TEST_CASE("C++ Reader - Basic functionality") {
 
 TEST_CASE("C++ API - Error handling") {
     SUBCASE("Invalid indexer creation should succeed but build should fail") {
-        dft::indexer::Indexer indexer("/nonexistent/path.gz", "/nonexistent/path.idx", 1.0);
+        dftracer::utils::indexer::Indexer indexer("/nonexistent/path.gz", "/nonexistent/path.idx", 1.0);
         CHECK(indexer.is_valid());
         
         // Building should fail
@@ -165,7 +165,7 @@ TEST_CASE("C++ API - Error handling") {
     
     SUBCASE("Invalid reader creation") {
         CHECK_THROWS_AS(
-            dft::reader::Reader("/nonexistent/path.gz", "/nonexistent/path.idx"),
+            dftracer::utils::reader::Reader("/nonexistent/path.gz", "/nonexistent/path.idx"),
             std::runtime_error
         );
     }
@@ -182,12 +182,12 @@ TEST_CASE("C++ API - Data range reading") {
     
     // Build index first
     {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
     
     // Create reader
-    dft::reader::Reader reader(gz_file, idx_file);
+    dftracer::utils::reader::Reader reader(gz_file, idx_file);
     
     SUBCASE("Read valid byte range") {
         // read first 50 bytes using streaming API
@@ -218,12 +218,12 @@ TEST_CASE("C++ API - Edge cases") {
     
     // Build index first
     {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
     
     // Create reader
-    dft::reader::Reader reader(gz_file, idx_file);
+    dftracer::utils::reader::Reader reader(gz_file, idx_file);
     
     SUBCASE("Invalid byte range (start >= end) should throw") {
         char buffer[1024];
@@ -251,11 +251,11 @@ TEST_CASE("C++ API - Integration test") {
     // Complete workflow using C++ API
     {
         // Build index
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
         
         // Read data
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         CHECK(max_bytes > 0);
         
@@ -286,7 +286,7 @@ TEST_CASE("C++ API - Integration test") {
 }
 
 TEST_CASE("C++ API - Memory safety stress test") {
-    // dft::utils::set_log_level("debug");  // Enable debug logging
+    // dftracer::utils::utils::set_log_level("debug");  // Enable debug logging
     TestEnvironment env(100000);
     REQUIRE(env.is_valid());
     
@@ -297,12 +297,12 @@ TEST_CASE("C++ API - Memory safety stress test") {
     
     // Build index
     {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
 
     // Multiple reads with streaming API
-    dft::reader::Reader reader(gz_file, idx_file);
+    dftracer::utils::reader::Reader reader(gz_file, idx_file);
     for (int i = 0; i < 3; ++i) {  // Reduced from 100 to 3 for easier debugging
         char buffer[1024];
         size_t total_bytes = 0;
@@ -327,7 +327,7 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
     std::string idx_file = env.get_index_path(gz_file);
     
     SUBCASE("Indexer with invalid paths should throw during build") {
-        dft::indexer::Indexer indexer("/definitely/nonexistent/path.gz", "/also/nonexistent/path.idx", 1.0);
+        dftracer::utils::indexer::Indexer indexer("/definitely/nonexistent/path.gz", "/also/nonexistent/path.idx", 1.0);
         CHECK(indexer.is_valid());  // Constructor succeeds
         
         CHECK_THROWS_AS(indexer.build(), std::runtime_error);
@@ -336,19 +336,19 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
     
     SUBCASE("Indexer with invalid chunk size should throw in constructor") {
         CHECK_THROWS_AS(
-            dft::indexer::Indexer(gz_file, idx_file, 0.0),
+            dftracer::utils::indexer::Indexer(gz_file, idx_file, 0.0),
             std::invalid_argument
         );
         
         CHECK_THROWS_AS(
-            dft::indexer::Indexer(gz_file, idx_file, -1.0),
+            dftracer::utils::indexer::Indexer(gz_file, idx_file, -1.0),
             std::invalid_argument
         );
     }
     
     SUBCASE("Reader with invalid paths should throw in constructor") {
         CHECK_THROWS_AS(
-            dft::reader::Reader("/definitely/nonexistent/path.gz", "/also/nonexistent/path.idx"),
+            dftracer::utils::reader::Reader("/definitely/nonexistent/path.gz", "/also/nonexistent/path.idx"),
             std::runtime_error
         );
     }
@@ -356,15 +356,15 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
     SUBCASE("Reader operations on invalid reader should throw") {
         // Build a valid index first
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
             indexer.build();
         }
         
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         CHECK(reader.is_valid());
         
         // Make reader invalid by moving from it
-        dft::reader::Reader moved_reader = std::move(reader);
+        dftracer::utils::reader::Reader moved_reader = std::move(reader);
         CHECK_FALSE(reader.is_valid());
         CHECK(moved_reader.is_valid());
         
@@ -380,11 +380,11 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
     SUBCASE("Invalid read parameters should throw") {
         // Build a valid index first
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
             indexer.build();
         }
         
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         
         // Invalid ranges should throw
         char buffer[1024];
@@ -403,8 +403,8 @@ TEST_CASE("C++ API - Advanced indexer functionality") {
     std::string idx_file = env.get_index_path(gz_file);
     
     SUBCASE("Multiple indexer instances for same file") {
-        dft::indexer::Indexer indexer1(gz_file, idx_file, 1.0);
-        dft::indexer::Indexer indexer2(gz_file, idx_file, 1.0);
+        dftracer::utils::indexer::Indexer indexer1(gz_file, idx_file, 1.0);
+        dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, 1.0);
         
         CHECK(indexer1.is_valid());
         CHECK(indexer2.is_valid());
@@ -419,19 +419,19 @@ TEST_CASE("C++ API - Advanced indexer functionality") {
     }
     
     SUBCASE("Different chunk sizes") {
-        dft::indexer::Indexer indexer_small(gz_file, idx_file + "_small", 0.1);
-        dft::indexer::Indexer indexer_large(gz_file, idx_file + "_large", 10.0);
+        dftracer::utils::indexer::Indexer indexer_small(gz_file, idx_file + "_small", 0.1);
+        dftracer::utils::indexer::Indexer indexer_large(gz_file, idx_file + "_large", 10.0);
         
         CHECK_NOTHROW(indexer_small.build());
         CHECK_NOTHROW(indexer_large.build());
         
         // Both should create valid indices
-        CHECK_NOTHROW(dft::reader::Reader(gz_file, idx_file + "_small"));
-        CHECK_NOTHROW(dft::reader::Reader(gz_file, idx_file + "_large"));
+        CHECK_NOTHROW(dftracer::utils::reader::Reader(gz_file, idx_file + "_small"));
+        CHECK_NOTHROW(dftracer::utils::reader::Reader(gz_file, idx_file + "_large"));
     }
     
     SUBCASE("Indexer state after operations") {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
         
         CHECK(indexer.is_valid());
         CHECK(indexer.need_rebuild());
@@ -457,13 +457,13 @@ TEST_CASE("C++ API - Advanced reader functionality") {
     
     // Build index first
     {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
     
     SUBCASE("Multiple readers for same file") {
-        dft::reader::Reader reader1(gz_file, idx_file);
-        dft::reader::Reader reader2(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader1(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader2(gz_file, idx_file);
         
         CHECK(reader1.is_valid());
         CHECK(reader2.is_valid());
@@ -493,7 +493,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
     }
     
     SUBCASE("Reader state consistency") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         
         CHECK(reader.is_valid());
         CHECK(reader.get_gz_path() == gz_file);
@@ -508,7 +508,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
     }
     
     SUBCASE("Various read patterns") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
         char buffer[2048];
@@ -542,7 +542,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
     }
     
     SUBCASE("Boundary conditions") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
         char buffer[1024];
@@ -585,12 +585,12 @@ TEST_CASE("C++ API - JSON boundary detection") {
     
     // Build index first
     {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
     
     // Create reader
-    dft::reader::Reader reader(gz_file, idx_file);
+    dftracer::utils::reader::Reader reader(gz_file, idx_file);
 
     SUBCASE("Small range should provide minimum requested bytes") {
         // Request 100 bytes - should get AT LEAST 100 bytes due to boundary extension
@@ -688,12 +688,12 @@ TEST_CASE("C++ API - Regression and stress tests") {
         
         // Build index
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
             CHECK_NOTHROW(indexer.build());
         }
         
         // Test large reads
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         CHECK(max_bytes > 10000);  // Should be a large file
         
@@ -742,12 +742,12 @@ TEST_CASE("C++ API - Regression and stress tests") {
         
         // Build index
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 32.0);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 32.0);
             indexer.build();
         }
         
         // Create reader
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
 
         SUBCASE("Original failing case: 0 to 10000 bytes") {
             char buffer[4096];
@@ -798,79 +798,79 @@ TEST_CASE("C++ API - Regression and stress tests") {
 TEST_CASE("C++ Logger - Comprehensive functionality") {
     SUBCASE("C++ API - Set and get log level by string") {
         // Test all valid log levels
-        CHECK(dft::utils::set_log_level("trace") == 0);
-        CHECK(dft::utils::get_log_level_string() == "trace");
+        CHECK(dftracer::utils::utils::set_log_level("trace") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "trace");
         
-        CHECK(dft::utils::set_log_level("debug") == 0);
-        CHECK(dft::utils::get_log_level_string() == "debug");
+        CHECK(dftracer::utils::utils::set_log_level("debug") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "debug");
         
-        CHECK(dft::utils::set_log_level("info") == 0);
-        CHECK(dft::utils::get_log_level_string() == "info");
+        CHECK(dftracer::utils::utils::set_log_level("info") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "info");
         
-        CHECK(dft::utils::set_log_level("warn") == 0);
-        CHECK(dft::utils::get_log_level_string() == "warn");
+        CHECK(dftracer::utils::utils::set_log_level("warn") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "warn");
         
-        CHECK(dft::utils::set_log_level("warning") == 0);
-        CHECK(dft::utils::get_log_level_string() == "warn");
+        CHECK(dftracer::utils::utils::set_log_level("warning") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "warn");
         
-        CHECK(dft::utils::set_log_level("error") == 0);
-        CHECK(dft::utils::get_log_level_string() == "error");
+        CHECK(dftracer::utils::utils::set_log_level("error") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "error");
         
-        CHECK(dft::utils::set_log_level("err") == 0);
-        CHECK(dft::utils::get_log_level_string() == "error");
+        CHECK(dftracer::utils::utils::set_log_level("err") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "error");
         
-        CHECK(dft::utils::set_log_level("critical") == 0);
-        CHECK(dft::utils::get_log_level_string() == "critical");
+        CHECK(dftracer::utils::utils::set_log_level("critical") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "critical");
         
-        CHECK(dft::utils::set_log_level("off") == 0);
-        CHECK(dft::utils::get_log_level_string() == "off");
+        CHECK(dftracer::utils::utils::set_log_level("off") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "off");
         
         // Test case insensitive
-        CHECK(dft::utils::set_log_level("TRACE") == 0);
-        CHECK(dft::utils::get_log_level_string() == "trace");
+        CHECK(dftracer::utils::utils::set_log_level("TRACE") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "trace");
         
-        CHECK(dft::utils::set_log_level("Debug") == 0);
-        CHECK(dft::utils::get_log_level_string() == "debug");
+        CHECK(dftracer::utils::utils::set_log_level("Debug") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "debug");
         
         // Test unrecognized level (should default to info)
-        CHECK(dft::utils::set_log_level("invalid") == 0);
-        CHECK(dft::utils::get_log_level_string() == "info");
+        CHECK(dftracer::utils::utils::set_log_level("invalid") == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "info");
     }
     
     SUBCASE("C++ API - Set and get log level by integer") {
         // Test valid integer levels (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off)
-        CHECK(dft::utils::set_log_level_int(0) == 0);
-        CHECK(dft::utils::get_log_level_int() == 0);
-        CHECK(dft::utils::get_log_level_string() == "trace");
+        CHECK(dftracer::utils::utils::set_log_level_int(0) == 0);
+        CHECK(dftracer::utils::utils::get_log_level_int() == 0);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "trace");
         
-        CHECK(dft::utils::set_log_level_int(1) == 0);
-        CHECK(dft::utils::get_log_level_int() == 1);
-        CHECK(dft::utils::get_log_level_string() == "debug");
+        CHECK(dftracer::utils::utils::set_log_level_int(1) == 0);
+        CHECK(dftracer::utils::utils::get_log_level_int() == 1);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "debug");
         
-        CHECK(dft::utils::set_log_level_int(2) == 0);
-        CHECK(dft::utils::get_log_level_int() == 2);
-        CHECK(dft::utils::get_log_level_string() == "info");
+        CHECK(dftracer::utils::utils::set_log_level_int(2) == 0);
+        CHECK(dftracer::utils::utils::get_log_level_int() == 2);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "info");
         
-        CHECK(dft::utils::set_log_level_int(3) == 0);
-        CHECK(dft::utils::get_log_level_int() == 3);
-        CHECK(dft::utils::get_log_level_string() == "warn");
+        CHECK(dftracer::utils::utils::set_log_level_int(3) == 0);
+        CHECK(dftracer::utils::utils::get_log_level_int() == 3);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "warn");
         
-        CHECK(dft::utils::set_log_level_int(4) == 0);
-        CHECK(dft::utils::get_log_level_int() == 4);
-        CHECK(dft::utils::get_log_level_string() == "error");
+        CHECK(dftracer::utils::utils::set_log_level_int(4) == 0);
+        CHECK(dftracer::utils::utils::get_log_level_int() == 4);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "error");
         
-        CHECK(dft::utils::set_log_level_int(5) == 0);
-        CHECK(dft::utils::get_log_level_int() == 5);
-        CHECK(dft::utils::get_log_level_string() == "critical");
+        CHECK(dftracer::utils::utils::set_log_level_int(5) == 0);
+        CHECK(dftracer::utils::utils::get_log_level_int() == 5);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "critical");
         
-        CHECK(dft::utils::set_log_level_int(6) == 0);
-        CHECK(dft::utils::get_log_level_int() == 6);
-        CHECK(dft::utils::get_log_level_string() == "off");
+        CHECK(dftracer::utils::utils::set_log_level_int(6) == 0);
+        CHECK(dftracer::utils::utils::get_log_level_int() == 6);
+        CHECK(dftracer::utils::utils::get_log_level_string() == "off");
         
         // Test invalid integer levels
-        CHECK(dft::utils::set_log_level_int(-1) == -1);
-        CHECK(dft::utils::set_log_level_int(7) == -1);
-        CHECK(dft::utils::set_log_level_int(100) == -1);
+        CHECK(dftracer::utils::utils::set_log_level_int(-1) == -1);
+        CHECK(dftracer::utils::utils::set_log_level_int(7) == -1);
+        CHECK(dftracer::utils::utils::set_log_level_int(100) == -1);
     }
 }
 
@@ -885,12 +885,12 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     
     // Build index first
     {
-        dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
         indexer.build();
     }
     
     SUBCASE("Basic raw read functionality") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         
         // Read using raw API
         const size_t buffer_size = 1024;
@@ -911,8 +911,8 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     }
     
     SUBCASE("Compare raw vs regular read") {
-        dft::reader::Reader reader1(gz_file, idx_file);
-        dft::reader::Reader reader2(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader1(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader2(gz_file, idx_file);
         
         const size_t buffer_size = 1024;
         char buffer1[1024], buffer2[1024];
@@ -949,7 +949,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     }
     
     SUBCASE("Raw read with different overloads") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         
         const size_t buffer_size = 512;
         char buffer1[512], buffer2[512];
@@ -976,7 +976,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     }
     
     SUBCASE("Raw read edge cases") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
         char buffer[1024];
@@ -1005,7 +1005,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     }
     
     SUBCASE("Raw read with small buffer") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         
         // Use very small buffer to test streaming behavior
         const size_t small_buffer_size = 16;
@@ -1026,7 +1026,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     }
     
     SUBCASE("Raw read multiple ranges") {
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
         char buffer[1024];
@@ -1059,8 +1059,8 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     }
     
     SUBCASE("Full file read comparison: raw vs JSON-boundary aware") {
-        dft::reader::Reader reader1(gz_file, idx_file);
-        dft::reader::Reader reader2(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader1(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader2(gz_file, idx_file);
         
         size_t max_bytes = reader1.get_max_bytes();
         char buffer[4096];
@@ -1127,7 +1127,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Indexer with various chunk sizes") {
         // Test different chunk sizes to trigger different code paths
         for (double chunk_size : {0.1, 0.5, 1.0, 2.0, 5.0}) {
-            dft::indexer::Indexer indexer(gz_file, idx_file + std::to_string(chunk_size), chunk_size);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file + std::to_string(chunk_size), chunk_size);
             CHECK_NOTHROW(indexer.build());
             CHECK(indexer.get_chunk_size_mb() == chunk_size);
         }
@@ -1136,11 +1136,11 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Reader with different range sizes to trigger various code paths") {
         // Build index first
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 0.1); // Small chunks
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1); // Small chunks
             indexer.build();
         }
         
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
         // Test various range sizes to trigger different internal paths
@@ -1172,12 +1172,12 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     
     SUBCASE("Force rebuild scenarios") {
         // Test force rebuild functionality
-        dft::indexer::Indexer indexer1(gz_file, idx_file, 1.0, false);
+        dftracer::utils::indexer::Indexer indexer1(gz_file, idx_file, 1.0, false);
         indexer1.build();
         CHECK_FALSE(indexer1.need_rebuild());
         
         // Force rebuild should rebuild even if not needed
-        dft::indexer::Indexer indexer2(gz_file, idx_file, 1.0, true);
+        dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, 1.0, true);
         // Force rebuild affects behavior during construction/build
         CHECK_NOTHROW(indexer2.build()); // Should succeed even if forced
         // Note: force_rebuild flag behavior needs further investigation
@@ -1187,14 +1187,14 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Multiple readers on same index") {
         // Build index once
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
             indexer.build();
         }
         
         // Create multiple readers
-        std::vector<dft::reader::Reader*> readers;
+        std::vector<dftracer::utils::reader::Reader*> readers;
         for (int i = 0; i < 5; ++i) {
-            readers.push_back(new dft::reader::Reader(gz_file, idx_file));
+            readers.push_back(new dftracer::utils::reader::Reader(gz_file, idx_file));
             CHECK(readers.back()->is_valid());
         }
         
@@ -1220,11 +1220,11 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Edge case: Reading near file boundaries") {
         // Build index
         {
-            dft::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
             indexer.build();
         }
         
-        dft::reader::Reader reader(gz_file, idx_file);
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         size_t max_bytes = reader.get_max_bytes();
         
         if (max_bytes > 10) {
@@ -1258,11 +1258,11 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
         
         // Build index with small chunks to force more complex compression
         {
-            dft::indexer::Indexer indexer(large_gz, large_idx, 0.1);
+            dftracer::utils::indexer::Indexer indexer(large_gz, large_idx, 0.1);
             indexer.build();
         }
         
-        dft::reader::Reader reader(large_gz, large_idx);
+        dftracer::utils::reader::Reader reader(large_gz, large_idx);
         size_t max_bytes = reader.get_max_bytes();
         
         // Read various large ranges

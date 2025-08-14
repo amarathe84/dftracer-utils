@@ -4,7 +4,7 @@
 #include <ctime>
 #include <string>
 
-namespace dft {
+namespace dftracer::utils {
 namespace utils {
 
 /**
@@ -16,6 +16,6 @@ namespace utils {
 time_t get_file_modification_time(const std::string &file_path);
 
 }  // namespace utils
-}  // namespace dft
+}  // namespace dftracer::utils
 
 #endif  // __DFTRACER_UTILS_UTILS_FILE_H

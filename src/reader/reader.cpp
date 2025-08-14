@@ -19,7 +19,7 @@ struct InflateState {
   size_t c_off;
 };
 
-namespace dft {
+namespace dftracer::utils {
 namespace reader {
 
 class ReaderError : public std::runtime_error {
@@ -186,7 +186,7 @@ class BaseStreamingSession {
   bool is_finished_;
 
   std::unique_ptr<InflateState> inflate_state_;
-  std::unique_ptr<dft::indexer::CheckpointInfo> checkpoint_;
+  std::unique_ptr<dftracer::utils::indexer::CheckpointInfo> checkpoint_;
   FILE *file_handle_;
   bool decompression_initialized_;
 
@@ -214,7 +214,7 @@ class BaseStreamingSession {
   bool is_finished() const { return is_finished_; }
 
   virtual void initialize(const std::string &gz_path, size_t start_bytes,
-                          size_t end_bytes, dft::indexer::Indexer &indexer) = 0;
+                          size_t end_bytes, dftracer::utils::indexer::Indexer &indexer) = 0;
   virtual size_t stream_chunk(char *buffer, size_t buffer_size) = 0;
 
   virtual void reset() {
@@ -247,7 +247,7 @@ class BaseStreamingSession {
   }
 
   void initialize_compression(const std::string &gz_path, size_t start_bytes,
-                              dft::indexer::Indexer &indexer) {
+                              dftracer::utils::indexer::Indexer &indexer) {
     file_handle_ = open_file(gz_path);
     inflate_state_.reset(new InflateState());
     bool use_checkpoint = false;
@@ -255,7 +255,7 @@ class BaseStreamingSession {
     // Try to find checkpoint
     int file_id = indexer.find_file_id(gz_path);
     if (file_id != -1) {
-      checkpoint_.reset(new dft::indexer::CheckpointInfo());
+      checkpoint_.reset(new dftracer::utils::indexer::CheckpointInfo());
       if (indexer.find_checkpoint(file_id, start_bytes, *checkpoint_)) {
         if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
                                          checkpoint_.get()) == 0) {
@@ -291,7 +291,7 @@ class BaseStreamingSession {
 
   int inflate_init_from_checkpoint(
       InflateState *state, FILE *f,
-      const dft::indexer::CheckpointInfo *checkpoint) const {
+      const dftracer::utils::indexer::CheckpointInfo *checkpoint) const {
     memset(state, 0, sizeof(*state));
     state->file = f;
     state->c_off = checkpoint->c_offset;
@@ -345,8 +345,8 @@ class BaseStreamingSession {
     }
 
     // Decompress the saved dictionary
-    unsigned char window[dft::indexer::ZLIB_WINDOW_SIZE];
-    size_t window_size = dft::indexer::ZLIB_WINDOW_SIZE;
+    unsigned char window[dftracer::utils::indexer::ZLIB_WINDOW_SIZE];
+    size_t window_size = dftracer::utils::indexer::ZLIB_WINDOW_SIZE;
     if (decompress_window(checkpoint->dict_compressed.data(),
                           checkpoint->dict_compressed.size(), window,
                           &window_size) != 0) {
@@ -421,7 +421,7 @@ class JsonStreamingSession : public BaseStreamingSession {
   }
 
   void initialize(const std::string &gz_path, size_t start_bytes,
-                  size_t end_bytes, dft::indexer::Indexer &indexer) override {
+                  size_t end_bytes, dftracer::utils::indexer::Indexer &indexer) override {
     spdlog::debug(
         "Initializing JSON streaming session for range [{}, {}] from {}",
         start_bytes, end_bytes, gz_path);
@@ -645,7 +645,7 @@ class RawStreamingSession : public BaseStreamingSession {
   RawStreamingSession() : BaseStreamingSession() {}
 
   void initialize(const std::string &gz_path, size_t start_bytes,
-                  size_t end_bytes, dft::indexer::Indexer &indexer) override {
+                  size_t end_bytes, dftracer::utils::indexer::Indexer &indexer) override {
     spdlog::debug(
         "Initializing raw streaming session for range [{}, {}] from {}",
         start_bytes, end_bytes, gz_path);
@@ -710,10 +710,10 @@ class RawStreamingSession : public BaseStreamingSession {
 
 class StreamingSessionFactory {
  private:
-  dft::indexer::Indexer &indexer_;
+  dftracer::utils::indexer::Indexer &indexer_;
 
  public:
-  explicit StreamingSessionFactory(dft::indexer::Indexer &indexer)
+  explicit StreamingSessionFactory(dftracer::utils::indexer::Indexer &indexer)
       : indexer_(indexer) {}
 
   std::unique_ptr<JsonStreamingSession> create_json_session(
@@ -751,7 +751,7 @@ class Reader::Impl {
       : gz_path_(gz_path), idx_path_(idx_path), is_open_(false) {
     try {
       // Create indexer instance - will auto-build index if needed
-      indexer_.reset(new dft::indexer::Indexer(gz_path, idx_path, 1.0));
+      indexer_.reset(new dftracer::utils::indexer::Indexer(gz_path, idx_path, 1.0));
       if (indexer_->need_rebuild()) {
         indexer_->build();
       }
@@ -885,7 +885,7 @@ class Reader::Impl {
   std::string idx_path_;
   bool is_open_;
 
-  std::unique_ptr<dft::indexer::Indexer> indexer_;
+  std::unique_ptr<dftracer::utils::indexer::Indexer> indexer_;
   std::unique_ptr<StreamingSessionFactory> session_factory_;
   std::unique_ptr<JsonStreamingSession> json_session_;
   std::unique_ptr<RawStreamingSession> raw_session_;
@@ -944,7 +944,7 @@ const std::string &Reader::get_idx_path() const {
 }
 
 }  // namespace reader
-}  // namespace dft
+}  // namespace dftracer::utils
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)
@@ -960,7 +960,7 @@ dft_reader_handle_t dft_reader_create(const char *gz_path,
   }
 
   try {
-    auto *reader = new dft::reader::Reader(gz_path, idx_path);
+    auto *reader = new dftracer::utils::reader::Reader(gz_path, idx_path);
     return static_cast<dft_reader_handle_t>(reader);
   } catch (const std::exception &e) {
     spdlog::error("Failed to create DFT reader: {}", e.what());
@@ -970,7 +970,7 @@ dft_reader_handle_t dft_reader_create(const char *gz_path,
 
 void dft_reader_destroy(dft_reader_handle_t reader) {
   if (reader) {
-    delete static_cast<dft::reader::Reader *>(reader);
+    delete static_cast<dftracer::utils::reader::Reader *>(reader);
   }
 }
 
@@ -980,7 +980,7 @@ int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes) {
   }
 
   try {
-    auto *cpp_reader = static_cast<dft::reader::Reader *>(reader);
+    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
     *max_bytes = cpp_reader->get_max_bytes();
     return 0;
   } catch (const std::exception &e) {
@@ -997,7 +997,7 @@ int dft_reader_read(dft_reader_handle_t reader, const char *gz_path,
   }
 
   try {
-    auto *cpp_reader = static_cast<dft::reader::Reader *>(reader);
+    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
     size_t bytes_read =
         cpp_reader->read(gz_path, start_bytes, end_bytes, buffer, buffer_size);
     return static_cast<int>(bytes_read);
@@ -1015,7 +1015,7 @@ int dft_reader_read_raw(dft_reader_handle_t reader, const char *gz_path,
   }
 
   try {
-    auto *cpp_reader = static_cast<dft::reader::Reader *>(reader);
+    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
     size_t bytes_read = cpp_reader->read_raw(gz_path, start_bytes, end_bytes,
                                              buffer, buffer_size);
     return static_cast<int>(bytes_read);
@@ -1027,7 +1027,7 @@ int dft_reader_read_raw(dft_reader_handle_t reader, const char *gz_path,
 
 void dft_reader_reset(dft_reader_handle_t reader) {
   if (reader) {
-    static_cast<dft::reader::Reader *>(reader)->reset();
+    static_cast<dftracer::utils::reader::Reader *>(reader)->reset();
   }
 }
 

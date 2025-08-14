@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
   // stderr-based logger to ensure logs don't interfere with data output
   auto logger = spdlog::stderr_color_mt("stderr");
   spdlog::set_default_logger(logger);
-  dft::utils::set_log_level(log_level_str);
+  dftracer::utils::utils::set_log_level(log_level_str);
 
   spdlog::debug("Log level set to: {}", log_level_str);
   spdlog::debug("Processing file: {}", gz_path);
@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
   std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
   try {
-    dft::indexer::Indexer indexer(gz_path, idx_path, chunk_size_mb,
+    dftracer::utils::indexer::Indexer indexer(gz_path, idx_path, chunk_size_mb,
                                   force_rebuild);
 
     if (check_rebuild) {
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
     spdlog::debug("Performing byte range read operation");
 
     try {
-      dft::reader::Reader reader(gz_path, idx_path);
+      dftracer::utils::reader::Reader reader(gz_path, idx_path);
       auto max_bytes = reader.get_max_bytes();
       if (end_bytes_ > max_bytes) {
         end_bytes_ = max_bytes;

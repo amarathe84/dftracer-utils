@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <string>
 
-namespace dft {
+namespace dftracer::utils {
 namespace utils {
 
 /**
@@ -77,7 +77,7 @@ std::string get_log_level_string() {
 int get_log_level_int() { return static_cast<int>(spdlog::get_level()); }
 
 }  // namespace utils
-}  // namespace dft
+}  // namespace dftracer::utils
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)
@@ -90,19 +90,19 @@ int dft_utils_set_log_level(const char *level_str) {
     return -1;
   }
 
-  return dft::utils::set_log_level(level_str);
+  return dftracer::utils::utils::set_log_level(level_str);
 }
 
 int dft_utils_set_log_level_int(int level) {
-  return dft::utils::set_log_level_int(level);
+  return dftracer::utils::utils::set_log_level_int(level);
 }
 
 const char *dft_utils_get_log_level_string() {
   static std::string level_string;
-  level_string = dft::utils::get_log_level_string();
+  level_string = dftracer::utils::utils::get_log_level_string();
   return level_string.c_str();
 }
 
-int dft_utils_get_log_level_int() { return dft::utils::get_log_level_int(); }
+int dft_utils_get_log_level_int() { return dftracer::utils::utils::get_log_level_int(); }
 
 }  // extern "C"

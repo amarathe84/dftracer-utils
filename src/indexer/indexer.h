@@ -148,7 +148,7 @@ void dft_indexer_destroy(dft_indexer_handle_t indexer);
 #include <string>
 #include <vector>
 
-namespace dft {
+namespace dftracer::utils {
 namespace indexer {
 
 /**
@@ -184,7 +184,7 @@ struct CheckpointInfo {
  * Example usage:
  * ```cpp
  * try {
- *     dft::indexer::Indexer indexer("trace.gz", "trace.gz.idx", 1.0);
+ *     dftracer::utils::indexer::Indexer indexer("trace.gz", "trace.gz.idx", 1.0);
  *     if (indexer.need_rebuild()) {
  *         indexer.build();
  *     }
@@ -311,7 +311,7 @@ class Indexer {
 };
 
 }  // namespace indexer
-}  // namespace dft
+}  // namespace dftracer::utils
 #endif
 
 #endif  // __DFTRACER_UTILS_READER_INDEXER_H

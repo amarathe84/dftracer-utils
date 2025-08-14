@@ -82,14 +82,14 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <string>
 
 // Forward declaration for indexer
-namespace dft {
+namespace dftracer::utils {
 namespace indexer {
 class Indexer;
 struct CheckpointInfo;
 }  // namespace indexer
-}  // namespace dft
+}  // namespace dftracer::utils
 
-namespace dft {
+namespace dftracer::utils {
 namespace reader {
 
 /**
@@ -98,7 +98,7 @@ namespace reader {
  * Example usage:
  * ```cpp
  * try {
- *     dft::reader::Reader reader("trace.gz", "trace.gz.idx");
+ *     dftracer::utils::reader::Reader reader("trace.gz", "trace.gz.idx");
  *     size_t max_bytes = reader.get_max_bytes();
  *     auto data = reader.read_range_bytes(0, 1024);
  *     // Use data.first.get() for raw pointer, data.second for size
@@ -230,7 +230,7 @@ class Reader {
 };
 
 }  // namespace reader
-}  // namespace dft
+}  // namespace dftracer::utils
 #endif
 
 #endif  // __DFTRACER_UTILS_READER_READER_H
