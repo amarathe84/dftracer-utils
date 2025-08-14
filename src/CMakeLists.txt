@@ -52,6 +52,7 @@ target_link_libraries(dftracer_utils
     PRIVATE spdlog::spdlog_header_only picosha2
     PUBLIC ghc_filesystem
 )
+target_add_rpath(dftracer_utils)
 
 # Link SQLite3 and zlib with appropriate variants for static library
 link_sqlite3(dftracer_utils STATIC)
@@ -81,14 +82,12 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     EXPORT_NAME shared
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
-    INSTALL_RPATH_USE_LINK_PATH TRUE
-    BUILD_WITH_INSTALL_RPATH TRUE
-    # INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/../lib"
 )
 target_link_libraries(dftracer_utils_shared 
     PRIVATE spdlog::spdlog_header_only picosha2
     PUBLIC ghc_filesystem
 )
+target_add_rpath(dftracer_utils_shared)
 
 # Link SQLite3 and zlib with appropriate variants for shared library
 link_sqlite3(dftracer_utils_shared SHARED)
@@ -181,25 +180,24 @@ if (SKBUILD)
           NB_STATIC STABLE_ABI
           ${source_file}
         )
-        set_target_properties(${source_name} PROPERTIES
-          INSTALL_RPATH "@loader_path;@loader_path/lib"
-          BUILD_RPATH "@loader_path;@loader_path/lib"
-          BUILD_WITH_INSTALL_RPATH TRUE
-          INSTALL_RPATH_USE_LINK_PATH TRUE
-        )
+        # set_target_properties(${source_name} PROPERTIES
+        #   INSTALL_RPATH "@loader_path;@loader_path/lib"
+        #   BUILD_RPATH "@loader_path;@loader_path/lib"
+        # )
       else()
         nanobind_add_module(
           ${source_name}
           NB_STATIC STABLE_ABI LTO
           ${source_file}
         )
-        set_target_properties(${source_name} PROPERTIES
-          INSTALL_RPATH_USE_LINK_PATH TRUE
-          BUILD_WITH_INSTALL_RPATH TRUE
-          # INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64;$ORIGIN/../../lib;$ORIGIN/dft_utils/lib;$ORIGIN/../dft_utils/lib"
-        )
+        # set_target_properties(${source_name} PROPERTIES
+        #   INSTALL_RPATH_USE_LINK_PATH TRUE
+        #   BUILD_WITH_INSTALL_RPATH TRUE
+        #   # INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64;$ORIGIN/../../lib;$ORIGIN/dft_utils/lib;$ORIGIN/../dft_utils/lib"
+        # )
       endif()
       target_link_libraries(${source_name} PRIVATE dftracer_utils::shared)
+      target_add_rpath(${source_name})
       install(TARGETS ${source_name} LIBRARY DESTINATION dftracer/utils)
   endforeach()
 endif()
