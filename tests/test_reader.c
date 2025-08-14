@@ -665,18 +665,6 @@ void test_logger_set_get_level_int(void) {
     TEST_ASSERT_EQUAL_INT(-1, dft_utils_set_log_level_int(100));
 }
 
-void test_logger_backward_compatibility(void) {
-    // Test backward compatibility aliases
-    TEST_ASSERT_EQUAL_INT(0, dft_set_log_level("info"));
-    TEST_ASSERT_EQUAL_STRING("info", dft_get_log_level_string());
-    
-    TEST_ASSERT_EQUAL_INT(0, dft_set_log_level_int(4));
-    TEST_ASSERT_EQUAL_INT(4, dft_get_log_level_int());
-    TEST_ASSERT_EQUAL_STRING("error", dft_get_log_level_string());
-    
-    // Test NULL input
-    TEST_ASSERT_EQUAL_INT(-1, dft_set_log_level(NULL));
-}
 
 void test_reader_raw_basic_functionality(void) {
     // Build index first
@@ -1114,7 +1102,6 @@ int main(void) {
     // Logger tests
     RUN_TEST(test_logger_set_get_level_string);
     RUN_TEST(test_logger_set_get_level_int);
-    RUN_TEST(test_logger_backward_compatibility);
     
     // Raw reader tests
     RUN_TEST(test_reader_raw_basic_functionality);

@@ -5,7 +5,6 @@
 extern "C"
 {
 #endif
-
     /**
      * Set the global spdlog log level programmatically
      * @param level_str String representation of log level (case insensitive)
@@ -35,12 +34,6 @@ extern "C"
      */
     int dft_utils_get_log_level_int(void);
 
-    // Backward compatibility aliases (deprecated)
-    int dft_set_log_level(const char *level_str);
-    int dft_set_log_level_int(int level);
-    const char *dft_get_log_level_string(void);
-    int dft_get_log_level_int(void);
-
 #ifdef __cplusplus
 }
 
@@ -50,9 +43,30 @@ namespace dft
 {
 namespace utils
 {
+/**
+ * Set the log level for the utils module
+ * @param level_str String representation of log level
+ * @return 0 on success, -1 on failure
+ */
 int set_log_level(const std::string &level_str);
+
+/**
+ * Set the log level for the utils module
+ * @param level Integer representation of log level
+ * @return 0 on success, -1 on failure
+ */
 int set_log_level_int(int level);
+
+/**
+ * Get the log level for the utils module
+ * @return String representation of log level
+ */
 std::string get_log_level_string();
+
+/**
+ * Get the log level for the utils module
+ * @return Integer representation of log level
+ */
 int get_log_level_int();
 } // namespace utils
 } // namespace dft
