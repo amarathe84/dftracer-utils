@@ -49,7 +49,7 @@ set_target_properties(dftracer_utils PROPERTIES
     OUTPUT_NAME dftracer_utils
 )
 target_link_libraries(dftracer_utils 
-    PRIVATE spdlog::spdlog picosha2
+    PRIVATE spdlog::spdlog_header_only picosha2
     PUBLIC ghc_filesystem
 )
 
@@ -86,7 +86,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     # INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/../lib"
 )
 target_link_libraries(dftracer_utils_shared 
-    PRIVATE spdlog::spdlog picosha2
+    PRIVATE spdlog::spdlog_header_only picosha2
     PUBLIC ghc_filesystem
 )
 
@@ -114,7 +114,7 @@ endif()
 
 add_executable(dft_reader bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog argparse::argparse ghc_filesystem picosha2)
+target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2)
 
 # Link SQLite3 and zlib for executable (treat as shared since it's an executable)
 link_sqlite3(dft_reader STATIC)
@@ -223,8 +223,11 @@ endif()
 if(TARGET picosha2)
     list(APPEND INSTALLABLE_TARGETS picosha2)
 endif()
-if(TARGET spdlog)
-    list(APPEND INSTALLABLE_TARGETS spdlog)
+# if(TARGET spdlog)
+#     list(APPEND INSTALLABLE_TARGETS spdlog)
+# endif()
+if (TARGET spdlog_header_only)
+    list(APPEND INSTALLABLE_TARGETS spdlog_header_only)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)
