@@ -1,32 +1,8 @@
-# Tests for dftracer_utils
-
 ##########################################
 # Dependencies
 ##########################################
 
-CPMAddPackage(
-  NAME doctest
-  GITHUB_REPOSITORY doctest/doctest
-  VERSION 2.4.11
-)
-
-CPMAddPackage(
-  NAME unity
-  GITHUB_REPOSITORY ThrowTheSwitch/Unity
-  VERSION 2.6.0
-  DOWNLOAD_ONLY YES
-)
-
-if(TARGET unity)
-  add_library(unity_lib ALIAS unity)
-else()
-  add_library(unity_lib STATIC ${unity_SOURCE_DIR}/src/unity.c)
-  target_include_directories(unity_lib PUBLIC ${unity_SOURCE_DIR}/src)
-endif()
-
-include(${CMAKE_SOURCE_DIR}/cmake/CPM.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
-
+need_test_deps()
 need_zlib()
 
 ##########################################
@@ -38,34 +14,28 @@ add_library(testing_utilities STATIC
 )
 target_link_libraries(testing_utilities
     PRIVATE
-    dft_utils
+    dftracer_utils
     doctest::doctest
     ZLIB::ZLIB
     ghc_filesystem
 )
-target_include_directories(testing_utilities
-    PRIVATE
-    ${CMAKE_BINARY_DIR}/include
-)
 
 ##########################################
-# Targets
+# Unit Tests
 ##########################################
 
-## Test Reader (C++ API)
+#+++++++++++++++++++++++++++++++++++++++++
+# Test Reader (C++ API)
+#+++++++++++++++++++++++++++++++++++++++++
 
 add_executable(test_reader
     test_reader.cpp
 )
 target_link_libraries(test_reader
     PRIVATE
-    dft_utils
+    dftracer_utils
     doctest::doctest
     testing_utilities
-)
-target_include_directories(test_reader
-    PRIVATE
-    ${CMAKE_BINARY_DIR}/include
 )
 target_set_warnings(test_reader)
 
@@ -77,20 +47,18 @@ endif()
 
 add_test(NAME test_reader COMMAND test_reader)
 
-## Test Reader C API
+#+++++++++++++++++++++++++++++++++++++++++
+# Test Reader C API
+#+++++++++++++++++++++++++++++++++++++++++
 
 add_executable(test_reader_c
     test_reader.c
 )
 target_link_libraries(test_reader_c
     PRIVATE
-    dft_utils
+    dftracer_utils
     unity_lib
     testing_utilities
-)
-target_include_directories(test_reader_c
-    PRIVATE
-    ${CMAKE_BINARY_DIR}/include
 )
 
 # Apply coverage flags if enabled
@@ -108,13 +76,9 @@ add_executable(test_reader_robustness
 )
 target_link_libraries(test_reader_robustness
     PRIVATE
-    dft_utils
+    dftracer_utils
     doctest::doctest
     testing_utilities
-)
-target_include_directories(test_reader_robustness
-    PRIVATE
-    ${CMAKE_BINARY_DIR}/include
 )
 target_set_warnings(test_reader_robustness)
 
@@ -126,24 +90,19 @@ endif()
 
 add_test(NAME test_reader_robustness COMMAND test_reader_robustness)
 
-##########################################
+#+++++++++++++++++++++++++++++++++++++++++
 # Python Tests (SKBUILD only)
-##########################################
+#+++++++++++++++++++++++++++++++++++++++++
 
 if(SKBUILD)
-    # Find Python interpreter
     find_package(Python COMPONENTS Interpreter REQUIRED)
-    
-    # Add Python tests
     add_test(NAME test_python_reader
-        COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/py/test_reader.py -v
+        COMMAND ${Python_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/python/test_reader.py -v
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
-    
-    # Set test environment
     set_tests_properties(test_python_reader
         PROPERTIES
-        ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/py/src"
+        ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python/src"
     )
 endif()
 
@@ -178,7 +137,7 @@ if(NOT CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     )
     
     # Create tests for all target aliases
-    foreach(TARGET_ALIAS "dft_utils" "dft_utils::static" "dft_utils::shared")
+    foreach(TARGET_ALIAS "dftracer_utils" "dftracer_utils::static" "dftracer_utils::shared")
         string(REPLACE "::" "_" TEST_NAME_SUFFIX ${TARGET_ALIAS})
         add_test(NAME test_target_${TEST_NAME_SUFFIX}
             COMMAND ${CMAKE_COMMAND}
@@ -193,9 +152,9 @@ if(NOT CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set_tests_properties(
         test_pkgconfig_discovery
         test_cmake_discovery
-        test_target_dft_utils
-        test_target_dft_utils_static
-        test_target_dft_utils_shared
+        test_target_dftracer_utils
+        test_target_dftracer_utils_static
+        test_target_dftracer_utils_shared
         PROPERTIES
         FIXTURES_REQUIRED "installed_package"
     )

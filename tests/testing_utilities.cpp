@@ -9,7 +9,7 @@
 #include <vector>
 #include <zlib.h>
 
-#include <dft_utils/utils/filesystem.h>
+#include <dftracer/utils/utils/filesystem.h>
 
 namespace dft_utils_test {
 bool compress_file_to_gzip(const std::string& input_file, const std::string& output_file) {

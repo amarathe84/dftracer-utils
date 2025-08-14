@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <dft_utils/indexer/indexer.h>
-#include <dft_utils/reader/reader.h>
-#include <dft_utils/utils/logger.h>
+#include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/reader/reader.h>
+#include <dftracer/utils/utils/logger.h>
 #include "testing_utilities.h"
 
 // Global test environment handle

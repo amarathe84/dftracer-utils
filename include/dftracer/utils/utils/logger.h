@@ -38,7 +38,8 @@ int dft_utils_get_log_level_int(void);
 
 #include <string>
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace utils {
 /**
  * Set the log level for the utils module
@@ -66,7 +67,8 @@ std::string get_log_level_string();
  */
 int get_log_level_int();
 }  // namespace utils
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 #endif
 
 #endif  // __DFTRACER_UTILS_UTILS_LOGGER_H

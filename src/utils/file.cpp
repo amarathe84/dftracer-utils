@@ -1,5 +1,5 @@
-#include <dft_utils/utils/file.h>
-#include <dft_utils/utils/filesystem.h>
+#include <dftracer/utils/utils/file.h>
+#include <dftracer/utils/utils/filesystem.h>
 
 // Platform-specific includes for file stats
 #ifdef _WIN32
@@ -11,7 +11,8 @@
 
 #include <chrono>
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace utils {
 
 time_t get_file_modification_time(const std::string &file_path) {
@@ -40,4 +41,5 @@ time_t get_file_modification_time(const std::string &file_path) {
 }
 
 }  // namespace utils
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer

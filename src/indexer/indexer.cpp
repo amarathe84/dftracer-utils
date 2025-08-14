@@ -1,7 +1,7 @@
-#include <dft_utils/indexer/indexer.h>
-#include <dft_utils/utils/file.h>
-#include <dft_utils/utils/filesystem.h>
-#include <dft_utils/utils/platform_compat.h>
+#include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/utils/file.h>
+#include <dftracer/utils/utils/filesystem.h>
+#include <dftracer/utils/utils/platform_compat.h>
 #include <picosha2.h>
 #include <spdlog/spdlog.h>
 #include <sqlite3.h>
@@ -15,7 +15,8 @@
 #include <stdexcept>
 #include <vector>
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace indexer {
 
 class Indexer::Impl {
@@ -1205,13 +1206,15 @@ void Indexer::Impl::build() {
 }
 
 }  // namespace indexer
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 
 // ==============================================================================
 // C++ Public Interface Implementation
 // ==============================================================================
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace indexer {
 
 Indexer::Indexer(const std::string &gz_path, const std::string &idx_path,
@@ -1265,7 +1268,8 @@ std::vector<CheckpointInfo> Indexer::get_checkpoints(int file_id) const {
 }
 
 }  // namespace indexer
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)

@@ -1,10 +1,11 @@
-#include <dft_utils/utils/logger.h>
+#include <dftracer/utils/utils/logger.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <string>
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace utils {
 
 /**
@@ -77,7 +78,8 @@ std::string get_log_level_string() {
 int get_log_level_int() { return static_cast<int>(spdlog::get_level()); }
 
 }  // namespace utils
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)

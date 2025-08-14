@@ -41,7 +41,7 @@ build-dir = "build/{wheel_tag}"
 wheel.py-api = "cp312"
 
 # Package discovery
-wheel.packages = ["py/src/dft_utils"]
+wheel.packages = ["dftracer/utils"]
 
 [tool.cibuildwheel]
 build-verbosity = 1

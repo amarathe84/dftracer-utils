@@ -394,3 +394,25 @@ function(need_picosha2)
     endif()
   endif()
 endfunction()
+
+function(need_test_deps)
+  CPMAddPackage(
+    NAME doctest
+    GITHUB_REPOSITORY doctest/doctest
+    VERSION 2.4.11
+  )
+
+  CPMAddPackage(
+    NAME unity
+    GITHUB_REPOSITORY ThrowTheSwitch/Unity
+    VERSION 2.6.0
+    DOWNLOAD_ONLY YES
+  )
+
+  if(TARGET unity)
+    add_library(unity_lib ALIAS unity)
+  else()
+    add_library(unity_lib STATIC ${unity_SOURCE_DIR}/src/unity.c)
+    target_include_directories(unity_lib PUBLIC ${unity_SOURCE_DIR}/src)
+  endif()
+endfunction()

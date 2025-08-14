@@ -82,14 +82,17 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <string>
 
 // Forward declaration for indexer
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace indexer {
 class Indexer;
 struct CheckpointInfo;
 }  // namespace indexer
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace reader {
 
 /**
@@ -230,7 +233,8 @@ class Reader {
 };
 
 }  // namespace reader
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 #endif
 
 #endif  // __DFTRACER_UTILS_READER_READER_H

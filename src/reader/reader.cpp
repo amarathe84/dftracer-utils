@@ -1,6 +1,6 @@
-#include <dft_utils/indexer/indexer.h>
-#include <dft_utils/reader/reader.h>
-#include <dft_utils/utils/platform_compat.h>
+#include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/reader/reader.h>
+#include <dftracer/utils/utils/platform_compat.h>
 #include <spdlog/spdlog.h>
 #include <zlib.h>
 
@@ -19,7 +19,8 @@ struct InflateState {
   size_t c_off;
 };
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace reader {
 
 class ReaderError : public std::runtime_error {
@@ -944,7 +945,8 @@ const std::string &Reader::get_idx_path() const {
 }
 
 }  // namespace reader
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)

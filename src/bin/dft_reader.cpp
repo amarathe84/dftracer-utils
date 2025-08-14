@@ -1,8 +1,8 @@
-#include <dft_utils/indexer/indexer.h>
-#include <dft_utils/reader/reader.h>
-#include <dft_utils/utils/filesystem.h>
-#include <dft_utils/utils/logger.h>
-#include <dft_utils/utils/platform_compat.h>
+#include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/reader/reader.h>
+#include <dftracer/utils/utils/filesystem.h>
+#include <dftracer/utils/utils/logger.h>
+#include <dftracer/utils/utils/platform_compat.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 

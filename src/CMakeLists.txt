@@ -1,12 +1,7 @@
-project(dft_utils 
-    VERSION 1.0.0
-    LANGUAGES C CXX
-)
-
 # Configure output directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
+# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
+# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
+# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PROJECT_NAME})
 
 ##########################################
 # Dependencies
@@ -43,42 +38,47 @@ set(DFTRACER_UTILS_SOURCES
 # Libraries
 ##########################################
 
-# static library
-add_library(dft_utils STATIC ${DFTRACER_UTILS_SOURCES})
-set_target_properties(dft_utils PROPERTIES 
-    OUTPUT_NAME dft_utils
+#+++++++++++++++++++++++++++++++++++++++++
+# Static library
+#+++++++++++++++++++++++++++++++++++++++++
+
+add_library(dftracer_utils STATIC ${DFTRACER_UTILS_SOURCES})
+add_library(dftracer_utils::static ALIAS dftracer_utils)
+
+set_target_properties(dftracer_utils PROPERTIES 
+    OUTPUT_NAME dftracer_utils
 )
-target_link_libraries(dft_utils 
+target_link_libraries(dftracer_utils 
     PRIVATE spdlog::spdlog picosha2
     PUBLIC ghc_filesystem
 )
 
 # Link SQLite3 and zlib with appropriate variants for static library
-link_sqlite3(dft_utils STATIC)
-link_zlib(dft_utils STATIC)
+link_sqlite3(dftracer_utils STATIC)
+link_zlib(dftracer_utils STATIC)
 
-# Create dft_utils include mapping using configure_file
-foreach(header ${DFTRACER_UTILS_HEADERS})
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${header} ${CMAKE_BINARY_DIR}/include/dft_utils/${header} COPYONLY)
-endforeach()
-
-target_include_directories(dft_utils 
+target_include_directories(dftracer_utils 
     PUBLIC 
-        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_set_warnings(dft_utils)
+target_set_warnings(dftracer_utils)
 
 # Apply coverage flags if enabled
 if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(dft_utils PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-    target_link_libraries(dft_utils PRIVATE --coverage)
+    target_compile_options(dftracer_utils PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dftracer_utils PRIVATE --coverage)
 endif()
 
-# shared library
-add_library(dft_utils_shared SHARED ${DFTRACER_UTILS_SOURCES})
-set_target_properties(dft_utils_shared PROPERTIES 
-    OUTPUT_NAME dft_utils
+#+++++++++++++++++++++++++++++++++++++++++
+# Shared Library
+#+++++++++++++++++++++++++++++++++++++++++
+
+add_library(dftracer_utils_shared SHARED ${DFTRACER_UTILS_SOURCES})
+add_library(dftracer_utils::shared ALIAS dftracer_utils_shared)
+
+set_target_properties(dftracer_utils_shared PROPERTIES 
+    OUTPUT_NAME dftracer_utils
     EXPORT_NAME shared
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -86,28 +86,27 @@ set_target_properties(dft_utils_shared PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
     INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:$ORIGIN/../lib"
 )
-target_link_libraries(dft_utils_shared 
+target_link_libraries(dftracer_utils_shared 
     PRIVATE spdlog::spdlog picosha2
     PUBLIC ghc_filesystem
 )
 
 # Link SQLite3 and zlib with appropriate variants for shared library
-link_sqlite3(dft_utils_shared SHARED)
-link_zlib(dft_utils_shared SHARED)
+link_sqlite3(dftracer_utils_shared SHARED)
+link_zlib(dftracer_utils_shared SHARED)
 
-target_include_directories(dft_utils_shared 
+target_include_directories(dftracer_utils_shared 
     PUBLIC 
-        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_set_warnings(dft_utils_shared)
+target_set_warnings(dftracer_utils_shared)
 
 # Apply coverage flags if enabled
 if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(dft_utils_shared PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-    target_link_libraries(dft_utils_shared PRIVATE --coverage)
+    target_compile_options(dftracer_utils_shared PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dftracer_utils_shared PRIVATE --coverage)
 endif()
-
 
 ##########################################
 # Executables
@@ -125,7 +124,7 @@ link_zlib(dft_reader STATIC)
 
 target_include_directories(dft_reader 
     PRIVATE 
-        ${CMAKE_BINARY_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include
 )
 
 target_set_warnings(dft_reader)
@@ -139,8 +138,8 @@ endif()
 # Make sure spdlog include directories are available for all targets
 get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
 if(SPDLOG_INCLUDE_DIRS)
-    target_include_directories(dft_utils PRIVATE ${SPDLOG_INCLUDE_DIRS})
-    target_include_directories(dft_utils_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dftracer_utils PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dftracer_utils_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
     target_include_directories(dft_reader PRIVATE ${SPDLOG_INCLUDE_DIRS})
 endif()
 
@@ -150,62 +149,104 @@ install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 
 ##########################################
+# Python binding
+##########################################
+
+if (SKBUILD)
+  if (CMAKE_VERSION VERSION_LESS 3.18)
+    set(DEV_MODULE Development)
+  else()
+    set(DEV_MODULE Development.Module)
+  endif()
+
+  find_package(Python 3.8 
+    REQUIRED COMPONENTS Interpreter ${DEV_MODULE}
+    OPTIONAL_COMPONENTS Development.SABIModule)
+
+  execute_process(
+    COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+    OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
+  find_package(nanobind CONFIG REQUIRED)
+
+  if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+  endif()
+
+  set(PYTHON_BINDINGS_SOURCES python/reader_ext.cpp)
+
+  foreach (source_file ${PYTHON_BINDINGS_SOURCES})
+      get_filename_component(source_name ${source_file} NAME_WE)
+      if (APPLE)
+        nanobind_add_module(
+          source_name
+          NB_STATIC STABLE_ABI
+          src/reader_ext.cpp
+        )
+        set_target_properties(source_name PROPERTIES
+          # INSTALL_RPATH "@loader_path;@loader_path/lib"
+          # BUILD_RPATH "@loader_path;@loader_path/lib"
+          BUILD_WITH_INSTALL_RPATH TRUE
+          INSTALL_RPATH_USE_LINK_PATH TRUE
+        )
+      else()
+        nanobind_add_module(
+          source_name
+          NB_STATIC STABLE_ABI LTO
+          src/reader_ext.cpp
+        )
+        set_target_properties(source_name PROPERTIES
+          INSTALL_RPATH_USE_LINK_PATH TRUE
+          BUILD_WITH_INSTALL_RPATH TRUE
+          # INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64;$ORIGIN/../../lib;$ORIGIN/dft_utils/lib;$ORIGIN/../dft_utils/lib"
+        )
+      endif()
+      target_link_libraries(source_name PRIVATE dftracer_utils::shared)
+  endforeach()
+endif()
+
+##########################################
 # Installations
 ##########################################
 
-# Aliases for the targets
-add_library(dft_utils::static ALIAS dft_utils)
-add_library(dft_utils::shared ALIAS dft_utils_shared)
-
 # Install directive for libraries  
-# Note: Only install targets that we can actually install (not imported/system targets)
-# Don't install zlib targets as they are built by CPM and not designed for export
-set(INSTALLABLE_TARGETS dft_utils dft_utils_shared)
 
-# Add sqlite3 if it's our own target (CPM-built)
+set(INSTALLABLE_TARGETS dftracer_utils dftracer_utils_shared)
 if(TARGET sqlite3)
     list(APPEND INSTALLABLE_TARGETS sqlite3)
 endif()
-
 if(TARGET sqlite3_static)
     list(APPEND INSTALLABLE_TARGETS sqlite3_static)
 endif()
-
-# Add ghc_filesystem if it's installable
 if(TARGET ghc_filesystem)
     list(APPEND INSTALLABLE_TARGETS ghc_filesystem)
 endif()
-
 if(TARGET picosha2)
     list(APPEND INSTALLABLE_TARGETS picosha2)
 endif()
-
-# Add spdlog if it's our own target (CPM-built)  
 if(TARGET spdlog)
     list(APPEND INSTALLABLE_TARGETS spdlog)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS}
-    EXPORT dft_utilsTargets
+    EXPORT dftracer_utilsTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 # Install headers
-install(FILES ${DFTRACER_UTILS_HEADERS}
-    DESTINATION ${INSTALL_INCLUDE_DIR}/${PROJECT_NAME}
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/dftracer/utils/
+    DESTINATION ${INSTALL_INCLUDE_DIR}/dftracer/utils
+    FILES_MATCHING PATTERN "*.h"
 )
 
-# Only create package config for non-Python builds
-# if(NOT (DEFINED DFTRACER_PYTHON_BUILD AND DFTRACER_PYTHON_BUILD))
-message(STATUS "Creating package config for dft_utils")
+message(STATUS "Creating package config for dftracer_utils")
 create_package_config(
-    TARGET dft_utils
+    TARGET dftracer_utils
     VERSION ${PROJECT_VERSION}
     DESCRIPTION "DFTracer utils library for processing gzipped files"
     URL "https://github.com/LLNL/dftracer-utils"
     REQUIRES "sqlite3 spdlog"
     LIBS_PRIVATE "-lspdlog -lsqlite3 -lz"
 )
-# endif()

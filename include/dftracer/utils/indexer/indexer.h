@@ -148,7 +148,8 @@ void dft_indexer_destroy(dft_indexer_handle_t indexer);
 #include <string>
 #include <vector>
 
-namespace dftracer::utils {
+namespace dftracer {
+namespace utils {
 namespace indexer {
 
 /**
@@ -311,7 +312,8 @@ class Indexer {
 };
 
 }  // namespace indexer
-}  // namespace dftracer::utils
+}  // namespace utils
+}  // namespace dftracer
 #endif
 
 #endif  // __DFTRACER_UTILS_READER_INDEXER_H
