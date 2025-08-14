@@ -40,17 +40,9 @@ include(Utils)
 include(Rpath)
 
 if (SKBUILD)
-  # message(FATAL_ERROR "CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
-  # Override standard CMake install directories for Python package
   set(CMAKE_INSTALL_LIBDIR "dftracer/utils/lib" CACHE STRING "Library install directory" FORCE)
   set(CMAKE_INSTALL_BINDIR "${SKBUILD_SCRIPTS_DIR}" CACHE STRING "Binary install directory" FORCE)
   set(CMAKE_INSTALL_INCLUDEDIR "dftracer/utils/include" CACHE STRING "Include install directory" FORCE)
-
-  # set(PYTHON_SITE_PACKAGES ${CMAKE_INSTALL_PREFIX})
-  # execute_process (COMMAND ${DFTRACER_PYTHON_EXE} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())" OUTPUT_VARIABLE MAIN_PYTHON_SITE_PACKAGES OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-  # set(SITE_PACKAGES_LOC_DIR "${SKBUILD_PLATLIB_DIR}/")
-  # set(CMAKE_INSTALL_RPATH "@loader_path/../dftracer/utils/lib" CACHE STRING "Library install directory" FORCE)
 endif()
 
 set_coverage_compiler_flags(DFTRACER_UTILS_TESTS AND DFTRACER_UTILS_COVERAGE)

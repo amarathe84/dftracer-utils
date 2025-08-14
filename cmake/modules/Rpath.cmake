@@ -39,22 +39,17 @@ function(target_add_rpath target_name)
             list(APPEND rpath_list "${path}")
         endforeach()
         normalize_rpath(rpath_list rpath_list)
-        set_target_properties(${target_name} PROPERTIES
-            INSTALL_RPATH "${rpath_list}"
-            BUILD_RPATH "${rpath_list}"
-            BUILD_WITH_INSTALL_RPATH TRUE
-            INSTALL_RPATH_USE_LINK_PATH TRUE
-        )
     else()
         list(APPEND rpath_list "$ORIGIN" "$ORIGIN/lib" "$ORIGIN/../lib" "$ORIGIN/../lib64")
         foreach (path IN LISTS additional_paths)
             list(APPEND rpath_list "${path}")
         endforeach()
-        set_target_properties(${target_name} PROPERTIES
-            INSTALL_RPATH "${rpath_list}"
-            BUILD_RPATH "${rpath_list}"
-            BUILD_WITH_INSTALL_RPATH TRUE
-            INSTALL_RPATH_USE_LINK_PATH TRUE
-        )
     endif()
+    message(STATUS "RPATH for target ${target_name}: ${rpath_list}")
+    set_target_properties(${target_name} PROPERTIES
+        INSTALL_RPATH "${rpath_list}"
+        BUILD_RPATH "${rpath_list}"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH_USE_LINK_PATH TRUE
+    )
 endfunction()

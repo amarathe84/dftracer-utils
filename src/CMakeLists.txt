@@ -180,21 +180,12 @@ if (SKBUILD)
           NB_STATIC STABLE_ABI
           ${source_file}
         )
-        # set_target_properties(${source_name} PROPERTIES
-        #   INSTALL_RPATH "@loader_path;@loader_path/lib"
-        #   BUILD_RPATH "@loader_path;@loader_path/lib"
-        # )
       else()
         nanobind_add_module(
           ${source_name}
           NB_STATIC STABLE_ABI LTO
           ${source_file}
         )
-        # set_target_properties(${source_name} PROPERTIES
-        #   INSTALL_RPATH_USE_LINK_PATH TRUE
-        #   BUILD_WITH_INSTALL_RPATH TRUE
-        #   # INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/lib64;$ORIGIN/../lib;$ORIGIN/../lib64;$ORIGIN/../../lib;$ORIGIN/dft_utils/lib;$ORIGIN/../dft_utils/lib"
-        # )
       endif()
       target_link_libraries(${source_name} PRIVATE dftracer_utils::shared)
       target_add_rpath(${source_name})
