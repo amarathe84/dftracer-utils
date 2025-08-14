@@ -135,22 +135,10 @@ int main(int argc, char **argv) {
       size_t bytes_written;
       size_t total_bytes = 0;
 
-      if (raw_mode) {
-        spdlog::debug("Using raw mode");
-        while ((bytes_written = reader.read_raw(
-                    start_bytes_, end_bytes_, buffer.get(), read_buffer_size)) >
-               0) {
+      while ((bytes_written = raw_mode ? reader.read_raw(start_bytes_, end_bytes_, buffer.get(), read_buffer_size) :
+                    reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size)) > 0) {
           fwrite(buffer.get(), 1, bytes_written, stdout);
           total_bytes += bytes_written;
-        }
-      } else {
-        spdlog::debug("Using JSON lines aware mode");
-        while ((bytes_written = reader.read(start_bytes_, end_bytes_,
-                                            buffer.get(), read_buffer_size)) >
-               0) {
-          fwrite(buffer.get(), 1, bytes_written, stdout);
-          total_bytes += bytes_written;
-        }
       }
 
       spdlog::debug("Successfully read {} bytes from range", total_bytes);

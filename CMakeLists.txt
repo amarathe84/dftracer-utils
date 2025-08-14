@@ -20,6 +20,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 # Enable optimization
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Release flags" FORCE)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ####################################################################################
 # Internal Paths for cmake libraries and Setup install and output Directories
