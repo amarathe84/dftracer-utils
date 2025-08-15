@@ -363,15 +363,16 @@ class TestDFTracerReader:
                     assert len(raw_data) > 0
                     assert len(raw_data) == 50  # Raw read should be exact size
                     
-                    # Compare with regular read - regular should be larger due to JSON boundary extension
+                    # Compare with regular read - regular should be less or (empty) due to JSON boundary extension
                     regular_data = reader.read(start, end)
-                    assert len(regular_data) >= len(raw_data)
-                    
+                    assert len(regular_data) <= len(raw_data)
+
                     # Regular read should end with complete JSON line
-                    assert regular_data.endswith('\\n')
-                    
-                    # Both should start with same data (up to raw_data length)
-                    assert raw_data == regular_data[:len(raw_data)]
+                    if regular_data:
+                        assert regular_data.endswith('\\n')
+
+                    # Both should start with same data (up to regular_data length)
+                    assert raw_data[:len(regular_data)] == regular_data
 
     def test_raw_iterator_functionality(self):
         """Test raw iterator functionality - mirrors C++ raw iterator tests"""
@@ -408,17 +409,16 @@ class TestDFTracerReader:
                 assert total_bytes > 0
 
     def test_raw_vs_line_iterator_comparison(self):
-        """Test comparison between raw and line-aware iterators - mirrors C++ comparison tests"""
+        """Test comparison between raw and line-aware iterators"""
         with PythonTestEnvironment(lines=2000) as env:
-            gz_file = env.create_test_gzip_file()
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
             env.build_index(gz_file, chunk_size_mb=0.5)
             
             with dft_utils.DFTracerReader(gz_file) as reader:
                 max_bytes = reader.get_max_bytes()
-                if max_bytes <= 2048:
-                    pytest.skip("File too small for iterator comparison")
                 
-                step_size = 512
+                step_size = bytes_per_line
                 
                 # Test line-aware iterator
                 line_chunks = []
@@ -443,49 +443,51 @@ class TestDFTracerReader:
                     assert len(line_chunk) > 0
                     assert len(raw_chunk) > 0
                     # Line chunks should end with complete lines
-                    assert line_chunk.endswith('\\n')
+                    assert line_chunk.endswith('\n')
                     # Raw chunks should be closer to requested step size
                     assert len(raw_chunk) <= step_size + 10  # Some tolerance
 
-    def test_json_boundary_detection(self):
-        """Test JSON boundary detection - mirrors C++ boundary tests"""
+    def test_line_boundary_detection(self):
+        """Test Line boundary detection"""
         with PythonTestEnvironment(lines=1000) as env:
-            gz_file = env.create_test_gzip_file()
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
             env.build_index(gz_file, chunk_size_mb=0.5)
             
             with dft_utils.DFTracerReader(gz_file) as reader:
                 # Small range should provide minimum requested bytes
-                content = reader.read(0, 100)
-                
-                assert len(content) >= 100  # Should get at least what was requested
-                
-                # Verify that output ends with complete JSON line
-                assert content.endswith('\\n')  # Should end with newline
-                
+                content = reader.read(0, bytes_per_line)
+
+                assert len(content) <= bytes_per_line  # Should get what was requested
+
+                # Verify that output ends with complete line
+                assert content.endswith('\n')  # Should end with newline
+
                 # Should contain complete JSON objects
                 assert content.rfind('}') != -1  # Should contain closing braces
                 last_brace_pos = content.rfind('}')
                 assert last_brace_pos < len(content) - 1  # '}' should not be the last character
-                assert content[last_brace_pos + 1] == '\\n'  # Should be followed by newline
+                assert content[last_brace_pos + 1] == '\n'  # Should be followed by newline
 
     def test_edge_cases(self):
-        """Test edge cases - mirrors C++ edge case tests"""
+        """Test edge cases"""
         with PythonTestEnvironment() as env:
-            gz_file = env.create_test_gzip_file()
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
             env.build_index(gz_file, chunk_size_mb=0.5)
             
             with dft_utils.DFTracerReader(gz_file) as reader:
                 max_bytes = reader.get_max_bytes()
                 
                 if max_bytes > 10:
-                    # Read near the end
+                    # Read near the end (not complete line)
                     data = reader.read(max_bytes - 10, max_bytes)
-                    assert len(data) > 0
+                    assert len(data) == 0
                     
-                    # Read single byte range
+                    # Read single byte range (not complete line)
                     if max_bytes > 1:
                         data = reader.read(0, 1)
-                        assert len(data) >= 1
+                        assert len(data) == 0
                 
                 # Test raw read edge cases
                 if max_bytes > 10:
@@ -537,7 +539,7 @@ class TestDFTracerRangeIterator:
                 
                 start = 1024
                 end = start + bytes_per_line * 12
-                step = 2048
+                step = bytes_per_line
 
                 chunk_count = 0
                 total_bytes = 0
@@ -545,7 +547,7 @@ class TestDFTracerRangeIterator:
                 for chunk in dft_utils.dft_reader_range(reader, start, end, step):
                     chunk_count += 1
                     total_bytes += len(chunk)
-                    assert 0 < len(chunk) < step < end - start
+                    assert 0 < len(chunk) <= step < end - start
                     # if chunk_count >= 3:  # Limit test iterations
                     #     break
                 
