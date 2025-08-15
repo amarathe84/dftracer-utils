@@ -128,7 +128,7 @@ TEST_CASE("C++ Reader - Basic functionality") {
         
         // Stream data until no more available
         size_t bytes_read;
-        while ((bytes_read = reader.read(gz_file, 0, 50, buffer, buffer_size)) > 0) {
+        while ((bytes_read = reader.read( 0, 50, buffer, buffer_size)) > 0) {
             result.append(buffer, bytes_read);
         }
         
@@ -197,7 +197,7 @@ TEST_CASE("C++ API - Data range reading") {
         
         // Stream data until no more available
         size_t bytes_read;
-        while ((bytes_read = reader.read(gz_file, 0, 50, buffer, buffer_size)) > 0) {
+        while ((bytes_read = reader.read( 0, 50, buffer, buffer_size)) > 0) {
             content.append(buffer, bytes_read);
         }
 
@@ -223,19 +223,18 @@ TEST_CASE("C++ API - Edge cases") {
     }
     
     // Create reader
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
     
     SUBCASE("Invalid byte range (start >= end) should throw") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
         char buffer[1024];
-        CHECK_THROWS(reader.read(gz_file, 100, 50, buffer, sizeof(buffer)));
-        CHECK_THROWS(reader.read(gz_file, 50, 50, buffer, sizeof(buffer))); // Equal start and end
+        CHECK_THROWS(reader.read( 100, 50, buffer, sizeof(buffer)));
+        CHECK_THROWS(reader.read( 50, 50, buffer, sizeof(buffer))); // Equal start and end
     }
     
     SUBCASE("Non-existent file should throw") {
         // Use cross-platform non-existent path
         fs::path non_existent = fs::temp_directory_path() / "nonexistent" / "file.gz";
-        char buffer[1024];
-        CHECK_THROWS(reader.read(non_existent.string(), 0, 50, buffer, sizeof(buffer)));
+        CHECK_THROWS(dftracer::utils::reader::Reader(non_existent.string(), non_existent.string()));
     }
 }
 
@@ -897,7 +896,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         
         // Stream raw data until no more available
         size_t bytes_read;
-        while ((bytes_read = reader.read(gz_file, 0, 50, buffer, buffer_size)) > 0) {
+        while ((bytes_read = reader.read( 0, 50, buffer, buffer_size)) > 0) {
             raw_result.append(buffer, bytes_read);
         }
         
@@ -955,7 +954,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         
         // Test explicit gz_path overload
         size_t bytes_read1;
-        while ((bytes_read1 = reader.read(gz_file, 0, 75, buffer1, buffer_size)) > 0) {
+        while ((bytes_read1 = reader.read( 0, 75, buffer1, buffer_size)) > 0) {
             result1.append(buffer1, bytes_read1);
         }
         

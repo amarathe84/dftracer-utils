@@ -65,7 +65,6 @@ int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char *gz_path);
 /**
  * Find the best checkpoint for a given uncompressed offset
  * @param indexer DFT indexer handle
- * @param file_id Database file ID (from dft_indexer_find_file_id)
  * @param target_offset Target uncompressed offset
  * @param uc_offset Output: uncompressed offset of checkpoint
  * @param c_offset Output: compressed offset of checkpoint
@@ -74,7 +73,7 @@ int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char *gz_path);
  * @param dict_size Output: size of compressed dictionary
  * @return 1 if checkpoint found, 0 if not found, -1 on error
  */
-int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, int file_id,
+int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
                                 uint64_t target_offset, uint64_t *uc_offset,
                                 uint64_t *c_offset, int *bits,
                                 unsigned char **dict_compressed,
@@ -87,9 +86,8 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, int file_id,
 void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed);
 
 /**
- * Get all checkpoints for a given file as arrays
+ * Get all checkpoints for this file as arrays
  * @param indexer DFT indexer handle
- * @param file_id Database file ID (from dft_indexer_find_file_id)
  * @param count Output: number of checkpoints
  * @param checkpoint_indices Output: array of checkpoint indices (caller must
  * free)
@@ -104,7 +102,7 @@ void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed);
  * @param num_lines_array Output: array of line counts (caller must free)
  * @return 0 on success, -1 on error
  */
-int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer, int file_id,
+int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
                                 size_t *count, uint64_t **checkpoint_indices,
                                 uint64_t **uc_offsets, uint64_t **uc_sizes,
                                 uint64_t **c_offsets, uint64_t **c_sizes,
@@ -289,22 +287,36 @@ class Indexer {
 
   /**
    * Find the best checkpoint for a given uncompressed offset
-   * @param file_id Database file ID (from find_file_id)
    * @param target_offset Target uncompressed offset
    * @param checkpoint Output parameter for checkpoint information
    * @return true if checkpoint found, false otherwise
    * @throws std::runtime_error on database error
    */
-  bool find_checkpoint(int file_id, size_t target_offset,
-                       CheckpointInfo &checkpoint) const;
+  bool find_checkpoint(size_t target_offset, CheckpointInfo &checkpoint) const;
 
   /**
-   * Get all checkpoints for a given file as a list
-   * @param file_id Database file ID (from find_file_id)
+   * Get all checkpoints for this file as a list
    * @return vector of all checkpoints ordered by uncompressed offset
    * @throws std::runtime_error on database error
    */
-  std::vector<CheckpointInfo> get_checkpoints(int file_id) const;
+  std::vector<CheckpointInfo> get_checkpoints() const;
+
+  /**
+   * Find checkpoints that contain data for a specific line range
+   * Uses the num_lines field in checkpoints to efficiently locate relevant checkpoints
+   * @param start_line Starting line number (1-based)
+   * @param end_line Ending line number (1-based, inclusive)
+   * @return vector of checkpoints that cover the specified line range
+   * @throws std::runtime_error on database error
+   */
+  std::vector<CheckpointInfo> find_checkpoints_by_line_range(size_t start_line, size_t end_line) const;
+
+  /**
+   * Get the cached file ID for this indexer instance
+   * @return file ID, or -1 if not found
+   * @throws std::runtime_error on database error
+   */
+  int get_file_id() const;
 
  private:
   class Impl;

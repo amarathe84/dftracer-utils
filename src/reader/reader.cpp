@@ -219,17 +219,14 @@ class BaseStreamingSession {
     bool use_checkpoint = false;
 
     // Try to find checkpoint
-    int file_id = indexer.find_file_id(gz_path);
-    if (file_id != -1) {
-      checkpoint_.reset(new dftracer::utils::indexer::CheckpointInfo());
-      if (indexer.find_checkpoint(file_id, start_bytes, *checkpoint_)) {
-        if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
-                                         checkpoint_.get()) == 0) {
-          use_checkpoint = true;
-          spdlog::debug(
-              "Using checkpoint at uncompressed offset {} for target {}",
-              checkpoint_->uc_offset, start_bytes);
-        }
+    checkpoint_.reset(new dftracer::utils::indexer::CheckpointInfo());
+    if (indexer.find_checkpoint(start_bytes, *checkpoint_)) {
+      if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
+                                       checkpoint_.get()) == 0) {
+        use_checkpoint = true;
+        spdlog::debug(
+            "Using checkpoint at uncompressed offset {} for target {}",
+            checkpoint_->uc_offset, start_bytes);
       }
     }
 
@@ -371,13 +368,13 @@ class BaseStreamingSession {
   }
 };
 
-class LineStreamingSession : public BaseStreamingSession {
+class LineByteStreamingSession : public BaseStreamingSession {
  private:
   std::vector<char> partial_line_buffer_;        // Partial line from previous read
   size_t actual_start_bytes_;
 
  public:
-  LineStreamingSession()
+  LineByteStreamingSession()
       : BaseStreamingSession(),
         actual_start_bytes_(0) {
   }
@@ -420,7 +417,7 @@ class LineStreamingSession : public BaseStreamingSession {
     // Check if we've reached the target end
     if (current_position_ >= target_end_bytes_) {
       is_finished_ = true;
-      spdlog::trace("LineStreamingSession finished: current_position_={}, target_end_bytes_={}", current_position_, target_end_bytes_);
+      spdlog::trace("LineByteStreamingSession finished: current_position_={}, target_end_bytes_={}", current_position_, target_end_bytes_);
       return 0;
     }
 
@@ -597,9 +594,9 @@ class LineStreamingSession : public BaseStreamingSession {
   }
 };
 
-class RawStreamingSession : public BaseStreamingSession {
+class ByteStreamingSession : public BaseStreamingSession {
  public:
-  RawStreamingSession() : BaseStreamingSession() {}
+  ByteStreamingSession() : BaseStreamingSession() {}
 
   void initialize(const std::string &gz_path, size_t start_bytes,
                   size_t end_bytes, dftracer::utils::indexer::Indexer &indexer) override {
@@ -665,6 +662,7 @@ class RawStreamingSession : public BaseStreamingSession {
   }
 };
 
+
 class StreamingSessionFactory {
  private:
   dftracer::utils::indexer::Indexer &indexer_;
@@ -673,28 +671,28 @@ class StreamingSessionFactory {
   explicit StreamingSessionFactory(dftracer::utils::indexer::Indexer &indexer)
       : indexer_(indexer) {}
 
-  std::unique_ptr<LineStreamingSession> create_line_session(
+  std::unique_ptr<LineByteStreamingSession> create_line_session(
       const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
-    std::unique_ptr<LineStreamingSession> session(new LineStreamingSession());
+    std::unique_ptr<LineByteStreamingSession> session(new LineByteStreamingSession());
     session->initialize(gz_path, start_bytes, end_bytes, indexer_);
     return session;
   }
 
-  std::unique_ptr<RawStreamingSession> create_raw_session(
+  std::unique_ptr<ByteStreamingSession> create_raw_session(
       const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
-    std::unique_ptr<RawStreamingSession> session(new RawStreamingSession());
+    std::unique_ptr<ByteStreamingSession> session(new ByteStreamingSession());
     session->initialize(gz_path, start_bytes, end_bytes, indexer_);
     return session;
   }
 
-  bool needs_new_line_session(const LineStreamingSession *current,
+  bool needs_new_line_session(const LineByteStreamingSession *current,
                                const std::string &gz_path, size_t start_bytes,
                                size_t end_bytes) const {
     return !current || !current->matches(gz_path, start_bytes, end_bytes) ||
            current->is_finished();
   }
 
-  bool needs_new_raw_session(const RawStreamingSession *current,
+  bool needs_new_raw_session(const ByteStreamingSession *current,
                              const std::string &gz_path, size_t start_bytes,
                              size_t end_bytes) const {
     return !current || !current->matches(gz_path, start_bytes, end_bytes) ||
@@ -737,8 +735,8 @@ class Reader::Impl {
         is_open_(other.is_open_),
         indexer_(std::move(other.indexer_)),
         session_factory_(std::move(other.session_factory_)),
-        line_session_(std::move(other.line_session_)),
-        raw_session_(std::move(other.raw_session_)) {
+        line_byte_session_(std::move(other.line_byte_session_)),
+        byte_session_(std::move(other.byte_session_)) {
     other.is_open_ = false;
   }
 
@@ -749,8 +747,8 @@ class Reader::Impl {
       is_open_ = other.is_open_;
       indexer_ = std::move(other.indexer_);
       session_factory_ = std::move(other.session_factory_);
-      line_session_ = std::move(other.line_session_);
-      raw_session_ = std::move(other.raw_session_);
+      line_byte_session_ = std::move(other.line_byte_session_);
+      byte_session_ = std::move(other.byte_session_);
       other.is_open_ = false;
     }
     return *this;
@@ -772,7 +770,19 @@ class Reader::Impl {
     return max_bytes;
   }
 
-  size_t read(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
+  size_t get_num_lines() const {
+    if (!is_open_ || !indexer_) {
+      throw std::runtime_error("Reader is not open");
+    }
+
+    size_t num_lines = static_cast<size_t>(indexer_->get_num_lines());
+
+    spdlog::debug("Total lines available: {}", num_lines);
+
+    return num_lines;
+  }
+
+  size_t read(size_t start_bytes, size_t end_bytes,
               char *buffer, size_t buffer_size) {
     if (!is_open_ || !indexer_) {
       throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
@@ -782,20 +792,20 @@ class Reader::Impl {
     validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes, indexer_->get_max_bytes());
 
     // Create or reuse raw streaming session
-    if (session_factory_->needs_new_raw_session(raw_session_.get(), gz_path,
+    if (session_factory_->needs_new_raw_session(byte_session_.get(), gz_path_,
                                                 start_bytes, end_bytes)) {
-      raw_session_ =
-          session_factory_->create_raw_session(gz_path, start_bytes, end_bytes);
+      byte_session_ =
+          session_factory_->create_raw_session(gz_path_, start_bytes, end_bytes);
     }
 
-    if (raw_session_->is_finished()) {
+    if (byte_session_->is_finished()) {
       return 0;
     }
 
-    return raw_session_->stream_chunk(buffer, buffer_size);
+    return byte_session_->stream_chunk(buffer, buffer_size);
   }
 
-  size_t read_line_bytes(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
+  size_t read_line_bytes(size_t start_bytes, size_t end_bytes,
               char *buffer, size_t buffer_size) {
     if (!is_open_ || !indexer_) {
       throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
@@ -809,23 +819,161 @@ class Reader::Impl {
     validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes, indexer_->get_max_bytes());
 
     // Create or reuse line streaming session
-    if (session_factory_->needs_new_line_session(line_session_.get(), gz_path,
+    if (session_factory_->needs_new_line_session(line_byte_session_.get(), gz_path_,
                                                  start_bytes, end_bytes)) {
-      line_session_ = session_factory_->create_line_session(
-          gz_path, start_bytes, end_bytes);
+      line_byte_session_ = session_factory_->create_line_session(
+          gz_path_, start_bytes, end_bytes);
     }
 
-    if (line_session_->is_finished()) {
+    if (line_byte_session_->is_finished()) {
       return 0;
     }
 
-    return line_session_->stream_chunk(buffer, buffer_size);
+    return line_byte_session_->stream_chunk(buffer, buffer_size);
   }
 
-  std::string read_lines(const std::string &gz_path, size_t start, size_t end) {
-    // For now, this is a placeholder implementation
-    // TODO: Implement line-based reading that converts line numbers to byte positions
-    throw Reader::Error(Reader::Error::READ_ERROR, "read_lines not yet implemented");
+  std::string read_lines(size_t start_line, size_t end_line) {
+    if (!is_open_ || !indexer_) {
+      throw std::runtime_error("Reader is not open");
+    }
+    
+    if (start_line == 0 || end_line == 0) {
+      throw std::runtime_error("Line numbers must be 1-based (start from 1)");
+    }
+    
+    if (start_line > end_line) {
+      throw std::runtime_error("Start line must be <= end line");
+    }
+    
+    try {
+      // Use the indexer's efficient checkpoint-based line range query
+      auto checkpoints = indexer_->find_checkpoints_by_line_range(start_line, end_line);
+      
+      if (checkpoints.empty()) {
+        throw std::runtime_error("No checkpoints found for line range [" + 
+                                std::to_string(start_line) + ", " + std::to_string(end_line) + "]");
+      }
+
+      spdlog::info("Got {} checkpoints for line range [{}, {}]", checkpoints.size(), start_line, end_line);
+      
+      for (size_t i = 0; i < checkpoints.size(); i++) {
+        spdlog::debug("Checkpoint {}: uc_offset={}, uc_size={}, num_lines={}", i, checkpoints[i].uc_offset, checkpoints[i].uc_size, checkpoints[i].num_lines);
+      }
+
+      std::string result;
+      
+      // Calculate cumulative lines to find exact byte positions
+      size_t cumulative_lines = 0;
+      size_t start_byte_offset = 0;
+      size_t end_byte_offset = 0;
+      bool found_start = false;
+      bool found_end = false;
+      
+      for (const auto& checkpoint : checkpoints) {
+        size_t checkpoint_start_line = cumulative_lines + 1;
+        size_t checkpoint_end_line = cumulative_lines + checkpoint.num_lines;
+        
+        // Find start position
+        if (!found_start && start_line >= checkpoint_start_line && start_line <= checkpoint_end_line) {
+          // Start is within this checkpoint - need to find exact byte position
+          if (start_line == checkpoint_start_line) {
+            // Starting at the beginning of this checkpoint
+            start_byte_offset = checkpoint.uc_offset;
+          } else {
+            // Need to scan within checkpoint to find the exact line
+            start_byte_offset = find_line_byte_offset(checkpoint, start_line - checkpoint_start_line);
+          }
+          found_start = true;
+        }
+        
+        // Find end position  
+        if (end_line >= checkpoint_start_line && end_line <= checkpoint_end_line) {
+          // End is within this checkpoint
+          end_byte_offset = checkpoint.uc_offset + checkpoint.uc_size;
+          found_end = true;
+          break;
+        }
+        
+        cumulative_lines += checkpoint.num_lines;
+        
+        // If we haven't found start yet, update start position
+        if (!found_start) {
+          start_byte_offset = checkpoint.uc_offset + checkpoint.uc_size;
+        }
+        
+        // If we found start but not end yet, extend end position
+        if (found_start && !found_end) {
+          end_byte_offset = checkpoint.uc_offset + checkpoint.uc_size;
+        }
+      }
+      
+      if (!found_start) {
+        throw std::runtime_error("Start line " + std::to_string(start_line) + " not found in available data");
+      }
+      
+      spdlog::debug("Reading lines [{}, {}] from byte range [{}, {}]", 
+                   start_line, end_line, start_byte_offset, end_byte_offset);
+
+      // Use line byte streaming to read the determined byte range
+      if (!line_byte_session_ || 
+          session_factory_->needs_new_line_session(line_byte_session_.get(), gz_path_, 
+                                                   start_byte_offset, end_byte_offset)) {
+        line_byte_session_ = session_factory_->create_line_session(
+            gz_path_, start_byte_offset, end_byte_offset);
+      }
+      
+      // Read data in chunks and count lines to ensure we only get requested lines
+      const size_t buffer_size = 64 * 1024; // 64KB buffer
+      std::vector<char> buffer(buffer_size);
+      size_t lines_found = 0;
+      size_t target_lines = end_line - start_line + 1;
+      
+      while (!line_byte_session_->is_finished() && lines_found < target_lines) {
+        size_t bytes_read = line_byte_session_->stream_chunk(buffer.data(), buffer_size);
+        if (bytes_read == 0) break;
+        
+        // Count newlines in this chunk and only append up to target lines
+        size_t chunk_lines = 0;
+        size_t bytes_to_append = 0;
+        
+        for (size_t i = 0; i < bytes_read; i++) {
+          if (buffer[i] == '\n') {
+            chunk_lines++;
+            if (lines_found + chunk_lines >= target_lines) {
+              bytes_to_append = i + 1; // Include the newline
+              break;
+            }
+          }
+        }
+        
+        // If we haven't reached the target and no newlines found, append all
+        if (bytes_to_append == 0 && lines_found + chunk_lines < target_lines) {
+          bytes_to_append = bytes_read;
+        }
+        
+        if (bytes_to_append > 0) {
+          result.append(buffer.data(), bytes_to_append);
+          
+          // Count actual newlines appended
+          for (size_t i = 0; i < bytes_to_append; i++) {
+            if (buffer[i] == '\n') {
+              lines_found++;
+            }
+          }
+        }
+        
+        // Break if we've found enough lines
+        if (lines_found >= target_lines) {
+          break;
+        }
+      }
+      
+      spdlog::debug("Read {} lines out of {} requested", lines_found, target_lines);
+      return result;
+      
+    } catch (const std::exception& e) {
+      throw std::runtime_error("Failed to read lines: " + std::string(e.what()));
+    }
   }
 
 
@@ -833,12 +981,49 @@ class Reader::Impl {
     if (!is_open_ || !indexer_) {
       throw std::runtime_error("Reader is not open");
     }
-    if (line_session_) {
-      line_session_->reset();
+    if (line_byte_session_) {
+      line_byte_session_->reset();
     }
-    if (raw_session_) {
-      raw_session_->reset();
+    if (byte_session_) {
+      byte_session_->reset();
     }
+  }
+
+ private:
+  size_t find_line_byte_offset(const dftracer::utils::indexer::CheckpointInfo& checkpoint, size_t line_offset_in_chunk) {
+    spdlog::debug("Finding byte offset for line offset {} within checkpoint at uc_offset {}", line_offset_in_chunk, checkpoint.uc_offset);
+    
+    // Create a temporary session to scan within the checkpoint
+    auto temp_session = session_factory_->create_line_session(gz_path_, checkpoint.uc_offset, checkpoint.uc_offset + checkpoint.uc_size);
+    
+    const size_t buffer_size = 64 * 1024;
+    std::vector<char> buffer(buffer_size);
+    size_t current_line = 0;
+    size_t total_bytes_read = 0;
+    
+    while (!temp_session->is_finished() && current_line < line_offset_in_chunk) {
+      size_t bytes_read = temp_session->stream_chunk(buffer.data(), buffer_size);
+      if (bytes_read == 0) break;
+      
+      // Count newlines and find the position of the target line
+      for (size_t i = 0; i < bytes_read; i++) {
+        if (buffer[i] == '\n') {
+          current_line++;
+          if (current_line == line_offset_in_chunk) {
+            // Found the line! Return the byte position after this newline
+            size_t result = checkpoint.uc_offset + total_bytes_read + i + 1;
+            spdlog::debug("Found byte offset {} for line offset {}", result, line_offset_in_chunk);
+            return result;
+          }
+        }
+      }
+      
+      total_bytes_read += bytes_read;
+    }
+    
+    // If we couldn't find the exact line, return the checkpoint start
+    spdlog::warn("Could not find exact byte offset for line offset {}, using checkpoint boundary", line_offset_in_chunk);
+    return checkpoint.uc_offset;
   }
 
  public:
@@ -855,8 +1040,8 @@ class Reader::Impl {
 
   std::unique_ptr<dftracer::utils::indexer::Indexer> indexer_;
   std::unique_ptr<StreamingSessionFactory> session_factory_;
-  std::unique_ptr<LineStreamingSession> line_session_;
-  std::unique_ptr<RawStreamingSession> raw_session_;
+  std::unique_ptr<LineByteStreamingSession> line_byte_session_;
+  std::unique_ptr<ByteStreamingSession> byte_session_;
 };
 
 // ==============================================================================
@@ -879,35 +1064,21 @@ Reader &Reader::operator=(Reader &&other) noexcept {
 
 size_t Reader::get_max_bytes() const { return pImpl_->get_max_bytes(); }
 
-size_t Reader::read(const std::string &gz_path, size_t start_bytes,
-                    size_t end_bytes, char *buffer, size_t buffer_size) {
-  return pImpl_->read(gz_path, start_bytes, end_bytes, buffer, buffer_size);
-}
-
-size_t Reader::read_line_bytes(const std::string &gz_path, size_t start_bytes,
-                               size_t end_bytes, char *buffer, size_t buffer_size) {
-  return pImpl_->read_line_bytes(gz_path, start_bytes, end_bytes, buffer, buffer_size);
-}
+size_t Reader::get_num_lines() const { return pImpl_->get_num_lines(); }
 
 size_t Reader::read(size_t start_bytes, size_t end_bytes, char *buffer,
                     size_t buffer_size) {
-  return pImpl_->read(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer,
-                      buffer_size);
+  return pImpl_->read(start_bytes, end_bytes, buffer, buffer_size);
 }
 
 size_t Reader::read_line_bytes(size_t start_bytes, size_t end_bytes, char *buffer,
                                size_t buffer_size) {
-  return pImpl_->read_line_bytes(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer,
-                                 buffer_size);
+  return pImpl_->read_line_bytes(start_bytes, end_bytes, buffer, buffer_size);
 }
 
 
 std::string Reader::read_lines(size_t start, size_t end) {
-  return pImpl_->read_lines(pImpl_->get_gz_path(), start, end);
-}
-
-std::string Reader::read_lines(const std::string &gz_path, size_t start, size_t end) {
-  return pImpl_->read_lines(gz_path, start, end);
+  return pImpl_->read_lines(start, end);
 }
 
 void Reader::reset() { pImpl_->reset(); }
@@ -997,17 +1168,32 @@ int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes) {
   }
 }
 
-int dft_reader_read(dft_reader_handle_t reader, const char *gz_path,
+int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines) {
+  if (!reader || !num_lines) {
+    return -1;
+  }
+
+  try {
+    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
+    *num_lines = cpp_reader->get_num_lines();
+    return 0;
+  } catch (const std::exception &e) {
+    spdlog::error("Failed to get number of lines: {}", e.what());
+    return -1;
+  }
+}
+
+int dft_reader_read(dft_reader_handle_t reader,
                     size_t start_bytes, size_t end_bytes, char *buffer,
                     size_t buffer_size) {
-  if (!reader || !gz_path || !buffer || buffer_size == 0) {
+  if (!reader || !buffer || buffer_size == 0) {
     return -1;
   }
 
   try {
     auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
     size_t bytes_read =
-        cpp_reader->read(gz_path, start_bytes, end_bytes, buffer, buffer_size);
+        cpp_reader->read(start_bytes, end_bytes, buffer, buffer_size);
     return static_cast<int>(bytes_read);
   } catch (const std::exception &e) {
     spdlog::error("Failed to read: {}", e.what());
@@ -1015,16 +1201,16 @@ int dft_reader_read(dft_reader_handle_t reader, const char *gz_path,
   }
 }
 
-int dft_reader_read_line_bytes(dft_reader_handle_t reader, const char *gz_path,
+int dft_reader_read_line_bytes(dft_reader_handle_t reader,
                                size_t start_bytes, size_t end_bytes, char *buffer,
                                size_t buffer_size) {
-  if (!reader || !gz_path || !buffer || buffer_size == 0) {
+  if (!reader || !buffer || buffer_size == 0) {
     return -1;
   }
 
   try {
     auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
-    size_t bytes_read = cpp_reader->read_line_bytes(gz_path, start_bytes, end_bytes,
+    size_t bytes_read = cpp_reader->read_line_bytes(start_bytes, end_bytes,
                                                     buffer, buffer_size);
     return static_cast<int>(bytes_read);
   } catch (const std::exception &e) {

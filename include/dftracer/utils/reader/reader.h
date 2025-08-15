@@ -37,33 +37,39 @@ void dft_reader_destroy(dft_reader_handle_t reader);
 int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes);
 
 /**
- * Read raw bytes from a gzip file using the index database (streaming)
+ * Get the maximum number of lines available in the indexed gzip file
+ * @param reader DFT reader handle
+ * @param num_lines Pointer to store the maximum number of lines
+ * @return 0 on success, -1 on error
+ */
+int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines);
+
+/**
+ * Read raw bytes from the gzip file using the index database (streaming)
  * Returns data without caring about JSON line boundaries. Call repeatedly until
  * returns 0.
  * @param reader DFT reader handle
- * @param gz_path Path to the gzip file
  * @param start_bytes Start position in bytes
  * @param end_bytes End position in bytes
  * @param buffer User-provided buffer for raw data
  * @param buffer_size Size of user-provided buffer
  * @return Number of bytes read, 0 indicates end of stream, -1 on error
  */
-int dft_reader_read(dft_reader_handle_t reader, const char *gz_path,
+int dft_reader_read(dft_reader_handle_t reader,
                     size_t start_bytes, size_t end_bytes, char *buffer,
                     size_t buffer_size);
 
 /**
- * Read a range of bytes from a gzip file using the index database (streaming)
+ * Read a range of bytes from the gzip file using the index database (streaming)
  * Returns complete lines only. Call repeatedly until returns 0.
  * @param reader DFT reader handle
- * @param gz_path Path to the gzip file
  * @param start_bytes Start position in bytes
  * @param end_bytes End position in bytes
  * @param buffer User-provided buffer for complete lines
  * @param buffer_size Size of user-provided buffer
  * @return Number of bytes read, 0 indicates end of stream, -1 on error
  */
-int dft_reader_read_line_bytes(dft_reader_handle_t reader, const char *gz_path,
+int dft_reader_read_line_bytes(dft_reader_handle_t reader,
                                size_t start_bytes, size_t end_bytes, char *buffer,
                                size_t buffer_size);
 
@@ -148,19 +154,11 @@ class Reader {
   size_t get_max_bytes() const;
 
   /**
-   * Read raw bytes from the gzip file using the index database (streaming)
-   * Returns data without caring about line boundaries. Call repeatedly until
-   * returns 0.
-   * @param gz_path Path to the gzip file (can be different from constructor)
-   * @param start_bytes Start position in bytes
-   * @param end_bytes End position in bytes
-   * @param buffer User-provided buffer for raw data
-   * @param buffer_size Size of user-provided buffer
-   * @return Number of bytes read, 0 indicates end of stream
+   * Get the maximum number of lines available in the indexed gzip file
+   * @return maximum number of lines
    * @throws std::runtime_error if operation fails
    */
-  size_t read(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
-              char *buffer, size_t buffer_size);
+  size_t get_num_lines() const;
 
   /**
    * Read raw bytes from the gzip file using the stored gz_path (streaming)
@@ -176,19 +174,6 @@ class Reader {
   size_t read(size_t start_bytes, size_t end_bytes, char *buffer,
               size_t buffer_size);
 
-  /**
-   * Read a range of bytes from the gzip file using the index database
-   * (streaming) Returns complete lines only. Call repeatedly until returns 0.
-   * @param gz_path Path to the gzip file (can be different from constructor)
-   * @param start_bytes Start position in bytes
-   * @param end_bytes End position in bytes
-   * @param buffer User-provided buffer for complete lines
-   * @param buffer_size Size of user-provided buffer
-   * @return Number of bytes read, 0 indicates end of stream
-   * @throws std::runtime_error if operation fails
-   */
-  size_t read_line_bytes(const std::string &gz_path, size_t start_bytes,
-                         size_t end_bytes, char *buffer, size_t buffer_size);
 
   /**
    * Read a range of bytes from the gzip file using the stored gz_path
@@ -212,15 +197,6 @@ class Reader {
    */
   std::string read_lines(size_t start, size_t end);
 
-  /**
-   * Read complete lines from the gzip file and return as a string
-   * @param gz_path Path to the gzip file (can be different from constructor)
-   * @param start Start line number (0-based)
-   * @param end End line number (exclusive, 0-based)
-   * @return String containing all lines in the range
-   * @throws std::runtime_error if operation fails
-   */
-  std::string read_lines(const std::string &gz_path, size_t start, size_t end);
 
   /**
    * Reset the reader to the initial state
@@ -245,30 +221,28 @@ class Reader {
    */
   const std::string &get_idx_path() const;
 
+  class Error : public std::runtime_error {
+   public:
+    enum Type {
+      DATABASE_ERROR,
+      FILE_IO_ERROR,
+      COMPRESSION_ERROR,
+      INVALID_ARGUMENT,
+      INITIALIZATION_ERROR,
+      READ_ERROR,
+      UNKNOWN_ERROR,
+    };
 
-class Error : public std::runtime_error {
- public:
-  enum Type {
-    DATABASE_ERROR,
-    FILE_IO_ERROR,
-    COMPRESSION_ERROR,
-    INVALID_ARGUMENT,
-    INITIALIZATION_ERROR,
-    READ_ERROR,
-    UNKNOWN_ERROR,
+    Error(Type type, const std::string &message)
+        : std::runtime_error(format_message(type, message)), type_(type) {}
+
+    Type get_type() const { return type_; }
+
+   private:
+    Type type_;
+
+    static std::string format_message(Type type, const std::string &message);
   };
-
-  Error(Type type, const std::string &message)
-      : std::runtime_error(format_message(type, message)), type_(type) {}
-
-  Type get_type() const { return type_; }
-
- private:
-  Type type_;
-
-  static std::string format_message(Type type, const std::string &message);
-};
-
 
  private:
   class Impl;
