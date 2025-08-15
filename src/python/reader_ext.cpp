@@ -262,17 +262,11 @@ class DFTracerReader
             const size_t buffer_size = 64 * 1024; // 64KB buffer
             std::vector<char> buffer(buffer_size);
             
-            while (true)
-            {
-                size_t bytes_read = raw ? 
+            size_t bytes_read;
+            while ((bytes_read = raw ? 
                     reader_->read_raw(start_bytes, end_bytes, buffer.data(), buffer.size()) :
-                    reader_->read(start_bytes, end_bytes, buffer.data(), buffer.size());
-                
-                if (bytes_read == 0)
-                {
-                    break;
-                }
-                
+                    reader_->read(start_bytes, end_bytes, buffer.data(), buffer.size())) > 0)
+            {
                 result.append(buffer.data(), bytes_read);
             }
             

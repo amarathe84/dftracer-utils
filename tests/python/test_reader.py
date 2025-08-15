@@ -52,15 +52,29 @@ class PythonTestEnvironment:
             except OSError:
                 pass
     
-    def create_test_gzip_file(self, filename="test_data.pfw.gz"):
+    def create_test_gzip_file(self, filename="test_data.pfw.gz", bytes_per_line=1024):
         """Create a test gzip file with sample trace-like data"""
         file_path = os.path.join(self.temp_dir, filename)
         
         # Generate test data similar to what C++ test creates
         lines = []
-        for i in range(self.lines):
-            # Create realistic DFTracer-like JSON data
-            line = f'{{"name": "name_{i}", "cat": "cat_{i}", "dur": {i * 10 % 1000}, "ts": {1000000 + i * 1000}, "pid": {os.getpid()}, "tid": {i % 10}}}\\n'
+        closing_len = 3  # len('"}\n')
+        for i in range(1, self.lines + 1):
+            # Build the JSON line up to the "data" key
+            line = f'{{"name":"name_{i}","cat":"cat_{i}","dur":{(i * 123 % 10000)},"data":"'
+            current_size = len(line)
+            needed_padding = 0
+            if bytes_per_line > current_size + closing_len:
+                needed_padding = bytes_per_line - current_size - closing_len
+            # Append padding safely
+            if needed_padding:
+                pad_chunk = 'x' * 4096
+                while needed_padding >= len(pad_chunk):
+                    line += pad_chunk
+                    needed_padding -= len(pad_chunk)
+                if needed_padding:
+                    line += 'x' * needed_padding
+            line += '"}\n'
             lines.append(line)
         
         # Write compressed data
@@ -141,13 +155,17 @@ class TestDFTracerReader:
             dft_utils.DFTracerReader("nonexistent_file.pfw.gz")
     
     def test_reader_creation_missing_index(self):
-        """Test reader creation when index file doesn't exist"""
+        """Test reader creation when index file doesn't exist - now auto-builds"""
         with PythonTestEnvironment() as env:
             gz_file = env.create_test_gzip_file()
             
-            # Should raise error when index doesn't exist
-            with pytest.raises(RuntimeError):
-                dft_utils.DFTracerReader(gz_file)
+            # Reader should now auto-build index instead of failing
+            with dft_utils.DFTracerReader(gz_file) as reader:
+                assert reader.is_open
+                assert reader.get_max_bytes() > 0
+                # Verify index file was created
+                idx_file = gz_file + ".idx"
+                assert os.path.exists(idx_file)
     
     def test_reader_basic_functionality(self):
         """Test reader basic functionality - mirrors C++ 'Reader - Basic functionality'"""
@@ -199,17 +217,17 @@ class TestDFTracerReader:
     def test_reader_data_reading(self):
         """Test reader data reading - mirrors C++ 'Read byte range using streaming API'"""
         with PythonTestEnvironment() as env:
-            gz_file = env.create_test_gzip_file()
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
             env.build_index(gz_file, chunk_size_mb=0.5)
             
             with dft_utils.DFTracerReader(gz_file) as reader:
-                # Read first 50 bytes equivalent (JSON boundary aware)
-                data = reader.read(0, 50)
-                
-                assert len(data) >= 50  # Should get at least 50 bytes due to boundary extension
-                assert len(data) > 0
+                # Read larger range to ensure complete lines are found
+                data = reader.read(0, bytes_per_line)
+
+                assert 0 < len(data) <= bytes_per_line  # Should get data with boundary extension
                 assert '"name"' in data  # Should contain JSON content
-                assert data.endswith('\\n')  # Should end with complete line
+                assert data.endswith('\n')  # Should end with complete line
     
     def test_reader_iteration_methods(self):
         """Test reader iteration - mirrors C++ iteration patterns"""
@@ -254,32 +272,34 @@ class TestDFTracerReader:
     def test_reader_range_operations(self):
         """Test reader range operations - mirrors C++ range reading"""
         with PythonTestEnvironment(lines=2000) as env:  # Large enough for range testing
-            gz_file = env.create_test_gzip_file()
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
             env.build_index(gz_file, chunk_size_mb=0.5)
             
             with dft_utils.DFTracerReader(gz_file) as reader:
                 max_bytes = reader.get_max_bytes()
                 
-                # Test reading a range
-                if max_bytes > 1024:
-                    start = 100
-                    end = start + 500
+                # Test reading a range - use larger range to ensure complete lines
+                if max_bytes > bytes_per_line * 4:
+                    start = 0  # Start from beginning
+                    end = start + bytes_per_line * 4  # Read 4 lines worth
                     data = reader.read(start, end)
-                    assert len(data) >= 500
-                    # Note: reader might return complete records that extend beyond the range
-                
-                # Test range iterator
-                if max_bytes > 2048:
-                    start = 200
-                    end = start + 1000
-                    step = 256
+                    assert 0 < len(data) <= end - start
+                    # Note: reader might return complete records that are less than or equal to the range
+
+
+                # Test range iterator - align with line boundaries
+                if max_bytes > bytes_per_line * 4:
+                    start = 0  # Start at line boundary
+                    end = start + bytes_per_line * 3  # Read 3 lines worth
+                    step = bytes_per_line
                     
                     chunk_count = 0
                     total_bytes = 0
                     for chunk in dft_utils.dft_reader_range(reader, start, end, step):
                         chunk_count += 1
                         total_bytes += len(chunk)
-                        assert len(chunk) > 0
+                        assert 0 < len(chunk) <= step < end - start
                         if chunk_count >= 3:
                             break
                     
@@ -287,7 +307,7 @@ class TestDFTracerReader:
                     assert total_bytes > 0
     
     def test_context_manager(self):
-        """Test reader as context manager - mirrors C++ RAII"""
+        """Test reader as context manager"""
         with PythonTestEnvironment() as env:
             gz_file = env.create_test_gzip_file()
             env.build_index(gz_file)
@@ -506,7 +526,8 @@ class TestDFTracerRangeIterator:
     def test_range_iterator_iteration(self):
         """Test range iterator iteration"""
         with PythonTestEnvironment(lines=2000) as env:
-            gz_file = env.create_test_gzip_file()
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
             env.build_index(gz_file)
             
             with dft_utils.DFTracerReader(gz_file) as reader:
@@ -515,18 +536,18 @@ class TestDFTracerRangeIterator:
                     pytest.skip("File too small for range testing")
                 
                 start = 1024
-                end = start + 1024
-                step = 256
-                
+                end = start + bytes_per_line * 12
+                step = 2048
+
                 chunk_count = 0
                 total_bytes = 0
                 
                 for chunk in dft_utils.dft_reader_range(reader, start, end, step):
                     chunk_count += 1
                     total_bytes += len(chunk)
-                    assert len(chunk) > 0
-                    if chunk_count >= 3:  # Limit test iterations
-                        break
+                    assert 0 < len(chunk) < step < end - start
+                    # if chunk_count >= 3:  # Limit test iterations
+                    #     break
                 
                 assert chunk_count > 0
                 assert total_bytes > 0

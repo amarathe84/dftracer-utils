@@ -60,9 +60,6 @@ std::string create_large_gzip_file(const std::string& name = "large_test.gz") {
     std::ofstream f(txt_file, std::ios::binary);
     if (!f) return "";
 
-    // Optional: comment out the per-line cout; it's very slow for many lines.
-    // std::cout << "Num lines: " << num_lines_ << ", Bytes per line: " << bytes_per_line_ << std::endl;
-
     constexpr size_t closing_len = 3; // "\"}\n"
 
     for (size_t i = 1; i <= num_lines_; ++i) {
