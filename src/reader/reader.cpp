@@ -220,13 +220,32 @@ class BaseStreamingSession {
 
     // Try to find checkpoint
     checkpoint_.reset(new dftracer::utils::indexer::CheckpointInfo());
-    if (indexer.find_checkpoint(start_bytes, *checkpoint_)) {
-      if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
-                                       checkpoint_.get()) == 0) {
-        use_checkpoint = true;
-        spdlog::debug(
-            "Using checkpoint at uncompressed offset {} for target {}",
-            checkpoint_->uc_offset, start_bytes);
+    
+    // Use first checkpoint for positions within the first checkpoint range to avoid optimized checkpoint issues
+    // The first checkpoint covers bytes 0 to ~33MB, so use sequential decompression for this range
+    bool should_use_first_checkpoint = start_bytes < 33554401; // First checkpoint range
+    
+    if (should_use_first_checkpoint) {
+      // Get the first checkpoint (at file beginning)
+      if (indexer.find_checkpoint(0, *checkpoint_)) {
+        if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
+                                         checkpoint_.get()) == 0) {
+          use_checkpoint = true;
+          spdlog::debug(
+              "Using first checkpoint at uncompressed offset {} for early target {}",
+              checkpoint_->uc_offset, start_bytes);
+        }
+      }
+    } else {
+      // For later positions, find the optimal checkpoint
+      if (indexer.find_checkpoint(start_bytes, *checkpoint_)) {
+        if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
+                                         checkpoint_.get()) == 0) {
+          use_checkpoint = true;
+          spdlog::debug(
+              "Using checkpoint at uncompressed offset {} for target {}",
+              checkpoint_->uc_offset, start_bytes);
+        }
       }
     }
 
@@ -880,8 +899,9 @@ class Reader::Impl {
             // Starting at the beginning of this checkpoint
             start_byte_offset = checkpoint.uc_offset;
           } else {
-            // Need to scan within checkpoint to find the exact line
-            start_byte_offset = find_line_byte_offset(checkpoint, start_line - checkpoint_start_line);
+            // Use checkpoint as starting point and scan forward to find exact line position
+            // This maintains checkpoint benefits while giving precise line positioning
+            start_byte_offset = find_line_in_checkpoint(checkpoint, cumulative_lines + 1, start_line);
           }
           found_start = true;
         }
@@ -990,29 +1010,36 @@ class Reader::Impl {
   }
 
  private:
-  size_t find_line_byte_offset(const dftracer::utils::indexer::CheckpointInfo& checkpoint, size_t line_offset_in_chunk) {
-    spdlog::debug("Finding byte offset for line offset {} within checkpoint at uc_offset {}", line_offset_in_chunk, checkpoint.uc_offset);
+  size_t find_line_in_checkpoint(const dftracer::utils::indexer::CheckpointInfo& checkpoint, 
+                                 size_t checkpoint_start_line, size_t target_line) {
+    spdlog::debug("Finding line {} starting from checkpoint at uc_offset {} (checkpoint starts at line {})", 
+                  target_line, checkpoint.uc_offset, checkpoint_start_line);
     
-    // Create a temporary session to scan within the checkpoint
-    auto temp_session = session_factory_->create_line_session(gz_path_, checkpoint.uc_offset, checkpoint.uc_offset + checkpoint.uc_size);
+    // Calculate how many lines we need to skip from the checkpoint beginning
+    size_t lines_to_skip = target_line - checkpoint_start_line;
+    
+    // Create a session from this checkpoint
+    auto temp_session = session_factory_->create_line_session(gz_path_, checkpoint.uc_offset, 
+                                                              checkpoint.uc_offset + checkpoint.uc_size);
     
     const size_t buffer_size = 64 * 1024;
     std::vector<char> buffer(buffer_size);
-    size_t current_line = 0;
+    size_t lines_skipped = 0;
     size_t total_bytes_read = 0;
     
-    while (!temp_session->is_finished() && current_line < line_offset_in_chunk) {
+    while (!temp_session->is_finished()) {
       size_t bytes_read = temp_session->stream_chunk(buffer.data(), buffer_size);
       if (bytes_read == 0) break;
       
       // Count newlines and find the position of the target line
       for (size_t i = 0; i < bytes_read; i++) {
         if (buffer[i] == '\n') {
-          current_line++;
-          if (current_line == line_offset_in_chunk) {
-            // Found the line! Return the byte position after this newline
+          lines_skipped++;
+          if (lines_skipped == lines_to_skip) {
+            // Found the target line! Return the byte position after this newline
             size_t result = checkpoint.uc_offset + total_bytes_read + i + 1;
-            spdlog::debug("Found byte offset {} for line offset {}", result, line_offset_in_chunk);
+            spdlog::debug("Found line {} at byte offset {} (skipped {} lines from checkpoint)", 
+                          target_line, result, lines_skipped);
             return result;
           }
         }
@@ -1022,7 +1049,7 @@ class Reader::Impl {
     }
     
     // If we couldn't find the exact line, return the checkpoint start
-    spdlog::warn("Could not find exact byte offset for line offset {}, using checkpoint boundary", line_offset_in_chunk);
+    spdlog::warn("Could not find line {} in checkpoint, using checkpoint boundary", target_line);
     return checkpoint.uc_offset;
   }
 
