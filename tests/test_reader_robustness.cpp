@@ -911,7 +911,12 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
                     stride_last_line = chunk_last;
                 }
                 
-                current_pos = end_pos + 1;
+                // For complete file reading, ensure we don't skip bytes
+                // Use overlapping ranges to ensure no data is missed
+                if (end_pos == max_bytes) {
+                    break; // We've read to the end
+                }
+                current_pos = end_pos;
             }
             
             // Compare results
