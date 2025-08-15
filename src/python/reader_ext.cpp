@@ -148,7 +148,7 @@ class DFTracerReader
         std::string operator*()
         {
             uint64_t end_pos = std::min(current_pos_ + step_, max_bytes_);
-            return Raw ? reader_->read_raw(current_pos_, end_pos) : reader_->read(current_pos_, end_pos);
+            return Raw ? reader_->read(current_pos_, end_pos) : reader_->read_line_bytes(current_pos_, end_pos);
         }
 
         Iterator &operator++()
@@ -171,7 +171,7 @@ class DFTracerReader
             }
 
             uint64_t end_pos = std::min(current_pos_ + step_, max_bytes_);
-            std::string result = Raw ? reader_->read_raw(current_pos_, end_pos) : reader_->read(current_pos_, end_pos);
+            std::string result = Raw ? reader_->read(current_pos_, end_pos) : reader_->read_line_bytes(current_pos_, end_pos);
             current_pos_ = end_pos;
             return result;
         }
@@ -226,12 +226,12 @@ class DFTracerReader
         return default_step_;
     }
 
-    std::string read(uint64_t start_bytes, uint64_t end_bytes)
+    std::string read_line_bytes(uint64_t start_bytes, uint64_t end_bytes)
     {
         return read_internal(start_bytes, end_bytes, false);
     }
 
-    std::string read_raw(uint64_t start_bytes, uint64_t end_bytes)
+    std::string read(uint64_t start_bytes, uint64_t end_bytes)
     {
         return read_internal(start_bytes, end_bytes, true);
     }
@@ -264,8 +264,8 @@ class DFTracerReader
             
             size_t bytes_read;
             while ((bytes_read = raw ? 
-                    reader_->read_raw(start_bytes, end_bytes, buffer.data(), buffer.size()) :
-                    reader_->read(start_bytes, end_bytes, buffer.data(), buffer.size())) > 0)
+                    reader_->read(start_bytes, end_bytes, buffer.data(), buffer.size()) :
+                    reader_->read_line_bytes(start_bytes, end_bytes, buffer.data(), buffer.size())) > 0)
             {
                 result.append(buffer.data(), bytes_read);
             }
@@ -357,7 +357,7 @@ class DFTracerRangeIterator
         }
 
         uint64_t chunk_end = std::min(current_pos_ + step_, end_pos_);
-        std::string result = Raw ? reader_->read_raw(current_pos_, chunk_end) : reader_->read(current_pos_, chunk_end);
+        std::string result = Raw ? reader_->read(current_pos_, chunk_end) : reader_->read_line_bytes(current_pos_, chunk_end);
         current_pos_ = chunk_end;
         return result;
     }
@@ -436,7 +436,7 @@ NB_MODULE(reader_ext, m)
         .def("set_default_step", &DFTracerReader::set_default_step, "step_bytes"_a, "Set default step for iteration")
         .def("get_default_step", &DFTracerReader::get_default_step, "Get current default step")
         .def("read", &DFTracerReader::read, "start_bytes"_a, "end_bytes"_a, "Read a range of bytes from the gzip file")
-        .def("read_raw", &DFTracerReader::read_raw, "start_bytes"_a, "end_bytes"_a, "Read raw bytes from the gzip file without JSON line processing")
+        .def("read_line_bytes", &DFTracerReader::read_line_bytes, "start_bytes"_a, "end_bytes"_a, "Read line-aligned bytes from the gzip file")
         .def("open", &DFTracerReader::open, "Open the index database")
         .def("close", &DFTracerReader::close, "Close the index database")
         .def("__enter__", &DFTracerReader::__enter__, nb::rv_policy::reference_internal, "Enter context manager")

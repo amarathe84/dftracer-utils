@@ -517,7 +517,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         // Small reads
         result.clear();
         size_t bytes_read;
-        while ((bytes_read = reader.read(0, 10, buffer, sizeof(buffer))) > 0) {
+        while ((bytes_read = reader.read_line_bytes(0, 10, buffer, sizeof(buffer))) > 0) {
             result.append(buffer, bytes_read);
         }
         // Small reads should return no data
@@ -526,7 +526,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         // Medium reads
         if (max_bytes > 1000) {
             result.clear();
-            while ((bytes_read = reader.read(100, 1000, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read_line_bytes(100, 1000, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() <= 900);
@@ -535,7 +535,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         // Large reads
         if (max_bytes > 10000) {
             result.clear();
-            while ((bytes_read = reader.read(1000, 10000, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read_line_bytes(1000, 10000, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() >= 9000);
@@ -596,7 +596,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
         std::string content;
         size_t bytes_read;
         
-        while ((bytes_read = reader.read(0, 100, buffer, sizeof(buffer))) > 0) {
+        while ((bytes_read = reader.read_line_bytes(0, 100, buffer, sizeof(buffer))) > 0) {
             content.append(buffer, bytes_read);
         }
         
@@ -618,7 +618,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
         std::string content;
         size_t bytes_read;
         
-        while ((bytes_read = reader.read(0, 500, buffer, sizeof(buffer))) > 0) {
+        while ((bytes_read = reader.read_line_bytes(0, 500, buffer, sizeof(buffer))) > 0) {
             content.append(buffer, bytes_read);
         }
         
@@ -648,7 +648,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
             std::string content;
             size_t bytes_read;
             
-            while ((bytes_read = reader.read(current_pos, current_pos + segment_size, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read_line_bytes(current_pos, current_pos + segment_size, buffer, sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
             
@@ -701,7 +701,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
             std::string content;
             
             size_t bytes_read;
-            while ((bytes_read = reader.read(1000, 50000, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read_line_bytes(1000, 50000, buffer, sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
             
@@ -752,7 +752,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
             std::string content;
             
             size_t bytes_read;
-            while ((bytes_read = reader.read(0, 10000, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read_line_bytes(0, 10000, buffer, sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
             
@@ -777,7 +777,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
             std::string content;
             
             size_t bytes_read;
-            while ((bytes_read = reader.read(0, 100, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read_line_bytes(0, 100, buffer, sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
             
@@ -897,7 +897,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         
         // Stream raw data until no more available
         size_t bytes_read;
-        while ((bytes_read = reader.read_raw(gz_file, 0, 50, buffer, buffer_size)) > 0) {
+        while ((bytes_read = reader.read(gz_file, 0, 50, buffer, buffer_size)) > 0) {
             raw_result.append(buffer, bytes_read);
         }
         
@@ -916,15 +916,15 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         char buffer1[1024], buffer2[1024];
         std::string raw_result, regular_result;
         
-        // Raw read
+        // Raw read (new default behavior)
         size_t bytes_read1;
-        while ((bytes_read1 = reader1.read_raw(0, 100, buffer1, buffer_size)) > 0) {
+        while ((bytes_read1 = reader1.read(0, 100, buffer1, buffer_size)) > 0) {
             raw_result.append(buffer1, bytes_read1);
         }
         
-        // Regular read  
+        // Line bytes read (old read behavior)
         size_t bytes_read2;
-        while ((bytes_read2 = reader2.read(0, 100, buffer2, buffer_size)) > 0) {
+        while ((bytes_read2 = reader2.read_line_bytes(0, 100, buffer2, buffer_size)) > 0) {
             regular_result.append(buffer2, bytes_read2);
         }
         
@@ -955,7 +955,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         
         // Test explicit gz_path overload
         size_t bytes_read1;
-        while ((bytes_read1 = reader.read_raw(gz_file, 0, 75, buffer1, buffer_size)) > 0) {
+        while ((bytes_read1 = reader.read(gz_file, 0, 75, buffer1, buffer_size)) > 0) {
             result1.append(buffer1, bytes_read1);
         }
         
@@ -963,7 +963,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
 
         // Test stored gz_path overload
         size_t bytes_read2;
-        while ((bytes_read2 = reader.read_raw(0, 75, buffer2, buffer_size)) > 0) {
+        while ((bytes_read2 = reader.read(0, 75, buffer2, buffer_size)) > 0) {
             result2.append(buffer2, bytes_read2);
         }
         
@@ -983,7 +983,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         // Single byte read
         result.clear();
         size_t bytes_read;
-        while ((bytes_read = reader.read_raw(0, 1, buffer, sizeof(buffer))) > 0) {
+        while ((bytes_read = reader.read(0, 1, buffer, sizeof(buffer))) > 0) {
             result.append(buffer, bytes_read);
         }
         CHECK(result.size() == 1);
@@ -991,15 +991,15 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         // Read near end of file
         if (max_bytes > 10) {
             result.clear();
-            while ((bytes_read = reader.read_raw(max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader.read(max_bytes - 10, max_bytes - 1, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() == 9);
         }
         
         // Invalid ranges should still throw
-        CHECK_THROWS(reader.read_raw(100, 50, buffer, sizeof(buffer)));
-        CHECK_THROWS(reader.read_raw(50, 50, buffer, sizeof(buffer)));
+        CHECK_THROWS(reader.read(100, 50, buffer, sizeof(buffer)));
+        CHECK_THROWS(reader.read(50, 50, buffer, sizeof(buffer)));
     }
     
     SUBCASE("Raw read with small buffer") {
@@ -1012,7 +1012,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         size_t total_calls = 0;
         
         size_t bytes_read;
-        while ((bytes_read = reader.read_raw(0, 200, small_buffer, small_buffer_size)) > 0) {
+        while ((bytes_read = reader.read(0, 200, small_buffer, small_buffer_size)) > 0) {
             result.append(small_buffer, bytes_read);
             total_calls++;
             CHECK(bytes_read <= small_buffer_size);
@@ -1041,7 +1041,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
             if (range.second <= max_bytes) {
                 std::string segment;
                 size_t bytes_read;
-                while ((bytes_read = reader.read_raw(range.first, range.second, buffer, sizeof(buffer))) > 0) {
+                while ((bytes_read = reader.read(range.first, range.second, buffer, sizeof(buffer))) > 0) {
                     segment.append(buffer, bytes_read);
                 }
                 
@@ -1066,14 +1066,14 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         // Read entire file with raw API
         std::string raw_content;
         size_t bytes_read1;
-        while ((bytes_read1 = reader1.read_raw(0, max_bytes, buffer, sizeof(buffer))) > 0) {
+        while ((bytes_read1 = reader1.read(0, max_bytes, buffer, sizeof(buffer))) > 0) {
             raw_content.append(buffer, bytes_read1);
         }
         
-        // Read entire file with JSON-boundary aware API
+        // Read entire file with line-boundary aware API
         std::string json_content;
         size_t bytes_read2;
-        while ((bytes_read2 = reader2.read(0, max_bytes, buffer, sizeof(buffer))) > 0) {
+        while ((bytes_read2 = reader2.read_line_bytes(0, max_bytes, buffer, sizeof(buffer))) > 0) {
             json_content.append(buffer, bytes_read2);
         }
         

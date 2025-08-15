@@ -220,7 +220,7 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
             std::string content;
             
             // Read this chunk
-            while ((bytes_written = reader.read(current_start, current_end, buffer.data(), buffer.size())) > 0) {
+            while ((bytes_written = reader.read_line_bytes(current_start, current_end, buffer.data(), buffer.size())) > 0) {
                 content.append(buffer.data(), bytes_written);
             }
             
@@ -278,7 +278,7 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
         size_t bytes_written = 0;
         std::string single_read_content;
         
-        while ((bytes_written = reader.read(0, large_read_size, buffer.data(), buffer.size())) > 0) {
+        while ((bytes_written = reader.read_line_bytes(0, large_read_size, buffer.data(), buffer.size())) > 0) {
             single_read_content.append(buffer.data(), bytes_written);
         }
         
@@ -300,7 +300,7 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
             std::string chunk_content;
             bytes_written = 0;
             
-            while ((bytes_written = stride_reader.read(start, end, buffer.data(), buffer.size())) > 0) {
+            while ((bytes_written = stride_reader.read_line_bytes(start, end, buffer.data(), buffer.size())) > 0) {
                 chunk_content.append(buffer.data(), bytes_written);
             }
             
@@ -367,7 +367,7 @@ TEST_CASE("Robustness - Different buffer sizes consistency") {
             size_t bytes_written = 0;
             std::string content;
             
-            while ((bytes_written = test_reader.read(start_pos, end_pos, buffer.data(), buffer.size())) > 0) {
+            while ((bytes_written = test_reader.read_line_bytes(start_pos, end_pos, buffer.data(), buffer.size())) > 0) {
                 content.append(buffer.data(), bytes_written);
             }
             
@@ -434,7 +434,7 @@ TEST_CASE("Robustness - Boundary edge cases") {
                 std::string content;
                 
                 // Read 100 bytes starting at position
-                while ((bytes_written = reader.read(pos, pos + 100, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = reader.read_line_bytes(pos, pos + 100, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                 }
 
@@ -472,7 +472,7 @@ TEST_CASE("Robustness - Boundary edge cases") {
                 std::string content;
                 
                 // Read 100 bytes starting at position
-                while ((bytes_written = reader.read(pos, pos + env.get_bytes_per_line(), buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = reader.read_line_bytes(pos, pos + env.get_bytes_per_line(), buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                 }
 
@@ -505,7 +505,7 @@ TEST_CASE("Robustness - Boundary edge cases") {
             size_t bytes_written = 0;
             std::string content;
             
-            while ((bytes_written = reader.read(start, end, buffer.data(), buffer.size())) > 0) {
+            while ((bytes_written = reader.read_line_bytes(start, end, buffer.data(), buffer.size())) > 0) {
                 content.append(buffer.data(), bytes_written);
             }
             
@@ -573,7 +573,7 @@ TEST_CASE("Robustness - Complete file sequential read") {
             size_t bytes_written = 0;
             std::string content;
             
-            while ((bytes_written = reader.read(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
+            while ((bytes_written = reader.read_line_bytes(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
                 content.append(buffer.data(), bytes_written);
             }
             
@@ -624,7 +624,7 @@ TEST_CASE("Robustness - Complete file sequential read") {
         size_t bytes_written = 0;
         std::string complete_content;
         
-        while ((bytes_written = reader.read(0, max_bytes, buffer.data(), buffer.size())) > 0) {
+        while ((bytes_written = reader.read_line_bytes(0, max_bytes, buffer.data(), buffer.size())) > 0) {
             complete_content.append(buffer.data(), bytes_written);
         }
         
@@ -646,7 +646,7 @@ TEST_CASE("Robustness - Complete file sequential read") {
             bytes_written = 0;
             std::string chunk_content;
             
-            while ((bytes_written = chunked_reader.read(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
+            while ((bytes_written = chunked_reader.read_line_bytes(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
                 chunk_content.append(buffer.data(), bytes_written);
             }
             
@@ -708,7 +708,7 @@ TEST_CASE("Robustness - JSON validation and consistency") {
                 size_t bytes_written = 0;
                 std::string content;
                 
-                while ((bytes_written = test_reader.read(range.first, range.second, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = test_reader.read_line_bytes(range.first, range.second, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                 }
                 
@@ -740,7 +740,7 @@ TEST_CASE("Robustness - JSON validation and consistency") {
             size_t bytes_written = 0;
             std::string content;
             
-            while ((bytes_written = test_reader.read(start_pos, end_pos, buffer.data(), buffer.size())) > 0) {
+            while ((bytes_written = test_reader.read_line_bytes(start_pos, end_pos, buffer.data(), buffer.size())) > 0) {
                 content.append(buffer.data(), bytes_written);
             }
             
@@ -774,7 +774,7 @@ TEST_CASE("Robustness - JSON validation and consistency") {
         size_t bytes_written = 0;
         std::string sequential_content;
         
-        while ((bytes_written = seq_reader.read(0, test_size, buffer.data(), buffer.size())) > 0) {
+        while ((bytes_written = seq_reader.read_line_bytes(0, test_size, buffer.data(), buffer.size())) > 0) {
             sequential_content.append(buffer.data(), bytes_written);
         }
         
@@ -797,7 +797,7 @@ TEST_CASE("Robustness - JSON validation and consistency") {
                 bytes_written = 0;
                 std::string chunk_content;
                 
-                while ((bytes_written = chunked_reader.read(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = chunked_reader.read_line_bytes(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
                     chunk_content.append(buffer.data(), bytes_written);
                 }
                 
@@ -867,7 +867,7 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
         size_t bytes_written = 0;
         std::string complete_content;
         
-        while ((bytes_written = reader.read(0, max_bytes, buffer.data(), buffer.size())) > 0) {
+        while ((bytes_written = reader.read_line_bytes(0, max_bytes, buffer.data(), buffer.size())) > 0) {
             complete_content.append(buffer.data(), bytes_written);
         }
         
@@ -892,7 +892,7 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
                 bytes_written = 0;
                 std::string chunk_content;
                 
-                while ((bytes_written = stride_reader.read(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = stride_reader.read_line_bytes(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
                     chunk_content.append(buffer.data(), bytes_written);
                 }
                 
@@ -954,7 +954,7 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
                 size_t bytes_written = 0;
                 std::string content;
                 
-                while ((bytes_written = test_reader.read(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = test_reader.read_line_bytes(current_pos, end_pos, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                 }
                 
@@ -1027,7 +1027,7 @@ TEST_CASE("Robustness - Memory and performance stress") {
                 size_t bytes_written = 0;
                 std::string content;
                 
-                while ((bytes_written = reader.read(start, end, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = reader.read_line_bytes(start, end, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                     total_bytes_written += bytes_written;
                 }
@@ -1085,7 +1085,7 @@ TEST_CASE("Robustness - Memory and performance stress") {
                 size_t bytes_written = 0;
                 std::string content;
                 
-                while ((bytes_written = thread_reader.read(0, max_bytes, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = thread_reader.read_line_bytes(0, max_bytes, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                 }
                 
@@ -1122,7 +1122,7 @@ TEST_CASE("Robustness - Memory and performance stress") {
                 size_t bytes_written = 0;
                 std::string content;
 
-                while ((bytes_written = async_reader.read(0, max_bytes, buffer.data(), buffer.size())) > 0) {
+                while ((bytes_written = async_reader.read_line_bytes(0, max_bytes, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                 }
 

@@ -223,7 +223,7 @@ class TestDFTracerReader:
             
             with dft_utils.DFTracerReader(gz_file) as reader:
                 # Read larger range to ensure complete lines are found
-                data = reader.read(0, bytes_per_line)
+                data = reader.read_line_bytes(0, bytes_per_line)
 
                 assert 0 < len(data) <= bytes_per_line  # Should get data with boundary extension
                 assert '"name"' in data  # Should contain JSON content
@@ -283,7 +283,7 @@ class TestDFTracerReader:
                 if max_bytes > bytes_per_line * 4:
                     start = 0  # Start from beginning
                     end = start + bytes_per_line * 4  # Read 4 lines worth
-                    data = reader.read(start, end)
+                    data = reader.read_line_bytes(start, end)
                     assert 0 < len(data) <= end - start
                     # Note: reader might return complete records that are less than or equal to the range
 
@@ -356,15 +356,15 @@ class TestDFTracerReader:
                 max_bytes = reader.get_max_bytes()
                 
                 if max_bytes > 100:
-                    # Test read_raw method - should return closer to requested size
+                    # Test read method - should return closer to requested size
                     start = 50
                     end = start + 50  # 50 bytes
-                    raw_data = reader.read_raw(start, end)
+                    raw_data = reader.read(start, end)
                     assert len(raw_data) > 0
                     assert len(raw_data) == 50  # Raw read should be exact size
                     
-                    # Compare with regular read - regular should be less or (empty) due to JSON boundary extension
-                    regular_data = reader.read(start, end)
+                    # Compare with line bytes read - should be less or (empty) due to line boundary extension
+                    regular_data = reader.read_line_bytes(start, end)
                     assert len(regular_data) <= len(raw_data)
 
                     # Regular read should end with complete JSON line
@@ -456,7 +456,7 @@ class TestDFTracerReader:
             
             with dft_utils.DFTracerReader(gz_file) as reader:
                 # Small range should provide minimum requested bytes
-                content = reader.read(0, bytes_per_line)
+                content = reader.read_line_bytes(0, bytes_per_line)
 
                 assert len(content) <= bytes_per_line  # Should get what was requested
 
@@ -481,22 +481,22 @@ class TestDFTracerReader:
                 
                 if max_bytes > 10:
                     # Read near the end (not complete line)
-                    data = reader.read(max_bytes - 10, max_bytes)
+                    data = reader.read_line_bytes(max_bytes - 10, max_bytes)
                     assert len(data) == 0
                     
                     # Read single byte range (not complete line)
                     if max_bytes > 1:
-                        data = reader.read(0, 1)
+                        data = reader.read_line_bytes(0, 1)
                         assert len(data) == 0
                 
                 # Test raw read edge cases
                 if max_bytes > 10:
                     # Single byte raw read
-                    raw_data = reader.read_raw(0, 1)
+                    raw_data = reader.read(0, 1)
                     assert len(raw_data) == 1
                     
                     # Read near end with raw
-                    raw_data = reader.read_raw(max_bytes - 5, max_bytes - 1)
+                    raw_data = reader.read(max_bytes - 5, max_bytes - 1)
                     assert len(raw_data) == 4
 
 

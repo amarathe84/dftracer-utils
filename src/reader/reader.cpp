@@ -779,6 +779,29 @@ class Reader::Impl {
                           "Reader is not open");
     }
 
+    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes, indexer_->get_max_bytes());
+
+    // Create or reuse raw streaming session
+    if (session_factory_->needs_new_raw_session(raw_session_.get(), gz_path,
+                                                start_bytes, end_bytes)) {
+      raw_session_ =
+          session_factory_->create_raw_session(gz_path, start_bytes, end_bytes);
+    }
+
+    if (raw_session_->is_finished()) {
+      return 0;
+    }
+
+    return raw_session_->stream_chunk(buffer, buffer_size);
+  }
+
+  size_t read_line_bytes(const std::string &gz_path, size_t start_bytes, size_t end_bytes,
+              char *buffer, size_t buffer_size) {
+    if (!is_open_ || !indexer_) {
+      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
+                          "Reader is not open");
+    }
+
     if (end_bytes > indexer_->get_max_bytes()) {
       end_bytes = indexer_->get_max_bytes();
     }
@@ -799,28 +822,12 @@ class Reader::Impl {
     return line_session_->stream_chunk(buffer, buffer_size);
   }
 
-  size_t read_raw(const std::string &gz_path, size_t start_bytes,
-                  size_t end_bytes, char *buffer, size_t buffer_size) {
-    if (!is_open_ || !indexer_) {
-      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
-                          "Reader is not open");
-    }
-
-    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes, indexer_->get_max_bytes());
-
-    // Create or reuse raw streaming session
-    if (session_factory_->needs_new_raw_session(raw_session_.get(), gz_path,
-                                                start_bytes, end_bytes)) {
-      raw_session_ =
-          session_factory_->create_raw_session(gz_path, start_bytes, end_bytes);
-    }
-
-    if (raw_session_->is_finished()) {
-      return 0;
-    }
-
-    return raw_session_->stream_chunk(buffer, buffer_size);
+  std::string read_lines(const std::string &gz_path, size_t start, size_t end) {
+    // For now, this is a placeholder implementation
+    // TODO: Implement line-based reading that converts line numbers to byte positions
+    throw Reader::Error(Reader::Error::READ_ERROR, "read_lines not yet implemented");
   }
+
 
   void reset() {
     if (!is_open_ || !indexer_) {
@@ -877,21 +884,30 @@ size_t Reader::read(const std::string &gz_path, size_t start_bytes,
   return pImpl_->read(gz_path, start_bytes, end_bytes, buffer, buffer_size);
 }
 
+size_t Reader::read_line_bytes(const std::string &gz_path, size_t start_bytes,
+                               size_t end_bytes, char *buffer, size_t buffer_size) {
+  return pImpl_->read_line_bytes(gz_path, start_bytes, end_bytes, buffer, buffer_size);
+}
+
 size_t Reader::read(size_t start_bytes, size_t end_bytes, char *buffer,
                     size_t buffer_size) {
   return pImpl_->read(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer,
                       buffer_size);
 }
 
-size_t Reader::read_raw(const std::string &gz_path, size_t start_bytes,
-                        size_t end_bytes, char *buffer, size_t buffer_size) {
-  return pImpl_->read_raw(gz_path, start_bytes, end_bytes, buffer, buffer_size);
+size_t Reader::read_line_bytes(size_t start_bytes, size_t end_bytes, char *buffer,
+                               size_t buffer_size) {
+  return pImpl_->read_line_bytes(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer,
+                                 buffer_size);
 }
 
-size_t Reader::read_raw(size_t start_bytes, size_t end_bytes, char *buffer,
-                        size_t buffer_size) {
-  return pImpl_->read_raw(pImpl_->get_gz_path(), start_bytes, end_bytes, buffer,
-                          buffer_size);
+
+std::string Reader::read_lines(size_t start, size_t end) {
+  return pImpl_->read_lines(pImpl_->get_gz_path(), start, end);
+}
+
+std::string Reader::read_lines(const std::string &gz_path, size_t start, size_t end) {
+  return pImpl_->read_lines(gz_path, start, end);
 }
 
 void Reader::reset() { pImpl_->reset(); }
@@ -999,20 +1015,20 @@ int dft_reader_read(dft_reader_handle_t reader, const char *gz_path,
   }
 }
 
-int dft_reader_read_raw(dft_reader_handle_t reader, const char *gz_path,
-                        size_t start_bytes, size_t end_bytes, char *buffer,
-                        size_t buffer_size) {
+int dft_reader_read_line_bytes(dft_reader_handle_t reader, const char *gz_path,
+                               size_t start_bytes, size_t end_bytes, char *buffer,
+                               size_t buffer_size) {
   if (!reader || !gz_path || !buffer || buffer_size == 0) {
     return -1;
   }
 
   try {
     auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
-    size_t bytes_read = cpp_reader->read_raw(gz_path, start_bytes, end_bytes,
-                                             buffer, buffer_size);
+    size_t bytes_read = cpp_reader->read_line_bytes(gz_path, start_bytes, end_bytes,
+                                                    buffer, buffer_size);
     return static_cast<int>(bytes_read);
   } catch (const std::exception &e) {
-    spdlog::error("Failed to read raw: {}", e.what());
+    spdlog::error("Failed to read line bytes: {}", e.what());
     return -1;
   }
 }

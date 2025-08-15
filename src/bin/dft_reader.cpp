@@ -41,11 +41,14 @@ int main(int argc, char **argv) {
           "Set logging level (trace, debug, info, warn, error, critical, off)")
       .default_value<std::string>("info");
   program.add_argument("--check").help("Check if index is valid").flag();
-  program.add_argument("--raw").help("Use raw reading mode").flag();
   program.add_argument("--read-buffer-size")
       .help("Size of the read buffer in bytes (default: 1MB)")
       .default_value<size_t>(1 * 1024 * 1024)
       .scan<'d', size_t>();
+  program.add_argument("--mode")
+      .help("Set the reading mode (bytes, line_bytes, lines)")
+      .default_value<std::string>("bytes")
+      .choices("bytes", "line_bytes", "lines");
 
   try {
     program.parse_args(argc, argv);
@@ -62,7 +65,7 @@ int main(int argc, char **argv) {
   double chunk_size_mb = program.get<double>("--chunk-size");
   bool force_rebuild = program.get<bool>("--force");
   bool check_rebuild = program.get<bool>("--check");
-  bool raw_mode = program.get<bool>("--raw");
+  std::string read_mode = program.get<std::string>("--mode");
   std::string log_level_str = program.get<std::string>("--log-level");
 
   // @todo: delete this later
@@ -135,8 +138,8 @@ int main(int argc, char **argv) {
       size_t bytes_written;
       size_t total_bytes = 0;
 
-      while ((bytes_written = raw_mode ? reader.read_raw(start_bytes_, end_bytes_, buffer.get(), read_buffer_size) :
-                    reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size)) > 0) {
+      while ((bytes_written = read_mode == "bytes" ? reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size) :
+                    reader.read_line_bytes(start_bytes_, end_bytes_, buffer.get(), read_buffer_size)) > 0) {
           fwrite(buffer.get(), 1, bytes_written, stdout);
           total_bytes += bytes_written;
       }
