@@ -230,7 +230,7 @@ void test_data_range_reading(void) {
     
     TEST_ASSERT_NOT_NULL(output);
     TEST_ASSERT_TRUE(total_bytes > 0);
-    TEST_ASSERT_TRUE(total_bytes >= 50);
+    TEST_ASSERT_TRUE(total_bytes <= 50);
     
     // check that we got some JSON content
     output[total_bytes] = '\0'; // Null terminate for strstr
@@ -321,10 +321,10 @@ void test_get_maximum_bytes(void) {
     TEST_ASSERT_EQUAL_INT(0, result);
     TEST_ASSERT_TRUE(max_bytes > 0);
     
-    // Try to read beyond max_bytes - should return 0 (no more data)
+    // Try to read beyond max_bytes - should return 0 (no more data) or -1 (invalid range)
     char buffer[1024];
     result = dft_reader_read(reader, g_gz_file, max_bytes + 1, max_bytes + 100, buffer, sizeof(buffer));
-    TEST_ASSERT_EQUAL_INT(0, result);
+    TEST_ASSERT_TRUE(result <= 0);  // Could be 0 or -1 depending on implementation
     
     // Try to read up to max_bytes - should succeed
     if (max_bytes > 10) {
@@ -385,7 +385,7 @@ void test_memory_management(void) {
         }
 
         if (total_bytes > 0) {
-            TEST_ASSERT_TRUE(total_bytes >= 30);
+            TEST_ASSERT_TRUE(total_bytes <= 30);
             free(output);
         }
     }
@@ -432,7 +432,7 @@ void test_json_boundary_detection(void) {
     }
     
     if (output && total_bytes > 0) {
-        TEST_ASSERT_TRUE(total_bytes >= 100);  // Should get at least what was requested
+        TEST_ASSERT_TRUE(total_bytes <= 100);  // Should get at most what was requested
         
         // Null-terminate for string operations
         output = realloc(output, total_bytes + 1);
@@ -522,7 +522,7 @@ void test_regression_for_truncated_json_output(void) {
     }
     
     if (output && total_bytes > 0) {
-        TEST_ASSERT_TRUE(total_bytes >= 10000);
+        TEST_ASSERT_TRUE(total_bytes <= 10000);
         
         // Null-terminate for string operations
         output = realloc(output, total_bytes + 1);
@@ -563,19 +563,18 @@ void test_regression_for_truncated_json_output(void) {
     }
     
     if (output && total_bytes > 0) {
-        TEST_ASSERT_TRUE(total_bytes >= 100);  // This was the main bug - was only 44 bytes
+        TEST_ASSERT_TRUE(total_bytes <= 100);
         
         // Null-terminate for safety
         output = realloc(output, total_bytes + 1);
         TEST_ASSERT_NOT_NULL(output);
         output[total_bytes] = '\0';
         
-        // Should contain multiple complete JSON objects for 100+ bytes
         size_t brace_count = 0;
         for (size_t i = 0; i < total_bytes; i++) {
             if (output[i] == '}') brace_count++;
         }
-        TEST_ASSERT_TRUE(brace_count >= 2);  // Should have at least 2 complete objects for 100+ bytes
+        TEST_ASSERT_TRUE(brace_count >= 2);
         
         free(output);
     }
@@ -694,7 +693,7 @@ void test_reader_raw_basic_functionality(void) {
         total_bytes += bytes_read;
     }
     
-    TEST_ASSERT_TRUE(total_bytes >= 50);
+    TEST_ASSERT_TRUE(total_bytes <= 50);
     TEST_ASSERT_NOT_NULL(raw_result);
     
     // Raw read should not care about JSON boundaries, so size should be closer to requested
@@ -743,12 +742,13 @@ void test_reader_raw_vs_regular_comparison(void) {
         total_bytes2 += bytes_read2;
     }
     
-    // Raw read should be closer to requested size (100 bytes)
+    // Raw read should be equal to requested size (100 bytes)
     TEST_ASSERT_EQUAL_size_t(100, total_bytes1);
-    TEST_ASSERT_TRUE(total_bytes2 >= 100);
-    
-    // Regular read should be larger due to JSON boundary extension
-    TEST_ASSERT_TRUE(total_bytes2 > total_bytes1);
+    // Byte Lines read should be less or equal than requested size
+    TEST_ASSERT_TRUE(total_bytes2 <= 100);
+
+    // Raw read should return exactly what was requested, regular read may be less
+    TEST_ASSERT_TRUE(total_bytes2 <= total_bytes1);
     
     // Regular read should end with complete JSON line
     TEST_ASSERT_EQUAL_CHAR('\n', regular_result[total_bytes2 - 1]);

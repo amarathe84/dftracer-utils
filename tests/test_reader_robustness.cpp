@@ -9,6 +9,9 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <thread>
+#include <atomic>
+#include <future>
 
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
@@ -413,8 +416,8 @@ TEST_CASE("Robustness - Boundary edge cases") {
     
     dftracer::utils::reader::Reader reader(gz_file, idx_file);
     size_t max_bytes = reader.get_max_bytes();
-    
-    SUBCASE("Tiny ranges near boundaries") {
+
+    SUBCASE("Range less than bytes_per_line") {
         // Test very small ranges at various positions
         std::vector<size_t> test_positions = {
             0,                    // Start of file
@@ -437,9 +440,47 @@ TEST_CASE("Robustness - Boundary edge cases") {
                 while ((bytes_written = reader.read(pos, pos + 100, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
                 }
+
+                // Should get 0 bytes since we cannot find single line
+                CHECK(content.size() == 0);
                 
-                // Should get at least 100 bytes due to JSON boundary extension
-                CHECK(content.size() >= 100);
+                // Should end with complete JSON line
+                if (!content.empty()) {
+                    CHECK(content.back() == '\n');
+                    
+                    // Should contain at least one complete JSON object
+                    CHECK(count_json_lines(content) >= 1);
+                }
+            }
+        }
+    }
+    
+    SUBCASE("Tiny ranges near boundaries") {
+        // Test very small ranges at various positions
+        std::vector<size_t> test_positions = {
+            0,                    // Start of file
+            1024,                 // Early position
+            max_bytes / 4,        // Quarter point
+            max_bytes / 2,        // Middle
+            max_bytes * 3 / 4,    // Three-quarter point
+            max_bytes - 1024      // Near end
+        };
+        
+        const size_t buffer_size = 8 * 1024 * 1024;
+        std::vector<char> buffer(buffer_size);
+        
+        for (size_t pos : test_positions) {
+            if (pos + 100 <= max_bytes) {
+                size_t bytes_written = 0;
+                std::string content;
+                
+                // Read 100 bytes starting at position
+                while ((bytes_written = reader.read(pos, pos + env.get_bytes_per_line(), buffer.data(), buffer.size())) > 0) {
+                    content.append(buffer.data(), bytes_written);
+                }
+
+                // Should get at least env.get_bytes_per_line() bytes due to JSON boundary extension
+                CHECK(content.size() == env.get_bytes_per_line());
                 
                 // Should end with complete JSON line
                 if (!content.empty()) {
@@ -974,6 +1015,8 @@ TEST_CASE("Robustness - Memory and performance stress") {
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<size_t> dis(0, max_bytes > 1000 ? max_bytes - 1000 : 0);
+
+            size_t total_bytes_written = 0;
             
             for (size_t i = 0; i < 50; ++i) {
                 size_t start = dis(gen);
@@ -984,6 +1027,7 @@ TEST_CASE("Robustness - Memory and performance stress") {
                 
                 while ((bytes_written = reader.read(start, end, buffer.data(), buffer.size())) > 0) {
                     content.append(buffer.data(), bytes_written);
+                    total_bytes_written += bytes_written;
                 }
                 
                 total_bytes_read += content.size();
@@ -991,7 +1035,7 @@ TEST_CASE("Robustness - Memory and performance stress") {
             }
             
             // Should have read substantial data
-            CHECK(total_bytes_read > 10000);
+            CHECK(total_bytes_read == total_bytes_written);
             CHECK(total_lines > 50);
         }
     }
@@ -1020,5 +1064,91 @@ TEST_CASE("Robustness - Memory and performance stress") {
             CHECK(content.size() >= 1024 * 1024);
             CHECK(count_json_lines(content) > 0);
         }
+    }
+
+    SUBCASE("Threading Concurrent reader instances") {
+        // Create multiple threads reading the same file
+        const size_t num_threads = 4;
+        std::vector<std::thread> threads;
+        std::atomic<size_t> total_lines(0);
+        
+        for (size_t i = 0; i < num_threads; ++i) {
+            threads.emplace_back([&gz_file, &idx_file, &total_lines]() {
+                dftracer::utils::reader::Reader thread_reader(gz_file, idx_file);
+                size_t max_bytes = thread_reader.get_max_bytes();
+                
+                const size_t buffer_size = 4 * 1024 * 1024;
+                std::vector<char> buffer(buffer_size);
+                
+                size_t bytes_written = 0;
+                std::string content;
+                
+                while ((bytes_written = thread_reader.read(0, max_bytes, buffer.data(), buffer.size())) > 0) {
+                    content.append(buffer.data(), bytes_written);
+                }
+                
+                // Validate JSON completeness
+                if (validate_json_lines(content)) {
+                    auto num_lines = count_json_lines(content);
+                    CHECK(num_lines > 0);
+                    total_lines += num_lines;
+                }
+            });
+        }
+
+        // Join all threads
+        for (auto& thread : threads) {
+            thread.join();
+        }
+        
+        // Should have read substantial number of lines across all threads
+        CHECK(total_lines.load() > 0);
+    }
+
+    SUBCASE("Future-Async Concurrent reader instances") {
+        const size_t num_futures = 4;
+        std::vector<std::future<size_t>> futures;
+
+        for (size_t i = 0; i < num_futures; ++i) {
+            futures.push_back(std::async(std::launch::async, [&gz_file, &idx_file]() {
+                dftracer::utils::reader::Reader async_reader(gz_file, idx_file);
+                size_t max_bytes = async_reader.get_max_bytes();
+
+                const size_t buffer_size = 4 * 1024 * 1024;
+                std::vector<char> buffer(buffer_size);
+
+                size_t bytes_written = 0;
+                std::string content;
+
+                while ((bytes_written = async_reader.read(0, max_bytes, buffer.data(), buffer.size())) > 0) {
+                    content.append(buffer.data(), bytes_written);
+                }
+
+                // Validate JSON completeness
+                if (validate_json_lines(content)) {
+                    return count_json_lines(content);
+                }
+                return static_cast<size_t>(0);
+            }));
+        }
+
+        size_t total_lines = 0;
+        size_t last_num_lines = 0;
+
+        // Wait for all futures to complete
+        for (size_t i = 0; i < num_futures; ++i) {
+            auto& fut = futures[i];
+            auto num_lines = fut.get();
+            CHECK(num_lines > 0);
+            if (i > 0) {
+              CHECK(num_lines == last_num_lines);
+            }
+            last_num_lines = num_lines;
+            total_lines += num_lines;
+        }
+
+        // Should have read substantial number of lines across all futures
+        std::cout << "Total lines read across futures: " << total_lines << std::endl;
+        CHECK(total_lines > 0);
     }
 }

@@ -420,28 +420,29 @@ class LineStreamingSession : public BaseStreamingSession {
     // Check if we've reached the target end
     if (current_position_ >= target_end_bytes_) {
       is_finished_ = true;
+      spdlog::trace("LineStreamingSession finished: current_position_={}, target_end_bytes_={}", current_position_, target_end_bytes_);
       return 0;
     }
 
     // if we have partial lines then add it to bytes_to_read
     // partial line length is also need to be less than buffer size ALWAYS
     std::vector<char> temp_buffer(buffer_size);
-    size_t bytes_to_read = buffer_size;
+    size_t available_buffer_space = buffer_size;
     if (!partial_line_buffer_.empty()) {
       // prepend partial buffer
       std::memcpy(temp_buffer.data(), partial_line_buffer_.data(), partial_line_buffer_.size());
-      bytes_to_read -= partial_line_buffer_.size();
+      available_buffer_space -= partial_line_buffer_.size();
     }
 
     // Calculate how much we can read without exceeding the target
-    bytes_to_read = std::min(target_end_bytes_ - current_position_, bytes_to_read);
-    size_t read_size = std::min(buffer_size, bytes_to_read);
+    size_t max_bytes_to_read = target_end_bytes_ - current_position_;
+    size_t bytes_to_read = std::min(max_bytes_to_read, available_buffer_space);
 
     size_t bytes_read = 0;
     if (bytes_to_read > 0) {
       int result = CompressionManager::inflate_read(
           inflate_state_.get(), reinterpret_cast<unsigned char *>(temp_buffer.data() + partial_line_buffer_.size()),
-          read_size, &bytes_read);
+          bytes_to_read, &bytes_read);
 
       if (result != 0 || bytes_read == 0) {
         is_finished_ = true;
@@ -449,12 +450,35 @@ class LineStreamingSession : public BaseStreamingSession {
       }
     }
 
-    spdlog::debug("Read {} bytes from compressed stream", bytes_read);
+    spdlog::trace("Read {} bytes from compressed stream, partial_buffer_size={}, current_position={}, target_end={}", 
+                  bytes_read, partial_line_buffer_.size(), current_position_, target_end_bytes_);
+
+    // Total data in temp_buffer is partial_line_buffer + new bytes
+    size_t total_data_size = partial_line_buffer_.size() + bytes_read;
+    
+    // Apply range limiting only for small partial reads, not for full file reads
+    size_t adjusted_size;
+    size_t original_range_size = target_end_bytes_ - start_bytes_;
+    
+    // If the requested range is small (< 1MB), apply strict range limiting
+    // For larger ranges (including full file reads), let it read naturally
+    if (original_range_size < 1024 * 1024) {
+      // Small range read - apply cumulative range limiting
+      size_t bytes_already_returned = current_position_ - actual_start_bytes_;
+      size_t max_allowed_return = (bytes_already_returned < original_range_size) ? 
+                                  (original_range_size - bytes_already_returned) : 0;
+      
+      size_t limited_data_size = std::min(total_data_size, max_allowed_return);
+      adjusted_size = adjust_to_boundary(temp_buffer.data(), limited_data_size);
+    } else {
+      // Large range or full file read - no artificial limiting
+      adjusted_size = adjust_to_boundary(temp_buffer.data(), total_data_size);
+    }
+    
+    spdlog::trace("After boundary adjustment: total_data_size={}, original_range_size={}, final_adjusted_size={}", 
+                  total_data_size, original_range_size, adjusted_size);
 
     current_position_ += bytes_read;
-
-    // chopped using adjust_to_boundary
-    size_t adjusted_size = adjust_to_boundary(temp_buffer.data(), bytes_read);
 
     if (adjusted_size == 0) {
       // No complete line found, we need to read more data
@@ -465,9 +489,21 @@ class LineStreamingSession : public BaseStreamingSession {
 
     // copy the adjusted buffer to the output
     std::memcpy(buffer, temp_buffer.data(), adjusted_size);
-    if (adjusted_size < bytes_read) {
-      partial_line_buffer_ = std::vector<char>(bytes_read - adjusted_size);
-      std::memcpy(partial_line_buffer_.data(), temp_buffer.data() + adjusted_size, partial_line_buffer_.size());
+    
+    // Update partial buffer with remaining data
+    if (adjusted_size < total_data_size) {
+      size_t remaining_size = total_data_size - adjusted_size;
+      partial_line_buffer_ = std::vector<char>(remaining_size);
+      std::memcpy(partial_line_buffer_.data(), temp_buffer.data() + adjusted_size, remaining_size);
+    } else {
+      // All data was used, clear partial buffer
+      partial_line_buffer_.clear();
+    }
+
+    // Debug for large range reads
+    if ((target_end_bytes_ - start_bytes_) > 40000) {
+      spdlog::trace("Large range read: returning {} bytes, current_pos={}, target_end={}, range_size={}", 
+                   adjusted_size, current_position_, target_end_bytes_, target_end_bytes_ - start_bytes_);
     }
 
     return adjusted_size;

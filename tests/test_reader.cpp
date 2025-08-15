@@ -275,7 +275,7 @@ TEST_CASE("C++ API - Integration test") {
         while ((bytes_read = reader.read(100, 200, buffer, sizeof(buffer))) > 0) {
             content2.append(buffer, bytes_read);
         }
-        CHECK(content2.size() >= 100);
+        CHECK(content2.size() <= 100);
         
         // Verify data content
         CHECK(content1.find("{") != std::string::npos);
@@ -1243,7 +1243,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
                 while ((bytes_read = reader.read(max_bytes - 1, max_bytes, buffer, sizeof(buffer))) > 0) {
                     result.append(buffer, bytes_read);
                 }
-                CHECK(result.size() >= 1);
+                CHECK(result.size() <= 1);
             }
         }
     }
