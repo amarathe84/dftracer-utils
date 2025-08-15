@@ -441,10 +441,15 @@ class LineByteStreamingSession : public BaseStreamingSession {
     }
 
     // if we have partial lines then add it to bytes_to_read
-    // partial line length is also need to be less than buffer size ALWAYS
+    // CRITICAL: Ensure partial buffer doesn't exceed available space
     std::vector<char> temp_buffer(buffer_size);
     size_t available_buffer_space = buffer_size;
     if (!partial_line_buffer_.empty()) {
+      // SECURITY: Check for buffer overflow before copying
+      if (partial_line_buffer_.size() > buffer_size) {
+        throw Reader::Error(Reader::Error::READ_ERROR,
+                          "Partial line buffer exceeds available buffer space");
+      }
       // prepend partial buffer
       std::memcpy(temp_buffer.data(), partial_line_buffer_.data(), partial_line_buffer_.size());
       available_buffer_space -= partial_line_buffer_.size();
@@ -480,6 +485,13 @@ class LineByteStreamingSession : public BaseStreamingSession {
     // For larger ranges (including full file reads), let it read naturally
     if (original_range_size < 1024 * 1024) {
       // Small range read - apply cumulative range limiting
+      // SECURITY: Prevent integer underflow by validating positions
+      if (current_position_ < actual_start_bytes_) {
+        spdlog::error("Invalid state: current_position_ {} < actual_start_bytes_ {}", 
+                     current_position_, actual_start_bytes_);
+        throw Reader::Error(Reader::Error::READ_ERROR,
+                          "Invalid internal position state detected");
+      }
       size_t bytes_already_returned = current_position_ - actual_start_bytes_;
       size_t max_allowed_return = (bytes_already_returned < original_range_size) ? 
                                   (original_range_size - bytes_already_returned) : 0;
@@ -864,131 +876,86 @@ class Reader::Impl {
       throw std::runtime_error("Start line must be <= end line");
     }
     
+    size_t total_lines = indexer_->get_num_lines();
+    if (start_line > total_lines || end_line > total_lines) {
+      throw std::runtime_error("Line numbers exceed total lines in file (" + 
+                              std::to_string(total_lines) + ")");
+    }
+    
     try {
-      // Use the indexer's efficient checkpoint-based line range query
+      // Use the checkpoint-based line range finder 
       auto checkpoints = indexer_->find_checkpoints_by_line_range(start_line, end_line);
       
       if (checkpoints.empty()) {
-        throw std::runtime_error("No checkpoints found for line range [" + 
-                                std::to_string(start_line) + ", " + std::to_string(end_line) + "]");
-      }
-
-      spdlog::info("Got {} checkpoints for line range [{}, {}]", checkpoints.size(), start_line, end_line);
-      
-      for (size_t i = 0; i < checkpoints.size(); i++) {
-        spdlog::debug("Checkpoint {}: uc_offset={}, uc_size={}, num_lines={}", i, checkpoints[i].uc_offset, checkpoints[i].uc_size, checkpoints[i].num_lines);
-      }
-
-      std::string result;
-      
-      // Calculate cumulative lines to find exact byte positions
-      size_t cumulative_lines = 0;
-      size_t start_byte_offset = 0;
-      size_t end_byte_offset = 0;
-      bool found_start = false;
-      bool found_end = false;
-      
-      for (const auto& checkpoint : checkpoints) {
-        size_t checkpoint_start_line = cumulative_lines + 1;
-        size_t checkpoint_end_line = cumulative_lines + checkpoint.num_lines;
-        
-        // Find start position
-        if (!found_start && start_line >= checkpoint_start_line && start_line <= checkpoint_end_line) {
-          // Start is within this checkpoint - need to find exact byte position
-          if (start_line == checkpoint_start_line) {
-            // Starting at the beginning of this checkpoint
-            start_byte_offset = checkpoint.uc_offset;
-          } else {
-            // Use checkpoint as starting point and scan forward to find exact line position
-            // This maintains checkpoint benefits while giving precise line positioning
-            start_byte_offset = find_line_in_checkpoint(checkpoint, cumulative_lines + 1, start_line);
-          }
-          found_start = true;
-        }
-        
-        // Find end position  
-        if (end_line >= checkpoint_start_line && end_line <= checkpoint_end_line) {
-          // End is within this checkpoint
-          end_byte_offset = checkpoint.uc_offset + checkpoint.uc_size;
-          found_end = true;
-          break;
-        }
-        
-        cumulative_lines += checkpoint.num_lines;
-        
-        // If we haven't found start yet, update start position
-        if (!found_start) {
-          start_byte_offset = checkpoint.uc_offset + checkpoint.uc_size;
-        }
-        
-        // If we found start but not end yet, extend end position
-        if (found_start && !found_end) {
-          end_byte_offset = checkpoint.uc_offset + checkpoint.uc_size;
-        }
+        // No checkpoints found - fall back to reading from beginning
+        spdlog::debug("No checkpoints found for line range [{}, {}], reading from beginning", 
+                     start_line, end_line);
+        return read_lines_from_beginning(start_line, end_line);
       }
       
-      if (!found_start) {
-        throw std::runtime_error("Start line " + std::to_string(start_line) + " not found in available data");
-      }
+      spdlog::debug("Found {} checkpoints for line range [{}, {}]", 
+                   checkpoints.size(), start_line, end_line);
+                   
+      // Find the byte range we need to read
+      size_t start_byte_offset = checkpoints[0].uc_offset;
+      size_t end_byte_offset = checkpoints.back().uc_offset + checkpoints.back().uc_size;
       
-      spdlog::debug("Reading lines [{}, {}] from byte range [{}, {}]", 
-                   start_line, end_line, start_byte_offset, end_byte_offset);
-
-      // Use line byte streaming to read the determined byte range
+      // Create a line session for this byte range
       if (!line_byte_session_ || 
           session_factory_->needs_new_line_session(line_byte_session_.get(), gz_path_, 
                                                    start_byte_offset, end_byte_offset)) {
-        line_byte_session_ = session_factory_->create_line_session(
-            gz_path_, start_byte_offset, end_byte_offset);
+        line_byte_session_ = session_factory_->create_line_session(gz_path_, 
+                                                                  start_byte_offset, end_byte_offset);
       }
       
-      // Read data in chunks and count lines to ensure we only get requested lines
-      const size_t buffer_size = 64 * 1024; // 64KB buffer
-      std::vector<char> buffer(buffer_size);
-      size_t lines_found = 0;
-      size_t target_lines = end_line - start_line + 1;
-      
-      while (!line_byte_session_->is_finished() && lines_found < target_lines) {
-        size_t bytes_read = line_byte_session_->stream_chunk(buffer.data(), buffer_size);
-        if (bytes_read == 0) break;
-        
-        // Count newlines in this chunk and only append up to target lines
-        size_t chunk_lines = 0;
-        size_t bytes_to_append = 0;
-        
-        for (size_t i = 0; i < bytes_read; i++) {
-          if (buffer[i] == '\n') {
-            chunk_lines++;
-            if (lines_found + chunk_lines >= target_lines) {
-              bytes_to_append = i + 1; // Include the newline
+      // Calculate the line offset from the first checkpoint
+      size_t cumulative_lines_before = 0;
+      for (size_t i = 0; i < checkpoints.size(); ++i) {
+        if (i == 0) {
+          // For the first checkpoint, calculate how many lines come before it
+          // This requires checking previous checkpoints or counting from beginning
+          auto all_checkpoints = indexer_->get_checkpoints();
+          for (const auto& cp : all_checkpoints) {
+            if (cp.uc_offset < checkpoints[0].uc_offset) {
+              cumulative_lines_before += cp.num_lines;
+            } else {
               break;
             }
           }
         }
+        break; // Only need the first checkpoint calculation
+      }
+      
+      // Read from the checkpoint and extract the target lines
+      std::string result;
+      size_t current_line = cumulative_lines_before + 1;
+      std::string current_line_content;
+      const size_t buffer_size = 64 * 1024;
+      std::vector<char> buffer(buffer_size);
+      
+      while (!line_byte_session_->is_finished() && current_line <= end_line) {
+        size_t bytes_read = line_byte_session_->stream_chunk(buffer.data(), buffer_size);
+        if (bytes_read == 0) break;
         
-        // If we haven't reached the target and no newlines found, append all
-        if (bytes_to_append == 0 && lines_found + chunk_lines < target_lines) {
-          bytes_to_append = bytes_read;
-        }
-        
-        if (bytes_to_append > 0) {
-          result.append(buffer.data(), bytes_to_append);
+        for (size_t i = 0; i < bytes_read && current_line <= end_line; i++) {
+          current_line_content += buffer[i];
           
-          // Count actual newlines appended
-          for (size_t i = 0; i < bytes_to_append; i++) {
-            if (buffer[i] == '\n') {
-              lines_found++;
+          if (buffer[i] == '\n') {
+            // We found a complete line
+            if (current_line >= start_line) {
+              result += current_line_content;
             }
+            current_line_content.clear();
+            current_line++;
           }
-        }
-        
-        // Break if we've found enough lines
-        if (lines_found >= target_lines) {
-          break;
         }
       }
       
-      spdlog::debug("Read {} lines out of {} requested", lines_found, target_lines);
+      // If we have a partial line at the end and we're still within range, add it
+      if (!current_line_content.empty() && current_line >= start_line && current_line <= end_line) {
+        result += current_line_content;
+      }
+      
       return result;
       
     } catch (const std::exception& e) {
@@ -1010,6 +977,48 @@ class Reader::Impl {
   }
 
  private:
+  std::string read_lines_from_beginning(size_t start_line, size_t end_line) {
+    size_t max_bytes = indexer_->get_max_bytes();
+    spdlog::debug("Reading lines [{}, {}] from file beginning (max bytes: {})", 
+                 start_line, end_line, max_bytes);
+    
+    // CRITICAL: Always create a fresh session to avoid state corruption
+    // Session reuse was causing wrong line positions to be returned
+    line_byte_session_ = session_factory_->create_line_session(gz_path_, 0, max_bytes);
+    
+    // Read through the file and extract only the requested lines
+    std::string result;
+    size_t current_line = 1;
+    std::string current_line_content;
+    const size_t buffer_size = 64 * 1024;
+    std::vector<char> buffer(buffer_size);
+    
+    while (!line_byte_session_->is_finished() && current_line <= end_line) {
+      size_t bytes_read = line_byte_session_->stream_chunk(buffer.data(), buffer_size);
+      if (bytes_read == 0) break;
+      
+      for (size_t i = 0; i < bytes_read && current_line <= end_line; i++) {
+        current_line_content += buffer[i];
+        
+        if (buffer[i] == '\n') {
+          // We found a complete line
+          if (current_line >= start_line) {
+            result += current_line_content;
+          }
+          current_line_content.clear();
+          current_line++;
+        }
+      }
+    }
+    
+    // If we have a partial line at the end and we're still within range, add it
+    if (!current_line_content.empty() && current_line >= start_line && current_line <= end_line) {
+      result += current_line_content;
+    }
+    
+    return result;
+  }
+
   size_t find_line_in_checkpoint(const dftracer::utils::indexer::CheckpointInfo& checkpoint, 
                                  size_t checkpoint_start_line, size_t target_line) {
     spdlog::debug("Finding line {} starting from checkpoint at uc_offset {} (checkpoint starts at line {})", 
@@ -1034,7 +1043,6 @@ class Reader::Impl {
       // Count newlines and find the position of the target line
       for (size_t i = 0; i < bytes_read; i++) {
         if (buffer[i] == '\n') {
-          lines_skipped++;
           if (lines_skipped == lines_to_skip) {
             // Found the target line! Return the byte position after this newline
             size_t result = checkpoint.uc_offset + total_bytes_read + i + 1;
@@ -1042,6 +1050,7 @@ class Reader::Impl {
                           target_line, result, lines_skipped);
             return result;
           }
+          lines_skipped++;
         }
       }
       
