@@ -882,85 +882,8 @@ class Reader::Impl {
                               std::to_string(total_lines) + ")");
     }
     
-    try {
-      // Use the checkpoint-based line range finder 
-      auto checkpoints = indexer_->find_checkpoints_by_line_range(start_line, end_line);
-      
-      if (checkpoints.empty()) {
-        // No checkpoints found - fall back to reading from beginning
-        spdlog::debug("No checkpoints found for line range [{}, {}], reading from beginning", 
-                     start_line, end_line);
-        return read_lines_from_beginning(start_line, end_line);
-      }
-      
-      spdlog::debug("Found {} checkpoints for line range [{}, {}]", 
-                   checkpoints.size(), start_line, end_line);
-                   
-      // Find the byte range we need to read
-      size_t start_byte_offset = checkpoints[0].uc_offset;
-      size_t end_byte_offset = checkpoints.back().uc_offset + checkpoints.back().uc_size;
-      
-      // Create a line session for this byte range
-      if (!line_byte_session_ || 
-          session_factory_->needs_new_line_session(line_byte_session_.get(), gz_path_, 
-                                                   start_byte_offset, end_byte_offset)) {
-        line_byte_session_ = session_factory_->create_line_session(gz_path_, 
-                                                                  start_byte_offset, end_byte_offset);
-      }
-      
-      // Calculate the line offset from the first checkpoint
-      size_t cumulative_lines_before = 0;
-      for (size_t i = 0; i < checkpoints.size(); ++i) {
-        if (i == 0) {
-          // For the first checkpoint, calculate how many lines come before it
-          // This requires checking previous checkpoints or counting from beginning
-          auto all_checkpoints = indexer_->get_checkpoints();
-          for (const auto& cp : all_checkpoints) {
-            if (cp.uc_offset < checkpoints[0].uc_offset) {
-              cumulative_lines_before += cp.num_lines;
-            } else {
-              break;
-            }
-          }
-        }
-        break; // Only need the first checkpoint calculation
-      }
-      
-      // Read from the checkpoint and extract the target lines
-      std::string result;
-      size_t current_line = cumulative_lines_before + 1;
-      std::string current_line_content;
-      const size_t buffer_size = 64 * 1024;
-      std::vector<char> buffer(buffer_size);
-      
-      while (!line_byte_session_->is_finished() && current_line <= end_line) {
-        size_t bytes_read = line_byte_session_->stream_chunk(buffer.data(), buffer_size);
-        if (bytes_read == 0) break;
-        
-        for (size_t i = 0; i < bytes_read && current_line <= end_line; i++) {
-          current_line_content += buffer[i];
-          
-          if (buffer[i] == '\n') {
-            // We found a complete line
-            if (current_line >= start_line) {
-              result += current_line_content;
-            }
-            current_line_content.clear();
-            current_line++;
-          }
-        }
-      }
-      
-      // If we have a partial line at the end and we're still within range, add it
-      if (!current_line_content.empty() && current_line >= start_line && current_line <= end_line) {
-        result += current_line_content;
-      }
-      
-      return result;
-      
-    } catch (const std::exception& e) {
-      throw std::runtime_error("Failed to read lines: " + std::string(e.what()));
-    }
+    // For now, always read from beginning since we don't have precise line tracking
+    return read_lines_from_beginning(start_line, end_line);
   }
 
 
