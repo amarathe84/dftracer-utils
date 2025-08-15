@@ -105,6 +105,8 @@ const char *dft_utils_get_log_level_string() {
   return level_string.c_str();
 }
 
-int dft_utils_get_log_level_int() { return dftracer::utils::utils::get_log_level_int(); }
+int dft_utils_get_log_level_int() {
+  return dftracer::utils::utils::get_log_level_int();
+}
 
 }  // extern "C"

@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
 
   try {
     dftracer::utils::indexer::Indexer indexer(gz_path, idx_path, chunk_size_mb,
-                                  force_rebuild);
+                                              force_rebuild);
 
     if (check_rebuild) {
       if (!indexer.need_rebuild()) {
@@ -120,51 +120,53 @@ int main(int argc, char **argv) {
 
   // read operations
   if (start != -1) {
-
     try {
       dftracer::utils::reader::Reader reader(gz_path, idx_path);
-    
 
       if (read_mode != "bytes") {
-          size_t end_line = static_cast<size_t>(end);
-          if (end == -1) {
-              end_line = reader.get_num_lines();
-          }
+        size_t end_line = static_cast<size_t>(end);
+        if (end == -1) {
+          end_line = reader.get_num_lines();
+        }
 
-          spdlog::debug("Reading lines from {} to {}", start, end_line);
+        spdlog::debug("Reading lines from {} to {}", start, end_line);
 
-          auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
-          if (lines.empty()) {
-              spdlog::debug("No lines read in the specified range");
-              return 0;
-          }
-          fwrite(lines.c_str(), 1, lines.size(), stdout);
-          // count new line only
-          size_t line_count = std::count(lines.begin(), lines.end(), '\n');
-          spdlog::debug("Successfully read {} lines from range", line_count);
+        auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
+        if (lines.empty()) {
+          spdlog::debug("No lines read in the specified range");
+          return 0;
+        }
+        fwrite(lines.c_str(), 1, lines.size(), stdout);
+        // count new line only
+        size_t line_count = std::count(lines.begin(), lines.end(), '\n');
+        spdlog::debug("Successfully read {} lines from range", line_count);
       } else {
-
         size_t start_bytes_ = static_cast<size_t>(start);
         size_t end_bytes_ = end == -1 ? std::numeric_limits<size_t>::max()
                                       : static_cast<size_t>(end);
 
-  auto max_bytes = reader.get_max_bytes();
-      if (end_bytes_ > max_bytes) {
-        end_bytes_ = max_bytes;
-      }                                      
+        auto max_bytes = reader.get_max_bytes();
+        if (end_bytes_ > max_bytes) {
+          end_bytes_ = max_bytes;
+        }
         spdlog::debug("Performing byte range read operation");
-          spdlog::debug("Using read buffer size: {} bytes", read_buffer_size);
-          auto buffer = std::make_unique<char[]>(read_buffer_size);
-          size_t bytes_written;
-          size_t total_bytes = 0;
+        spdlog::debug("Using read buffer size: {} bytes", read_buffer_size);
+        auto buffer = std::make_unique<char[]>(read_buffer_size);
+        size_t bytes_written;
+        size_t total_bytes = 0;
 
-          while ((bytes_written = read_mode == "bytes" ? reader.read(start_bytes_, end_bytes_, buffer.get(), read_buffer_size) :
-                        reader.read_line_bytes(start_bytes_, end_bytes_, buffer.get(), read_buffer_size)) > 0) {
-              fwrite(buffer.get(), 1, bytes_written, stdout);
-              total_bytes += bytes_written;
-          }
+        while ((bytes_written =
+                    read_mode == "bytes"
+                        ? reader.read(start_bytes_, end_bytes_, buffer.get(),
+                                      read_buffer_size)
+                        : reader.read_line_bytes(start_bytes_, end_bytes_,
+                                                 buffer.get(),
+                                                 read_buffer_size)) > 0) {
+          fwrite(buffer.get(), 1, bytes_written, stdout);
+          total_bytes += bytes_written;
+        }
 
-          spdlog::debug("Successfully read {} bytes from range", total_bytes);
+        spdlog::debug("Successfully read {} bytes from range", total_bytes);
       }
       fflush(stdout);
     } catch (const std::runtime_error &e) {

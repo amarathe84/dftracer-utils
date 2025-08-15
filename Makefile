@@ -64,9 +64,10 @@ test-py:
 
 format:
 	@echo "Formatting code..."
-	@clang-format -i -style=file ./src/*/*.{cpp,h}
-	@clang-format -i -style=file ./tests/*/*.{cpp,h}
-	@clang-format -i -style=file ./py/src/*.{cpp,h}
+	find ./include -name "*.h" -exec clang-format -i -style=file {} +
+	find ./src -name "*.cpp" -exec clang-format -i -style=file {} +
+	find ./tests -name "*.cpp" -exec clang-format -i -style=file {} +
+	find ./tests -name "*.h" -exec clang-format -i -style=file {} +
 
 # Normal build
 build:

@@ -102,8 +102,8 @@ void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed);
  * @param num_lines_array Output: array of line counts (caller must free)
  * @return 0 on success, -1 on error
  */
-int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
-                                size_t *count, uint64_t **checkpoint_indices,
+int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer, size_t *count,
+                                uint64_t **checkpoint_indices,
                                 uint64_t **uc_offsets, uint64_t **uc_sizes,
                                 uint64_t **c_offsets, uint64_t **c_sizes,
                                 int **bits_array, size_t **dict_sizes,
@@ -183,9 +183,8 @@ struct CheckpointInfo {
  * Example usage:
  * ```cpp
  * try {
- *     dftracer::utils::indexer::Indexer indexer("trace.gz", "trace.gz.idx", 1.0);
- *     if (indexer.need_rebuild()) {
- *         indexer.build();
+ *     dftracer::utils::indexer::Indexer indexer("trace.gz",
+ * "trace.gz.idx", 1.0); if (indexer.need_rebuild()) { indexer.build();
  *     }
  * } catch (const std::runtime_error& e) {
  *     // Handle error
@@ -303,13 +302,15 @@ class Indexer {
 
   /**
    * Find checkpoints that contain data for a specific line range
-   * Uses the num_lines field in checkpoints to efficiently locate relevant checkpoints
+   * Uses the num_lines field in checkpoints to efficiently locate relevant
+   * checkpoints
    * @param start_line Starting line number (1-based)
    * @param end_line Ending line number (1-based, inclusive)
    * @return vector of checkpoints that cover the specified line range
    * @throws std::runtime_error on database error
    */
-  std::vector<CheckpointInfo> find_checkpoints_by_line_range(size_t start_line, size_t end_line) const;
+  std::vector<CheckpointInfo> find_checkpoints_by_line_range(
+      size_t start_line, size_t end_line) const;
 
   /**
    * Get the cached file ID for this indexer instance

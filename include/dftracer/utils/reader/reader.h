@@ -55,9 +55,8 @@ int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines);
  * @param buffer_size Size of user-provided buffer
  * @return Number of bytes read, 0 indicates end of stream, -1 on error
  */
-int dft_reader_read(dft_reader_handle_t reader,
-                    size_t start_bytes, size_t end_bytes, char *buffer,
-                    size_t buffer_size);
+int dft_reader_read(dft_reader_handle_t reader, size_t start_bytes,
+                    size_t end_bytes, char *buffer, size_t buffer_size);
 
 /**
  * Read a range of bytes from the gzip file using the index database (streaming)
@@ -69,8 +68,8 @@ int dft_reader_read(dft_reader_handle_t reader,
  * @param buffer_size Size of user-provided buffer
  * @return Number of bytes read, 0 indicates end of stream, -1 on error
  */
-int dft_reader_read_line_bytes(dft_reader_handle_t reader,
-                               size_t start_bytes, size_t end_bytes, char *buffer,
+int dft_reader_read_line_bytes(dft_reader_handle_t reader, size_t start_bytes,
+                               size_t end_bytes, char *buffer,
                                size_t buffer_size);
 
 /**
@@ -83,9 +82,8 @@ int dft_reader_read_line_bytes(dft_reader_handle_t reader,
  * @param bytes_written Pointer to store number of bytes written to buffer
  * @return 0 on success, -1 on error
  */
-int dft_reader_read_lines(dft_reader_handle_t reader,
-                          size_t start_line, size_t end_line,
-                          char *buffer, size_t buffer_size,
+int dft_reader_read_lines(dft_reader_handle_t reader, size_t start_line,
+                          size_t end_line, char *buffer, size_t buffer_size,
                           size_t *bytes_written);
 
 /**
@@ -100,8 +98,8 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <stdexcept>
+#include <string>
 
 // Forward declaration for indexer
 namespace dftracer {
@@ -189,7 +187,6 @@ class Reader {
   size_t read(size_t start_bytes, size_t end_bytes, char *buffer,
               size_t buffer_size);
 
-
   /**
    * Read a range of bytes from the gzip file using the stored gz_path
    * (streaming) Returns complete lines only. Call repeatedly until returns 0.
@@ -211,7 +208,6 @@ class Reader {
    * @throws std::runtime_error if operation fails
    */
   std::string read_lines(size_t start, size_t end);
-
 
   /**
    * Reset the reader to the initial state
