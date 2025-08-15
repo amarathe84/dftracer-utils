@@ -1112,6 +1112,196 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
     }
 }
 
+TEST_CASE("C++ Reader - Line reading functionality") {
+    TestEnvironment env(10000);  // Create larger test with many lines for better indexer support
+    REQUIRE(env.is_valid());
+    
+    std::string gz_file = env.create_test_gzip_file();
+    REQUIRE(!gz_file.empty());
+    
+    std::string idx_file = env.get_index_path(gz_file);
+    
+    // Build index first with smaller chunk size to force checkpoint creation
+    {
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+        indexer.build();
+        
+        // Verify the indexer has line counts and checkpoints
+        size_t total_lines = indexer.get_num_lines();
+        auto checkpoints = indexer.get_checkpoints();
+        
+        // Skip line reading tests if indexer doesn't have proper line support
+        // This can happen with very small test files
+        if (total_lines == 0 || checkpoints.empty()) {
+            WARN("Skipping line reading tests - indexer has no line data (file too small?)");
+            return;
+        }
+        
+        INFO("Indexer created with " << checkpoints.size() << " checkpoints and " << total_lines << " total lines");
+    }
+    
+    SUBCASE("Basic line reading functionality") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // Read first 5 lines
+        std::string result = reader.read_lines(1, 5);
+        CHECK(!result.empty());
+        
+        // Count newlines to verify we got the right number of lines
+        size_t line_count = 0;
+        for (char c : result) {
+            if (c == '\n') line_count++;
+        }
+        CHECK(line_count == 5);  // Should have exactly 5 lines
+        
+        // Verify it starts with expected pattern (actual test data format)
+        CHECK(result.find("\"id\": 1") != std::string::npos);
+    }
+    
+    SUBCASE("Line reading accuracy - specific line numbers") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // Test specific line numbers that should contain predictable content
+        for (size_t line_num : {1, 10, 50, 100}) {
+            std::string result = reader.read_lines(line_num, line_num);
+            CHECK(!result.empty());
+            
+            // Should contain id: N where N = line_num
+            std::string expected_pattern = "\"id\": " + std::to_string(line_num);
+            CHECK(result.find(expected_pattern) != std::string::npos);
+            
+            // Should have exactly one line
+            size_t line_count = 0;
+            for (char c : result) {
+                if (c == '\n') line_count++;
+            }
+            CHECK(line_count == 1);
+        }
+    }
+    
+    SUBCASE("Line range reading") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // Read line range 10-15 (6 lines total)
+        std::string result = reader.read_lines(10, 15);
+        CHECK(!result.empty());
+        
+        // Count lines
+        size_t line_count = 0;
+        for (char c : result) {
+            if (c == '\n') line_count++;
+        }
+        CHECK(line_count == 6);  // Should have exactly 6 lines (10, 11, 12, 13, 14, 15)
+        
+        // Should start with line 10 and end with line 15
+        CHECK(result.find("\"id\": 10") != std::string::npos);
+        CHECK(result.find("\"id\": 15") != std::string::npos);
+        
+        // Should not contain line 9 or 16
+        CHECK(result.find("\"id\": 9") == std::string::npos);
+        CHECK(result.find("\"id\": 16") == std::string::npos);
+    }
+    
+    SUBCASE("Line reading consistency with sed behavior") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // Test that our line numbering matches sed's 1-based numbering
+        // Line 1 should contain id: 1, line 2 should contain id: 2, etc.
+        for (size_t i = 1; i <= 5; ++i) {
+            std::string result = reader.read_lines(i, i);
+            std::string expected_id = "\"id\": " + std::to_string(i);
+            CHECK(result.find(expected_id) != std::string::npos);
+        }
+    }
+    
+    SUBCASE("Error handling for invalid line numbers") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // 0-based line numbers should throw (we use 1-based)
+        CHECK_THROWS_AS(reader.read_lines(0, 5), std::runtime_error);
+        CHECK_THROWS_AS(reader.read_lines(1, 0), std::runtime_error);
+        
+        // start > end should throw
+        CHECK_THROWS_AS(reader.read_lines(10, 5), std::runtime_error);
+    }
+    
+    SUBCASE("Large line ranges") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // Get number of lines from indexer
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+        size_t num_lines = indexer.get_num_lines();
+        
+        if (num_lines > 100) {
+            // Read a large range
+            std::string result = reader.read_lines(1, 100);
+            CHECK(!result.empty());
+            
+            // Count lines
+            size_t line_count = 0;
+            for (char c : result) {
+                if (c == '\n') line_count++;
+            }
+            CHECK(line_count == 100);
+            
+            // Should start with line 1 and end with line 100
+            CHECK(result.find("\"id\": 1") != std::string::npos);
+            CHECK(result.find("\"id\": 100") != std::string::npos);
+        }
+    }
+    
+    SUBCASE("Line reading near file boundaries") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // Get number of lines from indexer
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+        size_t total_lines = indexer.get_num_lines();
+        
+        if (total_lines > 10) {
+            // Read last few lines
+            size_t start_line = total_lines - 5;
+            std::string result = reader.read_lines(start_line, total_lines);
+            CHECK(!result.empty());
+            
+            // Should have exactly 6 lines (start_line through total_lines inclusive)
+            size_t line_count = 0;
+            for (char c : result) {
+                if (c == '\n') line_count++;
+            }
+            CHECK(line_count == 6);
+        }
+    }
+    
+    SUBCASE("Single line reads at various positions") {
+        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        
+        // Get number of lines from indexer
+        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+        size_t total_lines = indexer.get_num_lines();
+        
+        // Test single line reads at different positions
+        std::vector<size_t> test_lines = {1, total_lines / 4, total_lines / 2, total_lines - 1, total_lines};
+        
+        for (size_t line_num : test_lines) {
+            if (line_num <= total_lines) {
+                std::string result = reader.read_lines(line_num, line_num);
+                CHECK(!result.empty());
+                
+                // Should have exactly one line
+                size_t line_count = 0;
+                for (char c : result) {
+                    if (c == '\n') line_count++;
+                }
+                CHECK(line_count == 1);
+                
+                // Should contain the expected id pattern
+                std::string expected_id = "\"id\": " + std::to_string(line_num);
+                CHECK(result.find(expected_id) != std::string::npos);
+            }
+        }
+    }
+}
+
 TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     TestEnvironment env(1000);
     REQUIRE(env.is_valid());

@@ -74,6 +74,21 @@ int dft_reader_read_line_bytes(dft_reader_handle_t reader,
                                size_t buffer_size);
 
 /**
+ * Read complete lines from the gzip file using line numbers
+ * @param reader DFT reader handle
+ * @param start_line Start line number (1-based)
+ * @param end_line End line number (1-based, inclusive)
+ * @param buffer User-provided buffer for the lines
+ * @param buffer_size Size of user-provided buffer
+ * @param bytes_written Pointer to store number of bytes written to buffer
+ * @return 0 on success, -1 on error
+ */
+int dft_reader_read_lines(dft_reader_handle_t reader,
+                          size_t start_line, size_t end_line,
+                          char *buffer, size_t buffer_size,
+                          size_t *bytes_written);
+
+/**
  * Reset the reader to the initial state
  * @param reader DFT reader handle
  */

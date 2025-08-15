@@ -1246,6 +1246,38 @@ int dft_reader_read_line_bytes(dft_reader_handle_t reader,
   }
 }
 
+int dft_reader_read_lines(dft_reader_handle_t reader,
+                          size_t start_line, size_t end_line,
+                          char *buffer, size_t buffer_size,
+                          size_t *bytes_written) {
+  if (!reader || !buffer || buffer_size == 0 || !bytes_written) {
+    return -1;
+  }
+  
+  try {
+    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
+    std::string result = cpp_reader->read_lines(start_line, end_line);
+    
+    size_t result_size = result.size();
+    if (result_size >= buffer_size) {
+      // Buffer too small - return error and required size
+      *bytes_written = result_size;
+      return -1;
+    }
+    
+    // Copy result to buffer
+    std::memcpy(buffer, result.c_str(), result_size);
+    buffer[result_size] = '\0';  // Null terminate
+    *bytes_written = result_size;
+    
+    return 0;
+  } catch (const std::exception &e) {
+    spdlog::error("Failed to read lines: {}", e.what());
+    *bytes_written = 0;
+    return -1;
+  }
+}
+
 void dft_reader_reset(dft_reader_handle_t reader) {
   if (reader) {
     static_cast<dftracer::utils::reader::Reader *>(reader)->reset();
