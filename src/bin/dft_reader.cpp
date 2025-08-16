@@ -68,13 +68,12 @@ int main(int argc, char **argv) {
   std::string read_mode = program.get<std::string>("--mode");
   std::string log_level_str = program.get<std::string>("--log-level");
 
-  // @todo: delete this later
   size_t read_buffer_size = program.get<size_t>("--read-buffer-size");
 
   // stderr-based logger to ensure logs don't interfere with data output
   auto logger = spdlog::stderr_color_mt("stderr");
   spdlog::set_default_logger(logger);
-  dftracer::utils::utils::set_log_level(log_level_str);
+  dftracer::utils::logger::set_log_level(log_level_str);
 
   spdlog::debug("Log level set to: {}", log_level_str);
   spdlog::debug("Processing file: {}", gz_path);

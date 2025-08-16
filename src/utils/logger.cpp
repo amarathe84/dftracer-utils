@@ -6,7 +6,7 @@
 
 namespace dftracer {
 namespace utils {
-namespace utils {
+namespace logger {
 
 /**
  * Convert string log level to spdlog level enum
@@ -77,7 +77,7 @@ std::string get_log_level_string() {
 
 int get_log_level_int() { return static_cast<int>(spdlog::get_level()); }
 
-}  // namespace utils
+}  // namespace logger
 }  // namespace utils
 }  // namespace dftracer
 
@@ -92,21 +92,21 @@ int dft_utils_set_log_level(const char *level_str) {
     return -1;
   }
 
-  return dftracer::utils::utils::set_log_level(level_str);
+  return dftracer::utils::logger::set_log_level(level_str);
 }
 
 int dft_utils_set_log_level_int(int level) {
-  return dftracer::utils::utils::set_log_level_int(level);
+  return dftracer::utils::logger::set_log_level_int(level);
 }
 
 const char *dft_utils_get_log_level_string() {
   static std::string level_string;
-  level_string = dftracer::utils::utils::get_log_level_string();
+  level_string = dftracer::utils::logger::get_log_level_string();
   return level_string.c_str();
 }
 
 int dft_utils_get_log_level_int() {
-  return dftracer::utils::utils::get_log_level_int();
+  return dftracer::utils::logger::get_log_level_int();
 }
 
 }  // extern "C"

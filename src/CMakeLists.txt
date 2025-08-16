@@ -170,7 +170,7 @@ if (SKBUILD)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
   endif()
 
-  set(PYTHON_BINDINGS_SOURCES python/reader_ext.cpp)
+  set(PYTHON_BINDINGS_SOURCES python/reader_ext.cpp python/utils_ext.cpp)
 
   foreach (source_file ${PYTHON_BINDINGS_SOURCES})
       get_filename_component(source_name ${source_file} NAME_WE)
