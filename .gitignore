@@ -63,3 +63,8 @@ build
 .vs
 /dist
 *.idx
+*.zindex
+.claude
+CLAUDE.md
+TODO
+temp
