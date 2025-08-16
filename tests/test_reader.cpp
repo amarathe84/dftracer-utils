@@ -821,80 +821,80 @@ TEST_CASE("C++ API - Regression and stress tests") {
 TEST_CASE("C++ Logger - Comprehensive functionality") {
   SUBCASE("C++ API - Set and get log level by string") {
     // Test all valid log levels
-    CHECK(dftracer::utils::utils::set_log_level("trace") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "trace");
+    CHECK(dftracer::utils::logger::set_log_level("trace") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "trace");
 
-    CHECK(dftracer::utils::utils::set_log_level("debug") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "debug");
+    CHECK(dftracer::utils::logger::set_log_level("debug") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "debug");
 
-    CHECK(dftracer::utils::utils::set_log_level("info") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "info");
+    CHECK(dftracer::utils::logger::set_log_level("info") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "info");
 
-    CHECK(dftracer::utils::utils::set_log_level("warn") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "warn");
+    CHECK(dftracer::utils::logger::set_log_level("warn") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "warn");
 
-    CHECK(dftracer::utils::utils::set_log_level("warning") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "warn");
+    CHECK(dftracer::utils::logger::set_log_level("warning") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "warn");
 
-    CHECK(dftracer::utils::utils::set_log_level("error") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "error");
+    CHECK(dftracer::utils::logger::set_log_level("error") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "error");
 
-    CHECK(dftracer::utils::utils::set_log_level("err") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "error");
+    CHECK(dftracer::utils::logger::set_log_level("err") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "error");
 
-    CHECK(dftracer::utils::utils::set_log_level("critical") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "critical");
+    CHECK(dftracer::utils::logger::set_log_level("critical") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "critical");
 
-    CHECK(dftracer::utils::utils::set_log_level("off") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "off");
+    CHECK(dftracer::utils::logger::set_log_level("off") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "off");
 
     // Test case insensitive
-    CHECK(dftracer::utils::utils::set_log_level("TRACE") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "trace");
+    CHECK(dftracer::utils::logger::set_log_level("TRACE") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "trace");
 
-    CHECK(dftracer::utils::utils::set_log_level("Debug") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "debug");
+    CHECK(dftracer::utils::logger::set_log_level("Debug") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "debug");
 
     // Test unrecognized level (should default to info)
-    CHECK(dftracer::utils::utils::set_log_level("invalid") == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "info");
+    CHECK(dftracer::utils::logger::set_log_level("invalid") == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "info");
   }
 
   SUBCASE("C++ API - Set and get log level by integer") {
     // Test valid integer levels (0=trace, 1=debug, 2=info, 3=warn, 4=error,
     // 5=critical, 6=off)
-    CHECK(dftracer::utils::utils::set_log_level_int(0) == 0);
-    CHECK(dftracer::utils::utils::get_log_level_int() == 0);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "trace");
+    CHECK(dftracer::utils::logger::set_log_level_int(0) == 0);
+    CHECK(dftracer::utils::logger::get_log_level_int() == 0);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "trace");
 
-    CHECK(dftracer::utils::utils::set_log_level_int(1) == 0);
-    CHECK(dftracer::utils::utils::get_log_level_int() == 1);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "debug");
+    CHECK(dftracer::utils::logger::set_log_level_int(1) == 0);
+    CHECK(dftracer::utils::logger::get_log_level_int() == 1);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "debug");
 
-    CHECK(dftracer::utils::utils::set_log_level_int(2) == 0);
-    CHECK(dftracer::utils::utils::get_log_level_int() == 2);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "info");
+    CHECK(dftracer::utils::logger::set_log_level_int(2) == 0);
+    CHECK(dftracer::utils::logger::get_log_level_int() == 2);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "info");
 
-    CHECK(dftracer::utils::utils::set_log_level_int(3) == 0);
-    CHECK(dftracer::utils::utils::get_log_level_int() == 3);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "warn");
+    CHECK(dftracer::utils::logger::set_log_level_int(3) == 0);
+    CHECK(dftracer::utils::logger::get_log_level_int() == 3);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "warn");
 
-    CHECK(dftracer::utils::utils::set_log_level_int(4) == 0);
-    CHECK(dftracer::utils::utils::get_log_level_int() == 4);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "error");
+    CHECK(dftracer::utils::logger::set_log_level_int(4) == 0);
+    CHECK(dftracer::utils::logger::get_log_level_int() == 4);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "error");
 
-    CHECK(dftracer::utils::utils::set_log_level_int(5) == 0);
-    CHECK(dftracer::utils::utils::get_log_level_int() == 5);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "critical");
+    CHECK(dftracer::utils::logger::set_log_level_int(5) == 0);
+    CHECK(dftracer::utils::logger::get_log_level_int() == 5);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "critical");
 
-    CHECK(dftracer::utils::utils::set_log_level_int(6) == 0);
-    CHECK(dftracer::utils::utils::get_log_level_int() == 6);
-    CHECK(dftracer::utils::utils::get_log_level_string() == "off");
+    CHECK(dftracer::utils::logger::set_log_level_int(6) == 0);
+    CHECK(dftracer::utils::logger::get_log_level_int() == 6);
+    CHECK(dftracer::utils::logger::get_log_level_string() == "off");
 
     // Test invalid integer levels
-    CHECK(dftracer::utils::utils::set_log_level_int(-1) == -1);
-    CHECK(dftracer::utils::utils::set_log_level_int(7) == -1);
-    CHECK(dftracer::utils::utils::set_log_level_int(100) == -1);
+    CHECK(dftracer::utils::logger::set_log_level_int(-1) == -1);
+    CHECK(dftracer::utils::logger::set_log_level_int(7) == -1);
+    CHECK(dftracer::utils::logger::set_log_level_int(100) == -1);
   }
 }
 
@@ -1200,7 +1200,7 @@ TEST_CASE("C++ Reader - Line reading functionality") {
     dftracer::utils::reader::Reader reader(gz_file, idx_file);
 
     // Test specific line numbers that should contain predictable content
-    for (size_t line_num : {1, 10, 50, 100}) {
+    for (size_t line_num : std::vector<size_t>({1, 10, 50, 100})) {
       std::string result = reader.read_lines(line_num, line_num);
       CHECK(!result.empty());
 
