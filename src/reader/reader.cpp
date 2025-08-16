@@ -9,24 +9,73 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
-
-// Forward declarations
-struct InflateState {
-  z_stream zs;
-  FILE *file;
-  unsigned char in[16384];  // 16 KB
-  int bits;
-  size_t c_off;
-};
+#ifdef __linux__
+#include <fcntl.h>
+#endif
 
 namespace dftracer {
 namespace utils {
 namespace reader {
 
+// Constants for better maintainability
+namespace constants {
+  static constexpr size_t DEFAULT_BUFFER_SIZE = 65536;       // 64KB (increased from 16KB)
+  static constexpr size_t SKIP_BUFFER_SIZE = 131072;         // 128KB (increased from 64KB)
+  static constexpr size_t SEARCH_BUFFER_SIZE = 2048;
+  static constexpr size_t LINE_SEARCH_LOOKBACK = 512;
+  static constexpr size_t FIRST_CHECKPOINT_THRESHOLD = 33554401;
+  static constexpr size_t SMALL_RANGE_THRESHOLD = 1048576;   // 1MB
+  static constexpr size_t LARGE_RANGE_LOG_THRESHOLD = 40000;
+  static constexpr size_t FILE_IO_BUFFER_SIZE = 262144;      // 256KB for file I/O
+}
+
+// Forward declarations
+struct InflateState {
+  z_stream zs;
+  FILE *file;
+  unsigned char in[constants::DEFAULT_BUFFER_SIZE];  // Increased buffer size
+  int bits;
+  size_t c_off;
+};
+
+// Error handling utilities
+class ErrorHandler {
+public:
+  static void validate_parameters(const char *buffer, size_t buffer_size,
+                                 size_t start_bytes, size_t end_bytes,
+                                 size_t max_bytes = SIZE_MAX) {
+    if (!buffer || buffer_size == 0) {
+      throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
+                          "Invalid buffer parameters");
+    }
+    if (start_bytes >= end_bytes) {
+      throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
+                          "start_bytes must be less than end_bytes");
+    }
+    if (max_bytes != SIZE_MAX) {
+      if (end_bytes > max_bytes) {
+        throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
+                            "end_bytes exceeds maximum available bytes");
+      }
+      if (start_bytes > max_bytes) {
+        throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
+                            "start_bytes exceeds maximum available bytes");
+      }
+    }
+  }
+
+  static void check_reader_state(bool is_open, const void* indexer) {
+    if (!is_open || !indexer) {
+      throw std::runtime_error("Reader is not open");
+    }
+  }
+};
+
+// Compression management with optimizations
 class CompressionManager {
- public:
+public:
   class InflationSession {
-   public:
+  public:
     explicit InflationSession(InflateState *state, bool owns = false)
         : state_(state), owns_state_(owns) {}
 
@@ -46,30 +95,25 @@ class CompressionManager {
 
       size_t remaining_skip = bytes_to_skip;
       while (remaining_skip > 0) {
-        size_t to_skip = (remaining_skip > skip_buffer_size) ? skip_buffer_size
-                                                             : remaining_skip;
+        size_t to_skip = std::min(remaining_skip, skip_buffer_size);
         size_t skipped;
         int result = read(skip_buffer, to_skip, &skipped);
-        if (result != 0) {
-          throw std::runtime_error("Failed during skip phase");
-        }
-        if (skipped == 0) {
+        if (result != 0 || skipped == 0) {
           break;
         }
         remaining_skip -= skipped;
       }
     }
 
-   private:
+  private:
     InflateState *state_;
     bool owns_state_;
 
-    InflationSession(const InflationSession &);             // deleted
-    InflationSession &operator=(const InflationSession &);  // deleted
+    InflationSession(const InflationSession &) = delete;
+    InflationSession &operator=(const InflationSession &) = delete;
   };
 
-  static int inflate_init(InflateState *state, FILE *f, size_t c_off,
-                          int bits) {
+  static int inflate_init(InflateState *state, FILE *f, size_t c_off, int bits) {
     memset(state, 0, sizeof(*state));
     state->file = f;
     state->c_off = c_off;
@@ -88,7 +132,9 @@ class CompressionManager {
     return 0;
   }
 
-  static void inflate_cleanup(InflateState *state) { inflateEnd(&state->zs); }
+  static void inflate_cleanup(InflateState *state) { 
+    inflateEnd(&state->zs); 
+  }
 
   static int inflate_read(InflateState *state, unsigned char *out,
                           size_t out_size, size_t *bytes_read) {
@@ -126,53 +172,37 @@ class CompressionManager {
   }
 };
 
-static void validate_read_parameters(const char *buffer, size_t buffer_size,
-                                     size_t start_bytes, size_t end_bytes,
-                                     size_t max_bytes = SIZE_MAX) {
-  if (!buffer || buffer_size == 0) {
-    throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
-                        "Invalid buffer parameters");
-  }
-  if (start_bytes >= end_bytes) {
-    throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
-                        "start_bytes must be less than end_bytes");
-  }
-  if (max_bytes != SIZE_MAX && end_bytes > max_bytes) {
-    throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
-                        "end_bytes exceeds maximum available bytes");
-  }
-  if (max_bytes != SIZE_MAX && start_bytes > max_bytes) {
-    throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
-                        "start_bytes exceeds maximum available bytes");
-  }
-}
-
+// Base streaming session with common functionality
 class BaseStreamingSession {
- protected:
-  std::string current_gz_path_;
-  size_t start_bytes_;
+protected:
+  // Optimized memory layout for cache efficiency
+  FILE *file_handle_;
+  std::unique_ptr<InflateState> inflate_state_;
   size_t current_position_;
   size_t target_end_bytes_;
+  
+  // Group flags together
   bool is_active_;
   bool is_finished_;
-
-  std::unique_ptr<InflateState> inflate_state_;
-  std::unique_ptr<dftracer::utils::indexer::CheckpointInfo> checkpoint_;
-  FILE *file_handle_;
   bool decompression_initialized_;
+  
+  // Less frequently accessed members
+  std::string current_gz_path_;
+  size_t start_bytes_;
+  std::unique_ptr<dftracer::utils::indexer::CheckpointInfo> checkpoint_;
+  
+  // Align skip buffer to cache line
+  alignas(64) unsigned char skip_buffer_[constants::SKIP_BUFFER_SIZE];
 
-  static const size_t SKIP_BUFFER_SIZE = 65536;
-  unsigned char skip_buffer_[SKIP_BUFFER_SIZE];
-
- public:
+public:
   BaseStreamingSession()
-      : start_bytes_(0),
+      : file_handle_(nullptr),
         current_position_(0),
         target_end_bytes_(0),
         is_active_(false),
         is_finished_(false),
-        file_handle_(nullptr),
-        decompression_initialized_(false) {}
+        decompression_initialized_(false),
+        start_bytes_(0) {}
 
   virtual ~BaseStreamingSession() { reset(); }
 
@@ -208,57 +238,46 @@ class BaseStreamingSession {
     decompression_initialized_ = false;
   }
 
- protected:
+protected:
   FILE *open_file(const std::string &path) {
     FILE *file = fopen(path.c_str(), "rb");
     if (!file) {
       throw Reader::Error(Reader::Error::FILE_IO_ERROR,
                           "Failed to open file: " + path);
     }
+    
+    // Optimize file I/O with larger buffer
+    setvbuf(file, nullptr, _IOFBF, constants::FILE_IO_BUFFER_SIZE);
+    
+    #ifdef __linux__
+    // Hint to kernel about sequential access
+    int fd = fileno(file);
+    posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+    #endif
+    
     return file;
+  }
+
+  void initialize_base(const std::string &gz_path, size_t start_bytes,
+                      size_t end_bytes) {
+    if (is_active_) {
+      reset();
+    }
+    current_gz_path_ = gz_path;
+    start_bytes_ = start_bytes;
+    target_end_bytes_ = end_bytes;
+    is_active_ = true;
+    is_finished_ = false;
   }
 
   void initialize_compression(const std::string &gz_path, size_t start_bytes,
                               dftracer::utils::indexer::Indexer &indexer) {
     file_handle_ = open_file(gz_path);
-    inflate_state_.reset(new InflateState());
-    bool use_checkpoint = false;
-
-    // Try to find checkpoint
-    checkpoint_.reset(new dftracer::utils::indexer::CheckpointInfo());
-
-    // Use first checkpoint for positions within the first checkpoint range to
-    // avoid optimized checkpoint issues The first checkpoint covers bytes 0 to
-    // ~33MB, so use sequential decompression for this range
-    bool should_use_first_checkpoint =
-        start_bytes < 33554401;  // First checkpoint range
-
-    if (should_use_first_checkpoint) {
-      // Get the first checkpoint (at file beginning)
-      if (indexer.find_checkpoint(0, *checkpoint_)) {
-        if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
-                                         checkpoint_.get()) == 0) {
-          use_checkpoint = true;
-          spdlog::debug(
-              "Using first checkpoint at uncompressed offset {} for early "
-              "target {}",
-              checkpoint_->uc_offset, start_bytes);
-        }
-      }
-    } else {
-      // For later positions, find the optimal checkpoint
-      if (indexer.find_checkpoint(start_bytes, *checkpoint_)) {
-        if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
-                                         checkpoint_.get()) == 0) {
-          use_checkpoint = true;
-          spdlog::debug(
-              "Using checkpoint at uncompressed offset {} for target {}",
-              checkpoint_->uc_offset, start_bytes);
-        }
-      }
-    }
-
-    // Fallback to sequential read
+    inflate_state_ = std::make_unique<InflateState>();
+    
+    checkpoint_ = std::make_unique<dftracer::utils::indexer::CheckpointInfo>();
+    bool use_checkpoint = try_initialize_with_checkpoint(start_bytes, indexer);
+    
     if (!use_checkpoint) {
       checkpoint_.reset();
       if (CompressionManager::inflate_init(inflate_state_.get(), file_handle_,
@@ -267,8 +286,36 @@ class BaseStreamingSession {
                             "Failed to initialize inflation");
       }
     }
-
+    
     decompression_initialized_ = true;
+  }
+
+  bool try_initialize_with_checkpoint(size_t start_bytes,
+                                     dftracer::utils::indexer::Indexer &indexer) {
+    bool should_use_first_checkpoint = start_bytes < constants::FIRST_CHECKPOINT_THRESHOLD;
+    
+    if (should_use_first_checkpoint) {
+      if (indexer.find_checkpoint(0, *checkpoint_)) {
+        if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
+                                         checkpoint_.get()) == 0) {
+          spdlog::debug(
+              "Using first checkpoint at uncompressed offset {} for early target {}",
+              checkpoint_->uc_offset, start_bytes);
+          return true;
+        }
+      }
+    } else {
+      if (indexer.find_checkpoint(start_bytes, *checkpoint_)) {
+        if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
+                                         checkpoint_.get()) == 0) {
+          spdlog::debug(
+              "Using checkpoint at uncompressed offset {} for target {}",
+              checkpoint_->uc_offset, start_bytes);
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   void skip_to_position(size_t target_position) {
@@ -276,7 +323,7 @@ class BaseStreamingSession {
     if (target_position > current_pos) {
       CompressionManager::InflationSession session(inflate_state_.get(), false);
       session.skip(target_position - current_pos, skip_buffer_,
-                   SKIP_BUFFER_SIZE);
+                   constants::SKIP_BUFFER_SIZE);
     }
   }
 
@@ -291,8 +338,6 @@ class BaseStreamingSession {
     spdlog::debug("Checkpoint c_offset: {}, bits: {}", checkpoint->c_offset,
                   checkpoint->bits);
 
-    // Position file exactly like zran: seek to point->in - (point->bits ? 1 :
-    // 0)
     off_t seek_pos =
         static_cast<off_t>(checkpoint->c_offset) - (checkpoint->bits ? 1 : 0);
     if (fseeko(f, seek_pos, SEEK_SET) != 0) {
@@ -300,7 +345,6 @@ class BaseStreamingSession {
       return -1;
     }
 
-    // If we have partial bits, read the extra byte (following zran approach)
     int ch = 0;
     if (checkpoint->bits != 0) {
       ch = fgetc(f);
@@ -310,19 +354,16 @@ class BaseStreamingSession {
       }
     }
 
-    // Initialize raw deflate stream (not gzip wrapper) following zran approach
     if (inflateInit2(&state->zs, -15) != Z_OK) {
       return -1;
     }
 
-    // Reset to raw mode (following zran: inflateReset2(&index->strm, RAW))
     state->zs.avail_in = 0;
-    if (inflateReset2(&state->zs, -15) != Z_OK) {  // RAW mode
+    if (inflateReset2(&state->zs, -15) != Z_OK) {
       inflateEnd(&state->zs);
       return -1;
     }
 
-    // Prime with partial bits if needed (following zran: INFLATEPRIME)
     if (checkpoint->bits != 0) {
       int prime_value = ch >> (8 - checkpoint->bits);
       spdlog::debug("Applying inflatePrime with {} bits, value: {}",
@@ -335,7 +376,6 @@ class BaseStreamingSession {
       }
     }
 
-    // Decompress the saved dictionary
     unsigned char window[dftracer::utils::indexer::ZLIB_WINDOW_SIZE];
     size_t window_size = dftracer::utils::indexer::ZLIB_WINDOW_SIZE;
     if (decompress_window(checkpoint->dict_compressed.data(),
@@ -345,7 +385,6 @@ class BaseStreamingSession {
       return -1;
     }
 
-    // Set dictionary (following zran: inflateSetDictionary)
     if (inflateSetDictionary(&state->zs, window,
                              static_cast<uInt>(window_size)) != Z_OK) {
       spdlog::error("inflateSetDictionary failed");
@@ -353,7 +392,6 @@ class BaseStreamingSession {
       return -1;
     }
 
-    // Prime the input buffer for subsequent reads
     size_t n = fread(state->in, 1, sizeof(state->in), state->file);
     if (n > 0) {
       state->zs.next_in = state->in;
@@ -394,15 +432,23 @@ class BaseStreamingSession {
     inflateEnd(&zs);
     return 0;
   }
+
+  bool is_at_target_end() const {
+    return current_position_ >= target_end_bytes_;
+  }
 };
 
+// Line-based streaming session
 class LineByteStreamingSession : public BaseStreamingSession {
- private:
-  std::vector<char> partial_line_buffer_;  // Partial line from previous read
+private:
+  std::vector<char> partial_line_buffer_;
+  std::vector<char> temp_buffer_;  // Reusable temp buffer
   size_t actual_start_bytes_;
 
- public:
-  LineByteStreamingSession() : BaseStreamingSession(), actual_start_bytes_(0) {}
+public:
+  LineByteStreamingSession() : BaseStreamingSession(), actual_start_bytes_(0) {
+    partial_line_buffer_.reserve(4096);  // Pre-allocate
+  }
 
   void initialize(const std::string &gz_path, size_t start_bytes,
                   size_t end_bytes,
@@ -411,19 +457,11 @@ class LineByteStreamingSession : public BaseStreamingSession {
         "Initializing JSON streaming session for range [{}, {}] from {}",
         start_bytes, end_bytes, gz_path);
 
-    if (is_active_) {
-      reset();
-    }
-
-    current_gz_path_ = gz_path;
-    start_bytes_ = start_bytes;
-    target_end_bytes_ = end_bytes;
-    is_active_ = true;
-    is_finished_ = false;
-
+    initialize_base(gz_path, start_bytes, end_bytes);
+    current_position_ = start_bytes;
+    
     initialize_compression(gz_path, start_bytes, indexer);
-
-    // Find the actual start position (beginning of a complete line)
+    
     actual_start_bytes_ = find_line_start(start_bytes);
     current_position_ = actual_start_bytes_;
 
@@ -432,42 +470,37 @@ class LineByteStreamingSession : public BaseStreamingSession {
         actual_start_bytes_, end_bytes);
   }
 
-  // size_t read_until_first_line
-
   size_t stream_chunk(char *buffer, size_t buffer_size) override {
+    // Prefetch buffer for writing
+    #ifdef __GNUC__
+    __builtin_prefetch(buffer, 1, 3);
+    #endif
+    
     if (!decompression_initialized_) {
       throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
                           "Streaming session not properly initialized");
     }
 
-    // Check if we've reached the target end
-    if (current_position_ >= target_end_bytes_) {
+    if (is_at_target_end()) {
       is_finished_ = true;
-      spdlog::trace(
-          "LineByteStreamingSession finished: current_position_={}, "
-          "target_end_bytes_={}",
-          current_position_, target_end_bytes_);
       return 0;
     }
 
-    // if we have partial lines then add it to bytes_to_read
-    // CRITICAL: Ensure partial buffer doesn't exceed available space
-    std::vector<char> temp_buffer(buffer_size);
+    // Prepare temp buffer
+    ensure_temp_buffer_size(buffer_size);
+    
     size_t available_buffer_space = buffer_size;
     if (!partial_line_buffer_.empty()) {
-      // SECURITY: Check for buffer overflow before copying
       if (partial_line_buffer_.size() > buffer_size) {
-        throw Reader::Error(
-            Reader::Error::READ_ERROR,
-            "Partial line buffer exceeds available buffer space");
+        throw Reader::Error(Reader::Error::READ_ERROR,
+                            "Partial line buffer exceeds available buffer space");
       }
-      // prepend partial buffer
-      std::memcpy(temp_buffer.data(), partial_line_buffer_.data(),
+      std::memcpy(temp_buffer_.data(), partial_line_buffer_.data(),
                   partial_line_buffer_.size());
       available_buffer_space -= partial_line_buffer_.size();
     }
 
-    // Calculate how much we can read without exceeding the target
+    // Read data
     size_t max_bytes_to_read = target_end_bytes_ - current_position_;
     size_t bytes_to_read = std::min(max_bytes_to_read, available_buffer_space);
 
@@ -475,7 +508,7 @@ class LineByteStreamingSession : public BaseStreamingSession {
     if (bytes_to_read > 0) {
       int result = CompressionManager::inflate_read(
           inflate_state_.get(),
-          reinterpret_cast<unsigned char *>(temp_buffer.data() +
+          reinterpret_cast<unsigned char *>(temp_buffer_.data() +
                                             partial_line_buffer_.size()),
           bytes_to_read, &bytes_read);
 
@@ -491,19 +524,57 @@ class LineByteStreamingSession : public BaseStreamingSession {
         bytes_read, partial_line_buffer_.size(), current_position_,
         target_end_bytes_);
 
-    // Total data in temp_buffer is partial_line_buffer + new bytes
     size_t total_data_size = partial_line_buffer_.size() + bytes_read;
+    size_t adjusted_size = apply_range_and_boundary_limits(
+        temp_buffer_.data(), total_data_size);
 
-    // Apply range limiting only for small partial reads, not for full file
-    // reads
+    current_position_ += bytes_read;
+
+    if (adjusted_size == 0) {
+      spdlog::error(
+          "No complete line found, need to read more data, try increasing the "
+          "end bytes");
+      is_finished_ = true;
+      return 0;
+    }
+
+    std::memcpy(buffer, temp_buffer_.data(), adjusted_size);
+
+    update_partial_buffer(adjusted_size, total_data_size);
+
+    if ((target_end_bytes_ - start_bytes_) > constants::LARGE_RANGE_LOG_THRESHOLD) {
+      spdlog::trace(
+          "Large range read: returning {} bytes, current_pos={}, "
+          "target_end={}, range_size={}",
+          adjusted_size, current_position_, target_end_bytes_,
+          target_end_bytes_ - start_bytes_);
+    }
+
+    return adjusted_size;
+  }
+
+  void reset() override {
+    BaseStreamingSession::reset();
+    partial_line_buffer_.clear();
+    partial_line_buffer_.shrink_to_fit();
+    temp_buffer_.clear();
+    temp_buffer_.shrink_to_fit();
+    actual_start_bytes_ = 0;
+  }
+
+private:
+  void ensure_temp_buffer_size(size_t required_size) {
+    if (temp_buffer_.size() < required_size) {
+      temp_buffer_.resize(required_size);
+    }
+  }
+
+  size_t apply_range_and_boundary_limits(char *buffer, size_t total_data_size) {
     size_t adjusted_size;
     size_t original_range_size = target_end_bytes_ - start_bytes_;
 
-    // If the requested range is small (< 1MB), apply strict range limiting
-    // For larger ranges (including full file reads), let it read naturally
-    if (original_range_size < 1024 * 1024) {
+    if (original_range_size < constants::SMALL_RANGE_THRESHOLD) {
       // Small range read - apply cumulative range limiting
-      // SECURITY: Prevent integer underflow by validating positions
       if (current_position_ < actual_start_bytes_) {
         spdlog::error(
             "Invalid state: current_position_ {} < actual_start_bytes_ {}",
@@ -518,10 +589,10 @@ class LineByteStreamingSession : public BaseStreamingSession {
               : 0;
 
       size_t limited_data_size = std::min(total_data_size, max_allowed_return);
-      adjusted_size = adjust_to_boundary(temp_buffer.data(), limited_data_size);
+      adjusted_size = adjust_to_boundary(buffer, limited_data_size);
     } else {
       // Large range or full file read - no artificial limiting
-      adjusted_size = adjust_to_boundary(temp_buffer.data(), total_data_size);
+      adjusted_size = adjust_to_boundary(buffer, total_data_size);
     }
 
     spdlog::trace(
@@ -529,50 +600,20 @@ class LineByteStreamingSession : public BaseStreamingSession {
         "original_range_size={}, final_adjusted_size={}",
         total_data_size, original_range_size, adjusted_size);
 
-    current_position_ += bytes_read;
-
-    if (adjusted_size == 0) {
-      // No complete line found, we need to read more data
-      spdlog::error(
-          "No complete line found, need to read more data, try increasing the "
-          "end bytes");
-      is_finished_ = true;
-      return 0;
-    }
-
-    // copy the adjusted buffer to the output
-    std::memcpy(buffer, temp_buffer.data(), adjusted_size);
-
-    // Update partial buffer with remaining data
-    if (adjusted_size < total_data_size) {
-      size_t remaining_size = total_data_size - adjusted_size;
-      partial_line_buffer_ = std::vector<char>(remaining_size);
-      std::memcpy(partial_line_buffer_.data(),
-                  temp_buffer.data() + adjusted_size, remaining_size);
-    } else {
-      // All data was used, clear partial buffer
-      partial_line_buffer_.clear();
-    }
-
-    // Debug for large range reads
-    if ((target_end_bytes_ - start_bytes_) > 40000) {
-      spdlog::trace(
-          "Large range read: returning {} bytes, current_pos={}, "
-          "target_end={}, range_size={}",
-          adjusted_size, current_position_, target_end_bytes_,
-          target_end_bytes_ - start_bytes_);
-    }
-
     return adjusted_size;
   }
 
-  void reset() override {
-    BaseStreamingSession::reset();
-    partial_line_buffer_ = std::vector<char>();
-    actual_start_bytes_ = 0;
+  void update_partial_buffer(size_t adjusted_size, size_t total_data_size) {
+    if (adjusted_size < total_data_size) {
+      size_t remaining_size = total_data_size - adjusted_size;
+      partial_line_buffer_.resize(remaining_size);
+      std::memcpy(partial_line_buffer_.data(),
+                  temp_buffer_.data() + adjusted_size, remaining_size);
+    } else {
+      partial_line_buffer_.clear();
+    }
   }
 
- private:
   size_t find_line_start(size_t target_start) {
     size_t current_pos = checkpoint_ ? checkpoint_->uc_offset : 0;
     size_t actual_start = target_start;
@@ -581,17 +622,18 @@ class LineByteStreamingSession : public BaseStreamingSession {
       return target_start;
     }
 
-    // Search for line start
     size_t search_start =
-        (target_start >= 512) ? target_start - 512 : current_pos;
+        (target_start >= constants::LINE_SEARCH_LOOKBACK) 
+            ? target_start - constants::LINE_SEARCH_LOOKBACK 
+            : current_pos;
 
     if (search_start > current_pos) {
       skip_to_position(search_start);
       current_pos = search_start;
     }
 
-    // Read data to find start of complete JSON line
-    unsigned char search_buffer[2048];
+    // Use stack allocation for small search buffer
+    alignas(64) unsigned char search_buffer[constants::SEARCH_BUFFER_SIZE];
     size_t search_bytes;
     if (CompressionManager::inflate_read(inflate_state_.get(), search_buffer,
                                          sizeof(search_buffer) - 1,
@@ -609,7 +651,6 @@ class LineByteStreamingSession : public BaseStreamingSession {
       }
     }
 
-    // Restart compression and skip to actual start
     restart_compression();
     if (actual_start > (checkpoint_ ? checkpoint_->uc_offset : 0)) {
       skip_to_position(actual_start);
@@ -619,18 +660,15 @@ class LineByteStreamingSession : public BaseStreamingSession {
   }
 
   size_t adjust_to_boundary(char *buffer, size_t buffer_size) {
-    // Find the last complete boundary in the buffer
     for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i > 0; i--) {
       if (buffer[i] == '\n') {
         return static_cast<size_t>(i) + 1;
       }
     }
-    // If no JSON boundary found and we're not finished, return 0 to buffer more
-    // data
+    
     if (!is_finished_) {
       return 0;
     }
-    // Only return partial data if we're at the end of stream
     return buffer_size;
   }
 
@@ -654,8 +692,9 @@ class LineByteStreamingSession : public BaseStreamingSession {
   }
 };
 
+// Byte-based streaming session
 class ByteStreamingSession : public BaseStreamingSession {
- public:
+public:
   ByteStreamingSession() : BaseStreamingSession() {}
 
   void initialize(const std::string &gz_path, size_t start_bytes,
@@ -665,20 +704,11 @@ class ByteStreamingSession : public BaseStreamingSession {
         "Initializing raw streaming session for range [{}, {}] from {}",
         start_bytes, end_bytes, gz_path);
 
-    if (is_active_) {
-      reset();
-    }
-
-    current_gz_path_ = gz_path;
-    start_bytes_ = start_bytes;
-    target_end_bytes_ = end_bytes;
+    initialize_base(gz_path, start_bytes, end_bytes);
     current_position_ = start_bytes;
-    is_active_ = true;
-    is_finished_ = false;
-
+    
     initialize_compression(gz_path, start_bytes, indexer);
 
-    // Skip to the start position
     size_t current_pos = checkpoint_ ? checkpoint_->uc_offset : 0;
     if (start_bytes > current_pos) {
       skip_to_position(start_bytes);
@@ -689,18 +719,20 @@ class ByteStreamingSession : public BaseStreamingSession {
   }
 
   size_t stream_chunk(char *buffer, size_t buffer_size) override {
+    #ifdef __GNUC__
+    __builtin_prefetch(buffer, 1, 3);
+    #endif
+    
     if (!decompression_initialized_) {
       throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
                           "Raw streaming session not properly initialized");
     }
 
-    // Check if we've reached the target end
-    if (current_position_ >= target_end_bytes_) {
+    if (is_at_target_end()) {
       is_finished_ = true;
       return 0;
     }
 
-    // Calculate how much we can read without exceeding the target
     size_t max_read = target_end_bytes_ - current_position_;
     size_t read_size = std::min(buffer_size, max_read);
 
@@ -723,25 +755,25 @@ class ByteStreamingSession : public BaseStreamingSession {
   }
 };
 
+// Factory for creating streaming sessions
 class StreamingSessionFactory {
- private:
+private:
   dftracer::utils::indexer::Indexer &indexer_;
 
- public:
+public:
   explicit StreamingSessionFactory(dftracer::utils::indexer::Indexer &indexer)
       : indexer_(indexer) {}
 
   std::unique_ptr<LineByteStreamingSession> create_line_session(
       const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
-    std::unique_ptr<LineByteStreamingSession> session(
-        new LineByteStreamingSession());
+    auto session = std::make_unique<LineByteStreamingSession>();
     session->initialize(gz_path, start_bytes, end_bytes, indexer_);
     return session;
   }
 
   std::unique_ptr<ByteStreamingSession> create_raw_session(
       const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
-    std::unique_ptr<ByteStreamingSession> session(new ByteStreamingSession());
+    auto session = std::make_unique<ByteStreamingSession>();
     session->initialize(gz_path, start_bytes, end_bytes, indexer_);
     return session;
   }
@@ -761,21 +793,20 @@ class StreamingSessionFactory {
   }
 };
 
+// Reader implementation
 class Reader::Impl {
- public:
+public:
   Impl(const std::string &gz_path, const std::string &idx_path)
       : gz_path_(gz_path), idx_path_(idx_path), is_open_(false) {
     try {
-      // Create indexer instance - will auto-build index if needed
-      indexer_.reset(
-          new dftracer::utils::indexer::Indexer(gz_path, idx_path, 1.0));
+      indexer_ = std::make_unique<dftracer::utils::indexer::Indexer>(
+          gz_path, idx_path, 1.0);
       if (indexer_->need_rebuild()) {
         indexer_->build();
       }
       is_open_ = true;
 
-      // Initialize session factory using indexer directly
-      session_factory_.reset(new StreamingSessionFactory(*indexer_));
+      session_factory_ = std::make_unique<StreamingSessionFactory>(*indexer_);
 
       spdlog::debug("Successfully created DFT reader for gz: {} and index: {}",
                     gz_path, idx_path);
@@ -817,44 +848,25 @@ class Reader::Impl {
   }
 
   size_t get_max_bytes() const {
-    if (!is_open_ || !indexer_) {
-      throw std::runtime_error("Reader is not open");
-    }
-
+    ErrorHandler::check_reader_state(is_open_, indexer_.get());
     size_t max_bytes = static_cast<size_t>(indexer_->get_max_bytes());
-
-    if (max_bytes > 0) {
-      spdlog::debug("Maximum bytes available: {}", max_bytes);
-    } else {
-      spdlog::debug("No chunks found, maximum bytes: 0");
-    }
-
+    spdlog::debug("Maximum bytes available: {}", max_bytes);
     return max_bytes;
   }
 
   size_t get_num_lines() const {
-    if (!is_open_ || !indexer_) {
-      throw std::runtime_error("Reader is not open");
-    }
-
+    ErrorHandler::check_reader_state(is_open_, indexer_.get());
     size_t num_lines = static_cast<size_t>(indexer_->get_num_lines());
-
     spdlog::debug("Total lines available: {}", num_lines);
-
     return num_lines;
   }
 
   size_t read(size_t start_bytes, size_t end_bytes, char *buffer,
               size_t buffer_size) {
-    if (!is_open_ || !indexer_) {
-      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
-                          "Reader is not open");
-    }
+    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    ErrorHandler::validate_parameters(buffer, buffer_size, start_bytes, 
+                                    end_bytes, indexer_->get_max_bytes());
 
-    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes,
-                             indexer_->get_max_bytes());
-
-    // Create or reuse raw streaming session
     if (session_factory_->needs_new_raw_session(byte_session_.get(), gz_path_,
                                                 start_bytes, end_bytes)) {
       byte_session_ = session_factory_->create_raw_session(
@@ -870,19 +882,15 @@ class Reader::Impl {
 
   size_t read_line_bytes(size_t start_bytes, size_t end_bytes, char *buffer,
                          size_t buffer_size) {
-    if (!is_open_ || !indexer_) {
-      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
-                          "Reader is not open");
-    }
-
+    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    
     if (end_bytes > indexer_->get_max_bytes()) {
       end_bytes = indexer_->get_max_bytes();
     }
 
-    validate_read_parameters(buffer, buffer_size, start_bytes, end_bytes,
-                             indexer_->get_max_bytes());
+    ErrorHandler::validate_parameters(buffer, buffer_size, start_bytes, 
+                                    end_bytes, indexer_->get_max_bytes());
 
-    // Create or reuse line streaming session
     if (session_factory_->needs_new_line_session(
             line_byte_session_.get(), gz_path_, start_bytes, end_bytes)) {
       line_byte_session_ = session_factory_->create_line_session(
@@ -897,9 +905,7 @@ class Reader::Impl {
   }
 
   std::string read_lines(size_t start_line, size_t end_line) {
-    if (!is_open_ || !indexer_) {
-      throw std::runtime_error("Reader is not open");
-    }
+    ErrorHandler::check_reader_state(is_open_, indexer_.get());
 
     if (start_line == 0 || end_line == 0) {
       throw std::runtime_error("Line numbers must be 1-based (start from 1)");
@@ -915,15 +921,11 @@ class Reader::Impl {
                                std::to_string(total_lines) + ")");
     }
 
-    // For now, always read from beginning since we don't have precise line
-    // tracking
     return read_lines_from_beginning(start_line, end_line);
   }
 
   void reset() {
-    if (!is_open_ || !indexer_) {
-      throw std::runtime_error("Reader is not open");
-    }
+    ErrorHandler::check_reader_state(is_open_, indexer_.get());
     if (line_byte_session_) {
       line_byte_session_->reset();
     }
@@ -932,18 +934,20 @@ class Reader::Impl {
     }
   }
 
- private:
+  bool is_valid() const { return is_open_ && indexer_ != nullptr; }
+  const std::string &get_gz_path() const { return gz_path_; }
+  const std::string &get_idx_path() const { return idx_path_; }
+
+private:
   std::string read_lines_from_beginning(size_t start_line, size_t end_line) {
     size_t max_bytes = indexer_->get_max_bytes();
     spdlog::debug("Reading lines [{}, {}] from file beginning (max bytes: {})",
                   start_line, end_line, max_bytes);
 
-    // CRITICAL: Always create a fresh session to avoid state corruption
-    // Session reuse was causing wrong line positions to be returned
+    // Always create a fresh session for line reading
     line_byte_session_ =
         session_factory_->create_line_session(gz_path_, 0, max_bytes);
 
-    // Read through the file and extract only the requested lines
     std::string result;
     size_t current_line = 1;
     std::string current_line_content;
@@ -959,7 +963,6 @@ class Reader::Impl {
         current_line_content += buffer[i];
 
         if (buffer[i] == '\n') {
-          // We found a complete line
           if (current_line >= start_line) {
             result += current_line_content;
           }
@@ -969,7 +972,6 @@ class Reader::Impl {
       }
     }
 
-    // If we have a partial line at the end and we're still within range, add it
     if (!current_line_content.empty() && current_line >= start_line &&
         current_line <= end_line) {
       result += current_line_content;
@@ -978,67 +980,7 @@ class Reader::Impl {
     return result;
   }
 
-  size_t find_line_in_checkpoint(
-      const dftracer::utils::indexer::CheckpointInfo &checkpoint,
-      size_t checkpoint_start_line, size_t target_line) {
-    spdlog::debug(
-        "Finding line {} starting from checkpoint at uc_offset {} (checkpoint "
-        "starts at line {})",
-        target_line, checkpoint.uc_offset, checkpoint_start_line);
-
-    // Calculate how many lines we need to skip from the checkpoint beginning
-    size_t lines_to_skip = target_line - checkpoint_start_line;
-
-    // Create a session from this checkpoint
-    auto temp_session = session_factory_->create_line_session(
-        gz_path_, checkpoint.uc_offset,
-        checkpoint.uc_offset + checkpoint.uc_size);
-
-    const size_t buffer_size = 64 * 1024;
-    std::vector<char> buffer(buffer_size);
-    size_t lines_skipped = 0;
-    size_t total_bytes_read = 0;
-
-    while (!temp_session->is_finished()) {
-      size_t bytes_read =
-          temp_session->stream_chunk(buffer.data(), buffer_size);
-      if (bytes_read == 0) break;
-
-      // Count newlines and find the position of the target line
-      for (size_t i = 0; i < bytes_read; i++) {
-        if (buffer[i] == '\n') {
-          if (lines_skipped == lines_to_skip) {
-            // Found the target line! Return the byte position after this
-            // newline
-            size_t result = checkpoint.uc_offset + total_bytes_read + i + 1;
-            spdlog::debug(
-                "Found line {} at byte offset {} (skipped {} lines from "
-                "checkpoint)",
-                target_line, result, lines_skipped);
-            return result;
-          }
-          lines_skipped++;
-        }
-      }
-
-      total_bytes_read += bytes_read;
-    }
-
-    // If we couldn't find the exact line, return the checkpoint start
-    spdlog::warn(
-        "Could not find line {} in checkpoint, using checkpoint boundary",
-        target_line);
-    return checkpoint.uc_offset;
-  }
-
- public:
-  bool is_valid() const { return is_open_ && indexer_ != nullptr; }
-  const std::string &get_gz_path() const { return gz_path_; }
-  const std::string &get_idx_path() const { return idx_path_; }
-
- private:
-  static constexpr size_t INFLATE_CHUNK_SIZE = 16 * 1024;  // 16 KB
-
+private:
   std::string gz_path_;
   std::string idx_path_;
   bool is_open_;
@@ -1134,6 +1076,15 @@ std::string Reader::Error::format_message(Type type,
 
 extern "C" {
 
+// Helper functions for C API
+static int validate_handle(dft_reader_handle_t reader) {
+  return reader ? 0 : -1;
+}
+
+static dftracer::utils::reader::Reader* cast_reader(dft_reader_handle_t reader) {
+  return static_cast<dftracer::utils::reader::Reader*>(reader);
+}
+
 dft_reader_handle_t dft_reader_create(const char *gz_path,
                                       const char *idx_path) {
   if (!gz_path || !idx_path) {
@@ -1152,18 +1103,17 @@ dft_reader_handle_t dft_reader_create(const char *gz_path,
 
 void dft_reader_destroy(dft_reader_handle_t reader) {
   if (reader) {
-    delete static_cast<dftracer::utils::reader::Reader *>(reader);
+    delete cast_reader(reader);
   }
 }
 
 int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes) {
-  if (!reader || !max_bytes) {
+  if (validate_handle(reader) || !max_bytes) {
     return -1;
   }
 
   try {
-    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
-    *max_bytes = cpp_reader->get_max_bytes();
+    *max_bytes = cast_reader(reader)->get_max_bytes();
     return 0;
   } catch (const std::exception &e) {
     spdlog::error("Failed to get max bytes: {}", e.what());
@@ -1172,13 +1122,12 @@ int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes) {
 }
 
 int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines) {
-  if (!reader || !num_lines) {
+  if (validate_handle(reader) || !num_lines) {
     return -1;
   }
 
   try {
-    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
-    *num_lines = cpp_reader->get_num_lines();
+    *num_lines = cast_reader(reader)->get_num_lines();
     return 0;
   } catch (const std::exception &e) {
     spdlog::error("Failed to get number of lines: {}", e.what());
@@ -1188,14 +1137,13 @@ int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines) {
 
 int dft_reader_read(dft_reader_handle_t reader, size_t start_bytes,
                     size_t end_bytes, char *buffer, size_t buffer_size) {
-  if (!reader || !buffer || buffer_size == 0) {
+  if (validate_handle(reader) || !buffer || buffer_size == 0) {
     return -1;
   }
 
   try {
-    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
-    size_t bytes_read =
-        cpp_reader->read(start_bytes, end_bytes, buffer, buffer_size);
+    size_t bytes_read = cast_reader(reader)->read(start_bytes, end_bytes, 
+                                                  buffer, buffer_size);
     return static_cast<int>(bytes_read);
   } catch (const std::exception &e) {
     spdlog::error("Failed to read: {}", e.what());
@@ -1206,14 +1154,13 @@ int dft_reader_read(dft_reader_handle_t reader, size_t start_bytes,
 int dft_reader_read_line_bytes(dft_reader_handle_t reader, size_t start_bytes,
                                size_t end_bytes, char *buffer,
                                size_t buffer_size) {
-  if (!reader || !buffer || buffer_size == 0) {
+  if (validate_handle(reader) || !buffer || buffer_size == 0) {
     return -1;
   }
 
   try {
-    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
-    size_t bytes_read = cpp_reader->read_line_bytes(start_bytes, end_bytes,
-                                                    buffer, buffer_size);
+    size_t bytes_read = cast_reader(reader)->read_line_bytes(
+        start_bytes, end_bytes, buffer, buffer_size);
     return static_cast<int>(bytes_read);
   } catch (const std::exception &e) {
     spdlog::error("Failed to read line bytes: {}", e.what());
@@ -1224,24 +1171,21 @@ int dft_reader_read_line_bytes(dft_reader_handle_t reader, size_t start_bytes,
 int dft_reader_read_lines(dft_reader_handle_t reader, size_t start_line,
                           size_t end_line, char *buffer, size_t buffer_size,
                           size_t *bytes_written) {
-  if (!reader || !buffer || buffer_size == 0 || !bytes_written) {
+  if (validate_handle(reader) || !buffer || buffer_size == 0 || !bytes_written) {
     return -1;
   }
 
   try {
-    auto *cpp_reader = static_cast<dftracer::utils::reader::Reader *>(reader);
-    std::string result = cpp_reader->read_lines(start_line, end_line);
+    std::string result = cast_reader(reader)->read_lines(start_line, end_line);
 
     size_t result_size = result.size();
     if (result_size >= buffer_size) {
-      // Buffer too small - return error and required size
       *bytes_written = result_size;
       return -1;
     }
 
-    // Copy result to buffer
     std::memcpy(buffer, result.c_str(), result_size);
-    buffer[result_size] = '\0';  // Null terminate
+    buffer[result_size] = '\0';
     *bytes_written = result_size;
 
     return 0;
@@ -1254,7 +1198,7 @@ int dft_reader_read_lines(dft_reader_handle_t reader, size_t start_line,
 
 void dft_reader_reset(dft_reader_handle_t reader) {
   if (reader) {
-    static_cast<dftracer::utils::reader::Reader *>(reader)->reset();
+    cast_reader(reader)->reset();
   }
 }
 
