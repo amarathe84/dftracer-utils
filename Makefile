@@ -41,7 +41,7 @@ coverage-view:
 test:
 	@echo "Building and running tests..."
 	@mkdir -p build_test
-	@cd build_test && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON -DCMAKE_INSTALL_PREFIX=$$(pwd)/install .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) && ctest --output-on-failure
+	@cd build_test && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON -DCMAKE_INSTALL_PREFIX=$$(pwd)/install .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) && ctest -j8 --output-on-failure
 
 # Run tests with coverage (requires coverage build)
 test-coverage:
@@ -58,7 +58,7 @@ test-py:
 	@python3 -m venv .venv_test_py
 	@.venv_test_py/bin/pip install --upgrade pip setuptools wheel
 	@.venv_test_py/bin/pip install -e .[dev]
-	@.venv_test_py/bin/pytest tests/py/test_reader.py -v
+	@.venv_test_py/bin/pytest tests/python/test_reader.py -v
 	@rm -rf .venv_test_py
 	@echo "Python tests completed successfully!"
 
