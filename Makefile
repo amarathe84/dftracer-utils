@@ -58,7 +58,7 @@ test-py:
 	@python3 -m venv .venv_test_py
 	@.venv_test_py/bin/pip install --upgrade pip setuptools wheel
 	@.venv_test_py/bin/pip install -e .[dev]
-	@.venv_test_py/bin/pytest tests/python/test_reader.py -v
+	@.venv_test_py/bin/pytest tests/python -v
 	@rm -rf .venv_test_py
 	@echo "Python tests completed successfully!"
 

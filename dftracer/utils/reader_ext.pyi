@@ -2,6 +2,7 @@
 
 from typing import Optional, Union, List, overload
 from typing_extensions import Self, Literal
+from .indexer_ext import DFTracerIndexer
 
 class DFTracerBytesIterator:
     """Iterator for reading bytes chunks from DFTracer traces."""
@@ -69,11 +70,18 @@ class DFTracerLinesRangeIterator:
 class DFTracerBytesReader:
     """Reader for DFTracer files in bytes mode."""
     
+    @overload
     def __init__(
         self, 
         gzip_path: str, 
         index_path: Optional[str] = None,
         index_checkpoint_size: int = 33_554_432 # 32MB
+    ) -> None: ...
+    
+    @overload
+    def __init__(
+        self,
+        indexer: DFTracerIndexer
     ) -> None: ...
     
     def get_max_bytes(self) -> int: ...
@@ -99,11 +107,18 @@ class DFTracerBytesReader:
 class DFTracerLineBytesReader:
     """Reader for DFTracer traces in line bytes mode."""
     
+    @overload
     def __init__(
         self, 
         gzip_path: str, 
         index_path: Optional[str] = None,
         index_checkpoint_size: int = 33_554_432 # 32MB
+    ) -> None: ...
+    
+    @overload
+    def __init__(
+        self,
+        indexer: DFTracerIndexer
     ) -> None: ...
     
     def get_max_bytes(self) -> int: ...
@@ -129,11 +144,18 @@ class DFTracerLineBytesReader:
 class DFTracerLinesReader:
     """Reader for DFTracer traces in lines mode."""
     
+    @overload
     def __init__(
         self, 
         gzip_path: str, 
         index_path: Optional[str] = None,
         index_checkpoint_size: int = 33_554_432 # 32MB
+    ) -> None: ...
+    
+    @overload
+    def __init__(
+        self,
+        indexer: DFTracerIndexer
     ) -> None: ...
     
     def get_max_bytes(self) -> int: ...

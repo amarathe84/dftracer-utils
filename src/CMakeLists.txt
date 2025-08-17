@@ -170,6 +170,15 @@ if (SKBUILD)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
   endif()
 
+  add_library(dftracer_utils_py python/indexer_py.cpp)
+  target_link_libraries(dftracer_utils_py PRIVATE dftracer_utils::shared)
+  # @HACK: this is needed to avoid include errors
+  target_include_directories(dftracer_utils_py
+    PRIVATE
+      ${Python_INCLUDE_DIRS}
+      ${NB_DIR}/include
+  )
+
   set(PYTHON_BINDINGS_SOURCES
     python/indexer_ext.cpp
     python/reader_ext.cpp
@@ -178,6 +187,7 @@ if (SKBUILD)
 
   foreach (source_file ${PYTHON_BINDINGS_SOURCES})
       get_filename_component(source_name ${source_file} NAME_WE)
+      # message(FATAL_ERROR "Building Python bindings for ${source_name}")
       if (APPLE)
         nanobind_add_module(
           ${source_name}
@@ -191,7 +201,11 @@ if (SKBUILD)
           ${source_file}
         )
       endif()
-      target_link_libraries(${source_name} PRIVATE dftracer_utils::shared)
+      target_link_libraries(${source_name} PRIVATE dftracer_utils::shared dftracer_utils_py)
+      # exception for reader_ext.cpp since it needs indexer_ext
+      # if (${source_name} STREQUAL "reader_ext")
+      #     target_link_libraries(${source_name} PRIVATE indexer_ext)
+      # endif()
       target_add_rpath(${source_name})
       install(TARGETS ${source_name} LIBRARY DESTINATION dftracer/utils)
   endforeach()

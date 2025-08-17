@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include "indexer_py.h"
+
 namespace nb = nanobind;
 
 using namespace nb::literals;
@@ -149,6 +151,41 @@ class DFTracerReader {
     }
 
     open();
+  }
+
+  DFTracerReader(DFTracerIndexer* indexer)
+      : reader_(nullptr),
+        is_open_(false),
+        max_bytes_(0) {
+    if (!indexer) {
+      throw std::runtime_error("Indexer cannot be null");
+    }
+
+    if constexpr (Mode == DFTracerReaderMode::Lines) {
+      current_pos_ = 1;
+      default_step_ = constants::DEFAULT_STEP_SIZE_LINES;
+      default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
+    } else {
+      current_pos_ = 0;
+      default_step_ = constants::DEFAULT_STEP_SIZE_BYTES;
+      default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
+    }
+
+    gzip_path_ = indexer->gz_path();
+    index_path_ = indexer->idx_path();
+    index_checkpoint_size_ = indexer->checkpoint_size();
+
+    try {
+      reader_ = std::make_unique<dftracer::utils::reader::Reader>(
+          indexer->get_indexer_ptr());
+      is_open_ = true;
+      max_bytes_ = static_cast<uint64_t>(reader_->get_max_bytes());
+      num_lines_ = static_cast<uint64_t>(reader_->get_num_lines());
+    } catch (const std::runtime_error &e) {
+      throw std::runtime_error(
+          "Failed to create DFT reader with indexer for gzip: " + gzip_path_ +
+          " and index: " + index_path_ + " - " + e.what());
+    }
   }
 
   ~DFTracerReader() { close(); }
@@ -520,6 +557,9 @@ NB_MODULE(reader_ext, m) {
       .def(nb::init<const std::string &, const std::optional<std::string> &>(),
            "gzip_path"_a, "index_path"_a = nb::none(),
            "Create a DFTracer bytes reader for a gzip file and its index")
+      .def(nb::init<DFTracerIndexer*>(),
+           "indexer"_a,
+           "Create a DFTracer bytes reader from an existing indexer")
       .def("get_max_bytes", &DFTracerBytesReader::get_max_bytes,
            "Get the maximum byte position available in the file")
       .def("get_num_lines", &DFTracerBytesReader::get_num_lines,
@@ -553,6 +593,9 @@ NB_MODULE(reader_ext, m) {
       .def(nb::init<const std::string &, const std::optional<std::string> &>(),
            "gzip_path"_a, "index_path"_a = nb::none(),
            "Create a DFTracer line bytes reader for a gzip file and its index")
+      .def(nb::init<DFTracerIndexer*>(),
+           "indexer"_a,
+           "Create a DFTracer line bytes reader from an existing indexer")
       .def("get_max_bytes", &DFTracerLineBytesReader::get_max_bytes,
            "Get the maximum byte position available in the file")
       .def("get_num_lines", &DFTracerLineBytesReader::get_num_lines,
@@ -587,6 +630,9 @@ NB_MODULE(reader_ext, m) {
       .def(nb::init<const std::string &, const std::optional<std::string> &>(),
            "gzip_path"_a, "index_path"_a = nb::none(),
            "Create a DFTracer lines reader for a gzip file and its index")
+      .def(nb::init<DFTracerIndexer*>(),
+           "indexer"_a,
+           "Create a DFTracer lines reader from an existing indexer")
       .def("get_max_bytes", &DFTracerLinesReader::get_max_bytes,
            "Get the maximum byte position available in the file")
       .def("get_num_lines", &DFTracerLinesReader::get_num_lines,

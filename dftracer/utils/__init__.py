@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 
 from .reader_ext import (
     DFTracerReader,  # noqa: F401 (alias to DFTracerLineBytesReader)
@@ -14,6 +14,11 @@ from .reader_ext import (
     dft_reader_range, # noqa: F401
 )
 
+from .indexer_ext import (
+    DFTracerIndexer,  # noqa: F401
+    CheckpointInfo,  # noqa: F401
+)
+
 from .utils_ext import (
     set_log_level,  # noqa: F401
     set_log_level_int,  # noqa: F401
@@ -21,15 +26,43 @@ from .utils_ext import (
     get_log_level_int,  # noqa: F401
 )
 
-def dft_reader(gzip_path: str, index_path: Optional[str] = None, mode: Literal["line_bytes", "bytes", "lines"] = "line_bytes"):
-    if mode == "line_bytes":
-        return DFTracerLineBytesReader(gzip_path, index_path)
-    elif mode == "bytes":
-        return DFTracerBytesReader(gzip_path, index_path)
-    elif mode == "lines":
-        return DFTracerLinesReader(gzip_path, index_path)
+def dft_reader(
+    gzip_path_or_indexer: Union[str, DFTracerIndexer], 
+    index_path: Optional[str] = None, 
+    mode: Literal["line_bytes", "bytes", "lines"] = "line_bytes"
+):
+    """Create a DFTracer reader with the specified mode.
+    
+    Args:
+        gzip_path_or_indexer: Either a path to gzip file or a DFTracerIndexer instance
+        index_path: Path to index file (ignored if indexer is provided)
+        mode: Reader mode - "line_bytes", "bytes", or "lines"
+        
+    Returns:
+        Appropriate DFTracer reader instance
+    """
+    if isinstance(gzip_path_or_indexer, DFTracerIndexer):
+        # Create reader from indexer
+        indexer = gzip_path_or_indexer
+        if mode == "line_bytes":
+            return DFTracerLineBytesReader(indexer)
+        elif mode == "bytes":
+            return DFTracerBytesReader(indexer)
+        elif mode == "lines":
+            return DFTracerLinesReader(indexer)
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
     else:
-        raise ValueError(f"Unknown mode: {mode}")
+        # Create reader from paths
+        gzip_path = gzip_path_or_indexer
+        if mode == "line_bytes":
+            return DFTracerLineBytesReader(gzip_path, index_path)
+        elif mode == "bytes":
+            return DFTracerBytesReader(gzip_path, index_path)
+        elif mode == "lines":
+            return DFTracerLinesReader(gzip_path, index_path)
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
 __version__ = "1.0.0"
 __all__ = [
@@ -43,6 +76,8 @@ __all__ = [
     "DFTracerBytesRangeIterator",
     "DFTracerLineBytesRangeIterator",
     "DFTracerLinesRangeIterator",
+    "DFTracerIndexer",
+    "CheckpointInfo",
     "dft_reader",
     "dft_reader_range",
     "set_log_level",
