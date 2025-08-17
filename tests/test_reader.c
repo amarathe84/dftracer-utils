@@ -404,7 +404,6 @@ void test_json_boundary_detection(void) {
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
     dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
@@ -452,6 +451,7 @@ void test_json_boundary_detection(void) {
     }
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
     free(gz_file);
     free(idx_file);
     test_environment_destroy(large_env);
@@ -859,7 +859,6 @@ void test_reader_raw_multiple_ranges(void) {
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
     dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
@@ -903,6 +902,7 @@ void test_reader_raw_multiple_ranges(void) {
     }
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_raw_null_parameters(void) {
