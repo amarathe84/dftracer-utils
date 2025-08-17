@@ -185,7 +185,8 @@ class Indexer {
    * @throws std::runtime_error if indexer creation fails
    */
   Indexer(const std::string &gz_path, const std::string &idx_path,
-          size_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE, bool force_rebuild = false);
+          size_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE,
+          bool force_rebuild = false);
 
   /**
    * Destructor - automatically destroys the indexer

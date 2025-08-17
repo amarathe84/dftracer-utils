@@ -98,7 +98,9 @@ int main(int argc, char **argv) {
   std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
   try {
-    dftracer::utils::indexer::Indexer indexer(gz_path, idx_path, static_cast<size_t>(chunk_size_mb * 1024 * 1024), force_rebuild);
+    dftracer::utils::indexer::Indexer indexer(
+        gz_path, idx_path, static_cast<size_t>(chunk_size_mb * 1024 * 1024),
+        force_rebuild);
 
     if (check_rebuild) {
       if (!indexer.need_rebuild()) {

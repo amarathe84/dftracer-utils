@@ -12,10 +12,8 @@
 #include <vector>
 
 extern "C" {
-size_t mb_to_b(double mb) {
-  return static_cast<size_t>(mb * 1024 * 1024);
-}
-} // extern "C"
+size_t mb_to_b(double mb) { return static_cast<size_t>(mb * 1024 * 1024); }
+}  // extern "C"
 
 namespace dft_utils_test {
 bool compress_file_to_gzip(const std::string& input_file,

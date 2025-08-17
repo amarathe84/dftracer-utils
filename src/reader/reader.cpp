@@ -800,11 +800,12 @@ class StreamingSessionFactory {
 // Reader implementation
 class Reader::Impl {
  public:
-  Impl(const std::string &gz_path, const std::string &idx_path, size_t index_ckpt_size)
+  Impl(const std::string &gz_path, const std::string &idx_path,
+       size_t index_ckpt_size)
       : gz_path_(gz_path), idx_path_(idx_path), is_open_(false) {
     try {
-      indexer_ = new dftracer::utils::indexer::Indexer(
-          gz_path, idx_path, index_ckpt_size);
+      indexer_ = new dftracer::utils::indexer::Indexer(gz_path, idx_path,
+                                                       index_ckpt_size);
       if (indexer_->need_rebuild()) {
         indexer_->build();
       }
@@ -1006,7 +1007,7 @@ class Reader::Impl {
   std::string idx_path_;
   bool is_open_;
 
-  dftracer::utils::indexer::Indexer* indexer_;
+  dftracer::utils::indexer::Indexer *indexer_;
   bool is_indexer_initialized_internally_;
   std::unique_ptr<StreamingSessionFactory> session_factory_;
   std::unique_ptr<LineByteStreamingSession> line_byte_session_;
@@ -1017,7 +1018,8 @@ class Reader::Impl {
 // C++ Public Interface Implementation
 // ==============================================================================
 
-Reader::Reader(const std::string &gz_path, const std::string &idx_path, size_t index_ckpt_size)
+Reader::Reader(const std::string &gz_path, const std::string &idx_path,
+               size_t index_ckpt_size)
     : pImpl_(new Impl(gz_path, idx_path, index_ckpt_size)) {}
 
 Reader::Reader(dftracer::utils::indexer::Indexer *indexer)
@@ -1111,16 +1113,16 @@ static dftracer::utils::reader::Reader *cast_reader(
   return static_cast<dftracer::utils::reader::Reader *>(reader);
 }
 
-dft_reader_handle_t dft_reader_create(const char *gz_path,
-                                      const char *idx_path,
-                                    size_t index_ckpt_size) {
+dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
+                                      size_t index_ckpt_size) {
   if (!gz_path || !idx_path) {
     spdlog::error("Both gz_path and idx_path cannot be null");
     return nullptr;
   }
 
   try {
-    auto *reader = new dftracer::utils::reader::Reader(gz_path, idx_path, index_ckpt_size);
+    auto *reader =
+        new dftracer::utils::reader::Reader(gz_path, idx_path, index_ckpt_size);
     return static_cast<dft_reader_handle_t>(reader);
   } catch (const std::exception &e) {
     spdlog::error("Failed to create DFT reader: {}", e.what());
@@ -1138,7 +1140,8 @@ dft_reader_handle_t dft_reader_create_with_indexer(
   spdlog::info("Creating DFT reader with provided indexer");
 
   try {
-    auto *reader = new dftracer::utils::reader::Reader(static_cast<dftracer::utils::indexer::Indexer *>(indexer));
+    auto *reader = new dftracer::utils::reader::Reader(
+        static_cast<dftracer::utils::indexer::Indexer *>(indexer));
     return static_cast<dft_reader_handle_t>(reader);
   } catch (const std::exception &e) {
     spdlog::error("Failed to create DFT reader with indexer: {}", e.what());

@@ -72,7 +72,8 @@ class DFTracerBytesReader:
     def __init__(
         self, 
         gzip_path: str, 
-        index_path: Optional[str] = None
+        index_path: Optional[str] = None,
+        index_checkpoint_size: int = 33_554_432 # 32MB
     ) -> None: ...
     
     def get_max_bytes(self) -> int: ...
@@ -101,7 +102,8 @@ class DFTracerLineBytesReader:
     def __init__(
         self, 
         gzip_path: str, 
-        index_path: Optional[str] = None
+        index_path: Optional[str] = None,
+        index_checkpoint_size: int = 33_554_432 # 32MB
     ) -> None: ...
     
     def get_max_bytes(self) -> int: ...
@@ -130,7 +132,8 @@ class DFTracerLinesReader:
     def __init__(
         self, 
         gzip_path: str, 
-        index_path: Optional[str] = None
+        index_path: Optional[str] = None,
+        index_checkpoint_size: int = 33_554_432 # 32MB
     ) -> None: ...
     
     def get_max_bytes(self) -> int: ...

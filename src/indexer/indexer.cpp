@@ -683,7 +683,9 @@ uint64_t Indexer::Impl::file_size_bytes(const std::string &path) const {
 bool Indexer::Impl::need_rebuild() const {
   // Check if index exists and is valid
   if (!index_exists_and_valid(idx_path_)) {
-    spdlog::info("Index rebuild needed: index does not exist or is invalid in {}", idx_path_);
+    spdlog::info(
+        "Index rebuild needed: index does not exist or is invalid in {}",
+        idx_path_);
     return true;
   }
 
@@ -695,7 +697,8 @@ bool Indexer::Impl::need_rebuild() const {
   //     if (diff > 0.1)
   //     {
   //         // Allow small floating point differences
-  //         spdlog::debug("Index rebuild needed: checkpoint size differs ({} bytes vs {} bytes)",
+  //         spdlog::debug("Index rebuild needed: checkpoint size differs ({}
+  //         bytes vs {} bytes)",
   //                       existing_ckpt_size, ckpt_size_);
   //         return true;
   //     }
@@ -737,7 +740,9 @@ bool Indexer::Impl::need_rebuild() const {
   } else {
     // Could not get stored file info, assume rebuild needed
     spdlog::info(
-        "Index rebuild needed: could not retrieve stored file information from {}", idx_path_);
+        "Index rebuild needed: could not retrieve stored file information from "
+        "{}",
+        idx_path_);
     return true;
   }
 
@@ -1244,8 +1249,9 @@ std::vector<CheckpointInfo> Indexer::Impl::find_checkpoints_by_line_range(
 }
 
 void Indexer::Impl::build() {
-  spdlog::debug("Building index for {} with {} bytes ({:.1f} MB) chunks...", gz_path_,
-                ckpt_size_, static_cast<double>(ckpt_size_) / (1024 * 1024));
+  spdlog::debug("Building index for {} with {} bytes ({:.1f} MB) chunks...",
+                gz_path_, ckpt_size_,
+                static_cast<double>(ckpt_size_) / (1024 * 1024));
 
   // If force rebuild is enabled, delete the existing database file to ensure
   // clean schema

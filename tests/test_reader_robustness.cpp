@@ -1237,7 +1237,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
     std::cout << "Chunk size: 0.5 MB (small enough to create checkpoints "
                  "during processing)"
               << std::endl;
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5), true);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5),
+                                              true);
     std::cout << "Building index..." << std::endl;
     indexer.build();
     std::cout << "Index built successfully" << std::endl;
@@ -1297,7 +1298,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
     // Get total lines from indexer
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
+                                                mb_to_b(2.0));
       total_lines = indexer.get_num_lines();
     }
 
@@ -1365,7 +1367,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
     // Get total lines from indexer
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
+                                                mb_to_b(2.0));
       total_lines = indexer.get_num_lines();
     }
 
@@ -1427,7 +1430,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
     // Get total lines from indexer
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
+                                                mb_to_b(2.0));
       total_lines = indexer.get_num_lines();
     }
 
@@ -1481,7 +1485,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
     // Get total lines from indexer
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
+                                                mb_to_b(2.0));
       total_lines = indexer.get_num_lines();
     }
 
@@ -1535,7 +1540,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
     // Get total lines from indexer
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
+                                                mb_to_b(2.0));
       total_lines = indexer.get_num_lines();
     }
 

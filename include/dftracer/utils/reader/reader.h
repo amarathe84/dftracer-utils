@@ -5,10 +5,9 @@
 extern "C" {
 #endif
 
+#include <dftracer/utils/indexer/indexer.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include <dftracer/utils/indexer/indexer.h>
 
 /**
  * Opaque handle for DFT reader
@@ -17,16 +16,15 @@ typedef void *dft_reader_handle_t;
 
 /**
  * Create a new DFT reader instance
- * 
+ *
  * The index file will be automatically create if it does not exist
- * 
+ *
  * @param gz_path Path to the gzipped trace file
  * @param idx_path Path to the index file
  * @param index_ckpt_size Checkpoint size for indexing in bytes
  * @return Opaque handle to the reader instance, or NULL on failure
  */
-dft_reader_handle_t dft_reader_create(const char *gz_path,
-                                      const char *idx_path,
+dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
                                       size_t index_ckpt_size);
 
 /**
@@ -153,7 +151,8 @@ class Reader {
    * @param index_ckpt_size Checkpoint size for indexing in bytes
    * @throws std::runtime_error if reader creation fails
    */
-  Reader(const std::string &gz_path, const std::string &idx_path, size_t index_ckpt_size = indexer::Indexer::DEFAULT_CHECKPOINT_SIZE);
+  Reader(const std::string &gz_path, const std::string &idx_path,
+         size_t index_ckpt_size = indexer::Indexer::DEFAULT_CHECKPOINT_SIZE);
 
   /**
    * Create a new DFT reader instance
