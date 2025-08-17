@@ -62,74 +62,51 @@ uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer);
  */
 int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char *gz_path);
 
+typedef struct dft_indexer_checkpoint_t {
+  uint64_t checkpoint_idx;
+  uint64_t uc_offset;
+  uint64_t uc_size;
+  uint64_t c_offset;
+  uint64_t c_size;
+  int bits;
+  unsigned char* dict_compressed;  // Owned by this struct
+  size_t dict_size;
+  uint64_t num_lines;
+} dft_indexer_checkpoint_info_t;
+
+
 /**
  * Find the best checkpoint for a given uncompressed offset
  * @param indexer DFT indexer handle
  * @param target_offset Target uncompressed offset
- * @param uc_offset Output: uncompressed offset of checkpoint
- * @param c_offset Output: compressed offset of checkpoint
- * @param bits Output: bit position of checkpoint
- * @param dict_compressed Output: compressed dictionary data (caller must free)
- * @param dict_size Output: size of compressed dictionary
+ * @param checkpoint DFT indexer checkpoint
  * @return 1 if checkpoint found, 0 if not found, -1 on error
  */
-int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
-                                uint64_t target_offset, uint64_t *uc_offset,
-                                uint64_t *c_offset, int *bits,
-                                unsigned char **dict_compressed,
-                                size_t *dict_size);
-
-/**
- * Free memory allocated by dft_indexer_find_checkpoint
- * @param dict_compressed Dictionary data to free
- */
-void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed);
+int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, size_t target_offset, dft_indexer_checkpoint_info_t* checkpoint);
 
 /**
  * Get all checkpoints for this file as arrays
  * @param indexer DFT indexer handle
+ * @param checkpoints Output: array of checkpoint information (caller must free using dft_indexer_free_checkpoints)
  * @param count Output: number of checkpoints
- * @param checkpoint_indices Output: array of checkpoint indices (caller must
- * free)
- * @param uc_offsets Output: array of uncompressed offsets (caller must free)
- * @param uc_sizes Output: array of uncompressed sizes (caller must free)
- * @param c_offsets Output: array of compressed offsets (caller must free)
- * @param c_sizes Output: array of compressed sizes (caller must free)
- * @param bits_array Output: array of bit positions (caller must free)
- * @param dict_sizes Output: array of dictionary sizes (caller must free)
- * @param dict_data Output: array of dictionary data pointers (caller must free
- * each and the array)
- * @param num_lines_array Output: array of line counts (caller must free)
- * @return 0 on success, -1 on error
  */
-int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer, size_t *count,
-                                uint64_t **checkpoint_indices,
-                                uint64_t **uc_offsets, uint64_t **uc_sizes,
-                                uint64_t **c_offsets, uint64_t **c_sizes,
-                                int **bits_array, size_t **dict_sizes,
-                                unsigned char ***dict_data,
-                                uint64_t **num_lines_array);
+int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
+                                 dft_indexer_checkpoint_info_t** checkpoints,
+                                size_t* count);
 
-/**
+
+/*
  * Free memory allocated by dft_indexer_get_checkpoints
- * @param count Number of checkpoints
- * @param checkpoint_indices Checkpoint indices array to free
- * @param uc_offsets Uncompressed offsets array to free
- * @param uc_sizes Uncompressed sizes array to free
- * @param c_offsets Compressed offsets array to free
- * @param c_sizes Compressed sizes array to free
- * @param bits_array Bits array to free
- * @param dict_sizes Dictionary sizes array to free
- * @param dict_data Dictionary data array to free (frees each dictionary and the
- * array)
- * @param num_lines_array Line counts array to free
+ * @param checkpoint Checkpoint information to free
  */
-void dft_indexer_free_checkpoints(size_t count, uint64_t *checkpoint_indices,
-                                  uint64_t *uc_offsets, uint64_t *uc_sizes,
-                                  uint64_t *c_offsets, uint64_t *c_sizes,
-                                  int *bits_array, size_t *dict_sizes,
-                                  unsigned char **dict_data,
-                                  uint64_t *num_lines_array);
+void dft_indexer_free_checkpoint(dft_indexer_checkpoint_info_t *checkpoint);
+
+/*
+ * Free memory allocated by dft_indexer_get_checkpoints
+ * @param checkpoints Array of checkpoint information to free
+ * @param count Number of checkpoints
+ */
+void dft_indexer_free_checkpoints(dft_indexer_checkpoint_info_t *checkpoints, size_t count);
 
 /**
  * Destroy a DFT indexer instance and free all associated resources
@@ -145,6 +122,7 @@ void dft_indexer_destroy(dft_indexer_handle_t indexer);
 #include <memory>
 #include <string>
 #include <vector>
+#include <stdexcept>
 
 namespace dftracer {
 namespace utils {
@@ -318,6 +296,28 @@ class Indexer {
    * @throws std::runtime_error on database error
    */
   int get_file_id() const;
+
+  // Error class for exception handling
+  class Error : public std::runtime_error {
+  public:
+    enum Type {
+      DATABASE_ERROR,
+      FILE_IO_ERROR,
+      COMPRESSION_ERROR,
+      INVALID_ARGUMENT,
+      BUILD_ERROR,
+      UNKNOWN_ERROR
+    };
+    
+    Error(Type type, const std::string& message)
+        : std::runtime_error(format_message(type, message)), type_(type) {}
+    
+    Type type() const { return type_; }
+    
+  private:
+    Type type_;
+    static std::string format_message(Type type, const std::string& message);
+  };
 
  private:
   class Impl;

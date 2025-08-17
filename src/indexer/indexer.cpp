@@ -1350,6 +1350,15 @@ std::vector<CheckpointInfo> Indexer::find_checkpoints_by_line_range(
 
 extern "C" {
 
+// Helper functions for C API
+static int validate_handle(dft_indexer_handle_t indexer) {
+  return indexer ? 0 : -1;
+}
+
+static dftracer::utils::indexer::Indexer* cast_indexer(dft_indexer_handle_t indexer) {
+  return static_cast<dftracer::utils::indexer::Indexer*>(indexer);
+}
+
 dft_indexer_handle_t dft_indexer_create(const char *gz_path,
                                         const char *idx_path,
                                         double chunk_size_mb,
@@ -1370,108 +1379,90 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
 }
 
 int dft_indexer_build(dft_indexer_handle_t indexer) {
-  if (!indexer) {
+  if (validate_handle(indexer)) {
     return -1;
   }
 
   try {
-    auto *cpp_indexer =
-        static_cast<dftracer::utils::indexer::Indexer *>(indexer);
-    cpp_indexer->build();
+    cast_indexer(indexer)->build();
     return 0;
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     spdlog::error("Failed to build index: {}", e.what());
     return -1;
   }
 }
 
 int dft_indexer_need_rebuild(dft_indexer_handle_t indexer) {
-  if (!indexer) {
+  if (validate_handle(indexer)) {
     return -1;
   }
 
   try {
-    auto *cpp_indexer =
-        static_cast<dftracer::utils::indexer::Indexer *>(indexer);
-    return cpp_indexer->need_rebuild() ? 1 : 0;
-  } catch (const std::exception &e) {
+    return cast_indexer(indexer)->need_rebuild() ? 1 : 0;
+  } catch (const std::exception& e) {
     spdlog::error("Failed to check if rebuild is needed: {}", e.what());
     return -1;
   }
 }
 
 uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer) {
-  if (!indexer) {
+  if (validate_handle(indexer)) {
     return 0;
   }
 
   try {
-    auto *cpp_indexer =
-        static_cast<dftracer::utils::indexer::Indexer *>(indexer);
-    return cpp_indexer->get_max_bytes();
-  } catch (const std::exception &e) {
+    return cast_indexer(indexer)->get_max_bytes();
+  } catch (const std::exception& e) {
     spdlog::error("Failed to get max bytes: {}", e.what());
     return 0;
   }
 }
 
 uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
-  if (!indexer) {
+  if (validate_handle(indexer)) {
     return 0;
   }
 
   try {
-    auto *cpp_indexer =
-        static_cast<dftracer::utils::indexer::Indexer *>(indexer);
-    return cpp_indexer->get_num_lines();
-  } catch (const std::exception &e) {
+    return cast_indexer(indexer)->get_num_lines();
+  } catch (const std::exception& e) {
     spdlog::error("Failed to get number of lines: {}", e.what());
     return 0;
   }
 }
 
-int dft_indexer_find_file_id(dft_indexer_handle_t indexer,
-                             const char *gz_path) {
-  if (!indexer || !gz_path) {
+int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char* gz_path) {
+  if (validate_handle(indexer) || !gz_path) {
     return -1;
   }
 
   try {
-    auto *cpp_indexer =
-        static_cast<dftracer::utils::indexer::Indexer *>(indexer);
-    return cpp_indexer->find_file_id(gz_path);
-  } catch (const std::exception &e) {
+    return cast_indexer(indexer)->find_file_id(gz_path);
+  } catch (const std::exception& e) {
     spdlog::error("Failed to find file ID: {}", e.what());
     return -1;
   }
 }
 
-int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
-                                uint64_t target_offset, uint64_t *uc_offset,
-                                uint64_t *c_offset, int *bits,
-                                unsigned char **dict_compressed,
-                                size_t *dict_size) {
-  if (!indexer || !uc_offset || !c_offset || !bits || !dict_compressed ||
-      !dict_size) {
+int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, size_t target_offset, dft_indexer_checkpoint_info_t* checkpoint) {
+  if (validate_handle(indexer) || !checkpoint) {
     return -1;
   }
 
   try {
-    auto *cpp_indexer =
-        static_cast<dftracer::utils::indexer::Indexer *>(indexer);
-    dftracer::utils::indexer::CheckpointInfo checkpoint;
+    dftracer::utils::indexer::CheckpointInfo temp_ckpt;
 
-    if (cpp_indexer->find_checkpoint(static_cast<size_t>(target_offset),
-                                     checkpoint)) {
-      *uc_offset = static_cast<uint64_t>(checkpoint.uc_offset);
-      *c_offset = static_cast<uint64_t>(checkpoint.c_offset);
-      *bits = checkpoint.bits;
-      *dict_size = checkpoint.dict_compressed.size();
+    if (cast_indexer(indexer)->find_checkpoint(static_cast<size_t>(target_offset),
+                                     temp_ckpt)) {
+      checkpoint->uc_offset = static_cast<uint64_t>(temp_ckpt.uc_offset);
+      checkpoint->c_offset = static_cast<uint64_t>(temp_ckpt.c_offset);
+      checkpoint->bits = temp_ckpt.bits;
+      checkpoint->dict_size = temp_ckpt.dict_compressed.size();
 
-      *dict_compressed = static_cast<unsigned char *>(malloc(*dict_size));
-      if (*dict_compressed) {
-        std::memcpy(*dict_compressed, checkpoint.dict_compressed.data(),
-                    *dict_size);
+      checkpoint->dict_compressed = static_cast<unsigned char *>(malloc(checkpoint->dict_size));
+      if (checkpoint->dict_compressed) {
+        std::memcpy(checkpoint->dict_compressed, temp_ckpt.dict_compressed.data(),
+                    checkpoint->dict_size);
         return 1;
       }
       return -1;
@@ -1483,128 +1474,79 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
   }
 }
 
-void dft_indexer_free_checkpoint_dict(unsigned char *dict_compressed) {
-  if (dict_compressed) {
-    free(dict_compressed);
-  }
-}
-
-int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer, size_t *count,
-                                uint64_t **checkpoint_indices,
-                                uint64_t **uc_offsets, uint64_t **uc_sizes,
-                                uint64_t **c_offsets, uint64_t **c_sizes,
-                                int **bits_array, size_t **dict_sizes,
-                                unsigned char ***dict_data,
-                                uint64_t **num_lines_array) {
-  if (!indexer || !count || !checkpoint_indices || !uc_offsets || !uc_sizes ||
-      !c_offsets || !c_sizes || !bits_array || !dict_sizes || !dict_data ||
-      !num_lines_array) {
+int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
+                                dft_indexer_checkpoint_info_t** checkpoints,
+                                size_t* count) {
+  if (validate_handle(indexer) || !count || !checkpoints) {
     return -1;
   }
 
   try {
-    auto *cpp_indexer =
-        static_cast<dftracer::utils::indexer::Indexer *>(indexer);
-    auto checkpoints = cpp_indexer->get_checkpoints();
+    auto ckpts = cast_indexer(indexer)->get_checkpoints();
 
-    *count = checkpoints.size();
-    if (*count == 0) {
+    auto temp_count = ckpts.size();
+    if (temp_count == 0) {
       return 0;
     }
 
-    // Allocate arrays
-    *checkpoint_indices =
-        static_cast<uint64_t *>(malloc(*count * sizeof(uint64_t)));
-    *uc_offsets = static_cast<uint64_t *>(malloc(*count * sizeof(uint64_t)));
-    *uc_sizes = static_cast<uint64_t *>(malloc(*count * sizeof(uint64_t)));
-    *c_offsets = static_cast<uint64_t *>(malloc(*count * sizeof(uint64_t)));
-    *c_sizes = static_cast<uint64_t *>(malloc(*count * sizeof(uint64_t)));
-    *bits_array = static_cast<int *>(malloc(*count * sizeof(int)));
-    *dict_sizes = static_cast<size_t *>(malloc(*count * sizeof(size_t)));
-    *dict_data =
-        static_cast<unsigned char **>(malloc(*count * sizeof(unsigned char *)));
-    *num_lines_array =
-        static_cast<uint64_t *>(malloc(*count * sizeof(uint64_t)));
-
-    if (!*checkpoint_indices || !*uc_offsets || !*uc_sizes || !*c_offsets ||
-        !*c_sizes || !*bits_array || !*dict_sizes || !*dict_data ||
-        !*num_lines_array) {
-      // Clean up on allocation failure
-      free(*checkpoint_indices);
-      free(*uc_offsets);
-      free(*uc_sizes);
-      free(*c_offsets);
-      free(*c_sizes);
-      free(*bits_array);
-      free(*dict_sizes);
-      free(*dict_data);
-      free(*num_lines_array);
+    auto temp_ckpts = static_cast<dft_indexer_checkpoint_info_t*>(malloc(temp_count * sizeof(dft_indexer_checkpoint_info_t)));
+    if (!temp_ckpts) {
       return -1;
     }
 
-    // Fill arrays
-    for (size_t i = 0; i < *count; i++) {
-      const auto &checkpoint = checkpoints[i];
-      (*checkpoint_indices)[i] =
-          static_cast<uint64_t>(checkpoint.checkpoint_idx);
-      (*uc_offsets)[i] = static_cast<uint64_t>(checkpoint.uc_offset);
-      (*uc_sizes)[i] = static_cast<uint64_t>(checkpoint.uc_size);
-      (*c_offsets)[i] = static_cast<uint64_t>(checkpoint.c_offset);
-      (*c_sizes)[i] = static_cast<uint64_t>(checkpoint.c_size);
-      (*bits_array)[i] = checkpoint.bits;
-      (*dict_sizes)[i] = checkpoint.dict_compressed.size();
-      (*num_lines_array)[i] = static_cast<uint64_t>(checkpoint.num_lines);
+    *checkpoints = temp_ckpts;
+
+    // Initialize checkpoint information
+    for (size_t i = 0; i < temp_count; i++) {
+      const auto& checkpoint = ckpts[i];
+
+      temp_ckpts[i].checkpoint_idx = static_cast<uint64_t>(checkpoint.checkpoint_idx);
+      temp_ckpts[i].uc_offset = static_cast<uint64_t>(checkpoint.uc_offset);
+      temp_ckpts[i].uc_size = static_cast<uint64_t>(checkpoint.uc_size);
+      temp_ckpts[i].c_offset = static_cast<uint64_t>(checkpoint.c_offset);
+      temp_ckpts[i].c_size = static_cast<uint64_t>(checkpoint.c_size);
+      temp_ckpts[i].bits = checkpoint.bits;
+      temp_ckpts[i].dict_size = checkpoint.dict_compressed.size();
+      temp_ckpts[i].num_lines = static_cast<uint64_t>(checkpoint.num_lines);
 
       // Allocate and copy dictionary data
-      (*dict_data)[i] = static_cast<unsigned char *>(malloc((*dict_sizes)[i]));
-      if ((*dict_data)[i]) {
-        std::memcpy((*dict_data)[i], checkpoint.dict_compressed.data(),
-                    (*dict_sizes)[i]);
+      temp_ckpts[i].dict_compressed = static_cast<unsigned char*>(malloc(temp_ckpts[i].dict_size));
+      if (temp_ckpts[i].dict_compressed) {
+        std::memcpy(temp_ckpts[i].dict_compressed, checkpoint.dict_compressed.data(), temp_ckpts[i].dict_size);
       } else {
         // Clean up on allocation failure
         for (size_t j = 0; j < i; j++) {
-          free((*dict_data)[j]);
+          free(temp_ckpts[j].dict_compressed);
         }
-        free(*checkpoint_indices);
-        free(*uc_offsets);
-        free(*uc_sizes);
-        free(*c_offsets);
-        free(*c_sizes);
-        free(*bits_array);
-        free(*dict_sizes);
-        free(*dict_data);
-        free(*num_lines_array);
+        free(temp_ckpts);
+        spdlog::error("Failed to allocate memory for checkpoint dictionary data");
+        *checkpoints = nullptr;
         return -1;
       }
     }
 
+    *count = temp_count;
+    *checkpoints = temp_ckpts;
     return 0;
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     spdlog::error("Failed to get checkpoints: {}", e.what());
     return -1;
   }
 }
 
-void dft_indexer_free_checkpoints(size_t count, uint64_t *checkpoint_indices,
-                                  uint64_t *uc_offsets, uint64_t *uc_sizes,
-                                  uint64_t *c_offsets, uint64_t *c_sizes,
-                                  int *bits_array, size_t *dict_sizes,
-                                  unsigned char **dict_data,
-                                  uint64_t *num_lines_array) {
-  free(checkpoint_indices);
-  free(uc_offsets);
-  free(uc_sizes);
-  free(c_offsets);
-  free(c_sizes);
-  free(bits_array);
-  free(dict_sizes);
-  free(num_lines_array);
+void dft_indexer_free_checkpoint(dft_indexer_checkpoint_info_t* checkpoint) {
+  if (checkpoint) {
+    free(checkpoint->dict_compressed);
+    free(checkpoint);
+  }
+}
 
-  if (dict_data) {
+void dft_indexer_free_checkpoints(dft_indexer_checkpoint_info_t* checkpoints, size_t count) {
+  if (checkpoints) {
     for (size_t i = 0; i < count; i++) {
-      free(dict_data[i]);
+      free(checkpoints[i].dict_compressed);
     }
-    free(dict_data);
+    free(checkpoints);
   }
 }
 
