@@ -1230,7 +1230,6 @@ void test_reader_line_reading_range(void) {
     TEST_ASSERT_EQUAL_INT(0, result);
     
     uint64_t total_lines = dft_indexer_get_num_lines(indexer);
-    dft_indexer_destroy(indexer);
     
     if (total_lines == 0) {
         printf("Skipping line range tests - no line data\n");
@@ -1278,6 +1277,7 @@ void test_reader_line_reading_range(void) {
     TEST_ASSERT_NULL(strstr(buffer, "\"id\": 16"));
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
     free(gz_file);
     free(idx_file);
     test_environment_destroy(large_env);
