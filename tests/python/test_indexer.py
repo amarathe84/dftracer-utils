@@ -10,76 +10,7 @@ import gzip
 import shutil
 
 import dftracer.utils as dft_utils
-
-class Environment:
-    """Environment manager for indexer tests"""
-    
-    def __init__(self, lines=100):
-        self.lines = lines
-        self.temp_dir = None
-        self.test_files = []
-        self._setup()
-    
-    def _setup(self):
-        """Set up temporary directory"""
-        self.temp_dir = tempfile.mkdtemp(prefix="dft_indexer_test_")
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
-    
-    def cleanup(self):
-        """Clean up temporary files and directory"""
-        for file_path in self.test_files:
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                idx_path = file_path + ".idx"
-                if os.path.exists(idx_path):
-                    os.remove(idx_path)
-            except OSError:
-                pass
-        
-        if self.temp_dir and os.path.exists(self.temp_dir):
-            try:
-                shutil.rmtree(self.temp_dir)
-            except OSError:
-                pass
-    
-    def create_test_gzip_file(self, filename="test_data.pfw.gz", bytes_per_line=1024):
-        """Create a test gzip file with sample trace-like data"""
-        file_path = os.path.join(self.temp_dir, filename)
-        
-        # Generate test data
-        lines = []
-        closing_len = 3  # len('"}\\n')
-        for i in range(1, self.lines + 1):
-            # Build the JSON line up to the "data" key
-            line = f'{{"name":"name_{i}","cat":"cat_{i}","dur":{(i * 123 % 10000)},"data":"'
-            current_size = len(line)
-            needed_padding = 0
-            if bytes_per_line > current_size + closing_len:
-                needed_padding = bytes_per_line - current_size - closing_len
-            # Append padding safely
-            if needed_padding:
-                pad_chunk = 'x' * 4096
-                while needed_padding >= len(pad_chunk):
-                    line += pad_chunk
-                    needed_padding -= len(pad_chunk)
-                if needed_padding:
-                    line += 'x' * needed_padding
-            line += '"}\n'
-            lines.append(line)
-        
-        # Write compressed data
-        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
-            f.writelines(lines)
-        
-        self.test_files.append(file_path)
-        return file_path
-
+from .common import Environment
 
 class TestDFTracerIndexer:
     """Test cases for DFTracerIndexer"""
