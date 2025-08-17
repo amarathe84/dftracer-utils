@@ -27,22 +27,22 @@ TEST_CASE("C++ Indexer - Basic functionality") {
   SUBCASE("Constructor and destructor") {
     // Test automatic destruction
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(1.0));
       CHECK(indexer.is_valid());
     }  // indexer automatically destroyed here
 
     // Should be able to create another one
-    dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, 1.0);
+    dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file,  mb_to_b(1.0));
     CHECK(indexer2.is_valid());
   }
 
   SUBCASE("Build index") {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,  mb_to_b(1.0));
     CHECK_NOTHROW(indexer.build());
   }
 
   SUBCASE("Check rebuild needed") {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(1.0));
     CHECK(indexer.need_rebuild());  // Should need rebuild initially
 
     indexer.build();
@@ -51,13 +51,13 @@ TEST_CASE("C++ Indexer - Basic functionality") {
   }
 
   SUBCASE("Getter methods") {
-    double chunk_size = 1.5;
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, chunk_size);
+    size_t ckpt_size = mb_to_b(1.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, ckpt_size);
 
     // Test getter methods
     CHECK(indexer.get_gz_path() == gz_file);
     CHECK(indexer.get_idx_path() == idx_file);
-    CHECK(indexer.get_chunk_size_mb() == chunk_size);
+    CHECK(indexer.get_checkpoint_size() == ckpt_size);
   }
 
   SUBCASE("Move semantics") {
@@ -88,7 +88,7 @@ TEST_CASE("C++ Reader - Basic functionality") {
 
   // Build index first
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
   }
 
@@ -182,7 +182,7 @@ TEST_CASE("C++ API - Data range reading") {
 
   // Build index first
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
   }
 
@@ -217,7 +217,7 @@ TEST_CASE("C++ API - Edge cases") {
 
   // Build index first
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
   }
 
@@ -252,7 +252,7 @@ TEST_CASE("C++ API - Integration test") {
   // Complete workflow using C++ API
   {
     // Build index
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
 
     // Read data
@@ -298,7 +298,7 @@ TEST_CASE("C++ API - Memory safety stress test") {
 
   // Build index
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
   }
 
@@ -330,7 +330,7 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
 
   SUBCASE("Indexer with invalid paths should throw during build") {
     dftracer::utils::indexer::Indexer indexer(
-        "/definitely/nonexistent/path.gz", "/also/nonexistent/path.idx", 1.0);
+        "/definitely/nonexistent/path.gz", "/also/nonexistent/path.idx", mb_to_b(1.0));
     CHECK(indexer.is_valid());  // Constructor succeeds
 
     CHECK_THROWS_AS(indexer.build(), std::runtime_error);
@@ -339,10 +339,7 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
   }
 
   SUBCASE("Indexer with invalid chunk size should throw in constructor") {
-    CHECK_THROWS_AS(dftracer::utils::indexer::Indexer(gz_file, idx_file, 0.0),
-                    dftracer::utils::indexer::Indexer::Error);
-
-    CHECK_THROWS_AS(dftracer::utils::indexer::Indexer(gz_file, idx_file, -1.0),
+    CHECK_THROWS_AS(dftracer::utils::indexer::Indexer(gz_file, idx_file, mb_to_b(0.0)),
                     dftracer::utils::indexer::Indexer::Error);
   }
 
@@ -356,7 +353,7 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
   SUBCASE("Reader operations on invalid reader should throw") {
     // Build a valid index first
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
       indexer.build();
     }
 
@@ -380,7 +377,7 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
   SUBCASE("Invalid read parameters should throw") {
     // Build a valid index first
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
       indexer.build();
     }
 
@@ -405,8 +402,8 @@ TEST_CASE("C++ API - Advanced indexer functionality") {
   std::string idx_file = env.get_index_path(gz_file);
 
   SUBCASE("Multiple indexer instances for same file") {
-    dftracer::utils::indexer::Indexer indexer1(gz_file, idx_file, 1.0);
-    dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, 1.0);
+    dftracer::utils::indexer::Indexer indexer1(gz_file, idx_file, mb_to_b(1.0));
+    dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, mb_to_b(1.0));
 
     CHECK(indexer1.is_valid());
     CHECK(indexer2.is_valid());
@@ -420,11 +417,11 @@ TEST_CASE("C++ API - Advanced indexer functionality") {
     CHECK_FALSE(indexer2.need_rebuild());
   }
 
-  SUBCASE("Different chunk sizes") {
+  SUBCASE("Different checkpoint sizes") {
     dftracer::utils::indexer::Indexer indexer_small(gz_file,
-                                                    idx_file + "_small", 0.1);
+                                                    idx_file + "_small", mb_to_b(0.1));
     dftracer::utils::indexer::Indexer indexer_large(gz_file,
-                                                    idx_file + "_large", 10.0);
+                                                    idx_file + "_large", mb_to_b(10.0));
 
     CHECK_NOTHROW(indexer_small.build());
     CHECK_NOTHROW(indexer_large.build());
@@ -437,7 +434,7 @@ TEST_CASE("C++ API - Advanced indexer functionality") {
   }
 
   SUBCASE("Indexer state after operations") {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(1.0));
 
     CHECK(indexer.is_valid());
     CHECK(indexer.need_rebuild());
@@ -463,7 +460,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
 
   // Build index first
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
   }
 
@@ -595,7 +592,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
 
   // Build index first
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
   }
 
@@ -705,7 +702,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
 
     // Build index
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(1.0));
       CHECK_NOTHROW(indexer.build());
     }
 
@@ -761,7 +758,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
 
     // Build index
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 32.0);
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(32.0));
       indexer.build();
     }
 
@@ -909,7 +906,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
 
   // Build index first
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
     indexer.build();
   }
 
@@ -1158,7 +1155,7 @@ TEST_CASE("C++ Reader - Line reading functionality") {
 
   // Build index first with smaller chunk size to force checkpoint creation
   {
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.1));
     indexer.build();
 
     // Verify the indexer has line counts and checkpoints
@@ -1268,7 +1265,7 @@ TEST_CASE("C++ Reader - Line reading functionality") {
     dftracer::utils::reader::Reader reader(gz_file, idx_file);
 
     // Get number of lines from indexer
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.1));
     size_t num_lines = indexer.get_num_lines();
 
     if (num_lines > 100) {
@@ -1293,7 +1290,7 @@ TEST_CASE("C++ Reader - Line reading functionality") {
     dftracer::utils::reader::Reader reader(gz_file, idx_file);
 
     // Get number of lines from indexer
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.1));
     size_t total_lines = indexer.get_num_lines();
 
     if (total_lines > 10) {
@@ -1315,7 +1312,7 @@ TEST_CASE("C++ Reader - Line reading functionality") {
     dftracer::utils::reader::Reader reader(gz_file, idx_file);
 
     // Get number of lines from indexer
-    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.1);
+    dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.1));
     size_t total_lines = indexer.get_num_lines();
 
     // Test single line reads at different positions
@@ -1351,13 +1348,14 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
 
   std::string idx_file = env.get_index_path(gz_file);
 
-  SUBCASE("Indexer with various chunk sizes") {
+  SUBCASE("Indexer with various checkpoint sizes") {
     // Test different chunk sizes to trigger different code paths
-    for (double chunk_size : {0.1, 0.5, 1.0, 2.0, 5.0}) {
+    for (double ckpt_size_mb : {0.1, 0.5, 1.0, 2.0, 5.0}) {
+      size_t ckpt_size = mb_to_b(ckpt_size_mb);
       dftracer::utils::indexer::Indexer indexer(
-          gz_file, idx_file + std::to_string(chunk_size), chunk_size);
+          gz_file, idx_file + std::to_string(ckpt_size_mb), ckpt_size);
       CHECK_NOTHROW(indexer.build());
-      CHECK(indexer.get_chunk_size_mb() == chunk_size);
+      CHECK(indexer.get_checkpoint_size() == ckpt_size);
     }
   }
 
@@ -1365,7 +1363,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     // Build index first
     {
       dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                0.1);  // Small chunks
+                                                mb_to_b(0.1));  // Small chunks
       indexer.build();
     }
 
@@ -1402,12 +1400,12 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
 
   SUBCASE("Force rebuild scenarios") {
     // Test force rebuild functionality
-    dftracer::utils::indexer::Indexer indexer1(gz_file, idx_file, 1.0, false);
+    dftracer::utils::indexer::Indexer indexer1(gz_file, idx_file, mb_to_b(1.0), false);
     indexer1.build();
     CHECK_FALSE(indexer1.need_rebuild());
 
     // Force rebuild should rebuild even if not needed
-    dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, 1.0, true);
+    dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, mb_to_b(1.0), true);
     // Force rebuild affects behavior during construction/build
     CHECK_NOTHROW(indexer2.build());  // Should succeed even if forced
     // Note: force_rebuild flag behavior needs further investigation
@@ -1418,7 +1416,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
   SUBCASE("Multiple readers on same index") {
     // Build index once
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 1.0);
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(1.0));
       indexer.build();
     }
 
@@ -1451,7 +1449,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
   SUBCASE("Edge case: Reading near file boundaries") {
     // Build index
     {
-      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, 0.5);
+      dftracer::utils::indexer::Indexer indexer(gz_file, idx_file, mb_to_b(0.5));
       indexer.build();
     }
 
@@ -1491,7 +1489,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
 
     // Build index with small chunks to force more complex compression
     {
-      dftracer::utils::indexer::Indexer indexer(large_gz, large_idx, 0.1);
+      dftracer::utils::indexer::Indexer indexer(large_gz, large_idx, mb_to_b(0.1));
       indexer.build();
     }
 

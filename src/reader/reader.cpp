@@ -800,15 +800,16 @@ class StreamingSessionFactory {
 // Reader implementation
 class Reader::Impl {
  public:
-  Impl(const std::string &gz_path, const std::string &idx_path)
+  Impl(const std::string &gz_path, const std::string &idx_path, size_t index_ckpt_size)
       : gz_path_(gz_path), idx_path_(idx_path), is_open_(false) {
     try {
-      indexer_ = std::make_unique<dftracer::utils::indexer::Indexer>(
-          gz_path, idx_path, 1.0);
+      indexer_ = new dftracer::utils::indexer::Indexer(
+          gz_path, idx_path, index_ckpt_size);
       if (indexer_->need_rebuild()) {
         indexer_->build();
       }
       is_open_ = true;
+      is_indexer_initialized_internally_ = true;
 
       session_factory_ = std::make_unique<StreamingSessionFactory>(*indexer_);
 
@@ -821,7 +822,23 @@ class Reader::Impl {
     }
   }
 
-  ~Impl() = default;
+  Impl(dftracer::utils::indexer::Indexer *indexer)
+      : indexer_(indexer), is_indexer_initialized_internally_(false) {
+    if (!indexer_->is_valid()) {
+      throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
+                          "Invalid indexer provided");
+    }
+    session_factory_ = std::make_unique<StreamingSessionFactory>(*indexer_);
+    is_open_ = true;
+    gz_path_ = indexer_->get_gz_path();
+    idx_path_ = indexer_->get_idx_path();
+  }
+
+  ~Impl() {
+    if (is_indexer_initialized_internally_) {
+      delete indexer_;
+    }
+  }
 
   Impl(const Impl &) = delete;
   Impl &operator=(const Impl &) = delete;
@@ -852,14 +869,14 @@ class Reader::Impl {
   }
 
   size_t get_max_bytes() const {
-    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    ErrorHandler::check_reader_state(is_open_, indexer_);
     size_t max_bytes = static_cast<size_t>(indexer_->get_max_bytes());
     spdlog::debug("Maximum bytes available: {}", max_bytes);
     return max_bytes;
   }
 
   size_t get_num_lines() const {
-    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    ErrorHandler::check_reader_state(is_open_, indexer_);
     size_t num_lines = static_cast<size_t>(indexer_->get_num_lines());
     spdlog::debug("Total lines available: {}", num_lines);
     return num_lines;
@@ -867,7 +884,7 @@ class Reader::Impl {
 
   size_t read(size_t start_bytes, size_t end_bytes, char *buffer,
               size_t buffer_size) {
-    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    ErrorHandler::check_reader_state(is_open_, indexer_);
     ErrorHandler::validate_parameters(buffer, buffer_size, start_bytes,
                                       end_bytes, indexer_->get_max_bytes());
 
@@ -886,7 +903,7 @@ class Reader::Impl {
 
   size_t read_line_bytes(size_t start_bytes, size_t end_bytes, char *buffer,
                          size_t buffer_size) {
-    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    ErrorHandler::check_reader_state(is_open_, indexer_);
 
     if (end_bytes > indexer_->get_max_bytes()) {
       end_bytes = indexer_->get_max_bytes();
@@ -909,7 +926,7 @@ class Reader::Impl {
   }
 
   std::string read_lines(size_t start_line, size_t end_line) {
-    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    ErrorHandler::check_reader_state(is_open_, indexer_);
 
     if (start_line == 0 || end_line == 0) {
       throw std::runtime_error("Line numbers must be 1-based (start from 1)");
@@ -929,7 +946,7 @@ class Reader::Impl {
   }
 
   void reset() {
-    ErrorHandler::check_reader_state(is_open_, indexer_.get());
+    ErrorHandler::check_reader_state(is_open_, indexer_);
     if (line_byte_session_) {
       line_byte_session_->reset();
     }
@@ -955,7 +972,7 @@ class Reader::Impl {
     std::string result;
     size_t current_line = 1;
     std::string current_line_content;
-    const size_t buffer_size = 64 * 1024;
+    const size_t buffer_size = 1 * 1024 * 1024;
     std::vector<char> buffer(buffer_size);
 
     while (!line_byte_session_->is_finished() && current_line <= end_line) {
@@ -989,7 +1006,8 @@ class Reader::Impl {
   std::string idx_path_;
   bool is_open_;
 
-  std::unique_ptr<dftracer::utils::indexer::Indexer> indexer_;
+  dftracer::utils::indexer::Indexer* indexer_;
+  bool is_indexer_initialized_internally_;
   std::unique_ptr<StreamingSessionFactory> session_factory_;
   std::unique_ptr<LineByteStreamingSession> line_byte_session_;
   std::unique_ptr<ByteStreamingSession> byte_session_;
@@ -999,8 +1017,11 @@ class Reader::Impl {
 // C++ Public Interface Implementation
 // ==============================================================================
 
-Reader::Reader(const std::string &gz_path, const std::string &idx_path)
-    : pImpl_(new Impl(gz_path, idx_path)) {}
+Reader::Reader(const std::string &gz_path, const std::string &idx_path, size_t index_ckpt_size)
+    : pImpl_(new Impl(gz_path, idx_path, index_ckpt_size)) {}
+
+Reader::Reader(dftracer::utils::indexer::Indexer *indexer)
+    : pImpl_(new Impl(indexer)) {}
 
 Reader::~Reader() = default;
 
@@ -1091,17 +1112,36 @@ static dftracer::utils::reader::Reader *cast_reader(
 }
 
 dft_reader_handle_t dft_reader_create(const char *gz_path,
-                                      const char *idx_path) {
+                                      const char *idx_path,
+                                    size_t index_ckpt_size) {
   if (!gz_path || !idx_path) {
     spdlog::error("Both gz_path and idx_path cannot be null");
     return nullptr;
   }
 
   try {
-    auto *reader = new dftracer::utils::reader::Reader(gz_path, idx_path);
+    auto *reader = new dftracer::utils::reader::Reader(gz_path, idx_path, index_ckpt_size);
     return static_cast<dft_reader_handle_t>(reader);
   } catch (const std::exception &e) {
     spdlog::error("Failed to create DFT reader: {}", e.what());
+    return nullptr;
+  }
+}
+
+dft_reader_handle_t dft_reader_create_with_indexer(
+    dft_indexer_handle_t indexer) {
+  if (!indexer) {
+    spdlog::error("Indexer cannot be null");
+    return nullptr;
+  }
+
+  spdlog::info("Creating DFT reader with provided indexer");
+
+  try {
+    auto *reader = new dftracer::utils::reader::Reader(static_cast<dftracer::utils::indexer::Indexer *>(indexer));
+    return static_cast<dft_reader_handle_t>(reader);
+  } catch (const std::exception &e) {
+    spdlog::error("Failed to create DFT reader with indexer: {}", e.what());
     return nullptr;
   }
 }

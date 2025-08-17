@@ -16,13 +16,13 @@ typedef void *dft_indexer_handle_t;
  * Create a new DFT indexer instance
  * @param gz_path Path to the gzipped trace file
  * @param idx_path Path to the index file
- * @param chunk_size_mb Chunk size for indexing in megabytes
+ * @param checkpoint_size Chunk size for indexing in bytes
  * @param force_rebuild Force rebuild index
  * @return Opaque handle to the indexer instance, or NULL on failure
  */
 dft_indexer_handle_t dft_indexer_create(const char *gz_path,
                                         const char *idx_path,
-                                        double chunk_size_mb,
+                                        size_t checkpoint_size,
                                         int force_rebuild);
 
 /**
@@ -173,18 +173,19 @@ struct CheckpointInfo {
  */
 class Indexer {
  public:
+  static constexpr size_t DEFAULT_CHECKPOINT_SIZE = 32 * 1024 * 1024;
+
   /**
    * Create a new DFT indexer instance
    * @param gz_path Path to the gzipped trace file
    * @param idx_path Path to the index file
-   * @param chunk_size_mb Chunk size for indexing in megabytes (also used for
-   * checkpoint interval)
+   * @param checkpoint_size Checkpoint size for indexing in bytes
    * @param force_rebuild Force rebuild even if index exists and chunk size
    * matches
    * @throws std::runtime_error if indexer creation fails
    */
   Indexer(const std::string &gz_path, const std::string &idx_path,
-          double chunk_size_mb, bool force_rebuild = false);
+          size_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE, bool force_rebuild = false);
 
   /**
    * Destructor - automatically destroys the indexer
@@ -237,10 +238,10 @@ class Indexer {
   const std::string &get_idx_path() const;
 
   /**
-   * Get the chunk size in megabytes (also used for checkpoint interval)
-   * @return chunk size in megabytes
+   * Get the checkpoint size in bytes
+   * @return checkpoint size in bytes
    */
-  double get_chunk_size_mb() const;
+  size_t get_checkpoint_size() const;
 
   /**
    * Get the maximum uncompressed bytes in the indexed file

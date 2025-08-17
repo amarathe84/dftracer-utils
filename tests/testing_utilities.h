@@ -54,6 +54,8 @@ char* test_environment_get_index_path(test_environment_handle_t env,
  */
 int compress_file_to_gzip_c(const char* input_file, const char* output_file);
 
+size_t mb_to_b(double mb);
+
 #ifdef __cplusplus
 }
 

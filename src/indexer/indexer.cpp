@@ -126,10 +126,10 @@ class SqliteStmt {
 
 class ErrorHandler {
  public:
-  static void validate_parameters(double chunk_size_mb) {
-    if (chunk_size_mb <= 0) {
+  static void validate_parameters(size_t ckpt_size) {
+    if (ckpt_size == 0) {
       throw Indexer::Error(Indexer::Error::INVALID_ARGUMENT,
-                           "chunk_size_mb must be greater than 0");
+                           "ckpt_size must be greater than 0");
     }
   }
 
@@ -153,15 +153,15 @@ class ErrorHandler {
 class Indexer::Impl {
  public:
   Impl(const std::string &gz_path, const std::string &idx_path,
-       double chunk_size_mb, bool force_rebuild)
+       size_t ckpt_size, bool force_rebuild)
       : gz_path_(gz_path),
         idx_path_(idx_path),
-        chunk_size_mb_(chunk_size_mb),
+        ckpt_size_(ckpt_size),
         force_rebuild_(force_rebuild),
         db_(nullptr),
         db_opened_(false),
         cached_file_id_(-1) {
-    ErrorHandler::validate_parameters(chunk_size_mb);
+    ErrorHandler::validate_parameters(ckpt_size_);
     spdlog::debug("Created DFT indexer for gz: {} and index: {}", gz_path,
                   idx_path);
   }
@@ -181,7 +181,7 @@ class Indexer::Impl {
   Impl(Impl &&other) noexcept
       : gz_path_(std::move(other.gz_path_)),
         idx_path_(std::move(other.idx_path_)),
-        chunk_size_mb_(other.chunk_size_mb_),
+        ckpt_size_(other.ckpt_size_),
         force_rebuild_(other.force_rebuild_),
         db_(other.db_),
         db_opened_(other.db_opened_),
@@ -197,7 +197,7 @@ class Indexer::Impl {
       }
       gz_path_ = std::move(other.gz_path_);
       idx_path_ = std::move(other.idx_path_);
-      chunk_size_mb_ = other.chunk_size_mb_;
+      ckpt_size_ = other.ckpt_size_;
       force_rebuild_ = other.force_rebuild_;
       db_ = other.db_;
       db_opened_ = other.db_opened_;
@@ -217,7 +217,7 @@ class Indexer::Impl {
 
   const std::string &get_idx_path() const { return idx_path_; }
 
-  double get_chunk_size_mb() const { return chunk_size_mb_; }
+  size_t get_checkpoint_size() const { return ckpt_size_; }
 
   uint64_t get_max_bytes() const;
   uint64_t get_num_lines() const;
@@ -233,7 +233,7 @@ class Indexer::Impl {
   std::string calculate_file_sha256(const std::string &file_path) const;
   time_t get_file_mtime(const std::string &file_path) const;
   bool index_exists_and_valid(const std::string &idx_path) const;
-  double get_existing_chunk_size_mb(const std::string &idx_path) const;
+  size_t get_existing_ckpt_size(const std::string &idx_path) const;
   bool get_stored_file_info(const std::string &idx_path,
                             const std::string &gz_path,
                             std::string &stored_sha256,
@@ -241,13 +241,13 @@ class Indexer::Impl {
   uint64_t file_size_bytes(const std::string &path) const;
   int init_schema(sqlite3 *db) const;
   int build_index_internal(sqlite3 *db, int file_id, const std::string &gz_path,
-                           size_t chunk_size) const;
+                           size_t ckpt_size) const;
 
   // Database cleanup helpers
   int cleanup_existing_data(sqlite3 *db, int file_id) const;
-  int insert_metadata(sqlite3 *db, int file_id, size_t chunk_size,
+  int insert_metadata(sqlite3 *db, int file_id, size_t ckpt_size,
                       uint64_t total_lines, uint64_t total_uc_size) const;
-  int process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t checkpoint_size,
+  int process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t ckpt_size,
                      uint64_t &total_lines_out,
                      uint64_t &total_uc_size_out) const;
   void save_chunk(sqlite3_stmt *stmt, int file_id, size_t chunk_idx,
@@ -271,7 +271,7 @@ class Indexer::Impl {
 
   std::string gz_path_;
   std::string idx_path_;
-  double chunk_size_mb_;
+  size_t ckpt_size_;
   bool force_rebuild_;
   sqlite3 *db_;
   bool db_opened_;
@@ -333,7 +333,7 @@ bool Indexer::Impl::index_exists_and_valid(const std::string &idx_path) const {
   return table_count >= 3;
 }
 
-double Indexer::Impl::get_existing_chunk_size_mb(
+size_t Indexer::Impl::get_existing_ckpt_size(
     const std::string &idx_path) const {
   sqlite3 *db;
   if (sqlite3_open(idx_path.c_str(), &db) != SQLITE_OK) {
@@ -342,19 +342,17 @@ double Indexer::Impl::get_existing_chunk_size_mb(
 
   sqlite3_stmt *stmt;
   const char *sql = "SELECT checkpoint_size FROM metadata LIMIT 1";
-  double chunk_size_mb = -1;
+  size_t ckpt_size = 0;
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-      auto chunk_size_bytes =
-          static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
-      chunk_size_mb = static_cast<double>(chunk_size_bytes) / (1024.0 * 1024.0);
+      ckpt_size = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
     }
     sqlite3_finalize(stmt);
   }
 
   sqlite3_close(db);
-  return chunk_size_mb;
+  return ckpt_size;
 }
 
 int Indexer::Impl::cleanup_existing_data(sqlite3 *db, int file_id) const {
@@ -384,7 +382,7 @@ int Indexer::Impl::cleanup_existing_data(sqlite3 *db, int file_id) const {
   return 0;
 }
 
-int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size,
+int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t ckpt_size,
                                    uint64_t total_lines,
                                    uint64_t total_uc_size) const {
   sqlite3_stmt *stmt = nullptr;
@@ -398,7 +396,7 @@ int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size,
   }
 
   sqlite3_bind_int(stmt, 1, file_id);
-  sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(chunk_size));
+  sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(ckpt_size));
   sqlite3_bind_int64(stmt, 3, static_cast<int64_t>(total_lines));
   sqlite3_bind_int64(stmt, 4, static_cast<int64_t>(total_uc_size));
 
@@ -408,9 +406,9 @@ int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t chunk_size,
                   result, sqlite3_errmsg(db));
   } else {
     spdlog::debug(
-        "Successfully inserted metadata for file_id {}: chunk_size={}, "
+        "Successfully inserted metadata for file_id {}: checkpoint_size={}, "
         "total_lines={}, total_uc_size={}",
-        file_id, chunk_size, total_lines, total_uc_size);
+        file_id, ckpt_size, total_lines, total_uc_size);
   }
   sqlite3_finalize(stmt);
   return (result == SQLITE_DONE) ? 0 : -1;
@@ -685,22 +683,20 @@ uint64_t Indexer::Impl::file_size_bytes(const std::string &path) const {
 bool Indexer::Impl::need_rebuild() const {
   // Check if index exists and is valid
   if (!index_exists_and_valid(idx_path_)) {
-    spdlog::info("Index rebuild needed: index does not exist or is invalid");
+    spdlog::info("Index rebuild needed: index does not exist or is invalid in {}", idx_path_);
     return true;
   }
 
-  // Check if chunk size differs
-  // double existing_chunk_size = get_existing_chunk_size_mb(idx_path_);
-  // if (existing_chunk_size > 0)
+  // Check if checkpoint size differs
+  // size_t existing_ckpt_size = get_existing_ckpt_size(idx_path_);
+  // if (existing_ckpt_size > 0)
   // {
-  //     double diff = std::abs(existing_chunk_size - chunk_size_mb_);
+  //     size_t diff = std::abs(existing_ckpt_size - ckpt_size_);
   //     if (diff > 0.1)
   //     {
   //         // Allow small floating point differences
-  //         spdlog::debug("Index rebuild needed: chunk size differs ({:.1f} MB
-  //         vs {:.1f} MB)",
-  //                       existing_chunk_size,
-  //                       chunk_size_mb_);
+  //         spdlog::debug("Index rebuild needed: checkpoint size differs ({} bytes vs {} bytes)",
+  //                       existing_ckpt_size, ckpt_size_);
   //         return true;
   //     }
   // }
@@ -741,7 +737,7 @@ bool Indexer::Impl::need_rebuild() const {
   } else {
     // Could not get stored file info, assume rebuild needed
     spdlog::info(
-        "Index rebuild needed: could not retrieve stored file information");
+        "Index rebuild needed: could not retrieve stored file information from {}", idx_path_);
     return true;
   }
 
@@ -947,7 +943,7 @@ int Indexer::Impl::save_checkpoint(sqlite3 *db, int file_id,
 
 int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id,
                                         const std::string &gz_path,
-                                        size_t chunk_size) const {
+                                        size_t ckpt_size) const {
   FILE *fp = fopen(gz_path.c_str(), "rb");
   if (!fp) return -1;
 
@@ -964,7 +960,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id,
   uint64_t total_lines = 0;
   uint64_t total_uc_size = 0;
   int result =
-      process_chunks(fp, db, file_id, chunk_size, total_lines, total_uc_size);
+      process_chunks(fp, db, file_id, ckpt_size, total_lines, total_uc_size);
   fclose(fp);
 
   if (result != 0) {
@@ -973,7 +969,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id,
   }
 
   // Insert metadata with total_lines and total_uc_size
-  if (insert_metadata(db, file_id, chunk_size, total_lines, total_uc_size) !=
+  if (insert_metadata(db, file_id, ckpt_size, total_lines, total_uc_size) !=
       0) {
     sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
     return -2;
@@ -1248,8 +1244,8 @@ std::vector<CheckpointInfo> Indexer::Impl::find_checkpoints_by_line_range(
 }
 
 void Indexer::Impl::build() {
-  spdlog::debug("Building index for {} with {:.1f} MB chunks...", gz_path_,
-                chunk_size_mb_);
+  spdlog::debug("Building index for {} with {} bytes ({:.1f} MB) chunks...", gz_path_,
+                ckpt_size_, static_cast<double>(ckpt_size_) / (1024 * 1024));
 
   // If force rebuild is enabled, delete the existing database file to ensure
   // clean schema
@@ -1324,12 +1320,10 @@ void Indexer::Impl::build() {
   int db_file_id = sqlite3_column_int(st, 0);
   sqlite3_finalize(st);
 
-  // build the index
-  auto stride = static_cast<size_t>(chunk_size_mb_ * 1024 * 1024);
-  spdlog::debug("Building index with stride: {} bytes ({:.1f} MB)", stride,
-                chunk_size_mb_);
+  spdlog::debug("Building index with stride: {} bytes ({:.1f} MB)", ckpt_size_,
+                static_cast<double>(ckpt_size_) / (1024 * 1024));
 
-  int ret = build_index_internal(db_, db_file_id, gz_path_, stride);
+  int ret = build_index_internal(db_, db_file_id, gz_path_, ckpt_size_);
   if (ret != 0) {
     throw Indexer::Error(
         Indexer::Error::BUILD_ERROR,
@@ -1352,8 +1346,8 @@ namespace utils {
 namespace indexer {
 
 Indexer::Indexer(const std::string &gz_path, const std::string &idx_path,
-                 double chunk_size_mb, bool force_rebuild)
-    : pImpl_(new Impl(gz_path, idx_path, chunk_size_mb, force_rebuild)) {}
+                 size_t ckpt_size, bool force_rebuild)
+    : pImpl_(new Impl(gz_path, idx_path, ckpt_size, force_rebuild)) {}
 
 Indexer::~Indexer() = default;
 
@@ -1380,8 +1374,8 @@ const std::string &Indexer::get_idx_path() const {
   return pImpl_->get_idx_path();
 }
 
-double Indexer::get_chunk_size_mb() const {
-  return pImpl_->get_chunk_size_mb();
+size_t Indexer::get_checkpoint_size() const {
+  return pImpl_->get_checkpoint_size();
 }
 
 uint64_t Indexer::get_max_bytes() const { return pImpl_->get_max_bytes(); }
@@ -1458,16 +1452,16 @@ static dftracer::utils::indexer::Indexer *cast_indexer(
 
 dft_indexer_handle_t dft_indexer_create(const char *gz_path,
                                         const char *idx_path,
-                                        double chunk_size_mb,
+                                        size_t checkpoint_size,
                                         int force_rebuild) {
-  if (!gz_path || !idx_path || chunk_size_mb <= 0) {
+  if (!gz_path || !idx_path || checkpoint_size == 0) {
     spdlog::error("Invalid parameters for indexer creation");
     return nullptr;
   }
 
   try {
     auto *indexer = new dftracer::utils::indexer::Indexer(
-        gz_path, idx_path, chunk_size_mb, force_rebuild != 0);
+        gz_path, idx_path, checkpoint_size, force_rebuild != 0);
     return static_cast<dft_indexer_handle_t>(indexer);
   } catch (const std::exception &e) {
     spdlog::error("Failed to create DFT indexer: {}", e.what());

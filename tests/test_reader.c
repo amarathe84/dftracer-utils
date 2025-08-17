@@ -59,7 +59,7 @@ static test_environment_handle_t setup_test_environment(void) {
 }
 
 void test_indexer_creation_and_destruction(void) {
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(1.0), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     if (indexer) {
@@ -71,24 +71,21 @@ void test_indexer_invalid_parameters(void) {
     dft_indexer_handle_t indexer;
     
     // Test null gz_path
-    indexer = dft_indexer_create(NULL, "test.idx", 1.0, 0);
+    indexer = dft_indexer_create(NULL, "test.idx", mb_to_b(1.0), 0);
     TEST_ASSERT_NULL(indexer);
     
     // Test null idx_path
-    indexer = dft_indexer_create("test.gz", NULL, 1.0, 0);
+    indexer = dft_indexer_create("test.gz", NULL, mb_to_b(1.0), 0);
     TEST_ASSERT_NULL(indexer);
     
     // Test invalid chunk size
-    indexer = dft_indexer_create("test.gz", "test.idx", 0.0, 0);
-    TEST_ASSERT_NULL(indexer);
-    
-    indexer = dft_indexer_create("test.gz", "test.idx", -1.0, 0);
+    indexer = dft_indexer_create("test.gz", "test.idx", 0, 0);
     TEST_ASSERT_NULL(indexer);
 }
 
 void test_gzip_index_building(void) {
-    
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 0);
+
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(1.0), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
@@ -108,8 +105,8 @@ void test_indexer_rebuild_detection(void) {
     
     char* test_idx_file = test_environment_get_index_path(test_env, test_gz_file);
     TEST_ASSERT_NOT_NULL(test_idx_file);
-    
-    dft_indexer_handle_t indexer = dft_indexer_create(test_gz_file, test_idx_file, 1.0, 0);
+
+    dft_indexer_handle_t indexer = dft_indexer_create(test_gz_file, test_idx_file, mb_to_b(1.0), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     // Initial build should be needed
@@ -123,7 +120,7 @@ void test_indexer_rebuild_detection(void) {
     dft_indexer_destroy(indexer);
     
     // Create new indexer with same parameters
-    indexer = dft_indexer_create(test_gz_file, test_idx_file, 1.0, 0);
+    indexer = dft_indexer_create(test_gz_file, test_idx_file, mb_to_b(1.0), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     // Should not need rebuild now
@@ -133,7 +130,7 @@ void test_indexer_rebuild_detection(void) {
     dft_indexer_destroy(indexer);
     
     // Create new indexer with different chunk size
-    indexer = dft_indexer_create(test_gz_file, test_idx_file, 2.0, 0);
+    indexer = dft_indexer_create(test_gz_file, test_idx_file, mb_to_b(2.0), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     // Should not rebuild due to different chunk size
@@ -150,7 +147,7 @@ void test_indexer_rebuild_detection(void) {
 void test_indexer_force_rebuild(void) {
 
     // Create indexer with force rebuild
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 1);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(1.0), 1);
     TEST_ASSERT_NOT_NULL(indexer);
     
     // Should need rebuild because no index is generated
@@ -163,37 +160,37 @@ void test_indexer_force_rebuild(void) {
 void test_reader_creation_and_destruction(void) {
     
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 1.0, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(1.0), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
     
-    dft_indexer_destroy(indexer);
-    
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     if (reader) {
         dft_reader_destroy(reader);
     }
-
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_invalid_parameters(void) {
     dft_reader_handle_t reader;
-    
+
+    size_t ckpt_size = mb_to_b(0.5);
+
     // Test null gz_path
-    reader = dft_reader_create(NULL, "test.idx");
+    reader = dft_reader_create(NULL, "test.idx", ckpt_size);
     TEST_ASSERT_NULL(reader);
     
     // Test null idx_path
-    reader = dft_reader_create("test.gz", NULL);
+    reader = dft_reader_create("test.gz", NULL, ckpt_size);
     TEST_ASSERT_NULL(reader);
     
     // Test with valid paths (SQLite will create database if it doesn't exist)
-    reader = dft_reader_create("nonexistent.gz", "nonexistent.idx");
+    reader = dft_reader_create("nonexistent.gz", "nonexistent.idx", ckpt_size);
     if (reader) {
         dft_reader_destroy(reader);
     }
@@ -202,15 +199,14 @@ void test_reader_invalid_parameters(void) {
 void test_data_range_reading(void) {
 
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // Read valid byte range using streaming API
@@ -239,20 +235,20 @@ void test_data_range_reading(void) {
     
     free(output);
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_read_with_null_parameters(void) {
 
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     char buffer[1024];
@@ -266,20 +262,20 @@ void test_read_with_null_parameters(void) {
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_edge_cases(void) {
 
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
 
     // Invalid byte range (start >= end)
@@ -296,20 +292,20 @@ void test_edge_cases(void) {
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_get_maximum_bytes(void) {
 
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     size_t max_bytes;
@@ -331,11 +327,12 @@ void test_get_maximum_bytes(void) {
     }
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_get_max_bytes_null_parameters(void) {
 
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file, mb_to_b(0.5));
     if (reader) {
         size_t max_bytes;
         
@@ -354,15 +351,14 @@ void test_get_max_bytes_null_parameters(void) {
 void test_memory_management(void) {
 
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // multiple reads to ensure no memory leaks
@@ -387,6 +383,7 @@ void test_memory_management(void) {
     }
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_json_boundary_detection(void) {
@@ -402,7 +399,7 @@ void test_json_boundary_detection(void) {
     TEST_ASSERT_NOT_NULL(idx_file);
     
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
@@ -410,7 +407,7 @@ void test_json_boundary_detection(void) {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(gz_file, idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     char buffer[2048];
@@ -492,15 +489,14 @@ void test_regression_for_truncated_json_output(void) {
     remove(txt_file);
     
     // Build index
-    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, 32.0, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, mb_to_b(32.0), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(gz_file, idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
 
     // Original failing case: 0 to 10000 bytes
@@ -576,6 +572,7 @@ void test_regression_for_truncated_json_output(void) {
     }
 
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
     test_environment_destroy(large_env);
 }
 
@@ -663,15 +660,14 @@ void test_logger_set_get_level_int(void) {
 
 void test_reader_raw_basic_functionality(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // Read using raw API
@@ -697,20 +693,20 @@ void test_reader_raw_basic_functionality(void) {
     
     free(raw_result);
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_raw_vs_regular_comparison(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create two readers
-    dft_reader_handle_t reader1 = dft_reader_create(g_gz_file, g_idx_file);
-    dft_reader_handle_t reader2 = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader1 = dft_reader_create_with_indexer(indexer);
+    dft_reader_handle_t reader2 = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader1);
     TEST_ASSERT_NOT_NULL(reader2);
     
@@ -757,19 +753,20 @@ void test_reader_raw_vs_regular_comparison(void) {
     free(regular_result);
     dft_reader_destroy(reader1);
     dft_reader_destroy(reader2);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_raw_edge_cases(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
+    // printf("Reader Raw: %p\n", (void*)reader);
     TEST_ASSERT_NOT_NULL(reader);
     
     size_t max_bytes;
@@ -814,19 +811,19 @@ void test_reader_raw_edge_cases(void) {
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_raw_small_buffer(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // Use very small buffer to test streaming behavior
@@ -852,11 +849,12 @@ void test_reader_raw_small_buffer(void) {
     
     free(output);
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_raw_multiple_ranges(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
@@ -864,7 +862,7 @@ void test_reader_raw_multiple_ranges(void) {
     dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     size_t max_bytes;
@@ -909,15 +907,14 @@ void test_reader_raw_multiple_ranges(void) {
 
 void test_reader_raw_null_parameters(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     char buffer[1024];
@@ -939,20 +936,20 @@ void test_reader_raw_null_parameters(void) {
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_full_file_comparison_raw_vs_json_boundary(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create two readers
-    dft_reader_handle_t reader1 = dft_reader_create(g_gz_file, g_idx_file);
-    dft_reader_handle_t reader2 = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader1 = dft_reader_create_with_indexer(indexer);
+    dft_reader_handle_t reader2 = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader1);
     TEST_ASSERT_NOT_NULL(reader2);
     
@@ -1062,6 +1059,7 @@ void test_reader_full_file_comparison_raw_vs_json_boundary(void) {
     free(json_content);
     dft_reader_destroy(reader1);
     dft_reader_destroy(reader2);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_line_reading_basic(void) {
@@ -1077,7 +1075,7 @@ void test_reader_line_reading_basic(void) {
     TEST_ASSERT_NOT_NULL(idx_file);
     
     // Build index first with small chunk size to force checkpoint creation
-    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, 0.1, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, mb_to_b(0.1), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
@@ -1085,19 +1083,19 @@ void test_reader_line_reading_basic(void) {
     
     // Verify indexer has line data
     uint64_t total_lines = dft_indexer_get_num_lines(indexer);
-    dft_indexer_destroy(indexer);
     
     // Skip test if no line data (file too small)
     if (total_lines == 0) {
         printf("Skipping line reading tests - indexer has no line data (file too small?)\n");
         free(gz_file);
         free(idx_file);
+        dft_indexer_destroy(indexer);
         test_environment_destroy(large_env);
         return;
     }
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(gz_file, idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // Test basic line reading - first 5 lines
@@ -1129,6 +1127,7 @@ void test_reader_line_reading_basic(void) {
     TEST_ASSERT_NOT_NULL(strstr(buffer, "\"id\": 1"));
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
     free(gz_file);
     free(idx_file);
     test_environment_destroy(large_env);
@@ -1146,25 +1145,25 @@ void test_reader_line_reading_accuracy(void) {
     TEST_ASSERT_NOT_NULL(idx_file);
     
     // Build index
-    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, 0.1, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, mb_to_b(0.1), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
     
     uint64_t total_lines = dft_indexer_get_num_lines(indexer);
-    dft_indexer_destroy(indexer);
     
     if (total_lines == 0) {
         printf("Skipping line accuracy tests - no line data\n");
         free(gz_file);
         free(idx_file);
+        dft_indexer_destroy(indexer);
         test_environment_destroy(large_env);
         return;
     }
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(gz_file, idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // Test specific line numbers
@@ -1206,6 +1205,7 @@ void test_reader_line_reading_accuracy(void) {
     }
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
     free(gz_file);
     free(idx_file);
     test_environment_destroy(large_env);
@@ -1223,7 +1223,7 @@ void test_reader_line_reading_range(void) {
     TEST_ASSERT_NOT_NULL(idx_file);
     
     // Build index
-    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, 0.1, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, mb_to_b(0.1), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
@@ -1241,7 +1241,7 @@ void test_reader_line_reading_range(void) {
     }
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(gz_file, idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // Read line range 10-15 (6 lines total)
@@ -1285,15 +1285,14 @@ void test_reader_line_reading_range(void) {
 
 void test_reader_line_reading_error_handling(void) {
     // Build index first
-    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, 0.5, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(g_gz_file, g_idx_file, mb_to_b(0.5), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
-    dft_indexer_destroy(indexer);
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(g_gz_file, g_idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     char buffer[1024];
@@ -1324,6 +1323,7 @@ void test_reader_line_reading_error_handling(void) {
     TEST_ASSERT_EQUAL_INT(-1, result);
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
 }
 
 void test_reader_line_reading_buffer_too_small(void) {
@@ -1338,14 +1338,13 @@ void test_reader_line_reading_buffer_too_small(void) {
     TEST_ASSERT_NOT_NULL(idx_file);
     
     // Build index
-    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, 0.1, 0);
+    dft_indexer_handle_t indexer = dft_indexer_create(gz_file, idx_file, mb_to_b(0.1), 0);
     TEST_ASSERT_NOT_NULL(indexer);
     
     int result = dft_indexer_build(indexer);
     TEST_ASSERT_EQUAL_INT(0, result);
     
     uint64_t total_lines = dft_indexer_get_num_lines(indexer);
-    dft_indexer_destroy(indexer);
     
     if (total_lines == 0) {
         printf("Skipping buffer size tests - no line data\n");
@@ -1356,7 +1355,7 @@ void test_reader_line_reading_buffer_too_small(void) {
     }
     
     // Create reader
-    dft_reader_handle_t reader = dft_reader_create(gz_file, idx_file);
+    dft_reader_handle_t reader = dft_reader_create_with_indexer(indexer);
     TEST_ASSERT_NOT_NULL(reader);
     
     // Try to read many lines into a small buffer
@@ -1379,6 +1378,7 @@ void test_reader_line_reading_buffer_too_small(void) {
     TEST_ASSERT_TRUE(bytes_written > sizeof(small_buffer));  // Should tell us required size
     
     dft_reader_destroy(reader);
+    dft_indexer_destroy(indexer);
     free(gz_file);
     free(idx_file);
     test_environment_destroy(large_env);
