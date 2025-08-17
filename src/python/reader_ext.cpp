@@ -153,10 +153,8 @@ class DFTracerReader {
     open();
   }
 
-  DFTracerReader(DFTracerIndexer* indexer)
-      : reader_(nullptr),
-        is_open_(false),
-        max_bytes_(0) {
+  DFTracerReader(DFTracerIndexer *indexer)
+      : reader_(nullptr), is_open_(false), max_bytes_(0) {
     if (!indexer) {
       throw std::runtime_error("Indexer cannot be null");
     }
@@ -557,8 +555,7 @@ NB_MODULE(reader_ext, m) {
       .def(nb::init<const std::string &, const std::optional<std::string> &>(),
            "gzip_path"_a, "index_path"_a = nb::none(),
            "Create a DFTracer bytes reader for a gzip file and its index")
-      .def(nb::init<DFTracerIndexer*>(),
-           "indexer"_a,
+      .def(nb::init<DFTracerIndexer *>(), "indexer"_a,
            "Create a DFTracer bytes reader from an existing indexer")
       .def("get_max_bytes", &DFTracerBytesReader::get_max_bytes,
            "Get the maximum byte position available in the file")
@@ -593,8 +590,7 @@ NB_MODULE(reader_ext, m) {
       .def(nb::init<const std::string &, const std::optional<std::string> &>(),
            "gzip_path"_a, "index_path"_a = nb::none(),
            "Create a DFTracer line bytes reader for a gzip file and its index")
-      .def(nb::init<DFTracerIndexer*>(),
-           "indexer"_a,
+      .def(nb::init<DFTracerIndexer *>(), "indexer"_a,
            "Create a DFTracer line bytes reader from an existing indexer")
       .def("get_max_bytes", &DFTracerLineBytesReader::get_max_bytes,
            "Get the maximum byte position available in the file")
@@ -630,8 +626,7 @@ NB_MODULE(reader_ext, m) {
       .def(nb::init<const std::string &, const std::optional<std::string> &>(),
            "gzip_path"_a, "index_path"_a = nb::none(),
            "Create a DFTracer lines reader for a gzip file and its index")
-      .def(nb::init<DFTracerIndexer*>(),
-           "indexer"_a,
+      .def(nb::init<DFTracerIndexer *>(), "indexer"_a,
            "Create a DFTracer lines reader from an existing indexer")
       .def("get_max_bytes", &DFTracerLinesReader::get_max_bytes,
            "Get the maximum byte position available in the file")
