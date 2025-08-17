@@ -61,6 +61,7 @@ link_zlib(dftracer_utils STATIC)
 target_include_directories(dftracer_utils 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
 )
 target_set_warnings(dftracer_utils)
 
@@ -96,6 +97,7 @@ link_zlib(dftracer_utils_shared SHARED)
 target_include_directories(dftracer_utils_shared 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
 )
 target_set_warnings(dftracer_utils_shared)
 
@@ -226,9 +228,6 @@ endif()
 if(TARGET picosha2)
     list(APPEND INSTALLABLE_TARGETS picosha2)
 endif()
-# if(TARGET spdlog)
-#     list(APPEND INSTALLABLE_TARGETS spdlog)
-# endif()
 if (TARGET spdlog_header_only)
     list(APPEND INSTALLABLE_TARGETS spdlog_header_only)
 endif()
@@ -241,10 +240,15 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/dftracer/utils/
     FILES_MATCHING PATTERN "*.h"
 )
 
+install(DIRECTORY ${CMAKE_BINARY_DIR}/include/dftracer/utils/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dftracer/utils
+    FILES_MATCHING PATTERN "*.h"
+)
+
 message(STATUS "Creating package config for dftracer_utils")
 create_package_config(
     TARGET dftracer_utils
-    VERSION ${PROJECT_VERSION}
+    VERSION ${DFTRACER_UTILS_PACKAGE_VERSION}
     DESCRIPTION "DFTracer utils library for processing gzipped files"
     URL "https://github.com/LLNL/dftracer-utils"
     REQUIRES "sqlite3 spdlog"

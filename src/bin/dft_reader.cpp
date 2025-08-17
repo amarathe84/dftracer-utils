@@ -1,3 +1,4 @@
+#include <dftracer/utils/config.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
@@ -14,7 +15,7 @@
 #include <cstring>
 
 int main(int argc, char **argv) {
-  argparse::ArgumentParser program("dft_reader", "1.0");
+  argparse::ArgumentParser program("dft_reader", DFTRACER_UTILS_PACKAGE_VERSION);
   program.add_description(
       "DFTracer utility for reading and indexing gzipped files");
   program.add_argument("file").help("Gzipped file to process").required();
