@@ -165,20 +165,6 @@ if (SKBUILD)
     OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
   find_package(nanobind CONFIG REQUIRED)
 
-  if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-  endif()
-
-  add_library(dftracer_utils_py python/indexer_py.cpp)
-  target_link_libraries(dftracer_utils_py PRIVATE dftracer_utils::shared)
-  # @HACK: this is needed to avoid include errors
-  target_include_directories(dftracer_utils_py
-    PRIVATE
-      ${Python_INCLUDE_DIRS}
-      ${NB_DIR}/include
-  )
-
   set(PYTHON_BINDINGS_SOURCES
     python/indexer_ext.cpp
     python/reader_ext.cpp
@@ -187,25 +173,28 @@ if (SKBUILD)
 
   foreach (source_file ${PYTHON_BINDINGS_SOURCES})
       get_filename_component(source_name ${source_file} NAME_WE)
-      # message(FATAL_ERROR "Building Python bindings for ${source_name}")
+      message(STATUS "Building Python bindings for ${source_name}")
+      set(source ${source_name})
+      # exception for reader_ext.cpp and indexer_ext
+      if (${source_name} STREQUAL "reader_ext" OR ${source_name} STREQUAL "indexer_ext")
+          list(APPEND sources python/indexer_py.h)
+      endif()
+
       if (APPLE)
         nanobind_add_module(
           ${source_name}
           NB_STATIC STABLE_ABI
-          ${source_file}
+          ${sources}
         )
       else()
         nanobind_add_module(
           ${source_name}
           NB_STATIC STABLE_ABI LTO
-          ${source_file}
+          python/indexer_py.h
+          ${sources}
         )
       endif()
-      target_link_libraries(${source_name} PRIVATE dftracer_utils::shared dftracer_utils_py)
-      # exception for reader_ext.cpp since it needs indexer_ext
-      # if (${source_name} STREQUAL "reader_ext")
-      #     target_link_libraries(${source_name} PRIVATE indexer_ext)
-      # endif()
+      target_link_libraries(${source_name} PRIVATE dftracer_utils::shared)
       target_add_rpath(${source_name})
       install(TARGETS ${source_name} LIBRARY DESTINATION dftracer/utils)
   endforeach()
