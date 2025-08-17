@@ -19,6 +19,136 @@ namespace dftracer {
 namespace utils {
 namespace indexer {
 
+// ==============================================================================
+// Constants and Configuration
+// ==============================================================================
+
+namespace constants {
+  static constexpr size_t INFLATE_BUFFER_SIZE = 16384;
+  static constexpr size_t PROCESS_BUFFER_SIZE = 65536;
+  static constexpr size_t ZLIB_WINDOW_SIZE = 32768;
+  static constexpr int ZLIB_GZIP_WINDOW_BITS = 31;  // 15 + 16 for gzip format
+
+  static const char* SQL_SCHEMA = R"(
+    CREATE TABLE IF NOT EXISTS files (
+      id INTEGER PRIMARY KEY,
+      logical_name TEXT UNIQUE NOT NULL,
+      byte_size INTEGER NOT NULL,
+      mtime_unix INTEGER NOT NULL,
+      sha256_hex TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS checkpoints (
+      id INTEGER PRIMARY KEY,
+      file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      checkpoint_idx INTEGER NOT NULL,
+      uc_offset INTEGER NOT NULL,
+      uc_size INTEGER NOT NULL,
+      c_offset INTEGER NOT NULL,
+      c_size INTEGER NOT NULL,
+      bits INTEGER NOT NULL,
+      dict_compressed BLOB NOT NULL,
+      num_lines INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS checkpoints_file_idx ON checkpoints(file_id, checkpoint_idx);
+    CREATE INDEX IF NOT EXISTS checkpoints_file_uc_off_idx ON checkpoints(file_id, uc_offset);
+
+    CREATE TABLE IF NOT EXISTS metadata (
+      file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      checkpoint_size INTEGER NOT NULL,
+      total_lines INTEGER NOT NULL DEFAULT 0,
+      total_uc_size INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(file_id)
+    );
+  )";
+}  // namespace constants
+
+// ==============================================================================
+// Helper Structures
+// ==============================================================================
+
+struct InflateState {
+  z_stream zs;
+  FILE *file;
+  unsigned char in[constants::INFLATE_BUFFER_SIZE];
+
+  InflateState() : file(nullptr) {
+    memset(&zs, 0, sizeof(zs));
+    memset(in, 0, sizeof(in));
+  }
+};
+
+struct CheckpointData {
+  size_t uc_offset;
+  size_t c_offset;
+  int bits;
+  unsigned char window[constants::ZLIB_WINDOW_SIZE];
+
+  CheckpointData() : uc_offset(0), c_offset(0), bits(0) {
+    memset(window, 0, sizeof(window));
+  }
+};
+
+class SqliteStmt {
+  public:
+  SqliteStmt(sqlite3 *db, const char *sql) {
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt_, nullptr) != SQLITE_OK) {
+      stmt_ = nullptr;
+      throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                                "Failed to prepare SQL statement: " +
+                                std::string(sqlite3_errmsg(db)));
+    }
+  }
+
+  ~SqliteStmt() {
+    if (stmt_) {
+      sqlite3_finalize(stmt_);
+    }
+  }
+
+  // No copy
+  SqliteStmt(const SqliteStmt &) = delete;
+  SqliteStmt &operator=(const SqliteStmt &) = delete;
+
+  operator sqlite3_stmt *() { return stmt_; }
+  sqlite3_stmt *get() { return stmt_; }
+
+  void reset() { sqlite3_reset(stmt_); }
+
+  private:
+  sqlite3_stmt *stmt_;
+};
+
+// ==============================================================================
+// Error Handling Helper
+// ==============================================================================
+
+class ErrorHandler {
+ public:
+  static void validate_parameters(double chunk_size_mb) {
+    if (chunk_size_mb <= 0) {
+      throw Indexer::Error(Indexer::Error::INVALID_ARGUMENT,
+                          "chunk_size_mb must be greater than 0");
+    }
+  }
+
+  static void check_indexer_state(sqlite3* db) {
+    if (!db) {
+      throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Database connection is not open");
+    }
+  }
+
+  static void validate_line_range(size_t start_line, size_t end_line) {
+    if (start_line == 0 || end_line == 0 || start_line > end_line) {
+      throw Indexer::Error(Indexer::Error::INVALID_ARGUMENT,
+                          "Invalid line range: start_line and end_line must be > 0 and "
+                          "start_line <= end_line");
+    }
+  }
+};
+
 class Indexer::Impl {
  public:
   Impl(const std::string &gz_path, const std::string &idx_path,
@@ -30,9 +160,7 @@ class Indexer::Impl {
         db_(nullptr),
         db_opened_(false),
         cached_file_id_(-1) {
-    if (chunk_size_mb <= 0) {
-      throw std::invalid_argument("chunk_size_mb must be greater than 0");
-    }
+    ErrorHandler::validate_parameters(chunk_size_mb);
     spdlog::debug("Created DFT indexer for gz: {} and index: {}", gz_path,
                   idx_path);
   }
@@ -100,51 +228,6 @@ class Indexer::Impl {
   int get_file_id() const;
 
  private:
-  static const char *SQL_SCHEMA;
-
-  struct InflateState {
-    z_stream zs;
-    FILE *file;
-    unsigned char in[16384];
-  };
-
-  struct CheckpointData {
-    size_t uc_offset;
-    size_t c_offset;
-    int bits;
-    unsigned char window[32768];
-  };
-
-  // RAII wrapper for SQLite statements
-  class SqliteStmt {
-   public:
-    SqliteStmt(sqlite3 *db, const char *sql) {
-      if (sqlite3_prepare_v2(db, sql, -1, &stmt_, nullptr) != SQLITE_OK) {
-        stmt_ = nullptr;
-        throw std::runtime_error("Failed to prepare SQL statement: " +
-                                 std::string(sqlite3_errmsg(db)));
-      }
-    }
-
-    ~SqliteStmt() {
-      if (stmt_) {
-        sqlite3_finalize(stmt_);
-      }
-    }
-
-    // No copy
-    SqliteStmt(const SqliteStmt &) = delete;
-    SqliteStmt &operator=(const SqliteStmt &) = delete;
-
-    operator sqlite3_stmt *() { return stmt_; }
-    sqlite3_stmt *get() { return stmt_; }
-
-    void reset() { sqlite3_reset(stmt_); }
-
-   private:
-    sqlite3_stmt *stmt_;
-  };
-
   // Helper methods
   std::string calculate_file_sha256(const std::string &file_path) const;
   time_t get_file_mtime(const std::string &file_path) const;
@@ -193,41 +276,6 @@ class Indexer::Impl {
   bool db_opened_;
   mutable int cached_file_id_;
 };
-
-const char *Indexer::Impl::SQL_SCHEMA =
-    "CREATE TABLE IF NOT EXISTS files ("
-    "  id INTEGER PRIMARY KEY,"
-    "  logical_name TEXT UNIQUE NOT NULL,"
-    "  byte_size INTEGER NOT NULL,"
-    "  mtime_unix INTEGER NOT NULL,"
-    "  sha256_hex TEXT NOT NULL"
-    ");"
-
-    "CREATE TABLE IF NOT EXISTS checkpoints ("
-    "  id INTEGER PRIMARY KEY,"
-    "  file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
-    "  checkpoint_idx INTEGER NOT NULL,"
-    "  uc_offset INTEGER NOT NULL,"
-    "  uc_size INTEGER NOT NULL,"
-    "  c_offset INTEGER NOT NULL,"
-    "  c_size INTEGER NOT NULL,"
-    "  bits INTEGER NOT NULL,"
-    "  dict_compressed BLOB NOT NULL,"
-    "  num_lines INTEGER NOT NULL"
-    ");"
-
-    "CREATE INDEX IF NOT EXISTS checkpoints_file_idx ON "
-    "checkpoints(file_id, checkpoint_idx);"
-    "CREATE INDEX IF NOT EXISTS checkpoints_file_uc_off_idx ON "
-    "checkpoints(file_id, uc_offset);"
-
-    "CREATE TABLE IF NOT EXISTS metadata ("
-    "  file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
-    "  checkpoint_size INTEGER NOT NULL,"
-    "  total_lines INTEGER NOT NULL DEFAULT 0,"
-    "  total_uc_size INTEGER NOT NULL DEFAULT 0,"
-    "  PRIMARY KEY(file_id)"
-    ");";
 
 std::string Indexer::Impl::calculate_file_sha256(
     const std::string &file_path) const {
@@ -412,7 +460,7 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
     size_t checkpoint_start_uc_offset =
         0;  // Start of current checkpoint (uncompressed)
 
-    unsigned char buffer[65536];
+    unsigned char buffer[constants::PROCESS_BUFFER_SIZE];
     uint64_t total_lines = 0;
 
     while (true) {
@@ -457,7 +505,7 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
           unsigned char *compressed_dict = nullptr;
           size_t compressed_dict_size = 0;
 
-          if (compress_window(checkpoint_data.window, ZLIB_WINDOW_SIZE,
+          if (compress_window(checkpoint_data.window, constants::ZLIB_WINDOW_SIZE,
                               &compressed_dict, &compressed_dict_size) == 0) {
             // Insert checkpoint into database
             sqlite3_bind_int(st_checkpoint, 1, file_id);
@@ -541,7 +589,7 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
           unsigned char *compressed_dict = nullptr;
           size_t compressed_dict_size = 0;
 
-          if (compress_window(checkpoint_data.window, ZLIB_WINDOW_SIZE,
+          if (compress_window(checkpoint_data.window, constants::ZLIB_WINDOW_SIZE,
                               &compressed_dict, &compressed_dict_size) == 0) {
             sqlite3_bind_int(st_checkpoint, 1, file_id);
             sqlite3_bind_int64(st_checkpoint, 2,
@@ -671,7 +719,8 @@ bool Indexer::Impl::need_rebuild() const {
     if (!stored_sha256.empty()) {
       std::string current_sha256 = calculate_file_sha256(gz_path_);
       if (current_sha256.empty()) {
-        throw std::runtime_error("Failed to calculate SHA256 for " + gz_path_);
+        throw Indexer::Error(Indexer::Error::FILE_ERROR,
+                      "Failed to calculate SHA256 for " + gz_path_);
       }
 
       if (current_sha256 != stored_sha256) {
@@ -699,12 +748,11 @@ bool Indexer::Impl::need_rebuild() const {
 
 int Indexer::Impl::init_schema(sqlite3 *db) const {
   char *errmsg = NULL;
-  int rc = sqlite3_exec(db, SQL_SCHEMA, NULL, NULL, &errmsg);
+  int rc = sqlite3_exec(db, constants::SQL_SCHEMA, NULL, NULL, &errmsg);
   if (rc != SQLITE_OK) {
-    std::string error =
-        "Failed to initialize database schema: " + std::string(errmsg);
+    std::string error = "Failed to initialize database schema: " + std::string(errmsg);
     sqlite3_free(errmsg);
-    throw std::runtime_error(error);
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR, error);
   }
   spdlog::debug("Schema init succeeded");
   return rc;
@@ -714,7 +762,7 @@ int Indexer::Impl::inflate_init_simple(InflateState *state, FILE *f) const {
   memset(state, 0, sizeof(*state));
   state->file = f;
 
-  if (inflateInit2(&state->zs, 31) != Z_OK) {
+  if (inflateInit2(&state->zs, constants::ZLIB_GZIP_WINDOW_BITS) != Z_OK) {
     return -1;
   }
   return 0;
@@ -792,22 +840,22 @@ int Indexer::Impl::create_checkpoint(InflateState *state,
       inflateGetDictionary(&state->zs, checkpoint->window, &have) == Z_OK &&
       have > 0) {
     // Got dictionary successfully
-    if (have < 32768) {
+    if (have < constants::ZLIB_WINDOW_SIZE) {
       // If less than 32KB available, right-align and pad with zeros
-      memmove(checkpoint->window + (32768 - have), checkpoint->window, have);
-      memset(checkpoint->window, 0, 32768 - have);
+      memmove(checkpoint->window + (constants::ZLIB_WINDOW_SIZE - have), checkpoint->window, have);
+      memset(checkpoint->window, 0, constants::ZLIB_WINDOW_SIZE - have);
     }
 
     spdlog::debug(
         "Created checkpoint: uc_offset={}, c_offset={}, bits={}, dict_size={}",
         uc_offset, checkpoint->c_offset, checkpoint->bits, have);
     return 0;
-  } else {
-    // If we can't get dictionary from zlib, this checkpoint won't work
-    spdlog::debug("Could not get dictionary for checkpoint at offset {}",
-                  uc_offset);
-    return -1;
   }
+
+  // If we can't get dictionary from zlib, this checkpoint won't work
+  spdlog::debug("Could not get dictionary for checkpoint at offset {}",
+                uc_offset);
+  return -1;
 }
 
 int Indexer::Impl::compress_window(const unsigned char *window,
@@ -937,8 +985,9 @@ uint64_t Indexer::Impl::get_max_bytes() const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw std::runtime_error("Cannot open index database: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Cannot open index database: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -982,8 +1031,9 @@ uint64_t Indexer::Impl::get_num_lines() const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw std::runtime_error("Cannot open index database: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Cannot open index database: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1011,8 +1061,9 @@ int Indexer::Impl::find_file_id(const std::string &gz_path) const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw std::runtime_error("Cannot open index database: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Cannot open index database: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1027,8 +1078,9 @@ int Indexer::Impl::find_file_id(const std::string &gz_path) const {
     sqlite3_finalize(stmt);
   } else {
     sqlite3_close(db);
-    throw std::runtime_error("Failed to prepare find_file_id statement: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Failed to prepare find_file_id statement: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_close(db);
@@ -1054,8 +1106,9 @@ bool Indexer::Impl::find_checkpoint(size_t target_offset,
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw std::runtime_error("Cannot open index database: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Cannot open index database: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1091,8 +1144,9 @@ bool Indexer::Impl::find_checkpoint(size_t target_offset,
     sqlite3_finalize(stmt);
   } else {
     sqlite3_close(db);
-    throw std::runtime_error("Failed to prepare find_checkpoint statement: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Failed to prepare find_checkpoint statement: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_close(db);
@@ -1108,8 +1162,9 @@ std::vector<CheckpointInfo> Indexer::Impl::get_checkpoints() const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw std::runtime_error("Cannot open index database: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Cannot open index database: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1145,8 +1200,9 @@ std::vector<CheckpointInfo> Indexer::Impl::get_checkpoints() const {
     sqlite3_finalize(stmt);
   } else {
     sqlite3_close(db);
-    throw std::runtime_error("Failed to prepare get_checkpoints statement: " +
-                             std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Failed to prepare get_checkpoints statement: " +
+                          std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_close(db);
@@ -1171,9 +1227,9 @@ std::vector<CheckpointInfo> Indexer::Impl::find_checkpoints_by_line_range(
   }
 
   if (start_line == 0 || end_line == 0 || start_line > end_line) {
-    throw std::runtime_error(
-        "Invalid line range: start_line and end_line must be > 0 and "
-        "start_line <= end_line");
+    throw Indexer::Error(Indexer::Error::INVALID_ARGUMENT,
+                          "Invalid line range: start_line and end_line must be > 0 and "
+                          "start_line <= end_line");
   }
 
   // For line-based reading, we need to start from the beginning and decompress
@@ -1201,26 +1257,30 @@ void Indexer::Impl::build() {
 
   // open database
   if (sqlite3_open(idx_path_.c_str(), &db_) != SQLITE_OK) {
-    throw std::runtime_error("Cannot create/open database " + idx_path_ + ": " +
-                             sqlite3_errmsg(db_));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Cannot create/open database " + idx_path_ + ": " +
+                          sqlite3_errmsg(db_));
   }
   db_opened_ = true;
 
   // initialize schema
   if (init_schema(db_) != SQLITE_OK) {
-    throw std::runtime_error("Failed to initialize database schema");
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Failed to initialize database schema");
   }
 
   // get file info
   uint64_t bytes = file_size_bytes(gz_path_);
   if (bytes == UINT64_MAX) {
-    throw std::runtime_error("Cannot stat " + gz_path_);
+    throw Indexer::Error(Indexer::Error::FILE_ERROR,
+                          "Cannot stat " + gz_path_);
   }
 
   // calculate SHA256 and get modification time
   std::string file_sha256 = calculate_file_sha256(gz_path_);
   if (file_sha256.empty()) {
-    throw std::runtime_error("Failed to calculate SHA256 for " + gz_path_);
+    throw Indexer::Error(Indexer::Error::FILE_ERROR,
+                          "Failed to calculate SHA256 for " + gz_path_);
   }
 
   time_t file_mtime = get_file_mtime(gz_path_);
@@ -1240,8 +1300,9 @@ void Indexer::Impl::build() {
           "sha256_hex=excluded.sha256_hex "
           "RETURNING id;",
           -1, &st, NULL) != SQLITE_OK) {
-    throw std::runtime_error("Prepare failed: " +
-                             std::string(sqlite3_errmsg(db_)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                          "Prepare failed: " +
+                          std::string(sqlite3_errmsg(db_)));
   }
 
   sqlite3_bind_text(st, 1, gz_path_.c_str(), -1, SQLITE_TRANSIENT);
@@ -1252,8 +1313,8 @@ void Indexer::Impl::build() {
   int rc = sqlite3_step(st);
   if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
     sqlite3_finalize(st);
-    throw std::runtime_error("Insert failed: " +
-                             std::string(sqlite3_errmsg(db_)));
+    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
+                         "Insert failed: " + std::string(sqlite3_errmsg(db_)));
   }
 
   int db_file_id = sqlite3_column_int(st, 0);
@@ -1266,8 +1327,9 @@ void Indexer::Impl::build() {
 
   int ret = build_index_internal(db_, db_file_id, gz_path_, stride);
   if (ret != 0) {
-    throw std::runtime_error("Index build failed for " + gz_path_ +
-                             " (error code: " + std::to_string(ret) + ")");
+    throw Indexer::Error(Indexer::Error::BUILD_ERROR,
+                             "Index build failed with error code: " +
+                             std::to_string(ret));
   }
 
   spdlog::debug("Index built successfully for {}", gz_path_);
@@ -1339,6 +1401,36 @@ std::vector<CheckpointInfo> Indexer::find_checkpoints_by_line_range(
     size_t start_line, size_t end_line) const {
   return pImpl_->find_checkpoints_by_line_range(start_line, end_line);
 }
+
+// ==============================================================================
+// Error Class Implementation
+// ==============================================================================
+
+std::string Indexer::Error::format_message(Type type, const std::string& message) {
+  const char* prefix = "";
+  switch (type) {
+    case DATABASE_ERROR:
+      prefix = "Database error";
+      break;
+    case FILE_ERROR:
+      prefix = "File error";
+      break;
+    case COMPRESSION_ERROR:
+      prefix = "Compression error";
+      break;
+    case INVALID_ARGUMENT:
+      prefix = "Invalid argument";
+      break;
+    case BUILD_ERROR:
+      prefix = "Build error";
+      break;
+    case UNKNOWN_ERROR:
+      prefix = "Unknown error";
+      break;
+  }
+  return std::string(prefix) + ": " + message;
+}
+
 
 }  // namespace indexer
 }  // namespace utils

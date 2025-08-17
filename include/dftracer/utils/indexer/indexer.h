@@ -302,7 +302,7 @@ class Indexer {
   public:
     enum Type {
       DATABASE_ERROR,
-      FILE_IO_ERROR,
+      FILE_ERROR,
       COMPRESSION_ERROR,
       INVALID_ARGUMENT,
       BUILD_ERROR,

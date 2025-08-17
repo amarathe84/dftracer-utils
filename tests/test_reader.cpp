@@ -340,10 +340,10 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
 
   SUBCASE("Indexer with invalid chunk size should throw in constructor") {
     CHECK_THROWS_AS(dftracer::utils::indexer::Indexer(gz_file, idx_file, 0.0),
-                    std::invalid_argument);
+                    dftracer::utils::indexer::Indexer::Error);
 
     CHECK_THROWS_AS(dftracer::utils::indexer::Indexer(gz_file, idx_file, -1.0),
-                    std::invalid_argument);
+                    dftracer::utils::indexer::Indexer::Error);
   }
 
   SUBCASE("Reader with invalid paths should throw in constructor") {
