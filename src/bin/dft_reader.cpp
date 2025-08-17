@@ -137,7 +137,8 @@ int main(int argc, char **argv) {
         }
         fwrite(lines.c_str(), 1, lines.size(), stdout);
         // count new line only
-        size_t line_count = static_cast<size_t>(std::count(lines.begin(), lines.end(), '\n'));
+        size_t line_count =
+            static_cast<size_t>(std::count(lines.begin(), lines.end(), '\n'));
         spdlog::debug("Successfully read {} lines from range", line_count);
       } else {
         size_t start_bytes_ = static_cast<size_t>(start);

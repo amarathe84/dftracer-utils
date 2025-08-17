@@ -24,12 +24,12 @@ namespace indexer {
 // ==============================================================================
 
 namespace constants {
-  static constexpr size_t INFLATE_BUFFER_SIZE = 16384;
-  static constexpr size_t PROCESS_BUFFER_SIZE = 65536;
-  static constexpr size_t ZLIB_WINDOW_SIZE = 32768;
-  static constexpr int ZLIB_GZIP_WINDOW_BITS = 31;  // 15 + 16 for gzip format
+static constexpr size_t INFLATE_BUFFER_SIZE = 16384;
+static constexpr size_t PROCESS_BUFFER_SIZE = 65536;
+static constexpr size_t ZLIB_WINDOW_SIZE = 32768;
+static constexpr int ZLIB_GZIP_WINDOW_BITS = 31;  // 15 + 16 for gzip format
 
-  static const char* SQL_SCHEMA = R"(
+static const char *SQL_SCHEMA = R"(
     CREATE TABLE IF NOT EXISTS files (
       id INTEGER PRIMARY KEY,
       logical_name TEXT UNIQUE NOT NULL,
@@ -91,13 +91,13 @@ struct CheckpointData {
 };
 
 class SqliteStmt {
-  public:
+ public:
   SqliteStmt(sqlite3 *db, const char *sql) {
     if (sqlite3_prepare_v2(db, sql, -1, &stmt_, nullptr) != SQLITE_OK) {
       stmt_ = nullptr;
       throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                                "Failed to prepare SQL statement: " +
-                                std::string(sqlite3_errmsg(db)));
+                           "Failed to prepare SQL statement: " +
+                               std::string(sqlite3_errmsg(db)));
     }
   }
 
@@ -116,7 +116,7 @@ class SqliteStmt {
 
   void reset() { sqlite3_reset(stmt_); }
 
-  private:
+ private:
   sqlite3_stmt *stmt_;
 };
 
@@ -129,22 +129,23 @@ class ErrorHandler {
   static void validate_parameters(double chunk_size_mb) {
     if (chunk_size_mb <= 0) {
       throw Indexer::Error(Indexer::Error::INVALID_ARGUMENT,
-                          "chunk_size_mb must be greater than 0");
+                           "chunk_size_mb must be greater than 0");
     }
   }
 
-  static void check_indexer_state(sqlite3* db) {
+  static void check_indexer_state(sqlite3 *db) {
     if (!db) {
       throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Database connection is not open");
+                           "Database connection is not open");
     }
   }
 
   static void validate_line_range(size_t start_line, size_t end_line) {
     if (start_line == 0 || end_line == 0 || start_line > end_line) {
-      throw Indexer::Error(Indexer::Error::INVALID_ARGUMENT,
-                          "Invalid line range: start_line and end_line must be > 0 and "
-                          "start_line <= end_line");
+      throw Indexer::Error(
+          Indexer::Error::INVALID_ARGUMENT,
+          "Invalid line range: start_line and end_line must be > 0 and "
+          "start_line <= end_line");
     }
   }
 };
@@ -505,8 +506,9 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
           unsigned char *compressed_dict = nullptr;
           size_t compressed_dict_size = 0;
 
-          if (compress_window(checkpoint_data.window, constants::ZLIB_WINDOW_SIZE,
-                              &compressed_dict, &compressed_dict_size) == 0) {
+          if (compress_window(checkpoint_data.window,
+                              constants::ZLIB_WINDOW_SIZE, &compressed_dict,
+                              &compressed_dict_size) == 0) {
             // Insert checkpoint into database
             sqlite3_bind_int(st_checkpoint, 1, file_id);
             sqlite3_bind_int64(st_checkpoint, 2,
@@ -589,8 +591,9 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
           unsigned char *compressed_dict = nullptr;
           size_t compressed_dict_size = 0;
 
-          if (compress_window(checkpoint_data.window, constants::ZLIB_WINDOW_SIZE,
-                              &compressed_dict, &compressed_dict_size) == 0) {
+          if (compress_window(checkpoint_data.window,
+                              constants::ZLIB_WINDOW_SIZE, &compressed_dict,
+                              &compressed_dict_size) == 0) {
             sqlite3_bind_int(st_checkpoint, 1, file_id);
             sqlite3_bind_int64(st_checkpoint, 2,
                                static_cast<int64_t>(checkpoint_idx));
@@ -720,7 +723,7 @@ bool Indexer::Impl::need_rebuild() const {
       std::string current_sha256 = calculate_file_sha256(gz_path_);
       if (current_sha256.empty()) {
         throw Indexer::Error(Indexer::Error::FILE_ERROR,
-                      "Failed to calculate SHA256 for " + gz_path_);
+                             "Failed to calculate SHA256 for " + gz_path_);
       }
 
       if (current_sha256 != stored_sha256) {
@@ -750,7 +753,8 @@ int Indexer::Impl::init_schema(sqlite3 *db) const {
   char *errmsg = NULL;
   int rc = sqlite3_exec(db, constants::SQL_SCHEMA, NULL, NULL, &errmsg);
   if (rc != SQLITE_OK) {
-    std::string error = "Failed to initialize database schema: " + std::string(errmsg);
+    std::string error =
+        "Failed to initialize database schema: " + std::string(errmsg);
     sqlite3_free(errmsg);
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR, error);
   }
@@ -842,7 +846,8 @@ int Indexer::Impl::create_checkpoint(InflateState *state,
     // Got dictionary successfully
     if (have < constants::ZLIB_WINDOW_SIZE) {
       // If less than 32KB available, right-align and pad with zeros
-      memmove(checkpoint->window + (constants::ZLIB_WINDOW_SIZE - have), checkpoint->window, have);
+      memmove(checkpoint->window + (constants::ZLIB_WINDOW_SIZE - have),
+              checkpoint->window, have);
       memset(checkpoint->window, 0, constants::ZLIB_WINDOW_SIZE - have);
     }
 
@@ -985,9 +990,9 @@ uint64_t Indexer::Impl::get_max_bytes() const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Cannot open index database: " +
-                          std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(
+        Indexer::Error::DATABASE_ERROR,
+        "Cannot open index database: " + std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1031,9 +1036,9 @@ uint64_t Indexer::Impl::get_num_lines() const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Cannot open index database: " +
-                          std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(
+        Indexer::Error::DATABASE_ERROR,
+        "Cannot open index database: " + std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1061,9 +1066,9 @@ int Indexer::Impl::find_file_id(const std::string &gz_path) const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Cannot open index database: " +
-                          std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(
+        Indexer::Error::DATABASE_ERROR,
+        "Cannot open index database: " + std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1079,8 +1084,8 @@ int Indexer::Impl::find_file_id(const std::string &gz_path) const {
   } else {
     sqlite3_close(db);
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Failed to prepare find_file_id statement: " +
-                          std::string(sqlite3_errmsg(db)));
+                         "Failed to prepare find_file_id statement: " +
+                             std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_close(db);
@@ -1106,9 +1111,9 @@ bool Indexer::Impl::find_checkpoint(size_t target_offset,
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Cannot open index database: " +
-                          std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(
+        Indexer::Error::DATABASE_ERROR,
+        "Cannot open index database: " + std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1145,8 +1150,8 @@ bool Indexer::Impl::find_checkpoint(size_t target_offset,
   } else {
     sqlite3_close(db);
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Failed to prepare find_checkpoint statement: " +
-                          std::string(sqlite3_errmsg(db)));
+                         "Failed to prepare find_checkpoint statement: " +
+                             std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_close(db);
@@ -1162,9 +1167,9 @@ std::vector<CheckpointInfo> Indexer::Impl::get_checkpoints() const {
 
   sqlite3 *db;
   if (sqlite3_open(idx_path_.c_str(), &db) != SQLITE_OK) {
-    throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Cannot open index database: " +
-                          std::string(sqlite3_errmsg(db)));
+    throw Indexer::Error(
+        Indexer::Error::DATABASE_ERROR,
+        "Cannot open index database: " + std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_stmt *stmt;
@@ -1201,8 +1206,8 @@ std::vector<CheckpointInfo> Indexer::Impl::get_checkpoints() const {
   } else {
     sqlite3_close(db);
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Failed to prepare get_checkpoints statement: " +
-                          std::string(sqlite3_errmsg(db)));
+                         "Failed to prepare get_checkpoints statement: " +
+                             std::string(sqlite3_errmsg(db)));
   }
 
   sqlite3_close(db);
@@ -1227,9 +1232,10 @@ std::vector<CheckpointInfo> Indexer::Impl::find_checkpoints_by_line_range(
   }
 
   if (start_line == 0 || end_line == 0 || start_line > end_line) {
-    throw Indexer::Error(Indexer::Error::INVALID_ARGUMENT,
-                          "Invalid line range: start_line and end_line must be > 0 and "
-                          "start_line <= end_line");
+    throw Indexer::Error(
+        Indexer::Error::INVALID_ARGUMENT,
+        "Invalid line range: start_line and end_line must be > 0 and "
+        "start_line <= end_line");
   }
 
   // For line-based reading, we need to start from the beginning and decompress
@@ -1258,29 +1264,28 @@ void Indexer::Impl::build() {
   // open database
   if (sqlite3_open(idx_path_.c_str(), &db_) != SQLITE_OK) {
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Cannot create/open database " + idx_path_ + ": " +
-                          sqlite3_errmsg(db_));
+                         "Cannot create/open database " + idx_path_ + ": " +
+                             sqlite3_errmsg(db_));
   }
   db_opened_ = true;
 
   // initialize schema
   if (init_schema(db_) != SQLITE_OK) {
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Failed to initialize database schema");
+                         "Failed to initialize database schema");
   }
 
   // get file info
   uint64_t bytes = file_size_bytes(gz_path_);
   if (bytes == UINT64_MAX) {
-    throw Indexer::Error(Indexer::Error::FILE_ERROR,
-                          "Cannot stat " + gz_path_);
+    throw Indexer::Error(Indexer::Error::FILE_ERROR, "Cannot stat " + gz_path_);
   }
 
   // calculate SHA256 and get modification time
   std::string file_sha256 = calculate_file_sha256(gz_path_);
   if (file_sha256.empty()) {
     throw Indexer::Error(Indexer::Error::FILE_ERROR,
-                          "Failed to calculate SHA256 for " + gz_path_);
+                         "Failed to calculate SHA256 for " + gz_path_);
   }
 
   time_t file_mtime = get_file_mtime(gz_path_);
@@ -1301,8 +1306,7 @@ void Indexer::Impl::build() {
           "RETURNING id;",
           -1, &st, NULL) != SQLITE_OK) {
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR,
-                          "Prepare failed: " +
-                          std::string(sqlite3_errmsg(db_)));
+                         "Prepare failed: " + std::string(sqlite3_errmsg(db_)));
   }
 
   sqlite3_bind_text(st, 1, gz_path_.c_str(), -1, SQLITE_TRANSIENT);
@@ -1327,9 +1331,9 @@ void Indexer::Impl::build() {
 
   int ret = build_index_internal(db_, db_file_id, gz_path_, stride);
   if (ret != 0) {
-    throw Indexer::Error(Indexer::Error::BUILD_ERROR,
-                             "Index build failed with error code: " +
-                             std::to_string(ret));
+    throw Indexer::Error(
+        Indexer::Error::BUILD_ERROR,
+        "Index build failed with error code: " + std::to_string(ret));
   }
 
   spdlog::debug("Index built successfully for {}", gz_path_);
@@ -1406,8 +1410,9 @@ std::vector<CheckpointInfo> Indexer::find_checkpoints_by_line_range(
 // Error Class Implementation
 // ==============================================================================
 
-std::string Indexer::Error::format_message(Type type, const std::string& message) {
-  const char* prefix = "";
+std::string Indexer::Error::format_message(Type type,
+                                           const std::string &message) {
+  const char *prefix = "";
   switch (type) {
     case DATABASE_ERROR:
       prefix = "Database error";
@@ -1431,7 +1436,6 @@ std::string Indexer::Error::format_message(Type type, const std::string& message
   return std::string(prefix) + ": " + message;
 }
 
-
 }  // namespace indexer
 }  // namespace utils
 }  // namespace dftracer
@@ -1447,8 +1451,9 @@ static int validate_handle(dft_indexer_handle_t indexer) {
   return indexer ? 0 : -1;
 }
 
-static dftracer::utils::indexer::Indexer* cast_indexer(dft_indexer_handle_t indexer) {
-  return static_cast<dftracer::utils::indexer::Indexer*>(indexer);
+static dftracer::utils::indexer::Indexer *cast_indexer(
+    dft_indexer_handle_t indexer) {
+  return static_cast<dftracer::utils::indexer::Indexer *>(indexer);
 }
 
 dft_indexer_handle_t dft_indexer_create(const char *gz_path,
@@ -1478,7 +1483,7 @@ int dft_indexer_build(dft_indexer_handle_t indexer) {
   try {
     cast_indexer(indexer)->build();
     return 0;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     spdlog::error("Failed to build index: {}", e.what());
     return -1;
   }
@@ -1491,7 +1496,7 @@ int dft_indexer_need_rebuild(dft_indexer_handle_t indexer) {
 
   try {
     return cast_indexer(indexer)->need_rebuild() ? 1 : 0;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     spdlog::error("Failed to check if rebuild is needed: {}", e.what());
     return -1;
   }
@@ -1504,7 +1509,7 @@ uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer) {
 
   try {
     return cast_indexer(indexer)->get_max_bytes();
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     spdlog::error("Failed to get max bytes: {}", e.what());
     return 0;
   }
@@ -1517,26 +1522,29 @@ uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
 
   try {
     return cast_indexer(indexer)->get_num_lines();
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     spdlog::error("Failed to get number of lines: {}", e.what());
     return 0;
   }
 }
 
-int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char* gz_path) {
+int dft_indexer_find_file_id(dft_indexer_handle_t indexer,
+                             const char *gz_path) {
   if (validate_handle(indexer) || !gz_path) {
     return -1;
   }
 
   try {
     return cast_indexer(indexer)->find_file_id(gz_path);
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     spdlog::error("Failed to find file ID: {}", e.what());
     return -1;
   }
 }
 
-int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, size_t target_offset, dft_indexer_checkpoint_info_t* checkpoint) {
+int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
+                                size_t target_offset,
+                                dft_indexer_checkpoint_info_t *checkpoint) {
   if (validate_handle(indexer) || !checkpoint) {
     return -1;
   }
@@ -1544,17 +1552,18 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, size_t target_offs
   try {
     dftracer::utils::indexer::CheckpointInfo temp_ckpt;
 
-    if (cast_indexer(indexer)->find_checkpoint(static_cast<size_t>(target_offset),
-                                     temp_ckpt)) {
+    if (cast_indexer(indexer)->find_checkpoint(
+            static_cast<size_t>(target_offset), temp_ckpt)) {
       checkpoint->uc_offset = static_cast<uint64_t>(temp_ckpt.uc_offset);
       checkpoint->c_offset = static_cast<uint64_t>(temp_ckpt.c_offset);
       checkpoint->bits = temp_ckpt.bits;
       checkpoint->dict_size = temp_ckpt.dict_compressed.size();
 
-      checkpoint->dict_compressed = static_cast<unsigned char *>(malloc(checkpoint->dict_size));
+      checkpoint->dict_compressed =
+          static_cast<unsigned char *>(malloc(checkpoint->dict_size));
       if (checkpoint->dict_compressed) {
-        std::memcpy(checkpoint->dict_compressed, temp_ckpt.dict_compressed.data(),
-                    checkpoint->dict_size);
+        std::memcpy(checkpoint->dict_compressed,
+                    temp_ckpt.dict_compressed.data(), checkpoint->dict_size);
         return 1;
       }
       return -1;
@@ -1567,8 +1576,8 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, size_t target_offs
 }
 
 int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
-                                dft_indexer_checkpoint_info_t** checkpoints,
-                                size_t* count) {
+                                dft_indexer_checkpoint_info_t **checkpoints,
+                                size_t *count) {
   if (validate_handle(indexer) || !count || !checkpoints) {
     return -1;
   }
@@ -1581,7 +1590,8 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
       return 0;
     }
 
-    auto temp_ckpts = static_cast<dft_indexer_checkpoint_info_t*>(malloc(temp_count * sizeof(dft_indexer_checkpoint_info_t)));
+    auto temp_ckpts = static_cast<dft_indexer_checkpoint_info_t *>(
+        malloc(temp_count * sizeof(dft_indexer_checkpoint_info_t)));
     if (!temp_ckpts) {
       return -1;
     }
@@ -1590,9 +1600,10 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
 
     // Initialize checkpoint information
     for (size_t i = 0; i < temp_count; i++) {
-      const auto& checkpoint = ckpts[i];
+      const auto &checkpoint = ckpts[i];
 
-      temp_ckpts[i].checkpoint_idx = static_cast<uint64_t>(checkpoint.checkpoint_idx);
+      temp_ckpts[i].checkpoint_idx =
+          static_cast<uint64_t>(checkpoint.checkpoint_idx);
       temp_ckpts[i].uc_offset = static_cast<uint64_t>(checkpoint.uc_offset);
       temp_ckpts[i].uc_size = static_cast<uint64_t>(checkpoint.uc_size);
       temp_ckpts[i].c_offset = static_cast<uint64_t>(checkpoint.c_offset);
@@ -1602,16 +1613,19 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
       temp_ckpts[i].num_lines = static_cast<uint64_t>(checkpoint.num_lines);
 
       // Allocate and copy dictionary data
-      temp_ckpts[i].dict_compressed = static_cast<unsigned char*>(malloc(temp_ckpts[i].dict_size));
+      temp_ckpts[i].dict_compressed =
+          static_cast<unsigned char *>(malloc(temp_ckpts[i].dict_size));
       if (temp_ckpts[i].dict_compressed) {
-        std::memcpy(temp_ckpts[i].dict_compressed, checkpoint.dict_compressed.data(), temp_ckpts[i].dict_size);
+        std::memcpy(temp_ckpts[i].dict_compressed,
+                    checkpoint.dict_compressed.data(), temp_ckpts[i].dict_size);
       } else {
         // Clean up on allocation failure
         for (size_t j = 0; j < i; j++) {
           free(temp_ckpts[j].dict_compressed);
         }
         free(temp_ckpts);
-        spdlog::error("Failed to allocate memory for checkpoint dictionary data");
+        spdlog::error(
+            "Failed to allocate memory for checkpoint dictionary data");
         *checkpoints = nullptr;
         return -1;
       }
@@ -1620,20 +1634,21 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
     *count = temp_count;
     *checkpoints = temp_ckpts;
     return 0;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     spdlog::error("Failed to get checkpoints: {}", e.what());
     return -1;
   }
 }
 
-void dft_indexer_free_checkpoint(dft_indexer_checkpoint_info_t* checkpoint) {
+void dft_indexer_free_checkpoint(dft_indexer_checkpoint_info_t *checkpoint) {
   if (checkpoint) {
     free(checkpoint->dict_compressed);
     free(checkpoint);
   }
 }
 
-void dft_indexer_free_checkpoints(dft_indexer_checkpoint_info_t* checkpoints, size_t count) {
+void dft_indexer_free_checkpoints(dft_indexer_checkpoint_info_t *checkpoints,
+                                  size_t count) {
   if (checkpoints) {
     for (size_t i = 0; i < count; i++) {
       free(checkpoints[i].dict_compressed);

@@ -69,11 +69,10 @@ typedef struct dft_indexer_checkpoint_t {
   uint64_t c_offset;
   uint64_t c_size;
   int bits;
-  unsigned char* dict_compressed;  // Owned by this struct
+  unsigned char *dict_compressed;  // Owned by this struct
   size_t dict_size;
   uint64_t num_lines;
 } dft_indexer_checkpoint_info_t;
-
 
 /**
  * Find the best checkpoint for a given uncompressed offset
@@ -82,18 +81,20 @@ typedef struct dft_indexer_checkpoint_t {
  * @param checkpoint DFT indexer checkpoint
  * @return 1 if checkpoint found, 0 if not found, -1 on error
  */
-int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer, size_t target_offset, dft_indexer_checkpoint_info_t* checkpoint);
+int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
+                                size_t target_offset,
+                                dft_indexer_checkpoint_info_t *checkpoint);
 
 /**
  * Get all checkpoints for this file as arrays
  * @param indexer DFT indexer handle
- * @param checkpoints Output: array of checkpoint information (caller must free using dft_indexer_free_checkpoints)
+ * @param checkpoints Output: array of checkpoint information (caller must free
+ * using dft_indexer_free_checkpoints)
  * @param count Output: number of checkpoints
  */
 int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
-                                 dft_indexer_checkpoint_info_t** checkpoints,
-                                size_t* count);
-
+                                dft_indexer_checkpoint_info_t **checkpoints,
+                                size_t *count);
 
 /*
  * Free memory allocated by dft_indexer_get_checkpoints
@@ -106,7 +107,8 @@ void dft_indexer_free_checkpoint(dft_indexer_checkpoint_info_t *checkpoint);
  * @param checkpoints Array of checkpoint information to free
  * @param count Number of checkpoints
  */
-void dft_indexer_free_checkpoints(dft_indexer_checkpoint_info_t *checkpoints, size_t count);
+void dft_indexer_free_checkpoints(dft_indexer_checkpoint_info_t *checkpoints,
+                                  size_t count);
 
 /**
  * Destroy a DFT indexer instance and free all associated resources
@@ -120,9 +122,9 @@ void dft_indexer_destroy(dft_indexer_handle_t indexer);
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include <stdexcept>
 
 namespace dftracer {
 namespace utils {
@@ -299,7 +301,7 @@ class Indexer {
 
   // Error class for exception handling
   class Error : public std::runtime_error {
-  public:
+   public:
     enum Type {
       DATABASE_ERROR,
       FILE_ERROR,
@@ -308,15 +310,15 @@ class Indexer {
       BUILD_ERROR,
       UNKNOWN_ERROR
     };
-    
-    Error(Type type, const std::string& message)
+
+    Error(Type type, const std::string &message)
         : std::runtime_error(format_message(type, message)), type_(type) {}
-    
+
     Type type() const { return type_; }
-    
-  private:
+
+   private:
     Type type_;
-    static std::string format_message(Type type, const std::string& message);
+    static std::string format_message(Type type, const std::string &message);
   };
 
  private:
