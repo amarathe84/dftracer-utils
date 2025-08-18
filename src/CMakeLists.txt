@@ -53,7 +53,7 @@ set_target_properties(dftracer_utils PROPERTIES
 )
 target_link_libraries(dftracer_utils 
     PRIVATE spdlog::spdlog_header_only picosha2
-    PUBLIC ghc_filesystem  simdjson::simdjson
+    PUBLIC ghc_filesystem  simdjson::simdjson_static
 )
 target_add_rpath(dftracer_utils)
 
@@ -89,7 +89,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
 )
 target_link_libraries(dftracer_utils_shared 
     PRIVATE spdlog::spdlog_header_only picosha2
-    PUBLIC ghc_filesystem  simdjson::simdjson
+    PUBLIC ghc_filesystem simdjson::simdjson
 )
 target_add_rpath(dftracer_utils_shared)
 
@@ -228,6 +228,9 @@ if (TARGET spdlog_header_only)
 endif()
 if (TARGET simdjson)
     list(APPEND INSTALLABLE_TARGETS simdjson)
+endif()
+if (TARGET simdjson_static)
+    list(APPEND INSTALLABLE_TARGETS simdjson_static)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)

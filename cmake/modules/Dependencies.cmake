@@ -52,6 +52,7 @@ function(need_simdjson)
       VERSION 3.13.0
       OPTIONS
         "SIMDJSON_BUILD_STATIC_LIB ON"
+        "BUILD_SHARED_LIBS ON"
         "SIMDJSON_DISABLE_DEPRECATED_API ON"
       FORCE YES
     )
