@@ -185,32 +185,30 @@ if (SKBUILD)
   )
 
   set(PYTHON_BINDINGS_SOURCES
+    python/dftracer_utils_ext.cpp
     python/indexer_ext.cpp
     python/reader_ext.cpp
     python/utils_ext.cpp
     python/json_ext.cpp
   )
 
-  foreach (source_file ${PYTHON_BINDINGS_SOURCES})
-      get_filename_component(source_name ${source_file} NAME_WE)
-      message(STATUS "Configuring Python bindings for ${source_name}")
-      if (APPLE)
-        nanobind_add_module(
-          ${source_name}
-          NB_STATIC STABLE_ABI
-          ${source_file}
-        )
-      else()
-        nanobind_add_module(
-          ${source_name}
-          NB_STATIC STABLE_ABI LTO
-          ${source_file}
-        )
-      endif()
-      target_link_libraries(${source_name} PRIVATE dftracer_utils::shared dftracer_utils_py)
-      target_add_rpath(${source_name})
-      install(TARGETS ${source_name} LIBRARY DESTINATION dftracer/utils)
-  endforeach()
+  if (APPLE)
+    nanobind_add_module(
+      dftracer_utils_ext
+      NB_STATIC STABLE_ABI
+      ${PYTHON_BINDINGS_SOURCES}
+    )
+  else()
+    nanobind_add_module(
+      dftracer_utils_ext
+      NB_STATIC STABLE_ABI LTO
+      ${PYTHON_BINDINGS_SOURCES}
+    )
+  endif()
+
+  target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared dftracer_utils_py)
+  target_add_rpath(dftracer_utils_ext)
+  install(TARGETS dftracer_utils_ext LIBRARY DESTINATION dftracer/utils)
 endif()
 
 ##########################################

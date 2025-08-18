@@ -15,7 +15,7 @@ namespace nb = nanobind;
 
 using namespace nb::literals;
 
-NB_MODULE(utils_ext, m) {
+void register_utils(nb::module_& m) {
   m.def("set_log_level", &dftracer::utils::logger::set_log_level, "level"_a,
         "Set the global log level using a string (trace, debug, info, warn, "
         "error, critical, off)");

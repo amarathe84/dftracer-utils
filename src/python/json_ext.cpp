@@ -5,9 +5,7 @@ namespace nb = nanobind;
 
 using namespace nb::literals;
 
-NB_MODULE(json_ext, m) {
-    m.doc() = "DFTracer utilities JSON extension";
-
+void register_json(nb::module_& m) {
     // Register JsonDocument for lazy dict-like JSON access
     nb::class_<JsonDocument>(m, "JsonDocument")
         .def(nb::init<const std::string&>(), "json_str"_a, "Create from JSON string")

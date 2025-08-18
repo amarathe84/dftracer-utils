@@ -8,8 +8,7 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-NB_MODULE(indexer_ext, m) {
-  m.doc() = "DFTracer utilities indexer extension";
+void register_indexer(nb::module_& m) {
 
   nb::class_<dftracer::utils::indexer::CheckpointInfo>(m, "CheckpointInfo")
       .def_rw("checkpoint_idx",

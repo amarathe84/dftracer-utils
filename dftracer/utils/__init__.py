@@ -1,6 +1,7 @@
 from typing import Optional, Literal, Union
 
-from .reader_ext import (
+from .dftracer_utils_ext import (
+    # Reader classes and iterators
     DFTracerReader,  # noqa: F401 (alias to DFTracerLineBytesReader)
     DFTracerBytesReader,  # noqa: F401
     DFTracerLineBytesReader,  # noqa: F401
@@ -18,14 +19,12 @@ from .reader_ext import (
     DFTracerJsonLinesRangeIterator,  # noqa: F401
     DFTracerJsonLinesBytesRangeIterator,  # noqa: F401
     dft_reader_range, # noqa: F401
-)
-
-from .indexer_ext import (
+    # Indexer classes
     DFTracerIndexer,  # noqa: F401
     CheckpointInfo,  # noqa: F401
-)
-
-from .utils_ext import (
+    # JSON classes
+    JsonDocument,  # noqa: F401
+    # Utility functions
     set_log_level,  # noqa: F401
     set_log_level_int,  # noqa: F401
     get_log_level_string,  # noqa: F401
@@ -98,6 +97,7 @@ __all__ = [
     "DFTracerJsonLinesBytesRangeIterator",
     "DFTracerIndexer",
     "CheckpointInfo",
+    "JsonDocument",
     "dft_reader",
     "dft_reader_range",
     "set_log_level",

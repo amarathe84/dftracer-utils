@@ -77,6 +77,7 @@ class DFTracerReaderIterator {
       : reader_(reader), current_pos_(0), step_(step) {
     switch (Mode) {
       case DFTracerReaderMode::Lines:
+      case DFTracerReaderMode::JsonLines:
         max_pos_ = reader_->get_num_lines();
         break;
       default:
@@ -86,7 +87,7 @@ class DFTracerReaderIterator {
   }
 
   DFTracerReaderIterator &__iter__() {
-    if constexpr (Mode == DFTracerReaderMode::Lines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
       current_pos_ = 1;
     } else {
       current_pos_ = 0;
@@ -221,7 +222,7 @@ class DFTracerReader {
       reader_->reset();
       reader_.reset();
       is_open_ = false;
-      if constexpr (Mode == DFTracerReaderMode::Lines) {
+      if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
         current_pos_ = 1;
       } else {
         current_pos_ = 0;
@@ -254,7 +255,7 @@ class DFTracerReader {
 
   DFTracerReader &__iter__() {
     ensure_open();
-    if constexpr (Mode == DFTracerReaderMode::Lines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
       current_pos_ = 1;
     } else {
       current_pos_ = 0;
@@ -270,7 +271,7 @@ class DFTracerReader {
   ReturnType __next__() {
     ensure_open();
     uint64_t max_pos;
-    if constexpr (Mode == DFTracerReaderMode::Lines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
       max_pos = num_lines_;
     } else {
       max_pos = max_bytes_;
@@ -386,7 +387,7 @@ class DFTracerRangeIterator {
           "Start position must be less than end position");
     }
 
-    if constexpr (Mode == DFTracerReaderMode::Lines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
       uint64_t num_lines = reader_->get_num_lines();
       if (end_pos_ > num_lines) {
         end_pos_ = num_lines;
@@ -510,21 +511,7 @@ DFTracerLinesRangeIterator dft_reader_range(
   return dft_reader_range_impl(reader, start, end, mode, step);
 }
 
-NB_MODULE(reader_ext, m) {
-  m.doc() = "DFTracer utilities reader extension";
-
-  // Register JsonDocument for cross-module compatibility
-  nb::class_<JsonDocument>(m, "JsonDocument")
-      .def("__getitem__", &JsonDocument::__getitem__, "Get item by key")
-      .def("__contains__", &JsonDocument::__contains__, "Check if key exists")
-      .def("__len__", &JsonDocument::__len__, "Get number of keys")
-      .def("__str__", &JsonDocument::__str__, "String representation")
-      .def("__repr__", &JsonDocument::__repr__, "String representation")
-      .def("__iter__", &JsonDocument::__iter__, "Iterator over keys")
-      .def("keys", &JsonDocument::keys, "Get all keys")
-      .def("get", &JsonDocument::get, "Get value with optional default", 
-           nb::arg("key"), nb::arg("default") = nb::none());
-
+void register_reader(nb::module_& m) {
   nb::class_<DFTracerBytesIterator>(m, "DFTracerBytesIterator")
       .def("__iter__", &DFTracerBytesIterator::__iter__,
            nb::rv_policy::reference_internal, "Get iterator")
