@@ -567,6 +567,292 @@ class TestDFTracerLinesReader:
                     assert total_lines > 0
 
 
+class TestDFTracerJsonLinesReader:
+    """Test cases for DFTracerJsonLinesReader - returns list of JSON objects"""
+    
+    def test_import(self):
+        """Test that we can import JSON lines reader classes"""
+        assert hasattr(dft_utils, 'DFTracerJsonLinesReader')
+        assert hasattr(dft_utils, 'DFTracerJsonLinesBytesReader')
+        assert hasattr(dft_utils, 'JsonDocument')
+    
+    def test_json_lines_reader_creation(self):
+        """Test JSON lines reader creation"""
+        with Environment() as env:
+            gz_file = env.create_test_gzip_file()
+            
+            with dft_utils.DFTracerJsonLinesReader(gz_file) as reader:
+                assert reader.is_open
+                assert reader.get_max_bytes() > 0
+                assert reader.get_num_lines() > 0
+                assert reader.gzip_path == gz_file
+    
+    def test_json_lines_reader_creation_from_indexer(self):
+        """Test JSON lines reader creation from indexer"""
+        with Environment() as env:
+            gz_file = env.create_test_gzip_file()
+            indexer = env.create_indexer(gz_file)
+            
+            reader = dft_utils.DFTracerJsonLinesReader(indexer)
+            assert reader.is_open
+            assert reader.get_max_bytes() > 0
+            assert reader.get_num_lines() > 0
+            assert reader.gzip_path == gz_file
+    
+    def test_json_lines_reader_data_reading(self):
+        """Test JSON lines reader data reading - returns list of JsonDocument objects"""
+        with Environment(lines=100) as env:
+            gz_file = env.create_test_gzip_file()
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            with dft_utils.DFTracerJsonLinesReader(gz_file) as reader:
+                num_lines = reader.get_num_lines()
+                if num_lines > 10:
+                    # Read lines 1-5 (JSON lines reader operates on line numbers)
+                    data = reader.read(1, 6)
+
+                    assert isinstance(data, list)  # Should return list of JsonDocuments
+                    assert len(data) >= 1  # Should get at least 1 JSON object
+                    
+                    # Check that each item is a JsonDocument
+                    for json_obj in data:
+                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        # Test accessing JSON fields
+                        assert "name" in json_obj  # Should have name field from test data
+                        assert "data" in json_obj  # Should have data field from test data
+                        
+                        # Test actual field values
+                        name_value = json_obj["name"]
+                        assert isinstance(name_value, str)
+                        assert name_value.startswith("name_")
+                        
+                        # Test nested data access
+                        data_value = json_obj["data"]
+                        assert isinstance(data_value, str)
+    
+    def test_json_lines_reader_iteration(self):
+        """Test JSON lines reader iteration"""
+        with Environment(lines=1000) as env:
+            gz_file = env.create_test_gzip_file()
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            with dft_utils.DFTracerJsonLinesReader(gz_file) as reader:
+                chunk_count = 0
+                total_json_objects = 0
+                
+                for chunk in reader:
+                    chunk_count += 1
+                    assert isinstance(chunk, list)  # Should return list of JsonDocuments
+                    total_json_objects += len(chunk)
+                    assert len(chunk) > 0
+                    
+                    # Test each JSON object in the chunk
+                    for json_obj in chunk:
+                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        assert "name" in json_obj
+                        assert "data" in json_obj
+                    
+                    if chunk_count >= 3:
+                        break
+                
+                assert chunk_count > 0
+                assert total_json_objects > 0
+    
+    def test_json_lines_reader_properties(self):
+        """Test JSON lines reader properties"""
+        with Environment() as env:
+            gz_file = env.create_test_gzip_file()
+            env.build_index(gz_file)
+            
+            with dft_utils.DFTracerJsonLinesReader(gz_file) as reader:
+                # Test property types
+                assert isinstance(reader.is_open, bool)
+                assert isinstance(reader.gzip_path, str)
+                assert isinstance(reader.index_path, str)
+                assert isinstance(reader.get_max_bytes(), int)
+                assert isinstance(reader.get_num_lines(), int)
+                assert isinstance(reader.get_default_step(), int)
+                
+                # Test values
+                assert reader.is_open
+                assert reader.get_max_bytes() > 0
+                assert reader.get_num_lines() > 0
+                assert reader.gzip_path == gz_file
+
+
+class TestDFTracerJsonLinesBytesReader:
+    """Test cases for DFTracerJsonLinesBytesReader - returns list of JSON objects from byte ranges"""
+    
+    def test_json_lines_bytes_reader_creation(self):
+        """Test JSON lines bytes reader creation"""
+        with Environment() as env:
+            gz_file = env.create_test_gzip_file()
+            
+            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as reader:
+                assert reader.is_open
+                assert reader.get_max_bytes() > 0
+                assert reader.get_num_lines() > 0
+                assert reader.gzip_path == gz_file
+    
+    def test_json_lines_bytes_reader_creation_from_indexer(self):
+        """Test JSON lines bytes reader creation from indexer"""
+        with Environment() as env:
+            gz_file = env.create_test_gzip_file()
+            indexer = env.create_indexer(gz_file)
+            
+            reader = dft_utils.DFTracerJsonLinesBytesReader(indexer)
+            assert reader.is_open
+            assert reader.get_max_bytes() > 0
+            assert reader.get_num_lines() > 0
+            assert reader.gzip_path == gz_file
+    
+    def test_json_lines_bytes_reader_data_reading(self):
+        """Test JSON lines bytes reader data reading - operates on byte ranges"""
+        with Environment(lines=100) as env:
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as reader:
+                max_bytes = reader.get_max_bytes()
+                if max_bytes > bytes_per_line * 4:
+                    # Read bytes 0 to 4 lines worth (JSON lines bytes reader operates on byte ranges)
+                    data = reader.read(0, bytes_per_line * 4)
+
+                    assert isinstance(data, list)  # Should return list of JsonDocuments
+                    assert len(data) >= 1  # Should get at least 1 JSON object
+                    
+                    # Check that each item is a JsonDocument
+                    for json_obj in data:
+                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        # Test accessing JSON fields
+                        assert "name" in json_obj  # Should have name field from test data
+                        assert "data" in json_obj  # Should have data field from test data
+                        
+                        # Test actual field values
+                        name_value = json_obj["name"]
+                        assert isinstance(name_value, str)
+                        assert name_value.startswith("name_")
+                        
+                        # Test nested data access
+                        data_value = json_obj["data"]
+                        assert isinstance(data_value, str)
+    
+    def test_json_lines_bytes_reader_iteration(self):
+        """Test JSON lines bytes reader iteration"""
+        with Environment(lines=1000) as env:
+            gz_file = env.create_test_gzip_file()
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as reader:
+                chunk_count = 0
+                total_json_objects = 0
+                
+                for chunk in reader:
+                    chunk_count += 1
+                    assert isinstance(chunk, list)  # Should return list of JsonDocuments
+                    total_json_objects += len(chunk)
+                    assert len(chunk) > 0
+                    
+                    # Test each JSON object in the chunk
+                    for json_obj in chunk:
+                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        assert "name" in json_obj
+                        assert "data" in json_obj
+                    
+                    if chunk_count >= 3:
+                        break
+                
+                assert chunk_count > 0
+                assert total_json_objects > 0
+    
+    def test_json_lines_bytes_vs_lines_reader_comparison(self):
+        """Test comparison between JSON lines bytes and JSON lines readers"""
+        with Environment(lines=500) as env:
+            gz_file = env.create_test_gzip_file()
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            # Test JSON lines reader (operates on line numbers)
+            with dft_utils.DFTracerJsonLinesReader(gz_file) as lines_reader:
+                num_lines = lines_reader.get_num_lines()
+                if num_lines > 10:
+                    lines_data = lines_reader.read(1, 6)  # Lines 1-5
+                    assert isinstance(lines_data, list)
+                    lines_count = len(lines_data)
+            
+            # Test JSON lines bytes reader (operates on byte ranges)
+            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as bytes_reader:
+                max_bytes = bytes_reader.get_max_bytes()
+                if max_bytes > 1024:
+                    bytes_data = bytes_reader.read(0, 1024 * 5)  # First 5KB
+                    assert isinstance(bytes_data, list)
+                    bytes_count = len(bytes_data)
+            
+            # Both should return valid JSON objects
+            if 'lines_count' in locals() and 'bytes_count' in locals():
+                assert lines_count > 0
+                assert bytes_count > 0
+                # Note: counts may differ since they operate on different ranges
+    
+    def test_json_lines_bytes_reader_properties(self):
+        """Test JSON lines bytes reader properties"""
+        with Environment() as env:
+            gz_file = env.create_test_gzip_file()
+            env.build_index(gz_file)
+            
+            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as reader:
+                # Test property types
+                assert isinstance(reader.is_open, bool)
+                assert isinstance(reader.gzip_path, str)
+                assert isinstance(reader.index_path, str)
+                assert isinstance(reader.get_max_bytes(), int)
+                assert isinstance(reader.get_num_lines(), int)
+                assert isinstance(reader.get_default_step(), int)
+                
+                # Test values
+                assert reader.is_open
+                assert reader.get_max_bytes() > 0
+                assert reader.get_num_lines() > 0
+                assert reader.gzip_path == gz_file
+    
+    def test_json_lines_bytes_reader_range_operations(self):
+        """Test JSON lines bytes reader range operations"""
+        with Environment(lines=2000) as env:
+            bytes_per_line = 1024
+            gz_file = env.create_test_gzip_file(bytes_per_line=bytes_per_line)
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as reader:
+                max_bytes = reader.get_max_bytes()
+                
+                if max_bytes > bytes_per_line * 8:
+                    start = 0
+                    end = bytes_per_line * 6  # 6 lines worth of bytes
+                    step = bytes_per_line * 2  # 2 lines worth per chunk
+                    
+                    chunk_count = 0
+                    total_json_objects = 0
+                    
+                    # Use dft_reader_range for JSON lines bytes reader would need to be supported
+                    # For now, test direct iteration
+                    reader.set_default_step(step)
+                    for chunk in reader.iter(step):
+                        chunk_count += 1
+                        assert isinstance(chunk, list)
+                        total_json_objects += len(chunk)
+                        
+                        # Test each JSON object
+                        for json_obj in chunk:
+                            assert isinstance(json_obj, dft_utils.JsonDocument)
+                            assert "name" in json_obj
+                        
+                        if chunk_count >= 3:
+                            break
+                    
+                    assert chunk_count > 0
+                    assert total_json_objects > 0
+
+
 class TestDFTracerRangeIterator:
     """Test cases for DFTracerRangeIterator"""
     

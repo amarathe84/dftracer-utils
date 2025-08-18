@@ -272,7 +272,7 @@ class Indexer::Impl {
   int save_checkpoint(sqlite3 *db, int file_id,
                       const CheckpointData *checkpoint) const;
 
-  std::string get_logical_path(const std::string &path);
+  std::string get_logical_path(const std::string &path) const;
 
   std::string gz_path_;
   std::string gz_path_logical_path_;
@@ -284,7 +284,7 @@ class Indexer::Impl {
   mutable int cached_file_id_;
 };
 
-std::string Indexer::Impl::get_logical_path(const std::string &path) {
+std::string Indexer::Impl::get_logical_path(const std::string &path) const {
   auto fs_path = fs::path(path);
   return fs_path.filename().string();
 }
@@ -1088,7 +1088,8 @@ int Indexer::Impl::find_file_id(const std::string &gz_path) const {
   int file_id = -1;
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
+    std::string logical_path = get_logical_path(gz_path);
+    sqlite3_bind_text(stmt, 1, logical_path.c_str(), -1, SQLITE_TRANSIENT);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
       file_id = sqlite3_column_int(stmt, 0);
     }

@@ -123,7 +123,14 @@ class TestDFTracerIndexer:
                 assert isinstance(file_id, int)
                 assert file_id >= 0  # Valid file ID
                 
-                # Test with non-existent file
+                # Test with non-existent file (use just the filename)
+                import os
+                gz_filename = os.path.basename(gz_file)
+                file_id_by_name = indexer.find_file_id(gz_filename)
+                # Should find the same file by logical name
+                assert file_id_by_name == file_id
+                
+                # Test with truly non-existent file
                 non_existent_id = indexer.find_file_id("nonexistent.gz")
                 assert non_existent_id == -1
     

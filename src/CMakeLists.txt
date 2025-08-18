@@ -175,20 +175,13 @@ if (SKBUILD)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
   endif()
 
-  add_library(dftracer_utils_py INTERFACE python/indexer_ext.h python/json_ext.h)
-  target_link_libraries(dftracer_utils_py INTERFACE dftracer_utils::shared)
-  # @HACK: this is needed to avoid include errors
-  target_include_directories(dftracer_utils_py
-    INTERFACE
-      ${Python_INCLUDE_DIRS}
-      ${NB_DIR}/include
-  )
-
   set(PYTHON_BINDINGS_SOURCES
     python/dftracer_utils_ext.cpp
+    python/indexer_ext.h 
     python/indexer_ext.cpp
     python/reader_ext.cpp
     python/utils_ext.cpp
+    python/json_ext.h
     python/json_ext.cpp
   )
 
@@ -206,7 +199,7 @@ if (SKBUILD)
     )
   endif()
 
-  target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared dftracer_utils_py)
+  target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared)
   target_add_rpath(dftracer_utils_ext)
   install(TARGETS dftracer_utils_ext LIBRARY DESTINATION dftracer/utils)
 endif()
