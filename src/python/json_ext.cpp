@@ -95,15 +95,8 @@ nb::object convert_lazy(const dftracer::utils::json::JsonDocument& elem) {
     switch (elem.type()) {
         case simdjson::dom::element_type::OBJECT:
             return nb::cast(JsonDocument(elem));  // Lazy wrapper for objects
-        case simdjson::dom::element_type::ARRAY: {
-            // For arrays, we could also make lazy, but for now convert to list
-            nb::list py_list;
-            auto arr = elem.get_array();
-            for (auto element : arr) {
-                py_list.append(convert_lazy(element));
-            }
-            return py_list;
-        }
+        case simdjson::dom::element_type::ARRAY:
+            return nb::cast(JsonArray(elem));     // Lazy wrapper for arrays
         default:
             return convert_primitive(elem);  // Convert primitives immediately
     }
@@ -218,6 +211,148 @@ nb::object JsonItemsIterator::__next__() {
     return nb::make_tuple(key, value);
 }
 
+// JsonArray class implementation
+JsonArray::JsonArray(const dftracer::utils::json::JsonDocument& d) : doc(d) {}
+
+nb::object JsonArray::__getitem__(int index) {
+    if (!doc.is_array()) {
+        throw nb::index_error("Document is not an array");
+    }
+    
+    auto arr = doc.get_array();
+    
+    // Handle negative indices (not supported)
+    if (index < 0) {
+        throw nb::index_error("Negative indexing not supported");
+    }
+    
+    // Check bounds
+    if (static_cast<size_t>(index) >= arr.size()) {
+        throw nb::index_error("Array index out of range");
+    }
+    
+    auto iter = arr.begin();
+    std::advance(iter, index);
+    return convert_lazy(*iter);
+}
+
+size_t JsonArray::__len__() {
+    if (!doc.is_array()) return 0;
+    
+    auto arr = doc.get_array();
+    return arr.size();
+}
+
+std::string JsonArray::__str__() {
+    return simdjson::minify(doc);
+}
+
+std::string JsonArray::__repr__() {
+    return "JsonArray(" + simdjson::minify(doc) + ")";
+}
+
+JsonArrayIterator JsonArray::__iter__() {
+    return JsonArrayIterator(doc);
+}
+
+bool JsonArray::__contains__(nb::object item) {
+    if (!doc.is_array()) return false;
+    
+    auto arr = doc.get_array();
+    for (auto elem : arr) {
+        nb::object converted = convert_lazy(elem);
+        // Use Python's equality comparison
+        try {
+            nb::object result = converted.attr("__eq__")(item);
+            if (nb::cast<bool>(result)) {
+                return true;
+            }
+        } catch (...) {
+            // If comparison fails, continue
+            continue;
+        }
+    }
+    return false;
+}
+
+int JsonArray::index(nb::object item) {
+    if (!doc.is_array()) {
+        throw nb::value_error("list.index(x): x not in list");
+    }
+    
+    auto arr = doc.get_array();
+    int idx = 0;
+    for (auto elem : arr) {
+        nb::object converted = convert_lazy(elem);
+        try {
+            nb::object result = converted.attr("__eq__")(item);
+            if (nb::cast<bool>(result)) {
+                return idx;
+            }
+        } catch (...) {
+            // If comparison fails, continue
+        }
+        idx++;
+    }
+    throw nb::value_error("list.index(x): x not in list");
+}
+
+int JsonArray::count(nb::object item) {
+    if (!doc.is_array()) return 0;
+    
+    auto arr = doc.get_array();
+    int count = 0;
+    for (auto elem : arr) {
+        nb::object converted = convert_lazy(elem);
+        try {
+            nb::object result = converted.attr("__eq__")(item);
+            if (nb::cast<bool>(result)) {
+                count++;
+            }
+        } catch (...) {
+            // If comparison fails, continue
+        }
+    }
+    return count;
+}
+
+nb::list JsonArray::to_list() {
+    nb::list result;
+    if (!doc.is_array()) return result;
+    
+    auto arr = doc.get_array();
+    for (auto elem : arr) {
+        result.append(convert_lazy(elem));
+    }
+    return result;
+}
+
+// JsonArrayIterator implementation
+JsonArrayIterator::JsonArrayIterator(const dftracer::utils::json::JsonDocument& d) : doc(d) {
+    if (doc.is_array()) {
+        auto arr = doc.get_array();
+        current = arr.begin();
+        end = arr.end();
+        is_valid = true;
+    } else {
+        is_valid = false;
+    }
+}
+
+JsonArrayIterator& JsonArrayIterator::__iter__() {
+    return *this;
+}
+
+nb::object JsonArrayIterator::__next__() {
+    if (!is_valid || current == end) {
+        throw nb::stop_iteration();
+    }
+    
+    nb::object value = convert_lazy(*current);
+    ++current;
+    return value;
+}
+
 void register_json(nb::module_& m) {
     // Register JsonDocument for lazy dict-like JSON access
     nb::class_<JsonDocument>(m, "JsonDocument")
@@ -246,4 +381,30 @@ void register_json(nb::module_& m) {
     nb::class_<JsonItemsIterator>(m, "JsonItemsIterator")
         .def("__iter__", &JsonItemsIterator::__iter__, nb::rv_policy::reference_internal)
         .def("__next__", &JsonItemsIterator::__next__);
+    
+    // Register JsonArray for lazy list-like JSON access
+    nb::class_<JsonArray>(m, "JsonArray")
+        .def("__getitem__", &JsonArray::__getitem__, "Get item by index")
+        .def("__len__", &JsonArray::__len__, "Get number of items")
+        .def("__str__", &JsonArray::__str__, "String representation")
+        .def("__repr__", &JsonArray::__repr__, "String representation")
+        .def("__iter__", &JsonArray::__iter__, "Iterator over items")
+        .def("__contains__", &JsonArray::__contains__, "Check if item exists in array")
+        .def("index", &JsonArray::index, "Find index of item in array")
+        .def("count", &JsonArray::count, "Count occurrences of item in array")
+        .def("to_list", &JsonArray::to_list, "Convert to Python list");
+    
+    // Register the array iterator class
+    nb::class_<JsonArrayIterator>(m, "JsonArrayIterator")
+        .def("__iter__", &JsonArrayIterator::__iter__, nb::rv_policy::reference_internal)
+        .def("__next__", &JsonArrayIterator::__next__);
+    
+    // Register JsonArray as a Sequence to make it more list-like
+    // This allows isinstance(arr, collections.abc.Sequence) to return True
+    m.attr("_register_json_array_as_sequence") = nb::cpp_function([]() {
+        nb::module_ collections_abc = nb::module_::import_("collections.abc");
+        nb::object sequence_abc = collections_abc.attr("Sequence");
+        nb::object json_array_class = nb::module_::import_("dftracer.utils").attr("JsonArray");
+        sequence_abc.attr("register")(json_array_class);
+    });
 }

@@ -1,4 +1,5 @@
 from typing import Optional, Literal, Union
+from .types import JsonValue, JsonArrayLike, is_json_document, is_json_array, is_json_value
 
 from .dftracer_utils_ext import (
     # Reader classes and iterators
@@ -24,12 +25,21 @@ from .dftracer_utils_ext import (
     CheckpointInfo,  # noqa: F401
     # JSON classes
     JsonDocument,  # noqa: F401
+    JsonArray,  # noqa: F401
     # Utility functions
     set_log_level,  # noqa: F401
     set_log_level_int,  # noqa: F401
     get_log_level_string,  # noqa: F401
     get_log_level_int,  # noqa: F401
+    _register_json_array_as_sequence,  # noqa: F401
 )
+
+# Register JsonArray with collections.abc.Sequence for better isinstance() support
+try:
+    _register_json_array_as_sequence()
+except ImportError:
+    # If collections.abc is not available, skip registration
+    pass
 
 def dft_reader(
     gzip_path_or_indexer: Union[str, DFTracerIndexer], 
@@ -98,10 +108,17 @@ __all__ = [
     "DFTracerIndexer",
     "CheckpointInfo",
     "JsonDocument",
+    "JsonArray",
     "dft_reader",
     "dft_reader_range",
     "set_log_level",
     "set_log_level_int", 
     "get_log_level_string",
-    "get_log_level_int"
+    "get_log_level_int",
+    # Type aliases and utilities
+    "JsonValue",
+    "JsonArrayLike",
+    "is_json_document", 
+    "is_json_array",
+    "is_json_value"
 ]

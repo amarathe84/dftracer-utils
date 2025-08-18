@@ -15,9 +15,11 @@ namespace nb = nanobind;
 
 // Forward declarations
 class JsonDocument;
+class JsonArray;
 class JsonKeysIterator;
 class JsonValuesIterator;
 class JsonItemsIterator;
+class JsonArrayIterator;
 nb::object convert_lazy(const dftracer::utils::json::JsonDocument& elem);
 nb::object convert_primitive(const dftracer::utils::json::JsonDocument& elem);
 
@@ -58,6 +60,34 @@ public:
     nb::object get(const std::string& key, nb::object default_val = nb::none());
 };
 
+// Lazy JSON Array wrapper
+class JsonArray {
+private:
+    dftracer::utils::json::JsonDocument doc;
+
+public:
+    explicit JsonArray(const dftracer::utils::json::JsonDocument& d);
+    
+    // List-like access: arr[index]
+    nb::object __getitem__(int index);
+    
+    // Get array length: len(arr)
+    size_t __len__();
+    
+    // String representation
+    std::string __str__();
+    std::string __repr__();
+    
+    // Iterator support: for item in arr
+    JsonArrayIterator __iter__();
+    
+    // Additional list-like methods for better compatibility
+    bool __contains__(nb::object item);
+    int index(nb::object item);
+    int count(nb::object item);
+    nb::list to_list();  // Convert to actual Python list
+};
+
 // Lazy iterator classes
 class JsonKeysIterator {
 private:
@@ -95,6 +125,19 @@ private:
 public:
     explicit JsonItemsIterator(const dftracer::utils::json::JsonDocument& d);
     JsonItemsIterator& __iter__();
+    nb::object __next__();
+};
+
+class JsonArrayIterator {
+private:
+    dftracer::utils::json::JsonDocument doc;
+    simdjson::dom::array::iterator current;
+    simdjson::dom::array::iterator end;
+    bool is_valid;
+
+public:
+    explicit JsonArrayIterator(const dftracer::utils::json::JsonDocument& d);
+    JsonArrayIterator& __iter__();
     nb::object __next__();
 };
 

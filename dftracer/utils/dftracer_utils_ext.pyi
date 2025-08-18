@@ -1,7 +1,11 @@
 """Type stubs for dftracer_utils_ext module."""
 
-from typing import Optional, Union, List, overload, Dict, Any, Iterator
+from typing import Optional, Union, List, overload, Any, Iterator, Tuple
 from typing_extensions import Self, Literal
+
+# Type aliases for better typing support
+JsonValue = Union['JsonDocument', 'JsonArray', str, int, float, bool, None]
+JsonArrayLike = Union['JsonArray', List[Any]]
 
 # ========== JSON FUNCTIONALITY ==========
 
@@ -12,7 +16,7 @@ class JsonDocument:
         """Create JsonDocument from JSON string."""
         ...
     
-    def __getitem__(self, key: str) -> Any:
+    def __getitem__(self, key: str) -> JsonValue:
         """Get item by key."""
         ...
     
@@ -36,12 +40,59 @@ class JsonDocument:
         """Iterator over keys."""
         ...
     
-    def keys(self) -> List[str]:
-        """Get all keys."""
+    def keys(self) -> Iterator[str]:
+        """Get lazy iterator over keys."""
         ...
     
-    def get(self, key: str, default: Any = None) -> Any:
+    def values(self) -> Iterator[JsonValue]:
+        """Get lazy iterator over values."""
+        ...
+    
+    def items(self) -> Iterator[Tuple[str, JsonValue]]:
+        """Get lazy iterator over (key, value) pairs."""
+        ...
+    
+    def get(self, key: str, default: Any = None) -> JsonValue:
         """Get value with optional default."""
+        ...
+
+class JsonArray:
+    """Lazy JSON array wrapper for high-performance list-like access."""
+    
+    def __getitem__(self, index: int) -> JsonValue:
+        """Get item by index."""
+        ...
+    
+    def __len__(self) -> int:
+        """Get number of items."""
+        ...
+    
+    def __str__(self) -> str:
+        """String representation."""
+        ...
+    
+    def __repr__(self) -> str:
+        """String representation."""
+        ...
+    
+    def __iter__(self) -> Iterator[JsonValue]:
+        """Iterator over items."""
+        ...
+    
+    def __contains__(self, item: Any) -> bool:
+        """Check if item exists in array."""
+        ...
+    
+    def index(self, item: Any) -> int:
+        """Find index of item in array."""
+        ...
+    
+    def count(self, item: Any) -> int:
+        """Count occurrences of item in array."""
+        ...
+    
+    def to_list(self) -> List[JsonValue]:
+        """Convert to Python list."""
         ...
 
 # ========== INDEXER FUNCTIONALITY ==========
@@ -561,4 +612,8 @@ def get_log_level_string() -> str:
 
 def get_log_level_int() -> int:
     """Get the current global log level as an integer."""
+    ...
+
+def _register_json_array_as_sequence() -> None:
+    """Register JsonArray with collections.abc.Sequence for better isinstance() support."""
     ...

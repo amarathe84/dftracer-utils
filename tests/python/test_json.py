@@ -37,7 +37,7 @@ class TestJsonDocument:
         
         # Test array access
         items = doc["items"]
-        assert isinstance(items, list)
+        assert isinstance(items, dft_utils.JsonArray)
         assert len(items) == 3
         assert items[0] == 1
         assert items[1] == 2
@@ -236,10 +236,12 @@ class TestJsonDocument:
         
         # Test array
         array = doc["array"]
-        assert isinstance(array, list)
+        assert isinstance(array, dft_utils.JsonArray)
         assert len(array) == 3
         assert array[0] == 1
-        
+        assert array[1] == 2
+        assert array[2] == 3
+
         # Test nested object
         nested = doc["object"]
         assert isinstance(nested, dft_utils.JsonDocument)
@@ -309,7 +311,7 @@ class TestJsonDocument:
         
         # Array items should also be converted properly
         array = doc["array"]
-        assert isinstance(array, list)
+        assert isinstance(array, dft_utils.JsonArray)
         assert len(array) == 2
         
         item1 = array[0]
@@ -319,6 +321,105 @@ class TestJsonDocument:
         item2 = array[1]
         assert isinstance(item2, dft_utils.JsonDocument)
         assert item2["item"] == 2
+    
+    def test_lazy_arrays(self):
+        """Test that arrays are handled lazily with JsonArray wrapper"""
+        json_str = '''
+        {
+            "simple_array": [1, 2, 3, "hello", true, null],
+            "mixed_array": [
+                {"name": "object1"},
+                [1, 2, 3],
+                "string",
+                42
+            ],
+            "nested_arrays": [
+                [1, 2],
+                [3, 4],
+                [5, 6]
+            ]
+        }
+        '''
+        doc = dft_utils.JsonDocument(json_str)
+        
+        # Test simple array access
+        simple_array = doc["simple_array"]
+        assert hasattr(simple_array, '__len__')  # Should be JsonArray, not list
+        assert hasattr(simple_array, '__getitem__')
+        assert hasattr(simple_array, '__iter__')
+        
+        # Test JsonArray length
+        assert len(simple_array) == 6
+        
+        # Test JsonArray indexing
+        assert simple_array[0] == 1
+        assert simple_array[1] == 2
+        assert simple_array[2] == 3
+        assert simple_array[3] == "hello"
+        assert simple_array[4] == True
+        assert simple_array[5] is None
+        
+        # Test JsonArray iteration (should be lazy)
+        items = list(simple_array)
+        assert len(items) == 6
+        assert items[0] == 1
+        assert items[3] == "hello"
+        
+        # Test mixed array with nested objects and arrays
+        mixed_array = doc["mixed_array"]
+        assert len(mixed_array) == 4
+        
+        # First element should be JsonDocument
+        obj = mixed_array[0]
+        assert hasattr(obj, 'keys')  # Should be JsonDocument
+        assert obj["name"] == "object1"
+        
+        # Second element should be JsonArray
+        nested_arr = mixed_array[1]
+        assert hasattr(nested_arr, '__len__')  # Should be JsonArray
+        assert len(nested_arr) == 3
+        assert nested_arr[0] == 1
+        
+        # Test deeply nested arrays
+        nested_arrays = doc["nested_arrays"]
+        assert len(nested_arrays) == 3
+        
+        first_sub_array = nested_arrays[0]
+        assert hasattr(first_sub_array, '__len__')  # Should be JsonArray
+        assert len(first_sub_array) == 2
+        assert first_sub_array[0] == 1
+        assert first_sub_array[1] == 2
+    
+    def test_array_error_handling(self):
+        """Test JsonArray error handling"""
+        json_str = '{"array": [1, 2, 3]}'
+        doc = dft_utils.JsonDocument(json_str)
+        array = doc["array"]
+        
+        # Test index out of range
+        with pytest.raises(IndexError):
+            array[10]
+        
+        # Test negative indexing (not supported)
+        with pytest.raises((IndexError, RuntimeError)):
+            array[-1]
+    
+    def test_array_string_representations(self):
+        """Test JsonArray string representations"""
+        json_str = '{"array": [1, "hello", true]}'
+        doc = dft_utils.JsonDocument(json_str)
+        array = doc["array"]
+        
+        # Test __str__ and __repr__
+        str_repr = str(array)
+        assert isinstance(str_repr, str)
+        assert "1" in str_repr
+        assert "hello" in str_repr
+        
+        repr_str = repr(array)
+        assert isinstance(repr_str, str)
+        assert repr_str.startswith("JsonArray(")
+        assert repr_str.endswith(")")
 
 
 if __name__ == "__main__":
