@@ -155,6 +155,7 @@ class Indexer::Impl {
   Impl(const std::string &gz_path, const std::string &idx_path,
        size_t ckpt_size, bool force_rebuild)
       : gz_path_(gz_path),
+        gz_path_logical_path_(get_logical_path(gz_path)),
         idx_path_(idx_path),
         ckpt_size_(ckpt_size),
         force_rebuild_(force_rebuild),
@@ -180,6 +181,7 @@ class Indexer::Impl {
   // Enable move
   Impl(Impl &&other) noexcept
       : gz_path_(std::move(other.gz_path_)),
+        gz_path_logical_path_(get_logical_path(gz_path_)),
         idx_path_(std::move(other.idx_path_)),
         ckpt_size_(other.ckpt_size_),
         force_rebuild_(other.force_rebuild_),
@@ -196,6 +198,7 @@ class Indexer::Impl {
         sqlite3_close(db_);
       }
       gz_path_ = std::move(other.gz_path_);
+      gz_path_logical_path_ = get_logical_path(gz_path_);
       idx_path_ = std::move(other.idx_path_);
       ckpt_size_ = other.ckpt_size_;
       force_rebuild_ = other.force_rebuild_;
@@ -269,7 +272,10 @@ class Indexer::Impl {
   int save_checkpoint(sqlite3 *db, int file_id,
                       const CheckpointData *checkpoint) const;
 
+  std::string get_logical_path(const std::string &path);
+
   std::string gz_path_;
+  std::string gz_path_logical_path_;
   std::string idx_path_;
   size_t ckpt_size_;
   bool force_rebuild_;
@@ -277,6 +283,11 @@ class Indexer::Impl {
   bool db_opened_;
   mutable int cached_file_id_;
 };
+
+std::string Indexer::Impl::get_logical_path(const std::string &path) {
+  auto fs_path = fs::path(path);
+  return fs_path.filename().string();
+}
 
 std::string Indexer::Impl::calculate_file_sha256(
     const std::string &file_path) const {
@@ -707,7 +718,7 @@ bool Indexer::Impl::need_rebuild() const {
   // Check if file content has changed using SHA256
   std::string stored_sha256;
   time_t stored_mtime;
-  if (get_stored_file_info(idx_path_, gz_path_, stored_sha256, stored_mtime)) {
+  if (get_stored_file_info(idx_path_, gz_path_logical_path_, stored_sha256, stored_mtime)) {
     // quick check using modification time as optimization
     // time_t current_mtime = get_file_mtime(indexer->gz_path);
     // if (current_mtime != stored_mtime && current_mtime > 0 && stored_mtime >
@@ -1003,7 +1014,7 @@ uint64_t Indexer::Impl::get_max_bytes() const {
   uint64_t max_bytes = 0;
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-    sqlite3_bind_text(stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
       max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
     }
@@ -1016,7 +1027,7 @@ uint64_t Indexer::Impl::get_max_bytes() const {
         "SELECT total_uc_size FROM metadata WHERE file_id = "
         "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)";
     if (sqlite3_prepare_v2(db, metadata_sql, -1, &stmt, nullptr) == SQLITE_OK) {
-      sqlite3_bind_text(stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
+      sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
       if (sqlite3_step(stmt) == SQLITE_ROW) {
         max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
         spdlog::debug("No checkpoints found, using metadata total_uc_size: {}",
@@ -1049,7 +1060,7 @@ uint64_t Indexer::Impl::get_num_lines() const {
   uint64_t total_lines = 0;
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-    sqlite3_bind_text(stmt, 1, gz_path_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
       total_lines = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
     }
@@ -1077,7 +1088,7 @@ int Indexer::Impl::find_file_id(const std::string &gz_path) const {
   int file_id = -1;
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-    sqlite3_bind_text(stmt, 1, gz_path.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
       file_id = sqlite3_column_int(stmt, 0);
     }
@@ -1311,7 +1322,7 @@ void Indexer::Impl::build() {
                          "Prepare failed: " + std::string(sqlite3_errmsg(db_)));
   }
 
-  sqlite3_bind_text(st, 1, gz_path_.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(st, 1, gz_path_logical_path_.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_int64(st, 2, static_cast<sqlite3_int64>(bytes));
   sqlite3_bind_int64(st, 3, static_cast<sqlite3_int64>(file_mtime));
   sqlite3_bind_text(st, 4, file_sha256.c_str(), -1, SQLITE_TRANSIENT);

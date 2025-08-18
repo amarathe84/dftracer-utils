@@ -13,6 +13,7 @@ need_spdlog()
 need_argparse()
 need_ghc_filesystem()
 need_picosha2()
+need_simdjson()
 
 ##########################################
 # Constants
@@ -25,6 +26,7 @@ set(DFTRACER_UTILS_HEADERS
   utils/filesystem.h
   utils/file.h
   utils/logger.h
+  utils/json.h
 )
 
 set(DFTRACER_UTILS_SOURCES
@@ -32,6 +34,7 @@ set(DFTRACER_UTILS_SOURCES
   reader/reader.cpp
   utils/file.cpp
   utils/logger.cpp
+  utils/json.cpp
 )
 
 ##########################################
@@ -49,7 +52,7 @@ set_target_properties(dftracer_utils PROPERTIES
     OUTPUT_NAME dftracer_utils
 )
 target_link_libraries(dftracer_utils 
-    PRIVATE spdlog::spdlog_header_only picosha2
+    PRIVATE spdlog::spdlog_header_only picosha2 simdjson::simdjson
     PUBLIC ghc_filesystem
 )
 target_add_rpath(dftracer_utils)
@@ -85,7 +88,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dftracer_utils_shared 
-    PRIVATE spdlog::spdlog_header_only picosha2
+    PRIVATE spdlog::spdlog_header_only picosha2 simdjson::simdjson
     PUBLIC ghc_filesystem
 )
 target_add_rpath(dftracer_utils_shared)
@@ -115,7 +118,7 @@ endif()
 
 add_executable(dft_reader bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2)
+target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
 
 # Link SQLite3 and zlib for executable (treat as shared since it's an executable)
 link_sqlite3(dft_reader STATIC)
@@ -230,6 +233,9 @@ if(TARGET picosha2)
 endif()
 if (TARGET spdlog_header_only)
     list(APPEND INSTALLABLE_TARGETS spdlog_header_only)
+endif()
+if (TARGET simdjson)
+    list(APPEND INSTALLABLE_TARGETS simdjson)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)

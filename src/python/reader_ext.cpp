@@ -1,6 +1,7 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
+#include <dftracer/utils/utils/json.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
@@ -26,6 +27,58 @@ constexpr uint64_t DEFAULT_STEP_SIZE_BYTES = 4 * 1024 * 1024;  // 4MB
 constexpr uint64_t DEFAULT_STEP_SIZE_LINES = 1;
 
 }  // namespace constants
+
+// Utility functions for converting C++ JSON types to Python objects
+namespace json_conversion {
+
+// Forward declaration
+nb::object any_to_python(const dftracer::utils::json::Any& value);
+
+nb::object any_to_python(const dftracer::utils::json::Any& value) {
+    if (!value.has_value()) {
+        return nb::none();
+    }
+    
+    const std::type_info& type = value.type();
+    
+    if (type == typeid(bool)) {
+        return nb::cast(std::any_cast<bool>(value));
+    } else if (type == typeid(int64_t)) {
+        return nb::cast(std::any_cast<int64_t>(value));
+    } else if (type == typeid(uint64_t)) {
+        return nb::cast(std::any_cast<uint64_t>(value));
+    } else if (type == typeid(double)) {
+        return nb::cast(std::any_cast<double>(value));
+    } else if (type == typeid(std::string)) {
+        return nb::cast(std::any_cast<std::string>(value));
+    } else if (type == typeid(dftracer::utils::json::AnyArray)) {
+        const auto& arr = std::any_cast<dftracer::utils::json::AnyArray>(value);
+        nb::list py_list;
+        for (const auto& item : arr) {
+            py_list.append(any_to_python(item));
+        }
+        return py_list;
+    } else if (type == typeid(dftracer::utils::json::AnyMap)) {
+        const auto& map = std::any_cast<dftracer::utils::json::AnyMap>(value);
+        nb::dict py_dict;
+        for (const auto& [key, val] : map) {
+            py_dict[key.c_str()] = any_to_python(val);
+        }
+        return py_dict;
+    }
+    
+    return nb::none(); // fallback for unknown types
+}
+
+nb::list anymap_vector_to_python(const std::vector<dftracer::utils::json::AnyMap>& vec) {
+    nb::list result;
+    for (const auto& map : vec) {
+        result.append(any_to_python(map));
+    }
+    return result;
+}
+
+}  // namespace json_conversion
 
 std::string trim_trailing(const char *data, size_t size) {
   if (size == 0) return "";
@@ -56,7 +109,7 @@ std::vector<std::string> split_lines(const std::string &data) {
   return lines;
 }
 
-enum class DFTracerReaderMode { LineBytes, Bytes, Lines };
+enum class DFTracerReaderMode { LineBytes, Bytes, Lines, JsonLines, JsonLinesBytes };
 
 template <DFTracerReaderMode Mode>
 class DFTracerReader;
@@ -120,10 +173,12 @@ class DFTracerReader {
   uint64_t index_checkpoint_size_;
 
  public:
-  using ReturnType =
+  using ReturnType = std::conditional_t<
+      Mode == DFTracerReaderMode::JsonLines || Mode == DFTracerReaderMode::JsonLinesBytes,
+      nb::list,  // Return Python list of dicts for JSON modes
       std::conditional_t<Mode == DFTracerReaderMode::Lines ||
                              Mode == DFTracerReaderMode::LineBytes,
-                         std::vector<std::string>, std::string>;
+                         std::vector<std::string>, std::string>>;
 
   DFTracerReader(const std::string &gzip_path,
                  const std::optional<std::string> &index_path = std::nullopt,
@@ -296,7 +351,13 @@ class DFTracerReader {
       std::vector<char> buffer(buffer_size);
 
       size_t bytes_read;
-      if constexpr (Mode == DFTracerReaderMode::Bytes) {
+      if constexpr (Mode == DFTracerReaderMode::JsonLines) {
+        auto json_objects = reader_->read_json_lines(start, end);
+        result = json_conversion::anymap_vector_to_python(json_objects);
+      } else if constexpr (Mode == DFTracerReaderMode::JsonLinesBytes) {
+        auto json_objects = reader_->read_json_lines_bytes(start, end, buffer.data(), buffer.size());
+        result = json_conversion::anymap_vector_to_python(json_objects);
+      } else if constexpr (Mode == DFTracerReaderMode::Bytes) {
         while ((bytes_read = reader_->read(start, end, buffer.data(),
                                            buffer.size())) > 0) {
           result.append(buffer.data(), bytes_read);
@@ -421,11 +482,15 @@ class DFTracerRangeIterator {
 using DFTracerBytesReader = DFTracerReader<DFTracerReaderMode::Bytes>;
 using DFTracerLineBytesReader = DFTracerReader<DFTracerReaderMode::LineBytes>;
 using DFTracerLinesReader = DFTracerReader<DFTracerReaderMode::Lines>;
+using DFTracerJsonLinesReader = DFTracerReader<DFTracerReaderMode::JsonLines>;
+using DFTracerJsonLinesBytesReader = DFTracerReader<DFTracerReaderMode::JsonLinesBytes>;
 
 using DFTracerBytesIterator = DFTracerReaderIterator<DFTracerReaderMode::Bytes>;
 using DFTracerLineBytesIterator =
     DFTracerReaderIterator<DFTracerReaderMode::LineBytes>;
 using DFTracerLinesIterator = DFTracerReaderIterator<DFTracerReaderMode::Lines>;
+using DFTracerJsonLinesIterator = DFTracerReaderIterator<DFTracerReaderMode::JsonLines>;
+using DFTracerJsonLinesBytesIterator = DFTracerReaderIterator<DFTracerReaderMode::JsonLinesBytes>;
 
 using DFTracerLineBytesRangeIterator =
     DFTracerRangeIterator<DFTracerReaderMode::LineBytes>;
@@ -433,6 +498,10 @@ using DFTracerBytesRangeIterator =
     DFTracerRangeIterator<DFTracerReaderMode::Bytes>;
 using DFTracerLinesRangeIterator =
     DFTracerRangeIterator<DFTracerReaderMode::Lines>;
+using DFTracerJsonLinesRangeIterator =
+    DFTracerRangeIterator<DFTracerReaderMode::JsonLines>;
+using DFTracerJsonLinesBytesRangeIterator =
+    DFTracerRangeIterator<DFTracerReaderMode::JsonLinesBytes>;
 
 template <typename ReaderMode>
 auto dft_reader_range_impl(ReaderMode &reader, uint64_t start, uint64_t end,
@@ -512,6 +581,18 @@ NB_MODULE(reader_ext, m) {
       .def("__next__", &DFTracerLinesIterator::__next__,
            "Get next lines chunk");
 
+  nb::class_<DFTracerJsonLinesIterator>(m, "DFTracerJsonLinesIterator")
+      .def("__iter__", &DFTracerJsonLinesIterator::__iter__,
+           nb::rv_policy::reference_internal, "Get iterator")
+      .def("__next__", &DFTracerJsonLinesIterator::__next__,
+           "Get next JSON lines chunk");
+
+  nb::class_<DFTracerJsonLinesBytesIterator>(m, "DFTracerJsonLinesBytesIterator")
+      .def("__iter__", &DFTracerJsonLinesBytesIterator::__iter__,
+           nb::rv_policy::reference_internal, "Get iterator")
+      .def("__next__", &DFTracerJsonLinesBytesIterator::__next__,
+           "Get next JSON lines bytes chunk");
+
   nb::class_<DFTracerBytesRangeIterator>(m, "DFTracerBytesRangeIterator")
       .def("__iter__", &DFTracerBytesRangeIterator::__iter__,
            nb::rv_policy::reference_internal, "Get iterator")
@@ -549,6 +630,30 @@ NB_MODULE(reader_ext, m) {
       .def_prop_ro("end", &DFTracerLinesRangeIterator::get_end, "End position")
       .def_prop_ro("step", &DFTracerLinesRangeIterator::get_step, "Step size")
       .def_prop_ro("current", &DFTracerLinesRangeIterator::get_current,
+                   "Current position");
+
+  nb::class_<DFTracerJsonLinesRangeIterator>(m, "DFTracerJsonLinesRangeIterator")
+      .def("__iter__", &DFTracerJsonLinesRangeIterator::__iter__,
+           nb::rv_policy::reference_internal, "Get iterator")
+      .def("__next__", &DFTracerJsonLinesRangeIterator::__next__,
+           "Get next JSON lines chunk")
+      .def_prop_ro("start", &DFTracerJsonLinesRangeIterator::get_start,
+                   "Start position")
+      .def_prop_ro("end", &DFTracerJsonLinesRangeIterator::get_end, "End position")
+      .def_prop_ro("step", &DFTracerJsonLinesRangeIterator::get_step, "Step size")
+      .def_prop_ro("current", &DFTracerJsonLinesRangeIterator::get_current,
+                   "Current position");
+
+  nb::class_<DFTracerJsonLinesBytesRangeIterator>(m, "DFTracerJsonLinesBytesRangeIterator")
+      .def("__iter__", &DFTracerJsonLinesBytesRangeIterator::__iter__,
+           nb::rv_policy::reference_internal, "Get iterator")
+      .def("__next__", &DFTracerJsonLinesBytesRangeIterator::__next__,
+           "Get next JSON lines bytes chunk")
+      .def_prop_ro("start", &DFTracerJsonLinesBytesRangeIterator::get_start,
+                   "Start position")
+      .def_prop_ro("end", &DFTracerJsonLinesBytesRangeIterator::get_end, "End position")
+      .def_prop_ro("step", &DFTracerJsonLinesBytesRangeIterator::get_step, "Step size")
+      .def_prop_ro("current", &DFTracerJsonLinesBytesRangeIterator::get_current,
                    "Current position");
 
   nb::class_<DFTracerBytesReader>(m, "DFTracerBytesReader")
@@ -655,6 +760,77 @@ NB_MODULE(reader_ext, m) {
       .def_prop_ro("index_path", &DFTracerLinesReader::index_path,
                    "Path to the index file")
       .def_prop_ro("is_open", &DFTracerLinesReader::is_open,
+                   "Whether the database is open");
+
+  nb::class_<DFTracerJsonLinesReader>(m, "DFTracerJsonLinesReader")
+      .def(nb::init<const std::string &, const std::optional<std::string> &>(),
+           "gzip_path"_a, "index_path"_a = nb::none(),
+           "Create a DFTracer JSON lines reader for a gzip file and its index")
+      .def(nb::init<DFTracerIndexer *>(), "indexer"_a,
+           "Create a DFTracer JSON lines reader from an existing indexer")
+      .def("get_max_bytes", &DFTracerJsonLinesReader::get_max_bytes,
+           "Get the maximum byte position available in the file")
+      .def("get_num_lines", &DFTracerJsonLinesReader::get_num_lines,
+           "Get the number of lines in the file")
+      .def("iter", &DFTracerJsonLinesReader::iter,
+           "step"_a = constants::DEFAULT_STEP_SIZE_LINES,
+           "Get iterator with optional step size")
+      .def("__iter__", &DFTracerJsonLinesReader::__iter__,
+           nb::rv_policy::reference_internal, "Get iterator for the reader")
+      .def("__next__", &DFTracerJsonLinesReader::__next__,
+           "Get next chunk with default step")
+      .def("set_default_step", &DFTracerJsonLinesReader::set_default_step, "step"_a,
+           "Set default step for iteration")
+      .def("get_default_step", &DFTracerJsonLinesReader::get_default_step,
+           "Get current default step")
+      .def("read", &DFTracerJsonLinesReader::read, "start"_a, "end"_a,
+           "Read a range from the gzip file and return as Python list of dictionaries")
+      .def("open", &DFTracerJsonLinesReader::open, "Open the index database")
+      .def("close", &DFTracerJsonLinesReader::close, "Close the index database")
+      .def("__enter__", &DFTracerJsonLinesReader::__enter__,
+           nb::rv_policy::reference_internal, "Enter context manager")
+      .def("__exit__", &DFTracerJsonLinesReader::__exit__, "Exit context manager")
+      .def_prop_ro("gzip_path", &DFTracerJsonLinesReader::gzip_path,
+                   "Path to the gzip file")
+      .def_prop_ro("index_path", &DFTracerJsonLinesReader::index_path,
+                   "Path to the index file")
+      .def_prop_ro("is_open", &DFTracerJsonLinesReader::is_open,
+                   "Whether the database is open");
+
+  nb::class_<DFTracerJsonLinesBytesReader>(m, "DFTracerJsonLinesBytesReader")
+      .def(nb::init<const std::string &, const std::optional<std::string> &>(),
+           "gzip_path"_a, "index_path"_a = nb::none(),
+           "Create a DFTracer JSON lines bytes reader for a gzip file and its index")
+      .def(nb::init<DFTracerIndexer *>(), "indexer"_a,
+           "Create a DFTracer JSON lines bytes reader from an existing indexer")
+      .def("get_max_bytes", &DFTracerJsonLinesBytesReader::get_max_bytes,
+           "Get the maximum byte position available in the file")
+      .def("get_num_lines", &DFTracerJsonLinesBytesReader::get_num_lines,
+           "Get the number of lines in the file")
+      .def("iter", &DFTracerJsonLinesBytesReader::iter,
+           "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
+           "Get iterator with optional step size")
+      .def("__iter__", &DFTracerJsonLinesBytesReader::__iter__,
+           nb::rv_policy::reference_internal, "Get iterator for the reader")
+      .def("__next__", &DFTracerJsonLinesBytesReader::__next__,
+           "Get next chunk with default step")
+      .def("set_default_step", &DFTracerJsonLinesBytesReader::set_default_step,
+           "step"_a, "Set default step for iteration")
+      .def("get_default_step", &DFTracerJsonLinesBytesReader::get_default_step,
+           "Get current default step")
+      .def("read", &DFTracerJsonLinesBytesReader::read, "start"_a, "end"_a,
+           "Read a range from the gzip file and return as Python list of dictionaries")
+      .def("open", &DFTracerJsonLinesBytesReader::open, "Open the index database")
+      .def("close", &DFTracerJsonLinesBytesReader::close, "Close the index database")
+      .def("__enter__", &DFTracerJsonLinesBytesReader::__enter__,
+           nb::rv_policy::reference_internal, "Enter context manager")
+      .def("__exit__", &DFTracerJsonLinesBytesReader::__exit__,
+           "Exit context manager")
+      .def_prop_ro("gzip_path", &DFTracerJsonLinesBytesReader::gzip_path,
+                   "Path to the gzip file")
+      .def_prop_ro("index_path", &DFTracerJsonLinesBytesReader::index_path,
+                   "Path to the index file")
+      .def_prop_ro("is_open", &DFTracerJsonLinesBytesReader::is_open,
                    "Whether the database is open");
 
   // Generic dft_reader_range function with mode parameter

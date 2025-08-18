@@ -31,12 +31,12 @@ int main(int argc, char **argv) {
       .help("End position in bytes")
       .default_value<int64_t>(-1)
       .scan<'d', int64_t>();
-  program.add_argument("-c", "--chunk-size")
-      .help("Chunk size for indexing in megabytes (default: 32)")
-      .scan<'g', double>()
-      .default_value<double>(32.0);
-  program.add_argument("-f", "--force")
-      .help("Force rebuild index even if chunk size differs")
+  program.add_argument("-c", "--checkpoint-size")
+      .help("Checkpoint size for indexing in bytes (default: 32 * 1024 * 1024 B (32 MB))")
+      .scan<'d', size_t>()
+      .default_value<size_t>(32 * 1024 * 1024);
+  program.add_argument("-f", "--force-rebuild")
+      .help("Force rebuild index")
       .flag();
   program.add_argument("--log-level")
       .help(
@@ -64,12 +64,11 @@ int main(int argc, char **argv) {
   std::string index_path = program.get<std::string>("--index");
   int64_t start = program.get<int64_t>("--start");
   int64_t end = program.get<int64_t>("--end");
-  double chunk_size_mb = program.get<double>("--chunk-size");
-  bool force_rebuild = program.get<bool>("--force");
+  size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
+  bool force_rebuild = program.get<bool>("--force-rebuild");
   bool check_rebuild = program.get<bool>("--check");
   std::string read_mode = program.get<std::string>("--mode");
   std::string log_level_str = program.get<std::string>("--log-level");
-
   size_t read_buffer_size = program.get<size_t>("--read-buffer-size");
 
   // stderr-based logger to ensure logs don't interfere with data output
@@ -82,11 +81,11 @@ int main(int argc, char **argv) {
   spdlog::debug("Start position: {}", start);
   spdlog::debug("End position: {}", end);
   spdlog::debug("Mode: {}", read_mode);
-  spdlog::debug("Chunk size: {} MB", chunk_size_mb);
+  spdlog::debug("Checkpoint size: {} B ({} MB)", checkpoint_size, checkpoint_size / (1024 * 1024));
   spdlog::debug("Force rebuild: {}", force_rebuild);
 
-  if (chunk_size_mb <= 0) {
-    spdlog::error("Chunk size must be positive (greater than 0 and in MB)");
+  if (checkpoint_size <= 0) {
+    spdlog::error("Checkpoint size must be positive (greater than 0 and in MB)");
     return 1;
   }
 
@@ -101,7 +100,7 @@ int main(int argc, char **argv) {
 
   try {
     dftracer::utils::indexer::Indexer indexer(
-        gz_path, idx_path, static_cast<size_t>(chunk_size_mb * 1024 * 1024),
+        gz_path, idx_path, checkpoint_size,
         force_rebuild);
 
     if (check_rebuild) {
@@ -133,15 +132,12 @@ int main(int argc, char **argv) {
 
         spdlog::debug("Reading lines from {} to {}", start, end_line);
 
-        auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
-        if (lines.empty()) {
-          spdlog::debug("No lines read in the specified range");
-          return 0;
-        }
-        fwrite(lines.c_str(), 1, lines.size(), stdout);
-        // count new line only
-        size_t line_count =
-            static_cast<size_t>(std::count(lines.begin(), lines.end(), '\n'));
+        // auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
+        auto lines = reader.read_json_lines(static_cast<size_t>(start), end_line);
+        // fwrite(lines, 1, lines.size(), stdout);
+        // size_t line_count =
+        //     static_cast<size_t>(std::count(lines.begin(), lines.end(), '\n'));
+        size_t line_count = lines.size();
         spdlog::debug("Successfully read {} lines from range", line_count);
       } else {
         size_t start_bytes_ = static_cast<size_t>(start);

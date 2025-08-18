@@ -946,6 +946,26 @@ class Reader::Impl {
     return read_lines_from_beginning(start_line, end_line);
   }
 
+  std::vector<dftracer::utils::json::AnyMap> read_json_lines(size_t start, size_t end) {
+    std::string lines_data = read_lines(start, end);
+    return dftracer::utils::json::parse_json_lines(lines_data.data(), lines_data.size());
+  }
+
+  std::vector<dftracer::utils::json::AnyMap> read_json_lines_bytes(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size) {
+    ErrorHandler::check_reader_state(is_open_, indexer_);
+    ErrorHandler::validate_parameters(buffer, buffer_size, start_bytes, end_bytes, indexer_->get_max_bytes());
+
+    // Read lines using existing streaming method
+    size_t bytes_read = read_line_bytes(start_bytes, end_bytes, buffer, buffer_size);
+    
+    if (bytes_read == 0) {
+      return std::vector<dftracer::utils::json::AnyMap>();
+    }
+
+    // Parse the buffer content as JSON Lines
+    return dftracer::utils::json::parse_json_lines(buffer, bytes_read);
+  }
+
   void reset() {
     ErrorHandler::check_reader_state(is_open_, indexer_);
     if (line_byte_session_) {
@@ -1052,6 +1072,14 @@ size_t Reader::read_line_bytes(size_t start_bytes, size_t end_bytes,
 
 std::string Reader::read_lines(size_t start, size_t end) {
   return pImpl_->read_lines(start, end);
+}
+
+std::vector<dftracer::utils::json::AnyMap> Reader::read_json_lines(size_t start, size_t end) {
+  return pImpl_->read_json_lines(start, end);
+}
+
+std::vector<dftracer::utils::json::AnyMap> Reader::read_json_lines_bytes(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size) {
+  return pImpl_->read_json_lines_bytes(start_bytes, end_bytes, buffer, buffer_size);
 }
 
 void Reader::reset() { pImpl_->reset(); }

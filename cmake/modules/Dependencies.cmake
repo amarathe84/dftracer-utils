@@ -44,6 +44,20 @@ function(need_ghc_filesystem)
   endif()
 endfunction()
 
+function(need_simdjson)
+  if(NOT simdjson_ADDED)
+    CPMAddPackage(
+      NAME simdjson
+      GITHUB_REPOSITORY simdjson/simdjson
+      VERSION 3.13.0
+      OPTIONS
+        "SIMDJSON_BUILD_STATIC_LIB ON"
+        "SIMDJSON_DISABLE_DEPRECATED_API ON"
+      FORCE YES
+    )
+  endif()
+endfunction()
+
 function(need_sqlite3)
   find_package(SQLite3 3.30 QUIET)
   

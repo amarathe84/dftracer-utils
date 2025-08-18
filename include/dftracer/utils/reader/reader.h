@@ -112,6 +112,8 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
+#include <dftracer/utils/utils/json.h>
 
 // Forward declaration for indexer
 namespace dftracer {
@@ -229,6 +231,27 @@ class Reader {
    * @throws std::runtime_error if operation fails
    */
   std::string read_lines(size_t start, size_t end);
+
+  /**
+   * Read complete lines from gzip file and parse as JSON Lines
+   * @param start Start line number (0-based)
+   * @param end End line number (exclusive, 0-based)
+   * @return Vector of parsed JSON objects
+   * @throws std::runtime_error if operation fails
+   */
+  std::vector<dftracer::utils::json::AnyMap> read_json_lines(size_t start, size_t end);
+
+  /**
+   * Read bytes from gzip file and parse as JSON Lines (streaming)
+   * Returns parsed JSON objects from complete lines only. Call repeatedly until returns empty vector.
+   * @param start_bytes Start position in bytes
+   * @param end_bytes End position in bytes
+   * @param buffer User-provided buffer for complete lines
+   * @param buffer_size Size of user-provided buffer
+   * @return Vector of parsed JSON objects from the buffer
+   * @throws std::runtime_error if operation fails
+   */
+  std::vector<dftracer::utils::json::AnyMap> read_json_lines_bytes(size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size);
 
   /**
    * Reset the reader to the initial state
