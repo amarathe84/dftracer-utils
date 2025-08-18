@@ -15,7 +15,8 @@
 #include <string>
 #include <vector>
 
-#include "indexer_py.h"
+#include "indexer_ext.h"
+#include "json_ext.h"
 
 namespace nb = nanobind;
 
@@ -28,57 +29,6 @@ constexpr uint64_t DEFAULT_STEP_SIZE_LINES = 1;
 
 }  // namespace constants
 
-// Utility functions for converting C++ JSON types to Python objects
-namespace json_conversion {
-
-// Forward declaration
-nb::object any_to_python(const dftracer::utils::json::Any& value);
-
-nb::object any_to_python(const dftracer::utils::json::Any& value) {
-    if (!value.has_value()) {
-        return nb::none();
-    }
-    
-    const std::type_info& type = value.type();
-    
-    if (type == typeid(bool)) {
-        return nb::cast(std::any_cast<bool>(value));
-    } else if (type == typeid(int64_t)) {
-        return nb::cast(std::any_cast<int64_t>(value));
-    } else if (type == typeid(uint64_t)) {
-        return nb::cast(std::any_cast<uint64_t>(value));
-    } else if (type == typeid(double)) {
-        return nb::cast(std::any_cast<double>(value));
-    } else if (type == typeid(std::string)) {
-        return nb::cast(std::any_cast<std::string>(value));
-    } else if (type == typeid(dftracer::utils::json::AnyArray)) {
-        const auto& arr = std::any_cast<dftracer::utils::json::AnyArray>(value);
-        nb::list py_list;
-        for (const auto& item : arr) {
-            py_list.append(any_to_python(item));
-        }
-        return py_list;
-    } else if (type == typeid(dftracer::utils::json::AnyMap)) {
-        const auto& map = std::any_cast<dftracer::utils::json::AnyMap>(value);
-        nb::dict py_dict;
-        for (const auto& [key, val] : map) {
-            py_dict[key.c_str()] = any_to_python(val);
-        }
-        return py_dict;
-    }
-    
-    return nb::none(); // fallback for unknown types
-}
-
-nb::list anymap_vector_to_python(const std::vector<dftracer::utils::json::AnyMap>& vec) {
-    nb::list result;
-    for (const auto& map : vec) {
-        result.append(any_to_python(map));
-    }
-    return result;
-}
-
-}  // namespace json_conversion
 
 std::string trim_trailing(const char *data, size_t size) {
   if (size == 0) return "";
@@ -353,10 +303,10 @@ class DFTracerReader {
       size_t bytes_read;
       if constexpr (Mode == DFTracerReaderMode::JsonLines) {
         auto json_objects = reader_->read_json_lines(start, end);
-        result = json_conversion::anymap_vector_to_python(json_objects);
+        result = jsondocs_to_python(json_objects);
       } else if constexpr (Mode == DFTracerReaderMode::JsonLinesBytes) {
         auto json_objects = reader_->read_json_lines_bytes(start, end, buffer.data(), buffer.size());
-        result = json_conversion::anymap_vector_to_python(json_objects);
+        result = jsondocs_to_python(json_objects);
       } else if constexpr (Mode == DFTracerReaderMode::Bytes) {
         while ((bytes_read = reader_->read(start, end, buffer.data(),
                                            buffer.size())) > 0) {
@@ -562,6 +512,18 @@ DFTracerLinesRangeIterator dft_reader_range(
 
 NB_MODULE(reader_ext, m) {
   m.doc() = "DFTracer utilities reader extension";
+
+  // Register JsonDocument for cross-module compatibility
+  nb::class_<JsonDocument>(m, "JsonDocument")
+      .def("__getitem__", &JsonDocument::__getitem__, "Get item by key")
+      .def("__contains__", &JsonDocument::__contains__, "Check if key exists")
+      .def("__len__", &JsonDocument::__len__, "Get number of keys")
+      .def("__str__", &JsonDocument::__str__, "String representation")
+      .def("__repr__", &JsonDocument::__repr__, "String representation")
+      .def("__iter__", &JsonDocument::__iter__, "Iterator over keys")
+      .def("keys", &JsonDocument::keys, "Get all keys")
+      .def("get", &JsonDocument::get, "Get value with optional default", 
+           nb::arg("key"), nb::arg("default") = nb::none());
 
   nb::class_<DFTracerBytesIterator>(m, "DFTracerBytesIterator")
       .def("__iter__", &DFTracerBytesIterator::__iter__,

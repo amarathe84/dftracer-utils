@@ -2,25 +2,24 @@
 #define __DFTRACER_UTILS_UTILS_DFT_EVENTS_H
 
 #include <unordered_map>
-#include <any>
 #include <string>
 #include <vector>
 #include <iosfwd>
+#include <simdjson.h>
 
 namespace dftracer {
 namespace utils {
 namespace json {
 
-using Any      = std::any;
-using AnyMap   = std::unordered_map<std::string, Any>;
-using AnyArray = std::vector<Any>;
+// High-performance JSON types using simdjson DOM directly - no conversion
+using JsonDocument = simdjson::dom::element;
+using JsonDocuments = std::vector<JsonDocument>;
 
-std::vector<AnyMap> parse_json_lines(const char* data, size_t size);
-AnyMap parse_json(const char* data, size_t size);
+JsonDocuments parse_json_lines(const char* data, size_t size);
+JsonDocument parse_json(const char* data, size_t size);
 
-std::ostream& operator<<(std::ostream& os, const Any& value);
-std::ostream& operator<<(std::ostream& os, const AnyMap& map);
-std::ostream& operator<<(std::ostream& os, const std::vector<AnyMap>& maps);
+std::ostream& operator<<(std::ostream& os, const JsonDocument& doc);
+std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
 
 }
 }

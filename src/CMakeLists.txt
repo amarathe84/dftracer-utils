@@ -52,8 +52,8 @@ set_target_properties(dftracer_utils PROPERTIES
     OUTPUT_NAME dftracer_utils
 )
 target_link_libraries(dftracer_utils 
-    PRIVATE spdlog::spdlog_header_only picosha2 simdjson::simdjson
-    PUBLIC ghc_filesystem
+    PRIVATE spdlog::spdlog_header_only picosha2
+    PUBLIC ghc_filesystem  simdjson::simdjson
 )
 target_add_rpath(dftracer_utils)
 
@@ -88,8 +88,8 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dftracer_utils_shared 
-    PRIVATE spdlog::spdlog_header_only picosha2 simdjson::simdjson
-    PUBLIC ghc_filesystem
+    PRIVATE spdlog::spdlog_header_only picosha2
+    PUBLIC ghc_filesystem  simdjson::simdjson
 )
 target_add_rpath(dftracer_utils_shared)
 
@@ -175,7 +175,7 @@ if (SKBUILD)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
   endif()
 
-  add_library(dftracer_utils_py INTERFACE python/indexer_py.h)
+  add_library(dftracer_utils_py INTERFACE python/indexer_ext.h python/json_ext.h)
   target_link_libraries(dftracer_utils_py INTERFACE dftracer_utils::shared)
   # @HACK: this is needed to avoid include errors
   target_include_directories(dftracer_utils_py
@@ -188,6 +188,7 @@ if (SKBUILD)
     python/indexer_ext.cpp
     python/reader_ext.cpp
     python/utils_ext.cpp
+    python/json_ext.cpp
   )
 
   foreach (source_file ${PYTHON_BINDINGS_SOURCES})

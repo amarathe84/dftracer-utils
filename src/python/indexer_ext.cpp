@@ -3,7 +3,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "indexer_py.h"
+#include "indexer_ext.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
