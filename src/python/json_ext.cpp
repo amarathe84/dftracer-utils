@@ -70,7 +70,37 @@ std::string JsonDocument::__str__() {
 }
 
 std::string JsonDocument::__repr__() {
-    return "JsonDocument(" + simdjson::minify(doc) + ")";
+    std::string type_name;
+    switch (doc.type()) {
+        case simdjson::dom::element_type::OBJECT:
+            type_name = "object";
+            break;
+        case simdjson::dom::element_type::ARRAY:
+            type_name = "array";
+            break;
+        case simdjson::dom::element_type::NULL_VALUE:
+            type_name = "null";
+            break;
+        case simdjson::dom::element_type::BOOL:
+            type_name = "bool";
+            break;
+        case simdjson::dom::element_type::INT64:
+            type_name = "int64";
+            break;
+        case simdjson::dom::element_type::UINT64:
+            type_name = "uint64";
+            break;
+        case simdjson::dom::element_type::DOUBLE:
+            type_name = "double";
+            break;
+        case simdjson::dom::element_type::STRING:
+            type_name = "string";
+            break;
+        default:
+            type_name = "unknown";
+            break;
+    }
+    return "JsonDocument(<" + type_name + ">)";
 }
 
 JsonKeysIterator JsonDocument::__iter__() {
