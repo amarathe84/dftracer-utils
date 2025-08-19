@@ -1053,9 +1053,9 @@ std::vector<HighLevelMetrics> DFTracerAnalyzer::load_view_from_parquet(const std
     reader->ReadTable(&table);
 
     // Convert Arrow table back to HighLevelMetrics
-    auto time_column = table->GetColumnByName("time_sum");
-    auto count_column = table->GetColumnByName("count_sum");
-    auto size_column = table->GetColumnByName("size_sum");
+    auto time_column = table->GetColumnByName("time");
+    auto count_column = table->GetColumnByName("count");
+    auto size_column = table->GetColumnByName("size");
 
     if (time_column && count_column && size_column) {
       auto time_array = std::static_pointer_cast<arrow::DoubleArray>(time_column->chunk(0));
@@ -1067,7 +1067,35 @@ std::vector<HighLevelMetrics> DFTracerAnalyzer::load_view_from_parquet(const std
         hlm.time_sum = time_array->Value(i);
         hlm.count_sum = count_array->Value(i);
         hlm.size_sum = size_array->Value(i);
-        // TODO: Load bin_sums and unique_sets maps
+        
+        // Load bin_sums from bin columns
+        for (auto col_name : table->ColumnNames()) {
+          if (col_name.find("size_bin_") == 0) {
+            auto bin_column = table->GetColumnByName(col_name);
+            if (bin_column) {
+              auto bin_array = std::static_pointer_cast<arrow::UInt32Array>(bin_column->chunk(0));
+              hlm.bin_sums[col_name] = bin_array->Value(i);
+            }
+          }
+        }
+        
+        // Load unique_sets from remaining string columns (like file_name)
+        // Skip index columns and data columns we already processed
+        for (auto col_name : table->ColumnNames()) {
+          if (col_name != "time" && col_name != "count" && col_name != "size" &&
+              col_name.find("size_bin_") != 0 && 
+              col_name != "time_range") { // Skip these common index columns
+            auto string_column = table->GetColumnByName(col_name);
+            if (string_column && string_column->type()->id() == arrow::Type::STRING) {
+              auto string_array = std::static_pointer_cast<arrow::StringArray>(string_column->chunk(0));
+              if (!string_array->IsNull(i)) {
+                std::string value = string_array->GetString(i);
+                hlm.unique_sets[col_name].insert(value);
+              }
+            }
+          }
+        }
+        
         metrics.push_back(hlm);
       }
     }
