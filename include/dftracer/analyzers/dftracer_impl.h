@@ -60,7 +60,8 @@ std::vector<HighLevelMetrics> DFTracerAnalyzer::compute_high_level_metrics(
           std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 
       return _compute_high_level_metrics(all_batches, view_types);
-    }
+    },
+    false, true, false, view_types
   );
 }
 
@@ -87,7 +88,7 @@ std::vector<HighLevelMetrics> DFTracerAnalyzer::analyze_trace(
 template <typename T, typename FallbackFunc>
 T DFTracerAnalyzer::restore_view(const std::string& checkpoint_name, 
                                 FallbackFunc fallback, bool force, 
-                                bool write_to_disk, bool read_from_disk) {
+                                bool write_to_disk, bool read_from_disk, const std::vector<std::string>& view_types) {
   if (checkpoint_) {
     std::string view_path = get_checkpoint_path(checkpoint_name);
     if (force || !has_checkpoint(checkpoint_name)) {
@@ -96,7 +97,7 @@ T DFTracerAnalyzer::restore_view(const std::string& checkpoint_name,
         return view;
       }
       if constexpr (std::is_same_v<T, std::vector<HighLevelMetrics>>) {
-        store_view(checkpoint_name, view);
+        store_view(checkpoint_name, view, view_types);
       }
       if (!read_from_disk) {
         return view;

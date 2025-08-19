@@ -5,8 +5,12 @@
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
+#include <arrow/util/key_value_metadata.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
+#include <parquet/file_reader.h>
+#include <parquet/file_writer.h>
+#include <parquet/metadata.h>
 
 #include <algorithm>
 #include <fstream>
@@ -546,11 +550,11 @@ std::string DFTracerAnalyzer::get_checkpoint_path(const std::string& name) const
 
 bool DFTracerAnalyzer::has_checkpoint(const std::string& name) const {
   std::string checkpoint_path = get_checkpoint_path(name);
-  std::string metadata_path = checkpoint_path + "/_metadata";
+  std::string metadata_path = checkpoint_path + "/_checkpoint_metadata";
   return fs::exists(metadata_path);
 }
 
-void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<HighLevelMetrics>& view) {
+void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<HighLevelMetrics>& view, const std::vector<std::string>& view_types) {
   try {
     std::string view_path = get_checkpoint_path(name);
     
@@ -558,15 +562,59 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
     fs::create_directories(view_path);
 
     if (view.empty()) {
-      // Create empty parquet file with basic schema
-      auto schema = arrow::schema({
-        arrow::field("time_sum", arrow::float64()),
-        arrow::field("count_sum", arrow::uint64()),
-        arrow::field("size_sum", arrow::uint64()),
-      });
+      // Create empty parquet file with minimal schema matching expected structure
+      std::vector<std::shared_ptr<arrow::Field>> empty_schema_fields;
       
+      // Add expected index columns based on view_types
+      for (const auto& view_type : view_types) {
+        std::shared_ptr<arrow::DataType> field_type = arrow::utf8();
+        if (view_type == "time_range") {
+          field_type = arrow::uint16();
+        }
+        empty_schema_fields.push_back(arrow::field(view_type, field_type));
+      }
+      
+      // Add HLM_EXTRA_COLS 
+      for (const auto& extra_col : HLM_EXTRA_COLS) {
+        std::shared_ptr<arrow::DataType> field_type = arrow::utf8();
+        if (extra_col == "acc_pat") {
+          field_type = arrow::utf8(); // Keep as string consistently
+        }
+        empty_schema_fields.push_back(arrow::field(extra_col, field_type));
+      }
+      
+      // Add data columns 
+      empty_schema_fields.push_back(arrow::field("time", arrow::float64()));
+      empty_schema_fields.push_back(arrow::field("count", arrow::uint64()));  
+      empty_schema_fields.push_back(arrow::field("size", arrow::uint64()));
+      
+      auto empty_schema = arrow::schema(empty_schema_fields);
       std::vector<std::shared_ptr<arrow::Array>> empty_arrays;
-      auto empty_table = arrow::Table::Make(schema, empty_arrays);
+      
+      // Create empty arrays that match the schema
+      for (const auto& field : empty_schema_fields) {
+        std::shared_ptr<arrow::Array> empty_array;
+        if (field->type()->id() == arrow::Type::STRING) {
+          arrow::StringBuilder builder;
+          builder.Finish(&empty_array);
+        } else if (field->type()->id() == arrow::Type::DOUBLE) {
+          arrow::DoubleBuilder builder;
+          builder.Finish(&empty_array);
+        } else if (field->type()->id() == arrow::Type::UINT64) {
+          arrow::UInt64Builder builder;
+          builder.Finish(&empty_array);
+        } else if (field->type()->id() == arrow::Type::UINT16) {
+          arrow::UInt16Builder builder;
+          builder.Finish(&empty_array);
+        } else {
+          // Default to string builder for unknown types
+          arrow::StringBuilder builder;
+          builder.Finish(&empty_array);
+        }
+        empty_arrays.push_back(empty_array);
+      }
+      
+      auto empty_table = arrow::Table::Make(empty_schema, empty_arrays);
       
       std::string parquet_file = view_path + "/part.0.parquet";
       auto outfile_result = arrow::io::FileOutputStream::Open(parquet_file);
@@ -577,10 +625,10 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
       auto outfile = *outfile_result;
       
       parquet::WriterProperties::Builder properties_builder;
-      properties_builder.compression(parquet::Compression::UNCOMPRESSED);
+      properties_builder.compression(parquet::Compression::SNAPPY);
       auto properties = properties_builder.build();
       
-      auto writer_result = parquet::arrow::FileWriter::Open(*schema, arrow::default_memory_pool(), outfile, properties);
+      auto writer_result = parquet::arrow::FileWriter::Open(*empty_schema, arrow::default_memory_pool(), outfile, properties);
       if (!writer_result.ok()) {
         spdlog::error("Failed to create parquet writer: {}", writer_result.status().ToString());
         return;
@@ -605,10 +653,10 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
         return;
       }
       
-      std::ofstream metadata(view_path + "/_metadata");
-      metadata << "checkpoint_name=" << name << std::endl;
-      metadata << "timestamp=" << std::time(nullptr) << std::endl;
-      metadata.close();
+      std::ofstream checkpoint_metadata(view_path + "/_checkpoint_metadata");
+      checkpoint_metadata << "checkpoint_name=" << name << std::endl;
+      checkpoint_metadata << "timestamp=" << std::time(nullptr) << std::endl;
+      checkpoint_metadata.close();
       
       spdlog::info("Stored empty view to checkpoint directory: {}", view_path);
       return;
@@ -618,35 +666,137 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
     const auto& first_hlm = view[0];
     std::vector<std::shared_ptr<arrow::Field>> schema_fields;
     
-    // Add basic fields
-    schema_fields.push_back(arrow::field("time_sum", arrow::float64()));
-    schema_fields.push_back(arrow::field("count_sum", arrow::uint64()));  
-    schema_fields.push_back(arrow::field("size_sum", arrow::uint64()));
+    // Add index fields first based on view_types and HLM_EXTRA_COLS (these will be the multi-index)
+    std::vector<std::string> available_index_fields;
     
-    // Add bin fields
+    // Add view_types first (in order they appear in view_types)
+    for (const auto& view_type : view_types) {
+      if (first_hlm.group_values.find(view_type) != first_hlm.group_values.end()) {
+        // Use appropriate Arrow type based on the field
+        std::shared_ptr<arrow::DataType> field_type = arrow::utf8();
+        if (view_type == "time_range") {
+          field_type = arrow::uint16();
+        }
+        schema_fields.push_back(arrow::field(view_type, field_type));
+        available_index_fields.push_back(view_type);
+      }
+    }
+    
+    // Add HLM_EXTRA_COLS in order (cat, io_cat, acc_pat, func_name)
+    for (const auto& extra_col : HLM_EXTRA_COLS) {
+      if (first_hlm.group_values.find(extra_col) != first_hlm.group_values.end()) {
+        // Use appropriate Arrow type based on the field
+        std::shared_ptr<arrow::DataType> field_type = arrow::utf8();
+        if (extra_col == "io_cat") {
+          field_type = arrow::utf8(); // Keep as string for now
+        } else if (extra_col == "acc_pat") {
+          field_type = arrow::utf8(); // Keep as string consistently
+        } else if (extra_col == "func_name" || extra_col == "cat") {
+          field_type = arrow::utf8();
+        }
+        
+        // Only add if not already added from view_types
+        if (std::find(available_index_fields.begin(), available_index_fields.end(), extra_col) == available_index_fields.end()) {
+          schema_fields.push_back(arrow::field(extra_col, field_type));
+          available_index_fields.push_back(extra_col);
+        }
+      }
+    }
+    
+    // Add data columns (time, count, size renamed to match Python format)
+    schema_fields.push_back(arrow::field("time", arrow::float64()));
+    schema_fields.push_back(arrow::field("count", arrow::uint64()));  
+    schema_fields.push_back(arrow::field("size", arrow::uint64()));
+    
+    // Add bin fields (using Python naming convention)
     std::vector<std::string> bin_field_names;
     for (const auto& [bin_name, _] : first_hlm.bin_sums) {
       schema_fields.push_back(arrow::field(bin_name, arrow::uint32()));
       bin_field_names.push_back(bin_name);
     }
     
-    // Add group value fields (for multi-index)
-    std::vector<std::string> group_field_names;
-    for (const auto& [group_name, _] : first_hlm.group_values) {
-      schema_fields.push_back(arrow::field(group_name, arrow::utf8()));
-      group_field_names.push_back(group_name);
-    }
-    
-    // Add unique set fields (as string representation)
+    // Add remaining unique set fields (these become data columns like file_name)
     std::vector<std::string> unique_set_field_names;
     for (const auto& [set_name, _] : first_hlm.unique_sets) {
       schema_fields.push_back(arrow::field(set_name, arrow::utf8()));
       unique_set_field_names.push_back(set_name);
     }
 
-    auto schema = arrow::schema(schema_fields);
+    // Create pandas metadata for multi-index support with complete column information
+    std::ostringstream pandas_metadata;
+    pandas_metadata << "{\"index_columns\": [";
+    for (size_t i = 0; i < available_index_fields.size(); ++i) {
+      if (i > 0) pandas_metadata << ", ";
+      pandas_metadata << "\"" << available_index_fields[i] << "\"";
+    }
+    pandas_metadata << "], \"column_indexes\": [{\"name\": null, \"field_name\": null, \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": {\"encoding\": \"UTF-8\"}}], \"columns\": [";
+    
+    // Add column metadata for data columns
+    bool first_col = true;
+    
+    // Data columns
+    if (!first_col) pandas_metadata << ", ";
+    pandas_metadata << "{\"name\": \"time\", \"field_name\": \"time\", \"pandas_type\": \"float64\", \"numpy_type\": \"double[pyarrow]\", \"metadata\": null}";
+    first_col = false;
+    
+    if (!first_col) pandas_metadata << ", ";
+    pandas_metadata << "{\"name\": \"count\", \"field_name\": \"count\", \"pandas_type\": \"int64\", \"numpy_type\": \"int64\", \"metadata\": null}";
+    
+    if (!first_col) pandas_metadata << ", ";
+    pandas_metadata << "{\"name\": \"size\", \"field_name\": \"size\", \"pandas_type\": \"uint64\", \"numpy_type\": \"uint64[pyarrow]\", \"metadata\": null}";
+    
+    // Bin columns
+    for (const auto& bin_name : bin_field_names) {
+      if (!first_col) pandas_metadata << ", ";
+      pandas_metadata << "{\"name\": \"" << bin_name << "\", \"field_name\": \"" << bin_name << "\", \"pandas_type\": \"uint32\", \"numpy_type\": \"uint32[pyarrow]\", \"metadata\": null}";
+    }
+    
+    // Unique set columns (like file_name)
+    for (const auto& set_name : unique_set_field_names) {
+      if (!first_col) pandas_metadata << ", ";
+      pandas_metadata << "{\"name\": \"" << set_name << "\", \"field_name\": \"" << set_name << "\", \"pandas_type\": \"unicode\", \"numpy_type\": \"object\", \"metadata\": null}";
+    }
+    
+    // Index columns metadata
+    for (const auto& index_col : available_index_fields) {
+      if (!first_col) pandas_metadata << ", ";
+      std::string pandas_type = "unicode";
+      std::string numpy_type = "object";
+      // Special handling for specific index columns that have different types in reference
+      if (index_col == "epoch") {
+        pandas_type = "uint64";
+        numpy_type = "uint64[pyarrow]";
+      } else if (index_col == "io_cat") {
+        pandas_type = "uint8";  
+        numpy_type = "uint8[pyarrow]";
+      } else if (index_col == "time_range") {
+        pandas_type = "uint16";
+        numpy_type = "uint16[pyarrow]";
+      } else if (index_col == "acc_pat") {
+        pandas_type = "unicode";
+        numpy_type = "object";
+      } else if (index_col == "func_name" || index_col == "cat") {
+        pandas_type = "object";
+        numpy_type = "string";
+      }
+      pandas_metadata << "{\"name\": \"" << index_col << "\", \"field_name\": \"" << index_col << "\", \"pandas_type\": \"" << pandas_type << "\", \"numpy_type\": \"" << numpy_type << "\", \"metadata\": null}";
+    }
+    
+    pandas_metadata << "], \"creator\": {\"library\": \"pyarrow\", \"version\": \"21.0.0\"}, \"pandas_version\": \"2.3.1\"}";
+    
+    auto arrow_metadata = arrow::key_value_metadata({{"pandas", pandas_metadata.str()}});
+    auto schema = arrow::schema(schema_fields, arrow_metadata);
+    
 
     // Convert metrics to Arrow arrays
+    
+    // Index column builders
+    std::unordered_map<std::string, std::unique_ptr<arrow::StringBuilder>> index_builders;
+    for (const auto& index_col : available_index_fields) {
+      index_builders[index_col] = std::make_unique<arrow::StringBuilder>();
+    }
+    
+    // Data column builders
     arrow::DoubleBuilder time_builder;
     arrow::UInt64Builder count_builder;
     arrow::UInt64Builder size_builder;
@@ -656,17 +806,20 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
       bin_builders[bin_name] = std::make_unique<arrow::UInt32Builder>();
     }
     
-    std::unordered_map<std::string, std::unique_ptr<arrow::StringBuilder>> group_builders;
-    for (const auto& group_name : group_field_names) {
-      group_builders[group_name] = std::make_unique<arrow::StringBuilder>();
-    }
-    
     std::unordered_map<std::string, std::unique_ptr<arrow::StringBuilder>> unique_set_builders;
     for (const auto& set_name : unique_set_field_names) {
       unique_set_builders[set_name] = std::make_unique<arrow::StringBuilder>();
     }
 
     for (const auto& hlm : view) {
+      // Add index values
+      for (const auto& index_col : available_index_fields) {
+        auto it = hlm.group_values.find(index_col);
+        std::string value = (it != hlm.group_values.end()) ? it->second : "";
+        index_builders[index_col]->Append(value);
+      }
+      
+      // Add data values
       time_builder.Append(hlm.time_sum);
       count_builder.Append(hlm.count_sum);
       size_builder.Append(hlm.size_sum);
@@ -676,13 +829,6 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
         auto it = hlm.bin_sums.find(bin_name);
         uint32_t value = (it != hlm.bin_sums.end()) ? it->second : 0;
         bin_builders[bin_name]->Append(value);
-      }
-      
-      // Add group values  
-      for (const auto& group_name : group_field_names) {
-        auto it = hlm.group_values.find(group_name);
-        std::string value = (it != hlm.group_values.end()) ? it->second : "";
-        group_builders[group_name]->Append(value);
       }
       
       // Add unique sets as comma-separated strings
@@ -703,16 +849,33 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
       }
     }
 
-    // Build arrays
+    // Build arrays in schema order: index columns first, then data columns
     std::vector<std::shared_ptr<arrow::Array>> arrays;
     
+    // Add index arrays first
+    for (const auto& index_col : available_index_fields) {
+      std::shared_ptr<arrow::Array> index_array;
+      auto status = index_builders[index_col]->Finish(&index_array);
+      if (!status.ok()) {
+        spdlog::error("Failed to finish index array for {}: {}", index_col, status.ToString());
+        return;
+      }
+      arrays.push_back(index_array);
+    }
+    
+    // Add data arrays
     std::shared_ptr<arrow::Array> time_array;
     std::shared_ptr<arrow::Array> count_array;
     std::shared_ptr<arrow::Array> size_array;
 
-    time_builder.Finish(&time_array);
-    count_builder.Finish(&count_array);  
-    size_builder.Finish(&size_array);
+    auto time_status = time_builder.Finish(&time_array);
+    auto count_status = count_builder.Finish(&count_array);  
+    auto size_status = size_builder.Finish(&size_array);
+    
+    if (!time_status.ok() || !count_status.ok() || !size_status.ok()) {
+      spdlog::error("Failed to finish data arrays");
+      return;
+    }
     
     arrays.push_back(time_array);
     arrays.push_back(count_array);
@@ -720,24 +883,37 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
     
     for (const auto& bin_name : bin_field_names) {
       std::shared_ptr<arrow::Array> bin_array;
-      bin_builders[bin_name]->Finish(&bin_array);
+      auto status = bin_builders[bin_name]->Finish(&bin_array);
+      if (!status.ok()) {
+        spdlog::error("Failed to finish bin array for {}: {}", bin_name, status.ToString());
+        return;
+      }
       arrays.push_back(bin_array);
-    }
-    
-    for (const auto& group_name : group_field_names) {
-      std::shared_ptr<arrow::Array> group_array;
-      group_builders[group_name]->Finish(&group_array);
-      arrays.push_back(group_array);
     }
     
     for (const auto& set_name : unique_set_field_names) {
       std::shared_ptr<arrow::Array> set_array;
-      unique_set_builders[set_name]->Finish(&set_array);
+      auto status = unique_set_builders[set_name]->Finish(&set_array);
+      if (!status.ok()) {
+        spdlog::error("Failed to finish unique set array for {}: {}", set_name, status.ToString());
+        return;
+      }
       arrays.push_back(set_array);
     }
 
     // Create Arrow table
     auto table = arrow::Table::Make(schema, arrays);
+
+    // Debug: Log table schema metadata 
+    if (table->schema()->metadata()) {
+      spdlog::info("Table schema has {} metadata entries", table->schema()->metadata()->size());
+      for (int i = 0; i < table->schema()->metadata()->size(); ++i) {
+        spdlog::info("Table metadata key: {}, value length: {}", 
+                     table->schema()->metadata()->key(i), table->schema()->metadata()->value(i).length());
+      }
+    } else {
+      spdlog::warn("Table schema has no metadata!");
+    }
 
     // Write to parquet directory with metadata (similar to Python implementation)
     std::string parquet_file = view_path + "/part.0.parquet";
@@ -752,12 +928,26 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
     properties_builder.compression(parquet::Compression::SNAPPY);
     auto properties = properties_builder.build();
 
-    auto writer_result = parquet::arrow::FileWriter::Open(*schema, arrow::default_memory_pool(), outfile, properties);
+    // Use ArrowWriterProperties to ensure metadata is preserved
+    auto arrow_properties = parquet::ArrowWriterProperties::Builder().store_schema()->build();
+    
+    auto writer_result = parquet::arrow::FileWriter::Open(*schema, arrow::default_memory_pool(), outfile, properties, arrow_properties);
     if (!writer_result.ok()) {
       spdlog::error("Failed to create parquet writer: {}", writer_result.status().ToString());
       return;
     }
     auto writer = std::move(*writer_result);
+    
+    // Add key-value metadata from schema to writer
+    if (schema->metadata()) {
+      auto kv_metadata = arrow::KeyValueMetadata::Make(
+          schema->metadata()->keys(), schema->metadata()->values());
+      spdlog::info("Writing metadata");
+      auto add_metadata_status = writer->AddKeyValueMetadata(kv_metadata);
+      if (!add_metadata_status.ok()) {
+        spdlog::error("Failed to add metadata: {}", add_metadata_status.ToString());
+      }
+    }
     
     auto write_status = writer->WriteTable(*table);
     if (!write_status.ok()) {
@@ -777,11 +967,61 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
       return;
     }
 
-    // Create _metadata file to mark checkpoint as complete (similar to Python)
-    std::ofstream metadata(view_path + "/_metadata");
-    metadata << "checkpoint_name=" << name << std::endl;
-    metadata << "timestamp=" << std::time(nullptr) << std::endl;
-    metadata.close();
+    // Generate _metadata and _common_metadata files (equivalent to Python's write_metadata=True)
+    try {
+      // Read our written parquet file to get its metadata
+      auto infile_result = arrow::io::ReadableFile::Open(parquet_file);
+      if (infile_result.ok()) {
+        auto infile = *infile_result;
+        auto parquet_reader = parquet::ParquetFileReader::Open(infile);
+        auto file_metadata = parquet_reader->metadata();
+        
+        // Write _common_metadata file (schema and common metadata only, no row groups)
+        // This is equivalent to Python's: pq.write_metadata(table.schema, '_common_metadata')
+        std::string common_metadata_file = view_path + "/_common_metadata";
+        auto common_outfile_result = arrow::io::FileOutputStream::Open(common_metadata_file);
+        if (common_outfile_result.ok()) {
+          auto common_outfile = *common_outfile_result;
+          
+          // Create a ParquetWriter just to generate the schema metadata, then close immediately
+          // This creates a parquet file with schema but no data/row groups (like Python's write_metadata)
+          auto common_writer_result = parquet::arrow::FileWriter::Open(*schema, arrow::default_memory_pool(), common_outfile, properties);
+          if (common_writer_result.ok()) {
+            auto common_writer = std::move(*common_writer_result);
+            auto close_status = common_writer->Close();
+            if (close_status.ok()) {
+              spdlog::info("Generated _common_metadata file: {}", common_metadata_file);
+            }
+          } else {
+            common_outfile->Close();
+          }
+        }
+        
+        // Write _metadata file (contains metadata for all parquet files with row groups)
+        // This is equivalent to Python's: pq.write_metadata(table.schema, '_metadata', metadata_collector=metadata_collector)
+        std::string metadata_file = view_path + "/_metadata";
+        auto metadata_outfile_result = arrow::io::FileOutputStream::Open(metadata_file);
+        if (metadata_outfile_result.ok()) {
+          auto metadata_outfile = *metadata_outfile_result;
+          
+          // Write the full file metadata (with row groups statistics)
+          // This includes the actual data statistics from our part.0.parquet file
+          parquet::WriteMetaDataFile(*file_metadata, metadata_outfile.get());
+          auto close_status = metadata_outfile->Close();
+          if (close_status.ok()) {
+            spdlog::info("Generated _metadata file: {}", metadata_file);
+          }
+        }
+      }
+    } catch (const std::exception& e) {
+      spdlog::warn("Failed to generate metadata files: {}", e.what());
+    }
+
+    // Create _checkpoint_metadata file to mark checkpoint as complete (similar to Python)
+    std::ofstream checkpoint_metadata(view_path + "/_checkpoint_metadata");
+    checkpoint_metadata << "checkpoint_name=" << name << std::endl;
+    checkpoint_metadata << "timestamp=" << std::time(nullptr) << std::endl;
+    checkpoint_metadata.close();
 
     spdlog::info("Stored view to checkpoint directory: {}", view_path);
 

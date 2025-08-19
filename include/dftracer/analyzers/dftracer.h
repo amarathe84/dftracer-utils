@@ -106,7 +106,7 @@ class DFTracerAnalyzer {
   template <typename T, typename FallbackFunc>
   T restore_view(const std::string& checkpoint_name, FallbackFunc fallback,
                  bool force = false, bool write_to_disk = true,
-                 bool read_from_disk = false);
+                 bool read_from_disk = false, const std::vector<std::string>& view_types = {});
 
  private:
   double time_granularity_;
@@ -129,7 +129,7 @@ class DFTracerAnalyzer {
   bool has_checkpoint(const std::string& name) const;
   
   // Parquet serialization/deserialization helpers
-  void store_view(const std::string& name, const std::vector<HighLevelMetrics>& view);
+  void store_view(const std::string& name, const std::vector<HighLevelMetrics>& view, const std::vector<std::string>& view_types);
   std::vector<HighLevelMetrics> load_view_from_parquet(const std::string& path);
 };
 
