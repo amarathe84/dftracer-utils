@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_ANALYZERS_DFTRACER_IMPL_H
-#define __DFTRACER_ANALYZERS_DFTRACER_IMPL_H
+#ifndef __DFTRACER_UTILS_ANALYZERS_DFTRACER_IMPL_H
+#define __DFTRACER_UTILS_ANALYZERS_DFTRACER_IMPL_H
 
 #include <dftracer/utils/pipeline/pipeline.h>
 #include <spdlog/spdlog.h>
@@ -71,4 +71,4 @@ std::vector<HighLevelMetrics> DFTracerAnalyzer::analyze_trace(
 }  // namespace analyzers
 }  // namespace dftracer
 
-#endif
+#endif // __DFTRACER_UTILS_ANALYZERS_DFTRACER_IMPL_H

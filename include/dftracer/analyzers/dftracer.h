@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_ANALYZERS_DFTRACER_H
-#define __DFTRACER_ANALYZERS_DFTRACER_H
+#ifndef __DFTRACER_UTILS_ANALYZERS_DFTRACER_H
+#define __DFTRACER_UTILS_ANALYZERS_DFTRACER_H
 
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/utils/json.h>
@@ -120,4 +120,4 @@ class DFTracerAnalyzer {
 // Include template implementations
 #include <dftracer/analyzers/dftracer_impl.h>
 
-#endif
+#endif // __DFTRACER_UTILS_ANALYZERS_DFTRACER_H
