@@ -410,6 +410,18 @@ function(need_picosha2)
   endif()
 endfunction()
 
+function(add_mpi_deps_if_needed TARGET_NAME)
+  if(DFTRACER_UTILS_MPI_ENABLE)
+    find_package(MPI REQUIRED)
+    if(MPI_FOUND)
+      target_link_libraries(${TARGET_NAME} PRIVATE MPI::MPI_CXX)
+      message(STATUS "Linked ${TARGET_NAME} to MPI::MPI_CXX")
+    else()
+      message(FATAL_ERROR "MPI not found!")
+    endif()
+  endif()
+endfunction()
+
 function(need_test_deps)
   CPMAddPackage(
     NAME doctest

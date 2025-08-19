@@ -52,6 +52,12 @@ if (SKBUILD)
   set(CMAKE_INSTALL_INCLUDEDIR "dftracer/utils/include" CACHE STRING "Include install directory" FORCE)
 endif()
 
+find_package(MPI COMPONENTS CXX)
+if (MPI_FOUND)
+  # message(FATAL_ERROR "MPI found: ${MPI_CXX_COMPILER}, Include dirs: ${MPI_CXX_INCLUDE_DIRS}")
+  include_directories(${MPI_CXX_INCLUDE_DIRS})
+  set(DFTRACER_UTILS_MPI_ENABLE 1)
+endif()
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.h.in"
                "${CMAKE_BINARY_DIR}/include/dftracer/utils/config.h" @ONLY)

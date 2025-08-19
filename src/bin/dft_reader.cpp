@@ -15,6 +15,8 @@
 #include <cstring>
 
 int main(int argc, char **argv) {
+  size_t default_checkpoint_size = dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
+  auto default_checkpoint_size_str = std::to_string(default_checkpoint_size) + " B (" + std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
   argparse::ArgumentParser program("dft_reader",
                                    DFTRACER_UTILS_PACKAGE_VERSION);
   program.add_description(
@@ -32,9 +34,9 @@ int main(int argc, char **argv) {
       .default_value<int64_t>(-1)
       .scan<'d', int64_t>();
   program.add_argument("-c", "--checkpoint-size")
-      .help("Checkpoint size for indexing in bytes (default: 32 * 1024 * 1024 B (32 MB))")
+      .help("Checkpoint size for indexing in bytes (default: " + default_checkpoint_size_str + ")")
       .scan<'d', size_t>()
-      .default_value<size_t>(32 * 1024 * 1024);
+      .default_value(static_cast<size_t>(default_checkpoint_size));
   program.add_argument("-f", "--force-rebuild")
       .help("Force rebuild index")
       .flag();

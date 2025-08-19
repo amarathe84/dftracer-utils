@@ -22,6 +22,7 @@
             pkg-config
             pigz
             lcov
+            openmpi
             # sqlite
             # zlib
             # spdlog

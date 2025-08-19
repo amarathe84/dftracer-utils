@@ -114,7 +114,9 @@ endif()
 # Executables
 ##########################################
 
-## DFT Reader
+# ----------------------------------------
+# DFT Reader
+# ----------------------------------------
 
 add_executable(dft_reader bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
@@ -125,9 +127,7 @@ link_sqlite3(dft_reader STATIC)
 link_zlib(dft_reader STATIC)
 
 target_include_directories(dft_reader 
-    PRIVATE 
-        ${CMAKE_SOURCE_DIR}/include
-)
+    PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
 target_set_warnings(dft_reader)
 
@@ -145,10 +145,43 @@ if(SPDLOG_INCLUDE_DIRS)
     target_include_directories(dft_reader PRIVATE ${SPDLOG_INCLUDE_DIRS})
 endif()
 
-
 # Install executable
 install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+# ----------------------------------------
+# DFT Map
+# ----------------------------------------
+
+add_executable(dft_map bin/dft_map.cpp ${DFTRACER_UTILS_SOURCES})
+set_target_properties(dft_map PROPERTIES OUTPUT_NAME "dft_map")
+target_link_libraries(dft_map PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
+add_mpi_deps_if_needed(dft_map)
+
+# Link SQLite3 and zlib for executable (treat as shared since it's an executable)
+link_sqlite3(dft_map STATIC)
+link_zlib(dft_map STATIC)
+
+target_include_directories(dft_map 
+    PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+target_set_warnings(dft_map)
+
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_map PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_map PRIVATE --coverage)
+endif()
+
+# Make sure spdlog include directories are available for all targets
+get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
+if(SPDLOG_INCLUDE_DIRS)
+    target_include_directories(dftracer_utils PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dftracer_utils_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dft_map PRIVATE ${SPDLOG_INCLUDE_DIRS})
+endif()
+
+# Install executable
+install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 ##########################################
 # Python binding
