@@ -14,6 +14,7 @@ need_argparse()
 need_ghc_filesystem()
 need_picosha2()
 need_simdjson()
+need_arrow()
 
 ##########################################
 # Constants
@@ -160,7 +161,16 @@ install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 add_executable(dft_map bin/dft_map.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_map PROPERTIES OUTPUT_NAME "dft_map")
-target_link_libraries(dft_map PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
+target_link_libraries(dft_map PRIVATE 
+  dftracer_utils
+  spdlog::spdlog_header_only 
+  argparse::argparse
+  ghc_filesystem
+  picosha2
+  simdjson::simdjson
+  arrow_static
+  parquet_static
+)
 add_mpi_deps_if_needed(dft_map)
 
 # Link SQLite3 and zlib for executable (treat as shared since it's an executable)
@@ -270,6 +280,12 @@ if (TARGET simdjson)
 endif()
 if (TARGET simdjson_static)
     list(APPEND INSTALLABLE_TARGETS simdjson_static)
+endif()
+if (TARGET dftracer_zlib)
+  list(APPEND INSTALLABLE_TARGETS dftracer_zlib)
+endif()
+if (TARGET dftracer_zlibstatic)
+  list(APPEND INSTALLABLE_TARGETS dftracer_zlibstatic)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)

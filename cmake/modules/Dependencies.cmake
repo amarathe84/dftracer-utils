@@ -246,6 +246,7 @@ function(need_zlib)
         "ZLIB_BUILD_SHARED ON"
         "ZLIB_INSTALL OFF"
         "ZLIB_BUILD_EXAMPLES OFF"
+      DOWNLOAD_ONLY YES
     )
     
     if(ZLIB_ADDED)
@@ -256,44 +257,47 @@ function(need_zlib)
       set(ZLIB_SOURCE_DIR ${ZLIB_SOURCE_DIR} PARENT_SCOPE)
       set(ZLIB_BINARY_DIR ${ZLIB_BINARY_DIR} PARENT_SCOPE)
 
-      # Completely override zlib's cmake_install.cmake after configuration
-      # This works because zlib regenerates its install file, but we'll override it post-generation
-      add_custom_target(override_zlib_install
-        ALL
-        COMMAND ${CMAKE_COMMAND} -E echo "# Installation disabled for zlib to prevent duplicates" > "${ZLIB_BINARY_DIR}/cmake_install.cmake"
-        COMMAND ${CMAKE_COMMAND} -E echo "message(STATUS \"Skipping zlib installation - handled manually\")" >> "${ZLIB_BINARY_DIR}/cmake_install.cmake"
-        DEPENDS zlib zlibstatic
-        COMMENT "Preventing zlib from installing files automatically"
-        VERBATIM
-      )
+      # Create our own zlib targets with proper install interface
+      add_library(dftracer_zlib SHARED ${ZLIB_SOURCE_DIR}/adler32.c ${ZLIB_SOURCE_DIR}/compress.c ${ZLIB_SOURCE_DIR}/crc32.c ${ZLIB_SOURCE_DIR}/deflate.c ${ZLIB_SOURCE_DIR}/gzclose.c ${ZLIB_SOURCE_DIR}/gzlib.c ${ZLIB_SOURCE_DIR}/gzread.c ${ZLIB_SOURCE_DIR}/gzwrite.c ${ZLIB_SOURCE_DIR}/inflate.c ${ZLIB_SOURCE_DIR}/infback.c ${ZLIB_SOURCE_DIR}/inftrees.c ${ZLIB_SOURCE_DIR}/inffast.c ${ZLIB_SOURCE_DIR}/trees.c ${ZLIB_SOURCE_DIR}/uncompr.c ${ZLIB_SOURCE_DIR}/zutil.c)
       
-      # Also prevent any subdirectory installs
-      install(CODE "
-        message(STATUS \"Preventing any residual zlib installation\")
-        # This prevents any zlib install commands from executing
-      ")
+      add_library(dftracer_zlibstatic STATIC ${ZLIB_SOURCE_DIR}/adler32.c ${ZLIB_SOURCE_DIR}/compress.c ${ZLIB_SOURCE_DIR}/crc32.c ${ZLIB_SOURCE_DIR}/deflate.c ${ZLIB_SOURCE_DIR}/gzclose.c ${ZLIB_SOURCE_DIR}/gzlib.c ${ZLIB_SOURCE_DIR}/gzread.c ${ZLIB_SOURCE_DIR}/gzwrite.c ${ZLIB_SOURCE_DIR}/inflate.c ${ZLIB_SOURCE_DIR}/infback.c ${ZLIB_SOURCE_DIR}/inftrees.c ${ZLIB_SOURCE_DIR}/inffast.c ${ZLIB_SOURCE_DIR}/trees.c ${ZLIB_SOURCE_DIR}/uncompr.c ${ZLIB_SOURCE_DIR}/zutil.c)
 
-      # Add zlib targets if they're CPM-built (our own targets)
-      # We manually install zlib because ZLIB_INSTALL is problematic
-      if(TARGET zlib)
-          # Manual installation of zlib to the correct location
-          install(TARGETS zlib
-              ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-              LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-          )
+      # Set proper include directories for build and install
+      target_include_directories(dftracer_zlib PUBLIC
+        $<BUILD_INTERFACE:${ZLIB_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${ZLIB_BINARY_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+      )
+
+      target_include_directories(dftracer_zlibstatic PUBLIC
+        $<BUILD_INTERFACE:${ZLIB_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${ZLIB_BINARY_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+      )
+
+      # Copy the generated zconf.h from the original zlib build
+      if(EXISTS "${ZLIB_BINARY_DIR}/zconf.h")
+        configure_file("${ZLIB_BINARY_DIR}/zconf.h" "${CMAKE_CURRENT_BINARY_DIR}/zconf.h" COPYONLY)
+        target_include_directories(dftracer_zlib PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
+        target_include_directories(dftracer_zlibstatic PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
       endif()
-      if(TARGET zlibstatic)
-          install(TARGETS zlibstatic
-              ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-              LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-          )
-      endif()
+
+      # Install our custom zlib targets
+      install(TARGETS dftracer_zlib dftracer_zlibstatic
+          EXPORT ZlibTargets
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+      )
+
+      install(EXPORT ZlibTargets
+          FILE ZlibTargets.cmake
+          NAMESPACE dftracer::
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/zlib
+      )
 
       # Install zlib headers manually
       if(ZLIB_SOURCE_DIR AND ZLIB_BINARY_DIR)
-          # Check if the header files actually exist before trying to install them
           if(EXISTS "${ZLIB_SOURCE_DIR}/zlib.h")
               install(FILES "${ZLIB_SOURCE_DIR}/zlib.h"
                   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -305,27 +309,21 @@ function(need_zlib)
                   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
               )
           endif()
-      else()
-          message(WARNING "Using ZLIB with CPM but source/binary directories not found. Skipping zlib header installation.")
       endif()
 
-      # Create simple aliases - these won't be exportable but that's OK
-      # The consumer will need to find their own zlib
-      if(TARGET zlib AND NOT TARGET ZLIB::ZLIB)
-        add_library(ZLIB::ZLIB ALIAS zlib)
-      endif()
+      # Create aliases for compatibility (avoid conflicts with Arrow)
+      add_library(dftracer::zlib ALIAS dftracer_zlib)
+      add_library(dftracer::zlibstatic ALIAS dftracer_zlibstatic)
 
-      if(TARGET zlibstatic AND NOT TARGET ZLIB::ZLIBSTATIC)
-        add_library(ZLIB::ZLIBSTATIC ALIAS zlibstatic)
-      endif()
+      # Make zlib available in parent scope for Arrow - let Arrow build its own
+      set(ZLIB_LIBRARIES dftracer_zlib PARENT_SCOPE)
+      set(ZLIB_INCLUDE_DIRS ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR} PARENT_SCOPE)
+      # Don't set ZLIB_FOUND to let Arrow build its own zlib
+      set(ZLIB_FOUND FALSE PARENT_SCOPE)
     endif()
   endif()
 endfunction()
 
-# Function to link zlib to a target
-# Parameters:
-#   TARGET_NAME - name of the target to link zlib to
-#   LIBRARY_TYPE - "STATIC" or "SHARED" to choose appropriate zlib variant
 function(link_zlib TARGET_NAME LIBRARY_TYPE)
   # Validate parameters
   if(NOT TARGET_NAME)
@@ -342,7 +340,7 @@ function(link_zlib TARGET_NAME LIBRARY_TYPE)
   
   # Check if any zlib variant is available
   set(ZLIB_AVAILABLE FALSE)
-  if(TARGET zlibstatic OR TARGET zlib OR ZLIB_FOUND)
+  if(TARGET dftracer_zlibstatic OR TARGET dftracer_zlib OR ZLIB_FOUND)
     set(ZLIB_AVAILABLE TRUE)
   endif()
   
@@ -353,40 +351,206 @@ function(link_zlib TARGET_NAME LIBRARY_TYPE)
   # Link appropriate zlib variant
   if(LIBRARY_TYPE STREQUAL "STATIC")
     # For static libraries, prefer static zlib if available
-    if(TARGET zlibstatic)
-      # CPM-built zlib static - use generator expression to avoid export issues
-      target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
-      message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
-    elseif(TARGET zlib)
-      # CPM-built zlib shared - use generator expression to avoid export issues
-      target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
-      message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
+    if(TARGET dftracer_zlibstatic)
+      target_link_libraries(${TARGET_NAME} PRIVATE dftracer::zlibstatic)
+      message(STATUS "Linked ${TARGET_NAME} to dftracer zlibstatic")
+    elseif(TARGET dftracer_zlib)
+      target_link_libraries(${TARGET_NAME} PRIVATE dftracer::zlib)
+      message(STATUS "Linked ${TARGET_NAME} to dftracer zlib (shared)")
     elseif(ZLIB_FOUND)
-      # System zlib - use normal linking
       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
     endif()
   else() # SHARED
     # For shared libraries, prefer shared zlib if available
-    if(TARGET zlib)
-      # CPM-built zlib shared - use generator expression to avoid export issues
-      target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
-      message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
-    elseif(TARGET zlibstatic)
-      # CPM-built zlib static - use generator expression to avoid export issues
-      target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-      target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
-      message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
+    if(TARGET dftracer_zlib)
+      target_link_libraries(${TARGET_NAME} PRIVATE dftracer::zlib)
+      message(STATUS "Linked ${TARGET_NAME} to dftracer zlib (shared)")
+    elseif(TARGET dftracer_zlibstatic)
+      target_link_libraries(${TARGET_NAME} PRIVATE dftracer::zlibstatic)
+      message(STATUS "Linked ${TARGET_NAME} to dftracer zlibstatic")
     elseif(ZLIB_FOUND)
-      # System zlib - use normal linking
       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
     endif()
   endif()
 endfunction()
+
+# function(need_zlib)
+#   find_package(ZLIB 1.2 QUIET)
+
+#   if(ZLIB_FOUND)
+#     message(STATUS "Found system ZLIB: ${ZLIB_LIBRARIES}")
+    
+#     # Set variables in parent scope so they persist outside the function
+#     set(ZLIB_FOUND ${ZLIB_FOUND} PARENT_SCOPE)
+#     set(ZLIB_LIBRARIES ${ZLIB_LIBRARIES} PARENT_SCOPE)
+#     set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS} PARENT_SCOPE)
+#     set(ZLIB_CPM FALSE PARENT_SCOPE)
+#   else()
+#     set(ZLIB_CPM FALSE PARENT_SCOPE)
+#     # Build with CPM
+#     CPMAddPackage(
+#       NAME ZLIB
+#       GITHUB_REPOSITORY madler/zlib
+#       VERSION 1.3.1
+#       OPTIONS
+#         "ZLIB_BUILD_STATIC ON"
+#         "ZLIB_BUILD_SHARED ON"
+#         "ZLIB_INSTALL OFF"
+#         "ZLIB_BUILD_EXAMPLES OFF"
+#     )
+    
+#     if(ZLIB_ADDED)
+#       message(STATUS "Built ZLIB with CPM")
+#       set(ZLIB_CPM TRUE PARENT_SCOPE) 
+
+#       # Make sure the source and binary directories are available in parent scope
+#       set(ZLIB_SOURCE_DIR ${ZLIB_SOURCE_DIR} PARENT_SCOPE)
+#       set(ZLIB_BINARY_DIR ${ZLIB_BINARY_DIR} PARENT_SCOPE)
+
+#       # Completely override zlib's cmake_install.cmake after configuration
+#       # This works because zlib regenerates its install file, but we'll override it post-generation
+#       add_custom_target(override_zlib_install
+#         ALL
+#         COMMAND ${CMAKE_COMMAND} -E echo "# Installation disabled for zlib to prevent duplicates" > "${ZLIB_BINARY_DIR}/cmake_install.cmake"
+#         COMMAND ${CMAKE_COMMAND} -E echo "message(STATUS \"Skipping zlib installation - handled manually\")" >> "${ZLIB_BINARY_DIR}/cmake_install.cmake"
+#         DEPENDS zlib zlibstatic
+#         COMMENT "Preventing zlib from installing files automatically"
+#         VERBATIM
+#       )
+      
+#       # Also prevent any subdirectory installs
+#       install(CODE "
+#         message(STATUS \"Preventing any residual zlib installation\")
+#         # This prevents any zlib install commands from executing
+#       ")
+
+#       # Add zlib targets if they're CPM-built (our own targets)
+#       # We manually install zlib because ZLIB_INSTALL is problematic
+#       if(TARGET zlib)
+#           # Manual installation of zlib to the correct location
+#           install(TARGETS zlib
+#               EXPORT ZlibTargets
+#               ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#               LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#               RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+#           )
+#       endif()
+#       if(TARGET zlibstatic)
+#           install(TARGETS zlibstatic
+#               EXPORT ZlibTargets
+#               ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#               LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#               RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+#           )
+#       endif()
+
+#       install(EXPORT ZlibTargets
+#           FILE ZlibTargets.cmake
+#           NAMESPACE ZLIB::
+#           DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/zlib
+#       )
+
+#       # Install zlib headers manually
+#       if(ZLIB_SOURCE_DIR AND ZLIB_BINARY_DIR)
+#           # Check if the header files actually exist before trying to install them
+#           if(EXISTS "${ZLIB_SOURCE_DIR}/zlib.h")
+#               install(FILES "${ZLIB_SOURCE_DIR}/zlib.h"
+#                   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+#               )
+#           endif()
+          
+#           if(EXISTS "${ZLIB_BINARY_DIR}/zconf.h")
+#               install(FILES "${ZLIB_BINARY_DIR}/zconf.h"
+#                   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+#               )
+#           endif()
+#       else()
+#           message(WARNING "Using ZLIB with CPM but source/binary directories not found. Skipping zlib header installation.")
+#       endif()
+
+#       # Create exportable aliases for zlib
+#       if(TARGET zlib AND NOT TARGET ZLIB::ZLIB)
+#         add_library(ZLIB::ZLIB ALIAS zlib)
+#         # Make zlib available in parent scope for Arrow
+#         set(ZLIB_LIBRARIES zlib PARENT_SCOPE)
+#         set(ZLIB_INCLUDE_DIRS ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR} PARENT_SCOPE)
+#         set(ZLIB_FOUND TRUE PARENT_SCOPE)
+#       endif()
+
+#       if(TARGET zlibstatic AND NOT TARGET ZLIB::ZLIBSTATIC)
+#         add_library(ZLIB::ZLIBSTATIC ALIAS zlibstatic)
+#       endif()
+#     endif()
+#   endif()
+# endfunction()
+
+# # Function to link zlib to a target
+# # Parameters:
+# #   TARGET_NAME - name of the target to link zlib to
+# #   LIBRARY_TYPE - "STATIC" or "SHARED" to choose appropriate zlib variant
+# function(link_zlib TARGET_NAME LIBRARY_TYPE)
+#   # Validate parameters
+#   if(NOT TARGET_NAME)
+#     message(FATAL_ERROR "link_zlib: TARGET_NAME is required")
+#   endif()
+  
+#   if(NOT LIBRARY_TYPE MATCHES "^(STATIC|SHARED)$")
+#     message(FATAL_ERROR "link_zlib: LIBRARY_TYPE must be either STATIC or SHARED")
+#   endif()
+  
+#   if(NOT TARGET ${TARGET_NAME})
+#     message(FATAL_ERROR "link_zlib: Target '${TARGET_NAME}' does not exist")
+#   endif()
+  
+#   # Check if any zlib variant is available
+#   set(ZLIB_AVAILABLE FALSE)
+#   if(TARGET zlibstatic OR TARGET zlib OR ZLIB_FOUND)
+#     set(ZLIB_AVAILABLE TRUE)
+#   endif()
+  
+#   if(NOT ZLIB_AVAILABLE)
+#     message(FATAL_ERROR "link_zlib: No zlib found! Call need_zlib() first or ensure system zlib is available.")
+#   endif()
+  
+#   # Link appropriate zlib variant
+#   if(LIBRARY_TYPE STREQUAL "STATIC")
+#     # For static libraries, prefer static zlib if available
+#     if(TARGET zlibstatic)
+#       # CPM-built zlib static - use generator expression to avoid export issues
+#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
+#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
+#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
+#     elseif(TARGET zlib)
+#       # CPM-built zlib shared - use generator expression to avoid export issues
+#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
+#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
+#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
+#     elseif(ZLIB_FOUND)
+#       # System zlib - use normal linking
+#       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
+#       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
+#     endif()
+#   else() # SHARED
+#     # For shared libraries, prefer shared zlib if available
+#     if(TARGET zlib)
+#       # CPM-built zlib shared - use generator expression to avoid export issues
+#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
+#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
+#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
+#     elseif(TARGET zlibstatic)
+#       # CPM-built zlib static - use generator expression to avoid export issues
+#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
+#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
+#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
+#     elseif(ZLIB_FOUND)
+#       # System zlib - use normal linking
+#       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
+#       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
+#     endif()
+#   endif()
+# endfunction()
 
 function(need_picosha2)
   if(NOT PicoSHA2_ADDED)
@@ -418,6 +582,73 @@ function(add_mpi_deps_if_needed TARGET_NAME)
       message(STATUS "Linked ${TARGET_NAME} to MPI::MPI_CXX")
     else()
       message(FATAL_ERROR "MPI not found!")
+    endif()
+  endif()
+endfunction()
+
+function(need_arrow)
+  find_package(Arrow 21.0.0 QUIET)
+  find_package(Parquet 21.0.0 QUIET)
+
+  if(Arrow_FOUND AND Parquet_FOUND)
+    message(STATUS "Found system Arrow and Parquet")
+    set(Arrow_ADDED TRUE PARENT_SCOPE)
+  else()
+    if(NOT Arrow_ADDED)
+      # Use a known stable version with minimal config
+      CPMAddPackage(
+        NAME Arrow
+        GITHUB_REPOSITORY apache/arrow
+        VERSION 21.0.0
+        GIT_TAG "apache-arrow-21.0.0"
+        SOURCE_SUBDIR "./cpp"
+        EXCLUDE_FROM_ALL YES
+        OPTIONS
+          "ARROW_DEFINE_OPTIONS ON"
+          "ARROW_BUILD_STATIC ON"
+          "ARROW_BUILD_SHARED ON"
+          "ARROW_PARQUET ON"
+          "ARROW_BUILD_TESTS OFF"
+          "ARROW_BUILD_BENCHMARKS OFF"
+          "ARROW_BUILD_EXAMPLES OFF"
+          "ARROW_WITH_BACKTRACE OFF"
+          # "ARROW_DEPENDENCY_SOURCE SYSTEM"
+          "ARROW_BOOST_USE_SHARED OFF"
+          "ARROW_ZSTD_USE_SHARED OFF"
+          "ARROW_JEMALLOC_USE_SHARED OFF"
+          "ARROW_PROTOBUF_USE_SHARED OFF"
+          "ARROW_WITH_THRIFT OFF"
+          "ARROW_COMPUTE OFF"
+          "ARROW_FLIGHT OFF"
+          "ARROW_WITH_GRPC OFF"
+          "ARROW_WITH_OPENTELEMETRY OFF"
+          "ARROW_IPC OFF"
+          "ARROW_DATASET OFF"
+          "ARROW_BUILD_CONFIG_SUMMARY_JSON OFF"
+          "PARQUET_INSTALL OFF"
+          "ARROW_WITH_ZLIB OFF"
+          "ARROW_ENABLE_TIMING_TESTS OFF"
+          "ARROW_BROTLI_USE_SHARED OFF"
+          "ARROW_GFLAGS_USE_SHARED OFF"
+          "ARROW_GRPC_USE_SHARED OFF"
+          "ARROW_JEMALLOC_USE_SHARED OFF"
+          "ARROW_LLVM_USE_SHARED OFF"
+          "ARROW_LZ4_USE_SHARED OFF"
+          "ARROW_OPENSSL_USE_SHARED OFF"
+          "ARROW_SNAPPY_USE_SHARED OFF"
+          "ARROW_THRIFT_USE_SHARED OFF"
+          "ARROW_UTF8PROC_USE_SHARED OFF"
+          "ARROW_ZSTD_USE_SHARED OFF"
+          "ARROW_INSTALL_NAME_RPATH OFF"       # Disable RPATH logic
+          "ARROW_INSTALL OFF"
+          "PARQUET_INSTALL OFF"
+          "ARROW_NO_INSTALL ON"
+        FORCE YES
+      )
+      file(READ "${Arrow_SOURCE_DIR}/cmake_modules/ArrowTargets.cmake" _arrow_targets_cmake)
+string(REPLACE "install(EXPORT arrow_targets" "# install(EXPORT arrow_targets"
+       _arrow_targets_cmake "${_arrow_targets_cmake}")
+file(WRITE "${Arrow_SOURCE_DIR}/cmake_modules/ArrowTargets.cmake" "${_arrow_targets_cmake}")
     endif()
   endif()
 endfunction()
