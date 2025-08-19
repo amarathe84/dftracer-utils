@@ -718,7 +718,8 @@ bool Indexer::Impl::need_rebuild() const {
   // Check if file content has changed using SHA256
   std::string stored_sha256;
   time_t stored_mtime;
-  if (get_stored_file_info(idx_path_, gz_path_logical_path_, stored_sha256, stored_mtime)) {
+  if (get_stored_file_info(idx_path_, gz_path_logical_path_, stored_sha256,
+                           stored_mtime)) {
     // quick check using modification time as optimization
     // time_t current_mtime = get_file_mtime(indexer->gz_path);
     // if (current_mtime != stored_mtime && current_mtime > 0 && stored_mtime >
@@ -1014,7 +1015,8 @@ uint64_t Indexer::Impl::get_max_bytes() const {
   uint64_t max_bytes = 0;
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1,
+                      SQLITE_STATIC);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
       max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
     }
@@ -1027,7 +1029,8 @@ uint64_t Indexer::Impl::get_max_bytes() const {
         "SELECT total_uc_size FROM metadata WHERE file_id = "
         "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)";
     if (sqlite3_prepare_v2(db, metadata_sql, -1, &stmt, nullptr) == SQLITE_OK) {
-      sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
+      sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1,
+                        SQLITE_STATIC);
       if (sqlite3_step(stmt) == SQLITE_ROW) {
         max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
         spdlog::debug("No checkpoints found, using metadata total_uc_size: {}",
@@ -1060,7 +1063,8 @@ uint64_t Indexer::Impl::get_num_lines() const {
   uint64_t total_lines = 0;
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, gz_path_logical_path_.c_str(), -1,
+                      SQLITE_STATIC);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
       total_lines = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
     }

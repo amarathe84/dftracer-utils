@@ -15,8 +15,11 @@
 #include <cstring>
 
 int main(int argc, char **argv) {
-  size_t default_checkpoint_size = dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
-  auto default_checkpoint_size_str = std::to_string(default_checkpoint_size) + " B (" + std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
+  size_t default_checkpoint_size =
+      dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
+  auto default_checkpoint_size_str =
+      std::to_string(default_checkpoint_size) + " B (" +
+      std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
   argparse::ArgumentParser program("dft_reader",
                                    DFTRACER_UTILS_PACKAGE_VERSION);
   program.add_description(
@@ -34,7 +37,8 @@ int main(int argc, char **argv) {
       .default_value<int64_t>(-1)
       .scan<'d', int64_t>();
   program.add_argument("-c", "--checkpoint-size")
-      .help("Checkpoint size for indexing in bytes (default: " + default_checkpoint_size_str + ")")
+      .help("Checkpoint size for indexing in bytes (default: " +
+            default_checkpoint_size_str + ")")
       .scan<'d', size_t>()
       .default_value(static_cast<size_t>(default_checkpoint_size));
   program.add_argument("-f", "--force-rebuild")
@@ -83,11 +87,13 @@ int main(int argc, char **argv) {
   spdlog::debug("Start position: {}", start);
   spdlog::debug("End position: {}", end);
   spdlog::debug("Mode: {}", read_mode);
-  spdlog::debug("Checkpoint size: {} B ({} MB)", checkpoint_size, checkpoint_size / (1024 * 1024));
+  spdlog::debug("Checkpoint size: {} B ({} MB)", checkpoint_size,
+                checkpoint_size / (1024 * 1024));
   spdlog::debug("Force rebuild: {}", force_rebuild);
 
   if (checkpoint_size <= 0) {
-    spdlog::error("Checkpoint size must be positive (greater than 0 and in MB)");
+    spdlog::error(
+        "Checkpoint size must be positive (greater than 0 and in MB)");
     return 1;
   }
 
@@ -101,9 +107,8 @@ int main(int argc, char **argv) {
   std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
   try {
-    dftracer::utils::indexer::Indexer indexer(
-        gz_path, idx_path, checkpoint_size,
-        force_rebuild);
+    dftracer::utils::indexer::Indexer indexer(gz_path, idx_path,
+                                              checkpoint_size, force_rebuild);
 
     if (check_rebuild) {
       if (!indexer.need_rebuild()) {
@@ -135,10 +140,12 @@ int main(int argc, char **argv) {
         spdlog::debug("Reading lines from {} to {}", start, end_line);
 
         // auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
-        auto lines = reader.read_json_lines(static_cast<size_t>(start), end_line);
+        auto lines =
+            reader.read_json_lines(static_cast<size_t>(start), end_line);
         // fwrite(lines, 1, lines.size(), stdout);
         // size_t line_count =
-        //     static_cast<size_t>(std::count(lines.begin(), lines.end(), '\n'));
+        //     static_cast<size_t>(std::count(lines.begin(), lines.end(),
+        //     '\n'));
         size_t line_count = lines.size();
         spdlog::debug("Successfully read {} lines from range", line_count);
       } else {
