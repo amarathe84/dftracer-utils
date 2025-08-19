@@ -60,13 +60,14 @@ set_target_properties(dftracer_utils PROPERTIES
 )
 target_link_libraries(dftracer_utils 
     PRIVATE spdlog::spdlog_header_only picosha2
-    PUBLIC ghc_filesystem  simdjson::simdjson_static
+    PUBLIC ghc_filesystem simdjson::simdjson_static
 )
 target_add_rpath(dftracer_utils)
 
-# Link SQLite3 and zlib with appropriate variants for static library
+# Link SQLite3, zlib, and Arrow with appropriate variants for static library
 link_sqlite3(dftracer_utils STATIC)
 link_zlib(dftracer_utils STATIC)
+link_arrow(dftracer_utils STATIC)
 
 target_include_directories(dftracer_utils 
     PUBLIC 
@@ -100,9 +101,10 @@ target_link_libraries(dftracer_utils_shared
 )
 target_add_rpath(dftracer_utils_shared)
 
-# Link SQLite3 and zlib with appropriate variants for shared library
+# Link SQLite3, zlib, and Arrow with appropriate variants for shared library
 link_sqlite3(dftracer_utils_shared SHARED)
 link_zlib(dftracer_utils_shared SHARED)
+link_arrow(dftracer_utils_shared SHARED)
 
 target_include_directories(dftracer_utils_shared 
     PUBLIC 
@@ -129,9 +131,10 @@ add_executable(dft_reader bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
 target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
 
-# Link SQLite3 and zlib for executable (treat as shared since it's an executable)
+# Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_reader STATIC)
 link_zlib(dft_reader STATIC)
+link_arrow(dft_reader STATIC)
 
 target_include_directories(dft_reader 
     PRIVATE ${CMAKE_SOURCE_DIR}/include)
@@ -168,14 +171,13 @@ target_link_libraries(dft_map PRIVATE
   ghc_filesystem
   picosha2
   simdjson::simdjson
-  arrow_static
-  parquet_static
 )
 add_mpi_deps_if_needed(dft_map)
 
-# Link SQLite3 and zlib for executable (treat as shared since it's an executable)
+# Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_map STATIC)
 link_zlib(dft_map STATIC)
+link_arrow(dft_map STATIC)
 
 target_include_directories(dft_map 
     PRIVATE ${CMAKE_SOURCE_DIR}/include)
@@ -286,6 +288,45 @@ if (TARGET dftracer_zlib)
 endif()
 if (TARGET dftracer_zlibstatic)
   list(APPEND INSTALLABLE_TARGETS dftracer_zlibstatic)
+endif()
+if (TARGET arrow_array)
+    list(APPEND INSTALLABLE_TARGETS arrow_array)
+endif()
+if (TARGET arrow_ipc)
+    list(APPEND INSTALLABLE_TARGETS arrow_ipc)
+endif()
+if (TARGET arrow_util)
+    list(APPEND INSTALLABLE_TARGETS arrow_util)
+endif()
+if (TARGET arrow_compute_core)
+    list(APPEND INSTALLABLE_TARGETS arrow_compute_core)
+endif()
+if (TARGET arrow_vendored)
+    list(APPEND INSTALLABLE_TARGETS arrow_vendored)
+endif()
+foreach(boost_target IN ITEMS
+    boost_headers boost_algorithm boost_align boost_array boost_assert boost_bind boost_concept_check boost_config boost_container_hash boost_conversion boost_core boost_crc boost_describe boost_detail boost_exception boost_function boost_function_types boost_functional boost_fusion boost_integer boost_intrusive boost_io boost_iterator boost_lexical_cast boost_move boost_mp11 boost_mpl boost_optional boost_predef boost_preprocessor boost_range boost_ratio boost_regex boost_scope_exit boost_smart_ptr boost_static_assert boost_system boost_throw_exception boost_tokenizer boost_tuple boost_type_traits boost_typeof boost_unordered boost_utility boost_uuid boost_variant2 boost_winapi boost_numeric_conversion boost_comptarget_disable_autolinking boost_container)
+    if(TARGET ${boost_target})
+        list(APPEND INSTALLABLE_TARGETS ${boost_target})
+    endif()
+endforeach()
+if (TARGET arrow_memory_pool)
+    list(APPEND INSTALLABLE_TARGETS arrow_memory_pool)
+endif()
+if (TARGET arrow_io)
+    list(APPEND INSTALLABLE_TARGETS arrow_io)
+endif()
+if (TARGET arrow_static)
+    list(APPEND INSTALLABLE_TARGETS arrow_static)
+endif()
+if (TARGET arrow_shared)
+    list(APPEND INSTALLABLE_TARGETS arrow_shared)
+endif()
+if (TARGET parquet_static)
+    list(APPEND INSTALLABLE_TARGETS parquet_static)
+endif()
+if (TARGET parquet_shared)
+    list(APPEND INSTALLABLE_TARGETS parquet_shared)
 endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)

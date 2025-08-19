@@ -67,6 +67,14 @@ int main(int argc, char* argv[]) {
       .scan<'g', double>()
       .default_value(DEFAULT_TIME_GRANULARITY);
 
+  program.add_argument("--checkpoint")
+      .help("Enable checkpointing for intermediate results")
+      .flag();
+
+  program.add_argument("--checkpoint-dir")
+      .help("Directory to store checkpoint data (required if --checkpoint is used)")
+      .default_value(std::string(""));
+
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception& err) {
@@ -92,6 +100,8 @@ int main(int argc, char* argv[]) {
   bool force_rebuild = program.get<bool>("--force-rebuild");
   std::string view_types_str = program.get<std::string>("--view-types");
   double time_granularity = program.get<double>("--time-granularity");
+  bool checkpoint = program.get<bool>("--checkpoint");
+  std::string checkpoint_dir = program.get<std::string>("--checkpoint-dir");
 
   std::vector<std::string> view_types;
   std::stringstream ss(view_types_str);
@@ -115,12 +125,28 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  // Validate checkpoint arguments
+  if (checkpoint && checkpoint_dir.empty()) {
+    if (mpi_rank == 0) {
+      spdlog::error("--checkpoint-dir must be specified when --checkpoint is enabled");
+      std::cerr << program;
+    }
+#if DFTRACER_UTILS_MPI_ENABLE
+    MPI_Finalize();
+#endif
+    return 1;
+  }
+
   if (mpi_rank == 0) {
     spdlog::info("=== DFTracer High-Level Metrics Computation ===");
     spdlog::info("Configuration:");
     spdlog::info("  Checkpoint size: {} MB", checkpoint_size / (1024 * 1024));
     spdlog::info("  Force rebuild: {}", force_rebuild ? "true" : "false");
     spdlog::info("  Time granularity: {} µs", time_granularity);
+    spdlog::info("  Checkpointing: {}", checkpoint ? "enabled" : "disabled");
+    if (checkpoint) {
+      spdlog::info("  Checkpoint directory: {}", checkpoint_dir);
+    }
     std::ostringstream view_types_oss;
     for (size_t i = 0; i < view_types.size(); ++i) {
       view_types_oss << view_types[i];
@@ -142,7 +168,8 @@ int main(int argc, char* argv[]) {
 #endif
 
   try {
-    DFTracerAnalyzer analyzer(time_granularity, 1e6, checkpoint_size);
+    DFTracerAnalyzer analyzer(time_granularity, 1e6, checkpoint_size, 
+                             checkpoint, checkpoint_dir);
 
     auto hlm_results = analyzer.analyze_trace(mpi_ctx, trace_paths, view_types);
 

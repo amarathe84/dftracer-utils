@@ -257,10 +257,39 @@ function(need_zlib)
       set(ZLIB_SOURCE_DIR ${ZLIB_SOURCE_DIR} PARENT_SCOPE)
       set(ZLIB_BINARY_DIR ${ZLIB_BINARY_DIR} PARENT_SCOPE)
 
-      # Create our own zlib targets with proper install interface
-      add_library(dftracer_zlib SHARED ${ZLIB_SOURCE_DIR}/adler32.c ${ZLIB_SOURCE_DIR}/compress.c ${ZLIB_SOURCE_DIR}/crc32.c ${ZLIB_SOURCE_DIR}/deflate.c ${ZLIB_SOURCE_DIR}/gzclose.c ${ZLIB_SOURCE_DIR}/gzlib.c ${ZLIB_SOURCE_DIR}/gzread.c ${ZLIB_SOURCE_DIR}/gzwrite.c ${ZLIB_SOURCE_DIR}/inflate.c ${ZLIB_SOURCE_DIR}/infback.c ${ZLIB_SOURCE_DIR}/inftrees.c ${ZLIB_SOURCE_DIR}/inffast.c ${ZLIB_SOURCE_DIR}/trees.c ${ZLIB_SOURCE_DIR}/uncompr.c ${ZLIB_SOURCE_DIR}/zutil.c)
-      
-      add_library(dftracer_zlibstatic STATIC ${ZLIB_SOURCE_DIR}/adler32.c ${ZLIB_SOURCE_DIR}/compress.c ${ZLIB_SOURCE_DIR}/crc32.c ${ZLIB_SOURCE_DIR}/deflate.c ${ZLIB_SOURCE_DIR}/gzclose.c ${ZLIB_SOURCE_DIR}/gzlib.c ${ZLIB_SOURCE_DIR}/gzread.c ${ZLIB_SOURCE_DIR}/gzwrite.c ${ZLIB_SOURCE_DIR}/inflate.c ${ZLIB_SOURCE_DIR}/infback.c ${ZLIB_SOURCE_DIR}/inftrees.c ${ZLIB_SOURCE_DIR}/inffast.c ${ZLIB_SOURCE_DIR}/trees.c ${ZLIB_SOURCE_DIR}/uncompr.c ${ZLIB_SOURCE_DIR}/zutil.c)
+      # Create our own zlib targets with proper install interface and fix macOS issues
+      if(APPLE)
+        # Create patched source files for macOS to fix type conflicts
+        set(ZLIB_SOURCES_PATCHED "")
+        foreach(src_file adler32.c crc32.c)
+          file(READ "${ZLIB_SOURCE_DIR}/${src_file}" SRC_CONTENT)
+          # Replace z_off64_t parameter with z_off_t in function definitions to match declarations
+          string(REGEX REPLACE "z_off64_t len2\\)" "z_off_t len2)" SRC_CONTENT_FIXED "${SRC_CONTENT}")
+          string(REGEX REPLACE "z_off64_t len2\\s*\\{" "z_off_t len2 {" SRC_CONTENT_FIXED "${SRC_CONTENT_FIXED}")
+          file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${src_file}" "${SRC_CONTENT_FIXED}")
+          list(APPEND ZLIB_SOURCES_PATCHED "${CMAKE_CURRENT_BINARY_DIR}/${src_file}")
+        endforeach()
+        
+        # Add the rest of the files normally
+        foreach(src_file compress.c deflate.c gzclose.c gzlib.c gzread.c gzwrite.c inflate.c infback.c inftrees.c inffast.c trees.c uncompr.c zutil.c)
+          list(APPEND ZLIB_SOURCES_PATCHED "${ZLIB_SOURCE_DIR}/${src_file}")
+        endforeach()
+        
+        add_library(dftracer_zlib SHARED ${ZLIB_SOURCES_PATCHED})
+        add_library(dftracer_zlibstatic STATIC ${ZLIB_SOURCES_PATCHED})
+      else()
+        add_library(dftracer_zlib SHARED ${ZLIB_SOURCE_DIR}/adler32.c ${ZLIB_SOURCE_DIR}/compress.c ${ZLIB_SOURCE_DIR}/crc32.c ${ZLIB_SOURCE_DIR}/deflate.c ${ZLIB_SOURCE_DIR}/gzclose.c ${ZLIB_SOURCE_DIR}/gzlib.c ${ZLIB_SOURCE_DIR}/gzread.c ${ZLIB_SOURCE_DIR}/gzwrite.c ${ZLIB_SOURCE_DIR}/inflate.c ${ZLIB_SOURCE_DIR}/infback.c ${ZLIB_SOURCE_DIR}/inftrees.c ${ZLIB_SOURCE_DIR}/inffast.c ${ZLIB_SOURCE_DIR}/trees.c ${ZLIB_SOURCE_DIR}/uncompr.c ${ZLIB_SOURCE_DIR}/zutil.c)
+        add_library(dftracer_zlibstatic STATIC ${ZLIB_SOURCE_DIR}/adler32.c ${ZLIB_SOURCE_DIR}/compress.c ${ZLIB_SOURCE_DIR}/crc32.c ${ZLIB_SOURCE_DIR}/deflate.c ${ZLIB_SOURCE_DIR}/gzclose.c ${ZLIB_SOURCE_DIR}/gzlib.c ${ZLIB_SOURCE_DIR}/gzread.c ${ZLIB_SOURCE_DIR}/gzwrite.c ${ZLIB_SOURCE_DIR}/inflate.c ${ZLIB_SOURCE_DIR}/infback.c ${ZLIB_SOURCE_DIR}/inftrees.c ${ZLIB_SOURCE_DIR}/inffast.c ${ZLIB_SOURCE_DIR}/trees.c ${ZLIB_SOURCE_DIR}/uncompr.c ${ZLIB_SOURCE_DIR}/zutil.c)
+      endif()
+
+      # Fix type mismatch issues on macOS by ensuring consistent type definitions
+      if(APPLE)
+        target_compile_definitions(dftracer_zlib PRIVATE _LARGEFILE64_SOURCE=1 _FILE_OFFSET_BITS=64)
+        target_compile_definitions(dftracer_zlibstatic PRIVATE _LARGEFILE64_SOURCE=1 _FILE_OFFSET_BITS=64)
+      else()
+        target_compile_definitions(dftracer_zlib PRIVATE _LARGEFILE64_SOURCE=1 _FILE_OFFSET_BITS=64 Z_HAVE_STDARG_H=1)
+        target_compile_definitions(dftracer_zlibstatic PRIVATE _LARGEFILE64_SOURCE=1 _FILE_OFFSET_BITS=64 Z_HAVE_STDARG_H=1)
+      endif()
 
       # Set proper include directories for build and install
       target_include_directories(dftracer_zlib PUBLIC
@@ -625,7 +654,6 @@ function(need_arrow)
           "ARROW_IPC OFF"
           "ARROW_DATASET OFF"
           "ARROW_BUILD_CONFIG_SUMMARY_JSON OFF"
-          "PARQUET_INSTALL OFF"
           "ARROW_WITH_ZLIB OFF"
           "ARROW_ENABLE_TIMING_TESTS OFF"
           "ARROW_BROTLI_USE_SHARED OFF"
@@ -639,16 +667,124 @@ function(need_arrow)
           "ARROW_THRIFT_USE_SHARED OFF"
           "ARROW_UTF8PROC_USE_SHARED OFF"
           "ARROW_ZSTD_USE_SHARED OFF"
-          "ARROW_INSTALL_NAME_RPATH OFF"       # Disable RPATH logic
-          "ARROW_INSTALL OFF"
-          "PARQUET_INSTALL OFF"
-          "ARROW_NO_INSTALL ON"
+          "ARROW_INSTALL_NAME_RPATH ON"
+          "ARROW_INSTALL ON"
+          "PARQUET_INSTALL ON"
+          "ARROW_NO_INSTALL OFF"
+          "ARROW_WITH_SNAPPY ON" # compression
         FORCE YES
       )
       file(READ "${Arrow_SOURCE_DIR}/cmake_modules/ArrowTargets.cmake" _arrow_targets_cmake)
 string(REPLACE "install(EXPORT arrow_targets" "# install(EXPORT arrow_targets"
        _arrow_targets_cmake "${_arrow_targets_cmake}")
 file(WRITE "${Arrow_SOURCE_DIR}/cmake_modules/ArrowTargets.cmake" "${_arrow_targets_cmake}")
+    endif()
+  endif()
+endfunction()
+
+
+function(link_arrow TARGET_NAME LIBRARY_TYPE)
+  # Validate parameters
+  if(NOT TARGET_NAME)
+    message(FATAL_ERROR "link_arrow: TARGET_NAME is required")
+  endif()
+  
+  if(NOT LIBRARY_TYPE MATCHES "^(STATIC|SHARED)$")
+    message(FATAL_ERROR "link_arrow: LIBRARY_TYPE must be either STATIC or SHARED")
+  endif()
+  
+  if(NOT TARGET ${TARGET_NAME})
+    message(FATAL_ERROR "link_arrow: Target '${TARGET_NAME}' does not exist")
+  endif()
+  
+  # Check if Arrow is available
+  set(ARROW_AVAILABLE FALSE)
+  
+  # Check for CPM-built Arrow
+  if(TARGET arrow_shared OR TARGET arrow_static)
+    set(ARROW_AVAILABLE TRUE)
+  endif()
+  
+  # Check for system Arrow
+  if(Arrow_FOUND)
+    set(ARROW_AVAILABLE TRUE)
+  endif()
+  
+  if(NOT ARROW_AVAILABLE)
+    message(FATAL_ERROR "link_arrow: No Arrow found! Call need_arrow() first or ensure system Arrow is available.")
+  endif()
+  
+  # Add Arrow include directories for CPM-built Arrow
+  if(TARGET arrow_shared OR TARGET arrow_static)
+    if(arrow_SOURCE_DIR)
+      target_include_directories(${TARGET_NAME} PRIVATE 
+        ${arrow_SOURCE_DIR}/src
+        ${arrow_BINARY_DIR}/src
+      )
+      message(STATUS "Added Arrow include directories to ${TARGET_NAME}: ${arrow_SOURCE_DIR}/src, ${arrow_BINARY_DIR}/src")
+    endif()
+  endif()
+  
+  # Link appropriate Arrow variant based on LIBRARY_TYPE
+  if(LIBRARY_TYPE STREQUAL "STATIC")
+    # For static libraries, prefer static Arrow if available
+    if(TARGET arrow_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE arrow_static)
+      message(STATUS "Linked ${TARGET_NAME} to arrow_static")
+    elseif(TARGET arrow_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE arrow_shared)
+      message(STATUS "Linked ${TARGET_NAME} to arrow_shared (static requested but not available)")
+    elseif(TARGET Arrow::arrow_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE Arrow::arrow_static)
+      message(STATUS "Linked ${TARGET_NAME} to Arrow::arrow_static")
+    elseif(TARGET Arrow::arrow_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE Arrow::arrow_shared)
+      message(STATUS "Linked ${TARGET_NAME} to Arrow::arrow_shared (static requested but not available)")
+    endif()
+    
+    # Link Parquet static variant
+    if(TARGET parquet_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE parquet_static)
+      message(STATUS "Linked ${TARGET_NAME} to parquet_static")
+    elseif(TARGET parquet_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE parquet_shared)
+      message(STATUS "Linked ${TARGET_NAME} to parquet_shared (static requested but not available)")
+    elseif(TARGET Parquet::parquet_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE Parquet::parquet_static)
+      message(STATUS "Linked ${TARGET_NAME} to Parquet::parquet_static")
+    elseif(TARGET Parquet::parquet_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE Parquet::parquet_shared)
+      message(STATUS "Linked ${TARGET_NAME} to Parquet::parquet_shared (static requested but not available)")
+    endif()
+  else() # SHARED
+    # For shared libraries, prefer shared Arrow if available
+    if(TARGET arrow_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE arrow_shared)
+      message(STATUS "Linked ${TARGET_NAME} to arrow_shared")
+    elseif(TARGET arrow_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE arrow_static)
+      message(STATUS "Linked ${TARGET_NAME} to arrow_static (shared requested but not available)")
+    elseif(TARGET Arrow::arrow_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE Arrow::arrow_shared)
+      message(STATUS "Linked ${TARGET_NAME} to Arrow::arrow_shared")
+    elseif(TARGET Arrow::arrow_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE Arrow::arrow_static)
+      message(STATUS "Linked ${TARGET_NAME} to Arrow::arrow_static (shared requested but not available)")
+    endif()
+    
+    # Link Parquet shared variant
+    if(TARGET parquet_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE parquet_shared)
+      message(STATUS "Linked ${TARGET_NAME} to parquet_shared")
+    elseif(TARGET parquet_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE parquet_static)
+      message(STATUS "Linked ${TARGET_NAME} to parquet_static (shared requested but not available)")
+    elseif(TARGET Parquet::parquet_shared)
+      target_link_libraries(${TARGET_NAME} PRIVATE Parquet::parquet_shared)
+      message(STATUS "Linked ${TARGET_NAME} to Parquet::parquet_shared")
+    elseif(TARGET Parquet::parquet_static)
+      target_link_libraries(${TARGET_NAME} PRIVATE Parquet::parquet_static)
+      message(STATUS "Linked ${TARGET_NAME} to Parquet::parquet_static (shared requested but not available)")
     endif()
   endif()
 endfunction()

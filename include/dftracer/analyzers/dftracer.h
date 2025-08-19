@@ -80,7 +80,9 @@ class DFTracerAnalyzer {
       double time_granularity = DEFAULT_TIME_GRANULARITY,
       double time_resolution = 1e6,
       size_t checkpoint_size =
-          dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE);
+          dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE,
+      bool checkpoint = false,
+      const std::string& checkpoint_dir = "");
 
   std::vector<TraceRecord> read_trace(
       const std::string& trace_path,
@@ -100,10 +102,18 @@ class DFTracerAnalyzer {
       ExecutionContext& ctx, const std::vector<std::string>& trace_paths,
       const std::vector<std::string>& view_types);
 
+  // Restore view from checkpoint or compute using fallback
+  template <typename T, typename FallbackFunc>
+  T restore_view(const std::string& checkpoint_name, FallbackFunc fallback,
+                 bool force = false, bool write_to_disk = true,
+                 bool read_from_disk = false);
+
  private:
   double time_granularity_;
   double time_resolution_;
   size_t checkpoint_size_;
+  std::string checkpoint_dir_;
+  bool checkpoint_;
 
   std::vector<HighLevelMetrics> _compute_high_level_metrics(
       const std::vector<std::vector<TraceRecord>>& all_batches,
@@ -112,6 +122,15 @@ class DFTracerAnalyzer {
   std::unordered_map<std::string, HighLevelMetrics> aggregate_hlm(
       const std::unordered_map<std::string, std::vector<TraceRecord>>& groups,
       const std::vector<std::string>& view_types);
+
+  // Checkpoint helper functions
+  std::string get_checkpoint_name(const std::vector<std::string>& args) const;
+  std::string get_checkpoint_path(const std::string& name) const;
+  bool has_checkpoint(const std::string& name) const;
+  
+  // Parquet serialization/deserialization helpers
+  void store_view(const std::string& name, const std::vector<HighLevelMetrics>& view);
+  std::vector<HighLevelMetrics> load_view_from_parquet(const std::string& path);
 };
 
 }  // namespace analyzers
