@@ -87,6 +87,135 @@ std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs) {
     return os;
 }
 
+std::string get_string_field(const JsonDocument& doc, const std::string& key) {
+    if (!doc.is_object()) return "";
+    
+    auto obj_result = doc.get_object();
+    if (obj_result.error()) return "";
+    
+    auto obj = obj_result.value();
+    for (auto field : obj) {
+        std::string field_key = std::string(field.key);
+        if (field_key == key) {
+            if (field.value.is_string()) {
+                auto str_result = field.value.get_string();
+                if (!str_result.error()) {
+                    return std::string(str_result.value());
+                }
+            }
+        }
+    }
+    return "";
+}
+
+double get_double_field(const JsonDocument& doc, const std::string& key) {
+    if (!doc.is_object()) return 0.0;
+    
+    auto obj_result = doc.get_object();
+    if (obj_result.error()) return 0.0;
+    
+    auto obj = obj_result.value();
+    for (auto field : obj) {
+        std::string field_key = std::string(field.key);
+        if (field_key == key) {
+            if (field.value.is_double()) {
+                auto val_result = field.value.get_double();
+                if (!val_result.error()) {
+                    return val_result.value();
+                }
+            } else if (field.value.is_int64()) {
+                auto val_result = field.value.get_int64();
+                if (!val_result.error()) {
+                    return static_cast<double>(val_result.value());
+                }
+            } else if (field.value.is_uint64()) {
+                auto val_result = field.value.get_uint64();
+                if (!val_result.error()) {
+                    return static_cast<double>(val_result.value());
+                }
+            } else if (field.value.is_string()) {
+                auto str_result = field.value.get_string();
+                if (!str_result.error()) {
+                    try {
+                        return std::stod(std::string(str_result.value()));
+                    } catch (...) {
+                        // Invalid number string, return 0.0
+                    }
+                }
+            }
+        }
+    }
+    return 0.0;
+}
+
+uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key) {
+    if (!doc.is_object()) return 0;
+    
+    auto obj_result = doc.get_object();
+    if (obj_result.error()) return 0;
+    
+    auto obj = obj_result.value();
+    for (auto field : obj) {
+        std::string field_key = std::string(field.key);
+        if (field_key == key) {
+            if (field.value.is_uint64()) {
+                auto val_result = field.value.get_uint64();
+                if (!val_result.error()) {
+                    return val_result.value();
+                }
+            } else if (field.value.is_int64()) {
+                auto val_result = field.value.get_int64();
+                if (!val_result.error()) {
+                    return static_cast<uint64_t>(val_result.value());
+                }
+            } else if (field.value.is_double()) {
+                auto val_result = field.value.get_double();
+                if (!val_result.error()) {
+                    return static_cast<uint64_t>(val_result.value());
+                }
+            } else if (field.value.is_string()) {
+                auto str_result = field.value.get_string();
+                if (!str_result.error()) {
+                    try {
+                        return std::stoull(std::string(str_result.value()));
+                    } catch (...) {
+                        // Invalid number string, return 0
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+std::string get_args_string_field(const JsonDocument& doc, const std::string& key) {
+    if (!doc.is_object()) return "";
+    
+    auto obj_result = doc.get_object();
+    if (obj_result.error()) return "";
+    
+    auto obj = obj_result.value();
+    for (auto field : obj) {
+        std::string field_key = std::string(field.key);
+        if (field_key == "args" && field.value.is_object()) {
+            auto args_result = field.value.get_object();
+            if (!args_result.error()) {
+                auto args = args_result.value();
+                for (auto arg_field : args) {
+                    std::string arg_key = std::string(arg_field.key);
+                    if (arg_key == key && arg_field.value.is_string()) {
+                        auto str_result = arg_field.value.get_string();
+                        if (!str_result.error()) {
+                            return std::string(str_result.value());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return "";
+}
+
 }
 }
 }

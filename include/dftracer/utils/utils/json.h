@@ -18,6 +18,12 @@ using JsonDocuments = std::vector<JsonDocument>;
 JsonDocuments parse_json_lines(const char* data, size_t size);
 JsonDocument parse_json(const char* data, size_t size);
 
+// Helper functions for extracting values from JSON documents
+std::string get_string_field(const JsonDocument& doc, const std::string& key);
+double get_double_field(const JsonDocument& doc, const std::string& key);
+uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key);
+std::string get_args_string_field(const JsonDocument& doc, const std::string& key);
+
 std::ostream& operator<<(std::ostream& os, const JsonDocument& doc);
 std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
 

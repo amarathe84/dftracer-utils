@@ -27,6 +27,11 @@ set(DFTRACER_UTILS_HEADERS
   utils/file.h
   utils/logger.h
   utils/json.h
+  pipeline/pipeline.h
+  pipeline/execution_context/sequential.h
+  pipeline/execution_context/threaded.h
+  pipeline/execution_context/mpi.h
+  analyzers/dftracer.h
 )
 
 set(DFTRACER_UTILS_SOURCES
@@ -35,6 +40,7 @@ set(DFTRACER_UTILS_SOURCES
   utils/file.cpp
   utils/logger.cpp
   utils/json.cpp
+  analyzers/dftracer.cpp
 )
 
 ##########################################
@@ -280,11 +286,31 @@ install(DIRECTORY ${CMAKE_BINARY_DIR}/include/dftracer/utils/
 )
 
 message(STATUS "Creating package config for dftracer_utils")
+
+# Determine which dependencies to require based on what was found vs built with CPM
+set(PKG_CONFIG_REQUIRES "")
+set(PKG_CONFIG_LIBS_PRIVATE "")
+
+# Add spdlog to requirements (always needed)
+set(PKG_CONFIG_REQUIRES "spdlog")
+set(PKG_CONFIG_LIBS_PRIVATE "-lspdlog")
+
+# Only add sqlite3 to pkg-config requirements if it was found on system
+if(SQLite3_FOUND AND NOT SQLite3_CPM)
+    set(PKG_CONFIG_REQUIRES "${PKG_CONFIG_REQUIRES} sqlite3")
+    set(PKG_CONFIG_LIBS_PRIVATE "${PKG_CONFIG_LIBS_PRIVATE} -lsqlite3")
+endif()
+
+# Only add zlib to pkg-config requirements if it was found on system
+if(ZLIB_FOUND AND NOT ZLIB_CPM)
+    set(PKG_CONFIG_LIBS_PRIVATE "${PKG_CONFIG_LIBS_PRIVATE} -lz")
+endif()
+
 create_package_config(
     TARGET dftracer_utils
     VERSION ${DFTRACER_UTILS_PACKAGE_VERSION}
     DESCRIPTION "DFTracer utils library for processing gzipped files"
     URL "https://github.com/LLNL/dftracer-utils"
-    REQUIRES "sqlite3 spdlog"
-    LIBS_PRIVATE "-lspdlog -lsqlite3 -lz"
+    REQUIRES "${PKG_CONFIG_REQUIRES}"
+    LIBS_PRIVATE "${PKG_CONFIG_LIBS_PRIVATE}"
 )

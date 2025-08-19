@@ -130,33 +130,202 @@ function(create_cmake_config_files)
 
 include(CMakeFindDependencyMacro)
 
-# Find dependencies
-find_dependency(ZLIB REQUIRED)
-find_dependency(PkgConfig REQUIRED)
+# Find dependencies - handle both CPM-built and system packages
 
-# Find sqlite3 using pkg-config
-pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+# ZLIB dependency
+find_library(ZLIB_LIBRARY_BUNDLED
+    NAMES z libz zlib
+    PATHS \${_IMPORT_PREFIX}/lib
+    NO_DEFAULT_PATH
+)
 
-# Try to find spdlog, but don't fail if not found since it might be a private dependency
-find_dependency(spdlog QUIET)
-if(NOT spdlog_FOUND)
-    # If spdlog is not found, create an interface target
-    # This assumes spdlog is available as a system library
-    if(NOT TARGET spdlog::spdlog)
-        add_library(spdlog::spdlog INTERFACE IMPORTED)
-        # Try to find the library in system locations
-        find_library(SPDLOG_LIB spdlog)
-        if(SPDLOG_LIB)
-            set_target_properties(spdlog::spdlog PROPERTIES
-                INTERFACE_LINK_LIBRARIES \"\${SPDLOG_LIB}\"
+if(ZLIB_LIBRARY_BUNDLED)
+    # Found zlib that was built with this package
+    find_path(ZLIB_INCLUDE_DIR_BUNDLED
+        NAMES zlib.h
+        PATHS \${_IMPORT_PREFIX}/include
+        NO_DEFAULT_PATH
+    )
+    
+    if(ZLIB_INCLUDE_DIR_BUNDLED AND NOT TARGET ZLIB::ZLIB)
+        add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
+        set_target_properties(ZLIB::ZLIB PROPERTIES
+            IMPORTED_LOCATION \"\${ZLIB_LIBRARY_BUNDLED}\"
+            INTERFACE_INCLUDE_DIRECTORIES \"\${ZLIB_INCLUDE_DIR_BUNDLED}\"
+        )
+    endif()
+else()
+    # Fall back to system zlib
+    find_dependency(ZLIB REQUIRED)
+endif()
+
+# SQLITE3 dependency
+find_library(SQLITE3_LIBRARY_BUNDLED
+    NAMES sqlite3 libsqlite3
+    PATHS \${_IMPORT_PREFIX}/lib
+    NO_DEFAULT_PATH
+)
+
+if(SQLITE3_LIBRARY_BUNDLED)
+    # Found sqlite3 that was built with this package
+    find_path(SQLITE3_INCLUDE_DIR_BUNDLED
+        NAMES sqlite3.h
+        PATHS \${_IMPORT_PREFIX}/include
+        NO_DEFAULT_PATH
+    )
+    
+    if(SQLITE3_INCLUDE_DIR_BUNDLED AND NOT TARGET SQLite::SQLite3)
+        add_library(SQLite::SQLite3 UNKNOWN IMPORTED)
+        set_target_properties(SQLite::SQLite3 PROPERTIES
+            IMPORTED_LOCATION \"\${SQLITE3_LIBRARY_BUNDLED}\"
+            INTERFACE_INCLUDE_DIRECTORIES \"\${SQLITE3_INCLUDE_DIR_BUNDLED}\"
+        )
+    endif()
+else()
+    # Fall back to system sqlite3 via pkg-config
+    find_dependency(PkgConfig REQUIRED)
+    pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+    
+    if(SQLITE3_FOUND AND NOT TARGET SQLite::SQLite3)
+        add_library(SQLite::SQLite3 UNKNOWN IMPORTED)
+        set_target_properties(SQLite::SQLite3 PROPERTIES
+            IMPORTED_LOCATION \"\${SQLITE3_LIBRARIES}\"
+            INTERFACE_INCLUDE_DIRECTORIES \"\${SQLITE3_INCLUDE_DIRS}\"
+        )
+    endif()
+endif()
+
+# SPDLOG dependency
+find_library(SPDLOG_LIBRARY_BUNDLED
+    NAMES spdlog libspdlog
+    PATHS \${_IMPORT_PREFIX}/lib
+    NO_DEFAULT_PATH
+)
+
+if(SPDLOG_LIBRARY_BUNDLED)
+    # Found spdlog that was built with this package
+    find_path(SPDLOG_INCLUDE_DIR_BUNDLED
+        NAMES spdlog/spdlog.h
+        PATHS \${_IMPORT_PREFIX}/include
+        NO_DEFAULT_PATH
+    )
+    
+    if(SPDLOG_INCLUDE_DIR_BUNDLED AND NOT TARGET spdlog::spdlog)
+        add_library(spdlog::spdlog UNKNOWN IMPORTED)
+        set_target_properties(spdlog::spdlog PROPERTIES
+            IMPORTED_LOCATION \"\${SPDLOG_LIBRARY_BUNDLED}\"
+            INTERFACE_INCLUDE_DIRECTORIES \"\${SPDLOG_INCLUDE_DIR_BUNDLED}\"
+        )
+    endif()
+    
+    # Also create header-only alias if not exists
+    if(NOT TARGET spdlog::spdlog_header_only)
+        add_library(spdlog::spdlog_header_only INTERFACE IMPORTED)
+        set_target_properties(spdlog::spdlog_header_only PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES \"\${SPDLOG_INCLUDE_DIR_BUNDLED}\"
+        )
+    endif()
+else()
+    # Try to find system spdlog
+    find_dependency(spdlog QUIET)
+    if(NOT spdlog_FOUND)
+        # If spdlog is not found, create an interface target for header-only usage
+        if(NOT TARGET spdlog::spdlog_header_only)
+            add_library(spdlog::spdlog_header_only INTERFACE IMPORTED)
+            # Try to find the library in system locations
+            find_library(SPDLOG_LIB spdlog)
+            if(SPDLOG_LIB)
+                set_target_properties(spdlog::spdlog_header_only PROPERTIES
+                    INTERFACE_LINK_LIBRARIES \"\${SPDLOG_LIB}\"
+                )
+            else()
+                # Fallback to just the library name for header-only usage
+                set_target_properties(spdlog::spdlog_header_only PROPERTIES
+                    INTERFACE_COMPILE_DEFINITIONS \"SPDLOG_HEADER_ONLY\"
+                )
+            endif()
+        endif()
+        
+        if(NOT TARGET spdlog::spdlog)
+            add_library(spdlog::spdlog ALIAS spdlog::spdlog_header_only)
+        endif()
+    endif()
+endif()
+
+# SIMDJSON dependency
+find_library(SIMDJSON_LIBRARY_BUNDLED
+    NAMES simdjson libsimdjson
+    PATHS \${_IMPORT_PREFIX}/lib
+    NO_DEFAULT_PATH
+)
+
+if(SIMDJSON_LIBRARY_BUNDLED)
+    # Found simdjson that was built with this package
+    find_path(SIMDJSON_INCLUDE_DIR_BUNDLED
+        NAMES simdjson.h
+        PATHS \${_IMPORT_PREFIX}/include
+        NO_DEFAULT_PATH
+    )
+    
+    if(SIMDJSON_INCLUDE_DIR_BUNDLED)
+        # Create shared target if not exists
+        if(NOT TARGET simdjson::simdjson)
+            add_library(simdjson::simdjson UNKNOWN IMPORTED)
+            set_target_properties(simdjson::simdjson PROPERTIES
+                IMPORTED_LOCATION \"\${SIMDJSON_LIBRARY_BUNDLED}\"
+                INTERFACE_INCLUDE_DIRECTORIES \"\${SIMDJSON_INCLUDE_DIR_BUNDLED}\"
             )
-        else()
-            # Fallback to just the library name
-            set_target_properties(spdlog::spdlog PROPERTIES
-                INTERFACE_LINK_LIBRARIES \"spdlog\"
+        endif()
+        
+        # Also look for static version
+        find_library(SIMDJSON_STATIC_LIBRARY_BUNDLED
+            NAMES simdjson_static libsimdjson_static
+            PATHS \${_IMPORT_PREFIX}/lib
+            NO_DEFAULT_PATH
+        )
+        
+        if(SIMDJSON_STATIC_LIBRARY_BUNDLED AND NOT TARGET simdjson::simdjson_static)
+            add_library(simdjson::simdjson_static UNKNOWN IMPORTED)
+            set_target_properties(simdjson::simdjson_static PROPERTIES
+                IMPORTED_LOCATION \"\${SIMDJSON_STATIC_LIBRARY_BUNDLED}\"
+                INTERFACE_INCLUDE_DIRECTORIES \"\${SIMDJSON_INCLUDE_DIR_BUNDLED}\"
             )
         endif()
     endif()
+else()
+    # Try to find system simdjson
+    find_dependency(simdjson QUIET)
+endif()
+
+# GHC_FILESYSTEM dependency (header-only)
+find_path(GHC_FILESYSTEM_INCLUDE_DIR_BUNDLED
+    NAMES ghc/filesystem.hpp
+    PATHS \${_IMPORT_PREFIX}/include
+    NO_DEFAULT_PATH
+)
+
+if(GHC_FILESYSTEM_INCLUDE_DIR_BUNDLED AND NOT TARGET ghc_filesystem)
+    add_library(ghc_filesystem INTERFACE IMPORTED)
+    set_target_properties(ghc_filesystem PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES \"\${GHC_FILESYSTEM_INCLUDE_DIR_BUNDLED}\"
+    )
+else()
+    # Try to find system ghc_filesystem
+    find_dependency(ghc_filesystem QUIET)
+endif()
+
+# PICOSHA2 dependency (header-only)
+find_path(PICOSHA2_INCLUDE_DIR_BUNDLED
+    NAMES picosha2.h
+    PATHS \${_IMPORT_PREFIX}/include
+    NO_DEFAULT_PATH
+)
+
+if(PICOSHA2_INCLUDE_DIR_BUNDLED AND NOT TARGET picosha2)
+    add_library(picosha2 INTERFACE IMPORTED)
+    set_target_properties(picosha2 PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES \"\${PICOSHA2_INCLUDE_DIR_BUNDLED}\"
+    )
 endif()
 
 # Include the targets file
