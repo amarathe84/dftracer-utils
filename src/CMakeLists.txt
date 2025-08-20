@@ -15,6 +15,7 @@ need_ghc_filesystem()
 need_picosha2()
 need_simdjson()
 need_arrow()
+need_diy()
 
 ##########################################
 # Constants
@@ -171,6 +172,7 @@ target_link_libraries(dft_map PRIVATE
   ghc_filesystem
   picosha2
   simdjson::simdjson
+  diy
 )
 add_mpi_deps_if_needed(dft_map)
 

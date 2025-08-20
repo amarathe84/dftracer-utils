@@ -30,6 +30,9 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
     }
   }
 
+  // int get_rank() const override { return 0; }
+  // int get_size() const override { return 1; }
+
   size_t get_num_threads() const { return num_threads_; }
 
   template <typename InT, typename OutT, typename MapFn>

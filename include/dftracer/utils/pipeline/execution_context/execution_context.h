@@ -12,6 +12,9 @@ namespace execution_context {
 template <typename Context>
 class ExecutionContext {
  public:
+  virtual int get_rank() const { return 0; }
+  virtual int get_size() const { return 1; }
+
   template <typename InT, typename OutT, typename MapFn>
   auto map(MapFn&& fn, const std::vector<InT>& input) const
       -> std::vector<OutT> {

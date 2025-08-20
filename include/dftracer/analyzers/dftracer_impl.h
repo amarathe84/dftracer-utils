@@ -36,32 +36,86 @@ std::vector<HighLevelMetrics> DFTracerAnalyzer::compute_high_level_metrics(
   checkpoint_args.insert(checkpoint_args.end(), sorted_view_types.begin(), sorted_view_types.end());
   std::string checkpoint_name = get_checkpoint_name(checkpoint_args);
 
+  // Check if we need distributed checkpointing
+  bool is_distributed = (ctx.get_size() > 1);
+  
   return restore_view<std::vector<HighLevelMetrics>>(
     checkpoint_name,
-    [this, &ctx, &trace_paths, &view_types]() -> std::vector<HighLevelMetrics> {
+    [this, &ctx, &trace_paths, &view_types, &checkpoint_name, is_distributed]() -> std::vector<HighLevelMetrics> {
+      // Use byte-level work distribution
+      WorkDistribution work_dist = distribute_work_by_bytes(
+          trace_paths, checkpoint_size_, ctx.get_size(), ctx.get_rank());
+      
+      if (work_dist.file_work.empty()) {
+        spdlog::info("Rank {} has no work assigned", ctx.get_rank());
+        return {};
+      }
+      
+      spdlog::info("Rank {} processing {} work units", ctx.get_rank(), work_dist.file_work.size());
+
+      // Debug: log each work unit for this rank
+      for (size_t i = 0; i < work_dist.file_work.size(); ++i) {
+        const auto& work = work_dist.file_work[i];
+        spdlog::info("Rank {} work unit {}: path={}, bytes=[{}, {}), process_full_file={}", 
+                     ctx.get_rank(), i, work.path, work.start_offset, work.end_offset, work.process_full_file);
+      }
+
       // Build HLM groupby columns
       std::vector<std::string> hlm_groupby = view_types;
       hlm_groupby.insert(hlm_groupby.end(), HLM_EXTRA_COLS.begin(),
                          HLM_EXTRA_COLS.end());
 
       auto hlm_pipeline =
-          make_pipeline<std::string>().map<std::vector<TraceRecord>>(
-              [this, &view_types](const std::string& path) {
-                auto traces = this->read_trace(path, view_types);
+          make_pipeline<FileWorkInfo>().map<std::vector<TraceRecord>>(
+              [this, &view_types](const FileWorkInfo& work_info) {
+                spdlog::info("Pipeline processing work unit: path={}, bytes=[{}, {}), process_full_file={}", 
+                             work_info.path, work_info.start_offset, work_info.end_offset, work_info.process_full_file);
+                auto traces = this->read_trace(work_info, view_types);
                 return this->postread_trace(traces, view_types);
               });
 
       auto start = std::chrono::high_resolution_clock::now();
-      auto all_batches = hlm_pipeline.run(ctx, trace_paths);
+      auto all_batches = hlm_pipeline.run(ctx, work_dist.file_work);
       auto elapsed = std::chrono::high_resolution_clock::now() - start;
 
       spdlog::info(
-          "Pipeline execution completed in {}ms",
+          "Rank {} pipeline execution completed in {}ms",
+          ctx.get_rank(),
           std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
 
-      return _compute_high_level_metrics(all_batches, view_types);
+      auto rank_metrics = _compute_high_level_metrics(all_batches, view_types);
+      
+      spdlog::info("Rank {} computed {} metrics, checkpoint_={}, ctx.get_size()={}", 
+                   ctx.get_rank(), rank_metrics.size(), checkpoint_, ctx.get_size());
+      
+      // Store this rank's results in distributed checkpoint
+      if (checkpoint_) {
+        spdlog::info("Rank {} calling store_distributed_view with {} metrics", 
+                     ctx.get_rank(), rank_metrics.size());
+        store_distributed_view(checkpoint_name, rank_metrics, view_types, ctx.get_rank());
+      }
+      
+      // Gather all results if we're in distributed mode
+      if (ctx.get_size() > 1) {
+        // In MPI mode, rank 0 loads and aggregates all distributed parts
+        if (ctx.get_rank() == 0) {
+          // Wait for all ranks to finish their work
+#if DFTRACER_UTILS_MPI_ENABLE
+          MPI_Barrier(MPI_COMM_WORLD);
+#endif
+          return load_distributed_view(checkpoint_name);
+        } else {
+          // Non-zero ranks return empty (only rank 0 has final result)
+#if DFTRACER_UTILS_MPI_ENABLE
+          MPI_Barrier(MPI_COMM_WORLD);
+#endif
+          return {};
+        }
+      }
+      
+      return rank_metrics;
     },
-    false, true, false, view_types
+    false, false, false, view_types, is_distributed
   );
 }
 
@@ -88,7 +142,8 @@ std::vector<HighLevelMetrics> DFTracerAnalyzer::analyze_trace(
 template <typename T, typename FallbackFunc>
 T DFTracerAnalyzer::restore_view(const std::string& checkpoint_name, 
                                 FallbackFunc fallback, bool force, 
-                                bool write_to_disk, bool read_from_disk, const std::vector<std::string>& view_types) {
+                                bool write_to_disk, bool read_from_disk, const std::vector<std::string>& view_types,
+                                bool is_distributed) {
   if (checkpoint_) {
     std::string view_path = get_checkpoint_path(checkpoint_name);
     if (force || !has_checkpoint(checkpoint_name)) {
@@ -96,9 +151,8 @@ T DFTracerAnalyzer::restore_view(const std::string& checkpoint_name,
       if (!write_to_disk) {
         return view;
       }
-      if constexpr (std::is_same_v<T, std::vector<HighLevelMetrics>>) {
-        store_view(checkpoint_name, view, view_types);
-      }
+      // Note: In distributed mode, the fallback function handles store_distributed_view,
+      // so we don't call store_view here to avoid overwriting distributed checkpoints
       if (!read_from_disk) {
         return view;
       }
@@ -106,7 +160,11 @@ T DFTracerAnalyzer::restore_view(const std::string& checkpoint_name,
     }
     // Read from checkpoint
     if constexpr (std::is_same_v<T, std::vector<HighLevelMetrics>>) {
-      return load_view_from_parquet(view_path);
+      if (is_distributed) {
+        return load_distributed_view(checkpoint_name);
+      } else {
+        return load_view_from_parquet(view_path);
+      }
     } else {
       // For other types, fallback to computation
       return fallback();

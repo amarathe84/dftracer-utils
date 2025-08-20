@@ -12,6 +12,9 @@
 namespace dftracer {
 namespace analyzers {
 
+// Forward declarations
+struct FileWorkInfo;
+
 struct HLM_AGG {
   static constexpr const char* TIME = "time";
   static constexpr const char* COUNT = "count";
@@ -87,6 +90,10 @@ class DFTracerAnalyzer {
   std::vector<TraceRecord> read_trace(
       const std::string& trace_path,
       const std::vector<std::string>& view_types);
+  
+  std::vector<TraceRecord> read_trace(
+      const FileWorkInfo& work_info,
+      const std::vector<std::string>& view_types);
 
   std::vector<TraceRecord> postread_trace(
       const std::vector<TraceRecord>& traces,
@@ -106,7 +113,8 @@ class DFTracerAnalyzer {
   template <typename T, typename FallbackFunc>
   T restore_view(const std::string& checkpoint_name, FallbackFunc fallback,
                  bool force = false, bool write_to_disk = true,
-                 bool read_from_disk = false, const std::vector<std::string>& view_types = {});
+                 bool read_from_disk = false, const std::vector<std::string>& view_types = {},
+                 bool is_distributed = false);
 
  private:
   double time_granularity_;
@@ -130,8 +138,36 @@ class DFTracerAnalyzer {
   
   // Parquet serialization/deserialization helpers
   void store_view(const std::string& name, const std::vector<HighLevelMetrics>& view, const std::vector<std::string>& view_types);
+  void store_view_to_file(const std::string& file_path, const std::vector<HighLevelMetrics>& view, const std::vector<std::string>& view_types);
   std::vector<HighLevelMetrics> load_view_from_parquet(const std::string& path);
+  
+  // Distributed checkpoint helpers
+  void store_distributed_view(const std::string& name, const std::vector<HighLevelMetrics>& view, 
+                              const std::vector<std::string>& view_types, size_t rank);
+  std::vector<HighLevelMetrics> load_distributed_view(const std::string& name);
 };
+
+// Byte-level work distribution structures
+struct FileWorkInfo {
+  std::string path;
+  uint64_t total_bytes;
+  uint64_t start_offset;  // assigned start offset for this rank
+  uint64_t end_offset;    // assigned end offset for this rank
+  bool process_full_file; // if true, process entire file regardless of offsets
+};
+
+struct WorkDistribution {
+  std::vector<FileWorkInfo> file_work;
+  uint64_t total_work_bytes;
+  size_t rank_count;
+  size_t current_rank;
+};
+
+// Work distribution helper functions
+WorkDistribution distribute_work_by_bytes(const std::vector<std::string>& trace_paths,
+                                        size_t checkpoint_size,
+                                        size_t rank_count,
+                                        size_t current_rank);
 
 }  // namespace analyzers
 }  // namespace dftracer

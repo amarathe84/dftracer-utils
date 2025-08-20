@@ -31,6 +31,21 @@ function(need_argparse)
   endif()
 endfunction()
 
+function(need_diy)
+  if (NOT diy_ADDED)
+    CPMAddPackage(
+      NAME diy
+      GITHUB_REPOSITORY diatomic/diy
+      VERSION 3.15
+      GIT_TAG 14554617a218a74a4c74a1bf8d0899e85d46fd9f
+      OPTIONS
+        "DIY_BUILD_TESTS OFF"
+        "build_tests OFF"
+      FORCE YES
+    )
+  endif()
+endfunction()
+
 function(need_ghc_filesystem)
   if(NOT ghc_filesystem_ADDED)
     CPMAddPackage(
@@ -294,13 +309,13 @@ function(need_zlib)
       # Set proper include directories for build and install
       target_include_directories(dftracer_zlib PUBLIC
         $<BUILD_INTERFACE:${ZLIB_SOURCE_DIR}>
-        $<BUILD_INTERFACE:${ZLIB_BINARY_DIR}>
+        # $<BUILD_INTERFACE:${ZLIB_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
       )
 
       target_include_directories(dftracer_zlibstatic PUBLIC
         $<BUILD_INTERFACE:${ZLIB_SOURCE_DIR}>
-        $<BUILD_INTERFACE:${ZLIB_BINARY_DIR}>
+        # $<BUILD_INTERFACE:${ZLIB_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
       )
 

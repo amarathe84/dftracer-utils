@@ -27,6 +27,19 @@ namespace analyzers {
 
 const std::vector<std::string> HLM_EXTRA_COLS = {"cat", "io_cat", "acc_pat",
                                                  "func_name"};
+
+// IO category to uint8 mapping (matching Python implementation)
+std::unordered_map<std::string, uint8_t> IO_CAT_TO_CODE = {
+  {"read", 0},
+  {"write", 1}, 
+  {"metadata", 2},
+  {"other", 3}
+};
+
+uint8_t encode_io_cat(const std::string& io_cat_str) {
+  auto it = IO_CAT_TO_CODE.find(io_cat_str);
+  return (it != IO_CAT_TO_CODE.end()) ? it->second : 3; // default to "other"
+}
 const double DEFAULT_TIME_GRANULARITY = 1e6;
 
 const double KiB = 1024.0;
@@ -415,6 +428,87 @@ std::vector<TraceRecord> DFTracerAnalyzer::read_trace(
                                time_granularity_);
 }
 
+std::vector<TraceRecord> DFTracerAnalyzer::read_trace(
+    const FileWorkInfo& work_info, const std::vector<std::string>& view_types) {
+  if (work_info.process_full_file) {
+    // Process the entire file 
+    spdlog::info("Reading full trace from: {}", work_info.path);
+    return read_and_parse_traces(work_info.path, view_types, checkpoint_size_, time_granularity_);
+  } else {
+    // Process byte range [start_offset, end_offset)
+    spdlog::info("Reading trace from: {} (bytes {}-{})", 
+                 work_info.path, work_info.start_offset, work_info.end_offset);
+    
+    try {
+      // Create reader for byte-range reading
+      std::string idx_path = work_info.path + ".idx";
+      spdlog::info("Creating reader with index path: {}", idx_path);
+      dftracer::utils::reader::Reader reader(work_info.path, idx_path, checkpoint_size_);
+      
+      // Read JSON lines from the specified byte range
+      std::vector<TraceRecord> records;
+      constexpr size_t BUFFER_SIZE = 1024 * 1024; // 1MB buffer
+      std::vector<char> buffer(BUFFER_SIZE);
+      
+      size_t current_pos = work_info.start_offset;
+      size_t total_chunks_processed = 0;
+      
+      spdlog::info("Starting byte range reading: current_pos={}, end_offset={}", 
+                   current_pos, work_info.end_offset);
+      
+      while (current_pos < work_info.end_offset) {
+        size_t chunk_end = std::min(current_pos + BUFFER_SIZE, static_cast<size_t>(work_info.end_offset));
+        
+        spdlog::info("Reading chunk: [{}, {}) (size: {})", current_pos, chunk_end, chunk_end - current_pos);
+        
+        auto json_docs = reader.read_json_lines_bytes(
+            current_pos, chunk_end, buffer.data(), buffer.size());
+        
+        spdlog::info("Got {} JSON documents from chunk [{}, {})", 
+                     json_docs.size(), current_pos, chunk_end);
+        
+        if (json_docs.empty()) {
+          spdlog::warn("No JSON documents found in chunk [{}, {}), breaking", current_pos, chunk_end);
+          break; // No more data
+        }
+        
+        total_chunks_processed++;
+        
+        // Parse each JSON document into TraceRecord
+        size_t parsed_records = 0;
+        for (const auto& doc : json_docs) {
+          try {
+            auto record = parse_trace_record(doc, view_types, time_granularity_);
+            // Only add non-empty records (empty func_name indicates filtered record)
+            if (!record.func_name.empty()) {
+              records.push_back(record);
+              parsed_records++;
+            }
+          } catch (const std::exception& e) {
+            spdlog::warn("Failed to parse trace record: {}", e.what());
+          }
+        }
+        
+        spdlog::info("Parsed {} valid records from {} JSON docs in chunk [{}, {})", 
+                     parsed_records, json_docs.size(), current_pos, chunk_end);
+        
+        // Move to next chunk (the reader handles line boundaries internally)
+        current_pos = chunk_end;
+      }
+      
+      spdlog::info("Read {} records from byte range [{}, {}) after processing {} chunks", 
+                   records.size(), work_info.start_offset, work_info.end_offset, total_chunks_processed);
+      return records;
+      
+    } catch (const std::exception& e) {
+      spdlog::error("Failed to read byte range from {}: {}", work_info.path, e.what());
+      // Fall back to reading the full file
+      spdlog::warn("Falling back to reading full file");
+      return read_and_parse_traces(work_info.path, view_types, checkpoint_size_, time_granularity_);
+    }
+  }
+}
+
 std::vector<TraceRecord> DFTracerAnalyzer::postread_trace(
     const std::vector<TraceRecord>& traces,
     const std::vector<std::string>& view_types) {
@@ -554,12 +648,11 @@ bool DFTracerAnalyzer::has_checkpoint(const std::string& name) const {
   return fs::exists(metadata_path);
 }
 
-void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<HighLevelMetrics>& view, const std::vector<std::string>& view_types) {
+void DFTracerAnalyzer::store_view_to_file(const std::string& file_path, const std::vector<HighLevelMetrics>& view, const std::vector<std::string>& view_types) {
   try {
-    std::string view_path = get_checkpoint_path(name);
-    
-    // Create checkpoint directory
-    fs::create_directories(view_path);
+    // Extract directory from file_path and create it
+    std::string dir_path = fs::path(file_path).parent_path().string();
+    fs::create_directories(dir_path);
 
     if (view.empty()) {
       // Create empty parquet file with minimal schema matching expected structure
@@ -597,14 +690,26 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
         if (field->type()->id() == arrow::Type::STRING) {
           arrow::StringBuilder builder;
           builder.Finish(&empty_array);
+        } else if (field->type()->id() == arrow::Type::LARGE_STRING) {
+          arrow::LargeStringBuilder builder;
+          builder.Finish(&empty_array);
         } else if (field->type()->id() == arrow::Type::DOUBLE) {
           arrow::DoubleBuilder builder;
           builder.Finish(&empty_array);
         } else if (field->type()->id() == arrow::Type::UINT64) {
           arrow::UInt64Builder builder;
           builder.Finish(&empty_array);
+        } else if (field->type()->id() == arrow::Type::UINT32) {
+          arrow::UInt32Builder builder;
+          builder.Finish(&empty_array);
         } else if (field->type()->id() == arrow::Type::UINT16) {
           arrow::UInt16Builder builder;
+          builder.Finish(&empty_array);
+        } else if (field->type()->id() == arrow::Type::UINT8) {
+          arrow::UInt8Builder builder;
+          builder.Finish(&empty_array);
+        } else if (field->type()->id() == arrow::Type::INT64) {
+          arrow::Int64Builder builder;
           builder.Finish(&empty_array);
         } else {
           // Default to string builder for unknown types
@@ -616,7 +721,7 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
       
       auto empty_table = arrow::Table::Make(empty_schema, empty_arrays);
       
-      std::string parquet_file = view_path + "/part.0.parquet";
+      std::string parquet_file = file_path;
       auto outfile_result = arrow::io::FileOutputStream::Open(parquet_file);
       if (!outfile_result.ok()) {
         spdlog::error("Failed to open parquet file {}: {}", parquet_file, outfile_result.status().ToString());
@@ -653,12 +758,14 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
         return;
       }
       
-      std::ofstream checkpoint_metadata(view_path + "/_checkpoint_metadata");
-      checkpoint_metadata << "checkpoint_name=" << name << std::endl;
+      // Create checkpoint metadata file (empty view case)
+      std::string checkpoint_dir = fs::path(file_path).parent_path().string();
+      std::ofstream checkpoint_metadata(checkpoint_dir + "/_checkpoint_metadata");
+      checkpoint_metadata << "checkpoint_created" << std::endl;
       checkpoint_metadata << "timestamp=" << std::time(nullptr) << std::endl;
       checkpoint_metadata.close();
       
-      spdlog::info("Stored empty view to checkpoint directory: {}", view_path);
+      spdlog::info("Stored empty view to file: {}", file_path);
       return;
     }
 
@@ -688,10 +795,12 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
         // Use appropriate Arrow type based on the field
         std::shared_ptr<arrow::DataType> field_type = arrow::utf8();
         if (extra_col == "io_cat") {
-          field_type = arrow::utf8(); // Keep as string for now
+          field_type = arrow::uint8();
         } else if (extra_col == "acc_pat") {
-          field_type = arrow::utf8(); // Keep as string consistently
+          field_type = arrow::int64();
         } else if (extra_col == "func_name" || extra_col == "cat") {
+          field_type = arrow::large_utf8(); // Use large_string to match reference
+        } else {
           field_type = arrow::utf8();
         }
         
@@ -718,6 +827,7 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
     // Add remaining unique set fields (these become data columns like file_name)
     std::vector<std::string> unique_set_field_names;
     for (const auto& [set_name, _] : first_hlm.unique_sets) {
+      // Use string type for file_name to match reference
       schema_fields.push_back(arrow::field(set_name, arrow::utf8()));
       unique_set_field_names.push_back(set_name);
     }
@@ -790,10 +900,28 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
 
     // Convert metrics to Arrow arrays
     
-    // Index column builders
-    std::unordered_map<std::string, std::unique_ptr<arrow::StringBuilder>> index_builders;
+    // Index column builders (different types based on field)
+    std::unordered_map<std::string, std::unique_ptr<arrow::StringBuilder>> string_index_builders;
+    std::unordered_map<std::string, std::unique_ptr<arrow::LargeStringBuilder>> large_string_index_builders;
+    std::unordered_map<std::string, std::unique_ptr<arrow::UInt8Builder>> uint8_index_builders;
+    std::unordered_map<std::string, std::unique_ptr<arrow::Int64Builder>> int64_index_builders;
+    std::unordered_map<std::string, std::unique_ptr<arrow::UInt64Builder>> uint64_index_builders;
+    std::unordered_map<std::string, std::unique_ptr<arrow::UInt16Builder>> uint16_index_builders;
+    
     for (const auto& index_col : available_index_fields) {
-      index_builders[index_col] = std::make_unique<arrow::StringBuilder>();
+      if (index_col == "io_cat") {
+        uint8_index_builders[index_col] = std::make_unique<arrow::UInt8Builder>();
+      } else if (index_col == "acc_pat") {
+        int64_index_builders[index_col] = std::make_unique<arrow::Int64Builder>();
+      } else if (index_col == "epoch") {
+        uint64_index_builders[index_col] = std::make_unique<arrow::UInt64Builder>();
+      } else if (index_col == "time_range") {
+        uint16_index_builders[index_col] = std::make_unique<arrow::UInt16Builder>();
+      } else if (index_col == "func_name" || index_col == "cat") {
+        large_string_index_builders[index_col] = std::make_unique<arrow::LargeStringBuilder>();
+      } else {
+        string_index_builders[index_col] = std::make_unique<arrow::StringBuilder>();
+      }
     }
     
     // Data column builders
@@ -816,7 +944,24 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
       for (const auto& index_col : available_index_fields) {
         auto it = hlm.group_values.find(index_col);
         std::string value = (it != hlm.group_values.end()) ? it->second : "";
-        index_builders[index_col]->Append(value);
+        
+        if (index_col == "io_cat") {
+          uint8_t encoded_value = encode_io_cat(value);
+          uint8_index_builders[index_col]->Append(encoded_value);
+        } else if (index_col == "acc_pat") {
+          int64_t numeric_value = value.empty() ? 0 : std::stoll(value);
+          int64_index_builders[index_col]->Append(numeric_value);
+        } else if (index_col == "epoch") {
+          uint64_t numeric_value = value.empty() ? 0 : std::stoull(value);
+          uint64_index_builders[index_col]->Append(numeric_value);
+        } else if (index_col == "time_range") {
+          uint16_t numeric_value = value.empty() ? 0 : static_cast<uint16_t>(std::stoul(value));
+          uint16_index_builders[index_col]->Append(numeric_value);
+        } else if (index_col == "func_name" || index_col == "cat") {
+          large_string_index_builders[index_col]->Append(value);
+        } else {
+          string_index_builders[index_col]->Append(value);
+        }
       }
       
       // Add data values
@@ -855,7 +1000,22 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
     // Add index arrays first
     for (const auto& index_col : available_index_fields) {
       std::shared_ptr<arrow::Array> index_array;
-      auto status = index_builders[index_col]->Finish(&index_array);
+      arrow::Status status;
+      
+      if (index_col == "io_cat") {
+        status = uint8_index_builders[index_col]->Finish(&index_array);
+      } else if (index_col == "acc_pat") {
+        status = int64_index_builders[index_col]->Finish(&index_array);
+      } else if (index_col == "epoch") {
+        status = uint64_index_builders[index_col]->Finish(&index_array);
+      } else if (index_col == "time_range") {
+        status = uint16_index_builders[index_col]->Finish(&index_array);
+      } else if (index_col == "func_name" || index_col == "cat") {
+        status = large_string_index_builders[index_col]->Finish(&index_array);
+      } else {
+        status = string_index_builders[index_col]->Finish(&index_array);
+      }
+      
       if (!status.ok()) {
         spdlog::error("Failed to finish index array for {}: {}", index_col, status.ToString());
         return;
@@ -916,7 +1076,7 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
     }
 
     // Write to parquet directory with metadata (similar to Python implementation)
-    std::string parquet_file = view_path + "/part.0.parquet";
+    std::string parquet_file = file_path;
     auto outfile_result = arrow::io::FileOutputStream::Open(parquet_file);
     if (!outfile_result.ok()) {
       spdlog::error("Failed to open parquet file {}: {}", parquet_file, outfile_result.status().ToString());
@@ -967,146 +1127,450 @@ void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<Hig
       return;
     }
 
-    // Generate _metadata and _common_metadata files (equivalent to Python's write_metadata=True)
-    try {
-      // Read our written parquet file to get its metadata
-      auto infile_result = arrow::io::ReadableFile::Open(parquet_file);
+    spdlog::info("Stored view to file: {}", file_path);
+
+  } catch (const std::exception& e) {
+    spdlog::error("Failed to store view to file {}: {}", file_path, e.what());
+  }
+}
+
+void DFTracerAnalyzer::store_view(const std::string& name, const std::vector<HighLevelMetrics>& view, const std::vector<std::string>& view_types) {
+  std::string view_path = get_checkpoint_path(name);
+  std::string file_path = view_path + "/part.0.parquet";
+  
+  // First store the actual data file
+  store_view_to_file(file_path, view, view_types);
+  
+  // Then generate metadata files for compatibility with pandas/pyarrow
+  try {
+    fs::create_directories(view_path);
+    
+    if (!view.empty()) {
+      // Generate _metadata and _common_metadata files (equivalent to Python's write_metadata=True)
+      auto infile_result = arrow::io::ReadableFile::Open(file_path);
       if (infile_result.ok()) {
         auto infile = *infile_result;
         auto parquet_reader = parquet::ParquetFileReader::Open(infile);
         auto file_metadata = parquet_reader->metadata();
         
         // Write _common_metadata file (schema and common metadata only, no row groups)
-        // This is equivalent to Python's: pq.write_metadata(table.schema, '_common_metadata')
         std::string common_metadata_file = view_path + "/_common_metadata";
         auto common_outfile_result = arrow::io::FileOutputStream::Open(common_metadata_file);
         if (common_outfile_result.ok()) {
           auto common_outfile = *common_outfile_result;
+          parquet::WriterProperties::Builder properties_builder;
+          properties_builder.compression(parquet::Compression::SNAPPY);
+          auto properties = properties_builder.build();
           
-          // Create a ParquetWriter just to generate the schema metadata, then close immediately
-          // This creates a parquet file with schema but no data/row groups (like Python's write_metadata)
-          auto common_writer_result = parquet::arrow::FileWriter::Open(*schema, arrow::default_memory_pool(), common_outfile, properties);
-          if (common_writer_result.ok()) {
-            auto common_writer = std::move(*common_writer_result);
-            auto close_status = common_writer->Close();
-            if (close_status.ok()) {
-              spdlog::info("Generated _common_metadata file: {}", common_metadata_file);
+          // Get schema from the file we just wrote
+          auto reader_result = parquet::arrow::OpenFile(infile, arrow::default_memory_pool());
+          if (reader_result.ok()) {
+            auto reader = std::move(*reader_result);
+            std::shared_ptr<arrow::Schema> schema;
+            auto schema_result = reader->GetSchema(&schema);
+            if (schema_result.ok()) {
+              auto common_writer_result = parquet::arrow::FileWriter::Open(*schema, arrow::default_memory_pool(), common_outfile, properties);
+              if (common_writer_result.ok()) {
+                auto common_writer = std::move(*common_writer_result);
+                auto close_status = common_writer->Close();
+                if (!close_status.ok()) {
+                  spdlog::warn("Failed to close common writer: {}", close_status.ToString());
+                }
+                spdlog::info("Generated _common_metadata file: {}", common_metadata_file);
+              }
             }
-          } else {
-            common_outfile->Close();
+          }
+          auto outfile_close_status = common_outfile->Close();
+          if (!outfile_close_status.ok()) {
+            spdlog::warn("Failed to close common outfile: {}", outfile_close_status.ToString());
           }
         }
         
         // Write _metadata file (contains metadata for all parquet files with row groups)
-        // This is equivalent to Python's: pq.write_metadata(table.schema, '_metadata', metadata_collector=metadata_collector)
         std::string metadata_file = view_path + "/_metadata";
         auto metadata_outfile_result = arrow::io::FileOutputStream::Open(metadata_file);
         if (metadata_outfile_result.ok()) {
           auto metadata_outfile = *metadata_outfile_result;
-          
-          // Write the full file metadata (with row groups statistics)
-          // This includes the actual data statistics from our part.0.parquet file
           parquet::WriteMetaDataFile(*file_metadata, metadata_outfile.get());
-          auto close_status = metadata_outfile->Close();
-          if (close_status.ok()) {
-            spdlog::info("Generated _metadata file: {}", metadata_file);
+          auto metadata_close_status = metadata_outfile->Close();
+          if (!metadata_close_status.ok()) {
+            spdlog::warn("Failed to close metadata outfile: {}", metadata_close_status.ToString());
           }
+          spdlog::info("Generated _metadata file: {}", metadata_file);
         }
       }
-    } catch (const std::exception& e) {
-      spdlog::warn("Failed to generate metadata files: {}", e.what());
     }
-
-    // Create _checkpoint_metadata file to mark checkpoint as complete (similar to Python)
+    
+    // Create _checkpoint_metadata file to mark checkpoint as complete
     std::ofstream checkpoint_metadata(view_path + "/_checkpoint_metadata");
-    checkpoint_metadata << "checkpoint_name=" << name << std::endl;
-    checkpoint_metadata << "timestamp=" << std::time(nullptr) << std::endl;
+    checkpoint_metadata << "checkpoint_created\n";
     checkpoint_metadata.close();
-
+    
     spdlog::info("Stored view to checkpoint directory: {}", view_path);
-
+    
   } catch (const std::exception& e) {
-    spdlog::error("Failed to store view {}: {}", name, e.what());
+    spdlog::warn("Failed to create checkpoint metadata: {}", e.what());
   }
 }
 
 std::vector<HighLevelMetrics> DFTracerAnalyzer::load_view_from_parquet(const std::string& path) {
-  std::vector<HighLevelMetrics> metrics;
+  std::vector<HighLevelMetrics> all_metrics;
   
   try {
-    // Look for parquet files in the checkpoint directory
-    std::string parquet_file = path + "/part.0.parquet";
+    // Find all parquet files in the checkpoint directory
+    if (!fs::exists(path)) {
+      spdlog::warn("Checkpoint directory does not exist: {}", path);
+      return {};
+    }
     
-    auto infile_result = arrow::io::ReadableFile::Open(parquet_file, arrow::default_memory_pool());
-    if (!infile_result.ok()) {
-      return {};
-    }
-    auto infile = *infile_result;
-
-    auto reader_result = parquet::arrow::OpenFile(infile, arrow::default_memory_pool());
-    if (!reader_result.ok()) {
-      return {};
-    }
-    auto reader = std::move(*reader_result);
-
-    std::shared_ptr<arrow::Table> table;
-    reader->ReadTable(&table);
-
-    // Convert Arrow table back to HighLevelMetrics
-    auto time_column = table->GetColumnByName("time");
-    auto count_column = table->GetColumnByName("count");
-    auto size_column = table->GetColumnByName("size");
-
-    if (time_column && count_column && size_column) {
-      auto time_array = std::static_pointer_cast<arrow::DoubleArray>(time_column->chunk(0));
-      auto count_array = std::static_pointer_cast<arrow::UInt64Array>(count_column->chunk(0));
-      auto size_array = std::static_pointer_cast<arrow::UInt64Array>(size_column->chunk(0));
-
-      for (int64_t i = 0; i < table->num_rows(); ++i) {
-        HighLevelMetrics hlm;
-        hlm.time_sum = time_array->Value(i);
-        hlm.count_sum = count_array->Value(i);
-        hlm.size_sum = size_array->Value(i);
-        
-        // Load bin_sums from bin columns
-        for (auto col_name : table->ColumnNames()) {
-          if (col_name.find("size_bin_") == 0) {
-            auto bin_column = table->GetColumnByName(col_name);
-            if (bin_column) {
-              auto bin_array = std::static_pointer_cast<arrow::UInt32Array>(bin_column->chunk(0));
-              hlm.bin_sums[col_name] = bin_array->Value(i);
-            }
-          }
+    std::vector<std::string> parquet_files;
+    for (const auto& entry : fs::directory_iterator(path)) {
+      if (entry.is_regular_file()) {
+        std::string filename = entry.path().filename().string();
+        if (filename.find("part.") == 0 && filename.find(".parquet") != std::string::npos) {
+          parquet_files.push_back(entry.path().string());
         }
-        
-        // Load unique_sets from remaining string columns (like file_name)
-        // Skip index columns and data columns we already processed
-        for (auto col_name : table->ColumnNames()) {
-          if (col_name != "time" && col_name != "count" && col_name != "size" &&
-              col_name.find("size_bin_") != 0 && 
-              col_name != "time_range") { // Skip these common index columns
-            auto string_column = table->GetColumnByName(col_name);
-            if (string_column && string_column->type()->id() == arrow::Type::STRING) {
-              auto string_array = std::static_pointer_cast<arrow::StringArray>(string_column->chunk(0));
-              if (!string_array->IsNull(i)) {
-                std::string value = string_array->GetString(i);
-                hlm.unique_sets[col_name].insert(value);
+      }
+    }
+    
+    if (parquet_files.empty()) {
+      spdlog::warn("No parquet files found in directory: {}", path);
+      return {};
+    }
+    
+    spdlog::info("Loading {} parquet files from: {}", parquet_files.size(), path);
+    
+    for (const auto& parquet_file : parquet_files) {
+      try {
+        auto infile_result = arrow::io::ReadableFile::Open(parquet_file, arrow::default_memory_pool());
+        if (!infile_result.ok()) {
+          spdlog::warn("Failed to open parquet file: {}", parquet_file);
+          continue;
+        }
+        auto infile = *infile_result;
+
+        auto reader_result = parquet::arrow::OpenFile(infile, arrow::default_memory_pool());
+        if (!reader_result.ok()) {
+          spdlog::warn("Failed to create parquet reader for: {}", parquet_file);
+          continue;
+        }
+        auto reader = std::move(*reader_result);
+
+        std::shared_ptr<arrow::Table> table;
+        auto read_status = reader->ReadTable(&table);
+        if (!read_status.ok()) {
+          spdlog::warn("Failed to read table from: {}", parquet_file);
+          continue;
+        }
+
+        // Convert Arrow table back to HighLevelMetrics
+        auto time_column = table->GetColumnByName("time");
+        auto count_column = table->GetColumnByName("count");
+        auto size_column = table->GetColumnByName("size");
+
+        if (time_column && count_column && size_column) {
+          auto time_array = std::static_pointer_cast<arrow::DoubleArray>(time_column->chunk(0));
+          auto count_array = std::static_pointer_cast<arrow::UInt64Array>(count_column->chunk(0));
+          auto size_array = std::static_pointer_cast<arrow::UInt64Array>(size_column->chunk(0));
+
+          for (int64_t i = 0; i < table->num_rows(); ++i) {
+            HighLevelMetrics hlm;
+            hlm.time_sum = time_array->Value(i);
+            hlm.count_sum = count_array->Value(i);
+            hlm.size_sum = size_array->Value(i);
+            
+            // Load bin_sums from bin columns
+            for (auto col_name : table->ColumnNames()) {
+              if (col_name.find("size_bin_") == 0) {
+                auto bin_column = table->GetColumnByName(col_name);
+                if (bin_column) {
+                  auto bin_array = std::static_pointer_cast<arrow::UInt32Array>(bin_column->chunk(0));
+                  hlm.bin_sums[col_name] = bin_array->Value(i);
+                }
               }
             }
+            
+            // Load unique_sets from remaining string columns (like file_name)
+            // Skip index columns and data columns we already processed
+            for (auto col_name : table->ColumnNames()) {
+              if (col_name != "time" && col_name != "count" && col_name != "size" &&
+                  col_name.find("size_bin_") != 0 && 
+                  col_name != "time_range") { // Skip these common index columns
+                auto string_column = table->GetColumnByName(col_name);
+                if (string_column && string_column->type()->id() == arrow::Type::STRING) {
+                  auto string_array = std::static_pointer_cast<arrow::StringArray>(string_column->chunk(0));
+                  if (!string_array->IsNull(i)) {
+                    std::string value = string_array->GetString(i);
+                    hlm.unique_sets[col_name].insert(value);
+                  }
+                }
+              }
+            }
+            
+            all_metrics.push_back(hlm);
           }
         }
         
-        metrics.push_back(hlm);
+        spdlog::debug("Loaded {} metrics from: {}", table->num_rows(), parquet_file);
+        
+      } catch (const std::exception& e) {
+        spdlog::warn("Failed to load parquet file {}: {}", parquet_file, e.what());
       }
     }
 
-    spdlog::info("Loaded {} HighLevelMetrics from checkpoint directory: {}", metrics.size(), path);
+    spdlog::info("Loaded {} total HighLevelMetrics from {} parquet files in: {}", 
+                 all_metrics.size(), parquet_files.size(), path);
 
   } catch (const std::exception& e) {
     spdlog::error("Failed to load view from {}: {}", path, e.what());
   }
   
-  return metrics;
+  return all_metrics;
+}
+
+void DFTracerAnalyzer::store_distributed_view(const std::string& name, 
+                                             const std::vector<HighLevelMetrics>& view, 
+                                             const std::vector<std::string>& view_types, 
+                                             size_t rank) {
+  spdlog::info("store_distributed_view called: rank={}, checkpoint_={}, view.size()={}", 
+               rank, checkpoint_, view.size());
+  
+  if (!checkpoint_) {
+    spdlog::warn("store_distributed_view: checkpoint_ is false, returning early");
+    return;
+  }
+  
+  std::string checkpoint_dir = get_checkpoint_path(name);
+  std::string part_filename = "part." + std::to_string(rank) + ".parquet";
+  std::string final_path = checkpoint_dir + "/" + part_filename;
+  
+  spdlog::info("store_distributed_view: saving to {}", final_path);
+  
+  // Create checkpoint directory if it doesn't exist
+  fs::create_directories(checkpoint_dir);
+  
+  // Store directly to part.{rank}.parquet
+  store_view_to_file(final_path, view, view_types);
+  
+  spdlog::info("Stored distributed view for rank {} to: {}", rank, final_path);
+  
+  // Only rank 0 generates metadata files for the distributed checkpoint
+  if (rank == 0 && !view.empty()) {
+    try {
+      // Generate _metadata and _common_metadata files from rank 0's parquet file
+      auto infile_result = arrow::io::ReadableFile::Open(final_path);
+      if (infile_result.ok()) {
+        auto infile = *infile_result;
+        auto parquet_reader = parquet::ParquetFileReader::Open(infile);
+        auto file_metadata = parquet_reader->metadata();
+        
+        // Write _common_metadata file (schema and common metadata only, no row groups)
+        std::string common_metadata_file = checkpoint_dir + "/_common_metadata";
+        auto common_outfile_result = arrow::io::FileOutputStream::Open(common_metadata_file);
+        if (common_outfile_result.ok()) {
+          auto common_outfile = *common_outfile_result;
+          parquet::WriterProperties::Builder properties_builder;
+          properties_builder.compression(parquet::Compression::SNAPPY);
+          auto properties = properties_builder.build();
+          
+          // Get schema from the file we just wrote
+          auto reader_result = parquet::arrow::OpenFile(infile, arrow::default_memory_pool());
+          if (reader_result.ok()) {
+            auto reader = std::move(*reader_result);
+            std::shared_ptr<arrow::Schema> schema;
+            auto schema_result = reader->GetSchema(&schema);
+            if (schema_result.ok()) {
+              auto common_writer_result = parquet::arrow::FileWriter::Open(*schema, arrow::default_memory_pool(), common_outfile, properties);
+              if (common_writer_result.ok()) {
+                auto common_writer = std::move(*common_writer_result);
+                auto close_status = common_writer->Close();
+                if (!close_status.ok()) {
+                  spdlog::warn("Failed to close common writer: {}", close_status.ToString());
+                }
+                spdlog::info("Generated _common_metadata file: {}", common_metadata_file);
+              }
+            }
+          }
+          auto outfile_close_status = common_outfile->Close();
+          if (!outfile_close_status.ok()) {
+            spdlog::warn("Failed to close common outfile: {}", outfile_close_status.ToString());
+          }
+        }
+        
+        // Write _metadata file (contains metadata for all parquet files with row groups)
+        std::string metadata_file = checkpoint_dir + "/_metadata";
+        auto metadata_outfile_result = arrow::io::FileOutputStream::Open(metadata_file);
+        if (metadata_outfile_result.ok()) {
+          auto metadata_outfile = *metadata_outfile_result;
+          parquet::WriteMetaDataFile(*file_metadata, metadata_outfile.get());
+          auto metadata_close_status = metadata_outfile->Close();
+          if (!metadata_close_status.ok()) {
+            spdlog::warn("Failed to close metadata outfile: {}", metadata_close_status.ToString());
+          }
+          spdlog::info("Generated _metadata file: {}", metadata_file);
+        }
+      }
+      
+      // Create _checkpoint_metadata file to mark checkpoint as complete
+      std::ofstream checkpoint_metadata(checkpoint_dir + "/_checkpoint_metadata");
+      checkpoint_metadata << "checkpoint_created\n";
+      checkpoint_metadata.close();
+      
+    } catch (const std::exception& e) {
+      spdlog::warn("Failed to create distributed checkpoint metadata: {}", e.what());
+    }
+  }
+}
+
+std::vector<HighLevelMetrics> DFTracerAnalyzer::load_distributed_view(const std::string& name) {
+  if (!checkpoint_) {
+    return {};
+  }
+  
+  std::string checkpoint_dir = get_checkpoint_path(name);
+  spdlog::info("Loading distributed view from: {}", checkpoint_dir);
+  
+  // Simply delegate to load_view_from_parquet which now handles all parquet files in the directory
+  return load_view_from_parquet(checkpoint_dir);
+}
+
+// Byte-level work distribution implementation
+WorkDistribution distribute_work_by_bytes(const std::vector<std::string>& trace_paths,
+                                         size_t checkpoint_size,
+                                         size_t rank_count,
+                                         size_t current_rank) {
+  WorkDistribution distribution;
+  distribution.rank_count = rank_count;
+  distribution.current_rank = current_rank;
+  distribution.total_work_bytes = 0;
+
+  // Step 1: Collect file sizes (only rank 0 does this in MPI context)
+  std::vector<FileWorkInfo> all_file_info;
+  
+  bool should_collect = true;
+#if DFTRACER_UTILS_MPI_ENABLE
+  should_collect = (current_rank == 0);
+#endif
+
+  if (should_collect) {
+    spdlog::info("Collecting file sizes for {} trace files...", trace_paths.size());
+    
+    for (const auto& path : trace_paths) {
+      try {
+        // Ensure index exists for this file
+        ensure_index_exists(path, checkpoint_size, false, static_cast<int>(current_rank));
+        
+        // Create indexer to get file size
+        std::string idx_path = path + ".idx";
+        dftracer::utils::indexer::Indexer indexer(path, idx_path, checkpoint_size, false);
+        
+        if (indexer.need_rebuild()) {
+          indexer.build();
+        }
+        
+        uint64_t file_bytes = indexer.get_max_bytes();
+        if (file_bytes > 0) {
+          FileWorkInfo info;
+          info.path = path;
+          info.total_bytes = file_bytes;
+          info.start_offset = 0;
+          info.end_offset = file_bytes;
+          info.process_full_file = true;
+          
+          all_file_info.push_back(info);
+          distribution.total_work_bytes += file_bytes;
+        }
+      } catch (const std::exception& e) {
+        spdlog::warn("Failed to get size for {}: {}", path, e.what());
+      }
+    }
+    
+    spdlog::info("Total work: {} MB across {} files", 
+                 distribution.total_work_bytes / (1024 * 1024), all_file_info.size());
+  }
+
+#if DFTRACER_UTILS_MPI_ENABLE
+  // Step 2: Broadcast total work bytes and file count
+  uint64_t total_bytes = distribution.total_work_bytes;
+  size_t file_count = all_file_info.size();
+  
+  MPI_Bcast(&total_bytes, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&file_count, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+  
+  distribution.total_work_bytes = total_bytes;
+  
+  // Step 3: Broadcast file info to all ranks
+  if (current_rank != 0) {
+    all_file_info.resize(file_count);
+  }
+  
+  for (size_t i = 0; i < file_count; ++i) {
+    size_t path_len = all_file_info[i].path.length();
+    MPI_Bcast(&path_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+    
+    if (current_rank != 0) {
+      all_file_info[i].path.resize(path_len);
+    }
+    
+    MPI_Bcast(const_cast<char*>(all_file_info[i].path.data()), path_len, MPI_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&all_file_info[i].total_bytes, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+  }
+#endif
+
+  // Step 4: Calculate byte-level work distribution
+  if (rank_count == 1) {
+    // Sequential case: assign all work to rank 0
+    distribution.file_work = all_file_info;
+  } else {
+    // Parallel case: distribute work by bytes across all files
+    uint64_t bytes_per_rank = distribution.total_work_bytes / rank_count;
+    uint64_t current_rank_start = current_rank * bytes_per_rank;
+    uint64_t current_rank_end = (current_rank == rank_count - 1) ? 
+                                distribution.total_work_bytes : 
+                                (current_rank + 1) * bytes_per_rank;
+    
+    spdlog::info("Rank {} work distribution: total_bytes={}, bytes_per_rank={}, start={}, end={}", 
+                 current_rank, distribution.total_work_bytes, bytes_per_rank, 
+                 current_rank_start, current_rank_end);
+    
+    uint64_t accumulated_bytes = 0;
+    
+    for (const auto& file_info : all_file_info) {
+      uint64_t file_start = accumulated_bytes;
+      uint64_t file_end = accumulated_bytes + file_info.total_bytes;
+      
+      spdlog::info("Rank {} examining file {} (global range [{}, {}), rank range [{}, {}))", 
+                   current_rank, file_info.path, file_start, file_end, current_rank_start, current_rank_end);
+      
+      // Check if this rank should process any part of this file
+      if (file_end > current_rank_start && file_start < current_rank_end) {
+        FileWorkInfo work_info = file_info;
+        
+        // Calculate the intersection of file range and rank range
+        uint64_t work_start_in_global = std::max(current_rank_start, file_start);
+        uint64_t work_end_in_global = std::min(current_rank_end, file_end);
+        
+        // Convert global offsets to file-relative offsets
+        work_info.start_offset = work_start_in_global - file_start;
+        work_info.end_offset = work_end_in_global - file_start;
+        work_info.process_full_file = (work_info.start_offset == 0 && work_info.end_offset == file_info.total_bytes);
+        
+        distribution.file_work.push_back(work_info);
+        
+        spdlog::info("Rank {} assigned file {} bytes [{}, {}) of {} total (chunk size: {})", 
+                     current_rank, work_info.path, work_info.start_offset, 
+                     work_info.end_offset, file_info.total_bytes, work_info.end_offset - work_info.start_offset);
+      } else {
+        spdlog::info("Rank {} skipping file {} (no overlap)", current_rank, file_info.path);
+      }
+      
+      accumulated_bytes += file_info.total_bytes;
+    }
+  }
+  
+  spdlog::info("Rank {} assigned {} files to process", current_rank, distribution.file_work.size());
+  
+  return distribution;
 }
 
 }  // namespace analyzers
