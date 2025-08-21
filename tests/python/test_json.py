@@ -194,8 +194,7 @@ class TestJsonDocument:
         assert isinstance(repr_str, str)
         assert repr_str.startswith("JsonDocument(")
         assert repr_str.endswith(")")
-        assert "name" in repr_str
-        assert "test" in repr_str
+        assert "object" in repr_str
     
     def test_data_types(self):
         """Test handling of different JSON data types"""

@@ -21,7 +21,7 @@ namespace reader {
 namespace constants {
 static constexpr size_t DEFAULT_BUFFER_SIZE =
     65536;  // 64KB
-static constexpr size_t DEFAULT_READER_BUFFER_SIZE = 128 * 1024;  // 128KB
+static constexpr size_t DEFAULT_READER_BUFFER_SIZE = 1 * 1024 * 1024;  // 1MB
 static constexpr size_t SKIP_BUFFER_SIZE =
     131072;  // 128KB
 static constexpr size_t SEARCH_BUFFER_SIZE = 2048;
@@ -952,14 +952,19 @@ class Reader::Impl {
     return read_lines_from_beginning(start_line, end_line);
   }
 
-  std::vector<dftracer::utils::json::JsonDocument> read_json_lines(size_t start,
+  dftracer::utils::json::JsonDocuments read_json_lines(size_t start,
                                                                    size_t end) {
     std::string lines_data = read_lines(start, end);
-    return dftracer::utils::json::parse_json_lines(lines_data.data(),
-                                                   lines_data.size());
+    return dftracer::utils::json::parse_json_lines(lines_data.data(), lines_data.size());
   }
 
-  std::vector<dftracer::utils::json::JsonDocument> read_json_lines_bytes(
+  dftracer::utils::json::OwnedJsonDocuments read_json_lines_owned(size_t start,
+                                                                  size_t end) {
+    std::string lines_data = read_lines(start, end);
+    return dftracer::utils::json::parse_json_lines_owned(lines_data.data(), lines_data.size());
+  }
+
+  dftracer::utils::json::JsonDocuments read_json_lines_bytes(
       size_t start_bytes, size_t end_bytes) {
     ErrorHandler::check_reader_state(is_open_, indexer_);
 
@@ -977,11 +982,34 @@ class Reader::Impl {
     }
 
     if (total_bytes == 0) {
-      return std::vector<dftracer::utils::json::JsonDocument>();
+      return {};
     }
 
-    return dftracer::utils::json::parse_json_lines(buffer_content.data(),
-                                                   buffer_content.size());
+    return dftracer::utils::json::parse_json_lines(buffer_content.data(), buffer_content.size());
+  }
+
+  dftracer::utils::json::OwnedJsonDocuments read_json_lines_bytes_owned(
+      size_t start_bytes, size_t end_bytes) {
+    ErrorHandler::check_reader_state(is_open_, indexer_);
+
+    auto buffer = std::make_unique<char[]>(default_buffer_size_);
+
+    ErrorHandler::validate_parameters(buffer.get(), default_buffer_size_, start_bytes,
+                                      end_bytes, indexer_->get_max_bytes());
+
+    std::string buffer_content;
+    size_t bytes_read = 0;
+    size_t total_bytes = 0;
+    while ((bytes_read = read_line_bytes(start_bytes, end_bytes, buffer.get(), default_buffer_size_)) > 0) {
+      buffer_content.append(buffer.get(), bytes_read);
+      total_bytes += bytes_read;
+    }
+
+    if (total_bytes == 0) {
+      return {};
+    }
+
+    return dftracer::utils::json::parse_json_lines_owned(buffer_content.data(), buffer_content.size());
   }
 
   void reset() {
@@ -1097,14 +1125,24 @@ std::string Reader::read_lines(size_t start, size_t end) {
   return pImpl_->read_lines(start, end);
 }
 
-std::vector<dftracer::utils::json::JsonDocument> Reader::read_json_lines(
+dftracer::utils::json::JsonDocuments Reader::read_json_lines(
     size_t start, size_t end) {
   return pImpl_->read_json_lines(start, end);
 }
 
-std::vector<dftracer::utils::json::JsonDocument> Reader::read_json_lines_bytes(
+dftracer::utils::json::OwnedJsonDocuments Reader::read_json_lines_owned(
+    size_t start, size_t end) {
+  return pImpl_->read_json_lines_owned(start, end);
+}
+
+dftracer::utils::json::JsonDocuments Reader::read_json_lines_bytes(
     size_t start_bytes, size_t end_bytes) {
   return pImpl_->read_json_lines_bytes(start_bytes, end_bytes);
+}
+
+dftracer::utils::json::OwnedJsonDocuments Reader::read_json_lines_bytes_owned(
+    size_t start_bytes, size_t end_bytes) {
+  return pImpl_->read_json_lines_bytes_owned(start_bytes, end_bytes);
 }
 
 void Reader::set_buffer_size(size_t size) {

@@ -66,8 +66,8 @@ set_target_properties(dftracer_utils PROPERTIES
     OUTPUT_NAME dftracer_utils
 )
 target_link_libraries(dftracer_utils 
-    PRIVATE spdlog::spdlog_header_only picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson_static cereal::cereal
+    PRIVATE picosha2
+    PUBLIC ghc_filesystem simdjson::simdjson_static cereal::cereal spdlog::spdlog_header_only
 )
 # add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
@@ -104,8 +104,8 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dftracer_utils_shared 
-    PRIVATE spdlog::spdlog_header_only picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson cereal::cereal
+    PRIVATE picosha2
+    PUBLIC ghc_filesystem simdjson::simdjson cereal::cereal spdlog::spdlog_header_only
 )
 # add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
@@ -350,7 +350,7 @@ if (SKBUILD)
     )
   endif()
 
-  target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared)
+  target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared spdlog::spdlog_header_only)
   target_add_rpath(dftracer_utils_ext)
   install(TARGETS dftracer_utils_ext LIBRARY DESTINATION dftracer/utils)
 endif()

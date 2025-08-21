@@ -261,6 +261,16 @@ class DFTracerReader {
     }
   }
 
+  void set_buffer_size(size_t size) {
+    ensure_open();
+    try {
+      reader_->set_buffer_size(size);
+    } catch (const std::runtime_error &e) {
+      throw std::runtime_error("Failed to set buffer size: " +
+                               std::string(e.what()));
+    }
+  }
+
   DFTracerReader &__iter__() {
     ensure_open();
     if constexpr (Mode == DFTracerReaderMode::Lines ||
@@ -316,8 +326,7 @@ class DFTracerReader {
         auto json_objects = reader_->read_json_lines(start, end);
         result = jsondocs_to_python(json_objects);
       } else if constexpr (Mode == DFTracerReaderMode::JsonLinesBytes) {
-        auto json_objects = reader_->read_json_lines_bytes(
-            start, end, buffer.data(), buffer.size());
+        auto json_objects = reader_->read_json_lines_bytes(start, end);
         result = jsondocs_to_python(json_objects);
       } else if constexpr (Mode == DFTracerReaderMode::Bytes) {
         while ((bytes_read = reader_->read(start, end, buffer.data(),

@@ -20,8 +20,11 @@ class JsonKeysIterator;
 class JsonValuesIterator;
 class JsonItemsIterator;
 class JsonArrayIterator;
+
+// Function declarations - implementations in json_ext.cpp
 nb::object convert_lazy(const dftracer::utils::json::JsonDocument& elem);
 nb::object convert_primitive(const dftracer::utils::json::JsonDocument& elem);
+nb::list jsondocs_to_python(const std::vector<dftracer::utils::json::JsonDocument>& docs);
 
 class JsonDocument {
 private:
@@ -141,9 +144,5 @@ public:
     nb::object __next__();
 };
 
-// Function declarations - implementations in json_ext.cpp
-nb::object convert_lazy(const dftracer::utils::json::JsonDocument& elem);
-nb::object convert_primitive(const dftracer::utils::json::JsonDocument& elem);
-nb::list jsondocs_to_python(const std::vector<dftracer::utils::json::JsonDocument>& docs);
 
 #endif

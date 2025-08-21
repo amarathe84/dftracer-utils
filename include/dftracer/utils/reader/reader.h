@@ -240,11 +240,20 @@ class Reader {
    * @return Vector of parsed JSON objects
    * @throws std::runtime_error if operation fails
    */
-  std::vector<dftracer::utils::json::JsonDocument> read_json_lines(size_t start,
-                                                                   size_t end);
+  dftracer::utils::json::JsonDocuments read_json_lines(size_t start,
+                                                       size_t end);
 
   /**
-   * Read bytes from gzip file and parse as JSON Lines (streaming)
+   * Read complete lines from gzip file and parse as JSON Lines (owned)
+   * @param start Start line number (0-based)
+   * @param end End line number (exclusive, 0-based)
+   * @return Vector of parsed JSON objects
+   * @throws std::runtime_error if operation fails
+   */
+  dftracer::utils::json::OwnedJsonDocuments read_json_lines_owned(size_t start, size_t end);
+
+  /**
+   * Read bytes from gzip file and parse as JSON Lines
    * Returns parsed JSON objects from complete lines only. Call repeatedly until
    * returns empty vector.
    * @param start_bytes Start position in bytes
@@ -252,7 +261,19 @@ class Reader {
    * @return Vector of parsed JSON objects from the buffer
    * @throws std::runtime_error if operation fails
    */
-  std::vector<dftracer::utils::json::JsonDocument> read_json_lines_bytes(
+  dftracer::utils::json::JsonDocuments read_json_lines_bytes(
+      size_t start_bytes, size_t end_bytes);
+
+  /**
+   * Read bytes from gzip file and parse as JSON Lines (owned)
+   * Returns parsed JSON objects from complete lines only. Call repeatedly until
+   * returns empty vector.
+   * @param start_bytes Start position in bytes
+   * @param end_bytes End position in bytes
+   * @return Vector of parsed JSON objects from the buffer
+   * @throws std::runtime_error if operation fails
+   */
+  dftracer::utils::json::OwnedJsonDocuments read_json_lines_bytes_owned(
       size_t start_bytes, size_t end_bytes);
 
   /**
