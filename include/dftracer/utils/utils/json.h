@@ -9,14 +9,11 @@
 #include <vector>
 
 #include <spdlog/fmt/fmt.h>
+#include <spdlog/fmt/ranges.h>
 
 namespace dftracer {
 namespace utils {
 namespace json {
-
-namespace {
-  size_t find_last_newline(const char* data, size_t n);
-}
 
 class OwnedJsonDocument {
 private:
@@ -63,10 +60,10 @@ public:
 
     // operator
 
-    inline operator simdjson::dom::element() const {
-      ensure_parsed();
-      return element_;
-    }
+    // inline operator const simdjson::dom::element&() const {
+    //   ensure_parsed();
+    //   return element_;
+    // }
 
     // Additional utility methods
     bool is_valid() const;
@@ -88,13 +85,17 @@ OwnedJsonDocument parse_json_owned(const char* data, size_t size);
 JsonDocuments parse_json_lines(const char* data, size_t size);
 OwnedJsonDocuments parse_json_lines_owned(const char* data, size_t size);
 
-
-// Helper functions for extracting values from JSON documents
 std::string get_string_field(const JsonDocument& doc, const std::string& key);
 double get_double_field(const JsonDocument& doc, const std::string& key);
 uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key);
 std::string get_args_string_field(const JsonDocument& doc,
                                   const std::string& key);
+
+std::string get_string_field_owned(const OwnedJsonDocument& doc, const std::string& key);
+double get_double_field_owned(const OwnedJsonDocument& doc, const std::string& key);
+uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc, const std::string& key);
+std::string get_args_string_field_owned(const OwnedJsonDocument& doc, const std::string& key);
+
 
 std::ostream& operator<<(std::ostream& os, const JsonDocument& doc);
 std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
@@ -113,6 +114,18 @@ struct fmt::formatter<dftracer::utils::json::JsonDocument> : fmt::formatter<std:
 };
 
 template <>
+struct fmt::formatter<dftracer::utils::json::JsonDocuments> : fmt::formatter<std::string> {
+  auto format(const dftracer::utils::json::JsonDocuments& docs, fmt::format_context& ctx) {
+    std::string s;
+    for (size_t i = 0; i < docs.size(); ++i) {
+      if (i > 0) s += "\n";
+      s += simdjson::minify(docs[i]);
+    }
+    return fmt::formatter<std::string>::format(s, ctx);
+  }
+};
+
+template <>
 struct fmt::formatter<dftracer::utils::json::OwnedJsonDocument> : fmt::formatter<std::string> {
   auto format(const dftracer::utils::json::OwnedJsonDocument& doc, fmt::format_context& ctx) {
     std::string s = doc.minify();
@@ -120,17 +133,16 @@ struct fmt::formatter<dftracer::utils::json::OwnedJsonDocument> : fmt::formatter
   }
 };
 
-// // fmt formatter for JsonDocuments
-// template <>
-// struct fmt::formatter<dftracer::utils::json::JsonDocuments> : fmt::formatter<std::string> {
-//   auto format(const dftracer::utils::json::JsonDocuments& docs, fmt::format_context& ctx) {
-//     std::string s;
-//     for (size_t i = 0; i < docs.size(); ++i) {
-//       if (i > 0) s += "\n";
-//       s += docs[i].minify();
-//     }
-//     return fmt::formatter<std::string>::format(s, ctx);
-//   }
-// };
+template <>
+struct fmt::formatter<dftracer::utils::json::OwnedJsonDocuments> : fmt::formatter<std::string> {
+  auto format(const dftracer::utils::json::OwnedJsonDocuments& docs, fmt::format_context& ctx) {
+    std::string s;
+    for (size_t i = 0; i < docs.size(); ++i) {
+      if (i > 0) s += "\n";
+      s += docs[i].minify();
+    }
+    return fmt::formatter<std::string>::format(s, ctx);
+  }
+};
 
 #endif

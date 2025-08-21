@@ -264,7 +264,8 @@ OwnedJsonDocument parse_json_owned(const char* data, size_t size) {
   return OwnedJsonDocument(data, size);
 }
 
-std::string get_string_field(const JsonDocument& doc, const std::string& key) {
+template<typename JsonDoc>
+std::string _get_string_field_impl(const JsonDoc& doc, const std::string& key) {
   if (!doc.is_object()) return "";
 
   auto obj_result = doc.get_object();
@@ -285,7 +286,8 @@ std::string get_string_field(const JsonDocument& doc, const std::string& key) {
   return "";
 }
 
-double get_double_field(const JsonDocument& doc, const std::string& key) {
+template <typename JsonDoc>
+double _get_double_field_impl(const JsonDoc& doc, const std::string& key) {
   if (!doc.is_object()) return 0.0;
 
   auto obj_result = doc.get_object();
@@ -325,7 +327,8 @@ double get_double_field(const JsonDocument& doc, const std::string& key) {
   return 0.0;
 }
 
-uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key) {
+template <typename JsonDoc>
+uint64_t _get_uint64_field_impl(const JsonDoc& doc, const std::string& key) {
   if (!doc.is_object()) return 0;
 
   auto obj_result = doc.get_object();
@@ -365,7 +368,8 @@ uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key) {
   return 0;
 }
 
-std::string get_args_string_field(const JsonDocument& doc,
+template <typename JsonDoc>
+std::string _get_args_string_field_impl(const JsonDoc& doc,
                                   const std::string& key) {
   if (!doc.is_object()) return "";
 
@@ -392,6 +396,40 @@ std::string get_args_string_field(const JsonDocument& doc,
     }
   }
   return "";
+}
+
+
+std::string get_string_field(const JsonDocument& doc, const std::string& key) {
+  return _get_string_field_impl(doc, key);
+}
+
+double get_double_field(const JsonDocument& doc, const std::string& key) {
+  return _get_double_field_impl(doc, key);
+}
+
+uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key) {
+  return _get_uint64_field_impl(doc, key);
+}
+
+std::string get_args_string_field(const JsonDocument& doc,
+                                  const std::string& key) {
+  return _get_args_string_field_impl(doc, key);
+}
+
+std::string get_string_field_owned(const OwnedJsonDocument& doc, const std::string& key) {
+  return _get_string_field_impl(doc, key);
+}
+
+double get_double_field_owned(const OwnedJsonDocument& doc, const std::string& key) {
+  return _get_double_field_impl(doc, key);
+}
+
+uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc, const std::string& key) {
+  return _get_uint64_field_impl(doc, key);
+}
+
+std::string get_args_string_field_owned(const OwnedJsonDocument& doc, const std::string& key) {
+  return _get_args_string_field_impl(doc, key);
 }
 
 }  // namespace json
