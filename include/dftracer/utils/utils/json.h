@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <spdlog/fmt/fmt.h>
+
 namespace dftracer {
 namespace utils {
 namespace json {
@@ -32,5 +34,29 @@ std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
 }  // namespace json
 }  // namespace utils
 }  // namespace dftracer
+
+
+
+// fmt formatter for JsonDocument
+template <>
+struct fmt::formatter<dftracer::utils::json::JsonDocument> : fmt::formatter<std::string> {
+  auto format(const dftracer::utils::json::JsonDocument& doc, fmt::format_context& ctx) {
+    std::string s = simdjson::minify(doc);
+    return fmt::formatter<std::string>::format(s, ctx);
+  }
+};
+
+// fmt formatter for JsonDocuments
+template <>
+struct fmt::formatter<dftracer::utils::json::JsonDocuments> : fmt::formatter<std::string> {
+  auto format(const dftracer::utils::json::JsonDocuments& docs, fmt::format_context& ctx) {
+    std::string s;
+    for (size_t i = 0; i < docs.size(); ++i) {
+      if (i > 0) s += "\n";
+      s += simdjson::minify(docs[i]);
+    }
+    return fmt::formatter<std::string>::format(s, ctx);
+  }
+};
 
 #endif

@@ -1,10 +1,13 @@
-#include <dftracer/analyzers/dftracer.h>
 #include <dftracer/utils/config.h>
 #include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/pipeline/execution_context/threaded.h>
+#include <dftracer/utils/reader/reader.h>
+#include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/utils/logger.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/analyzers/analyzer.h>
+
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <argparse/argparse.hpp>
 #include <iostream>
@@ -12,8 +15,8 @@
 #include <string>
 #include <vector>
 
-using namespace dftracer::utils::pipeline::execution_context;
-using namespace dftracer::analyzers;
+using namespace dftracer::utils::pipeline;
+// using namespace dftracer::analyzers;
 
 int main(int argc, char* argv[]) {
   size_t default_checkpoint_size =
@@ -55,7 +58,7 @@ int main(int argc, char* argv[]) {
           "Time granularity for time_range calculation in microseconds "
           "(default: 1e6)")
       .scan<'g', double>()
-      .default_value(DEFAULT_TIME_GRANULARITY);
+      .default_value(1e6);
 
   program.add_argument("--checkpoint")
       .help("Enable checkpointing for intermediate results")
@@ -126,34 +129,65 @@ int main(int argc, char* argv[]) {
   spdlog::info("  View types: {}", view_types_oss.str());
   spdlog::info("  Trace files: {}", trace_paths.size());
 
-   ThreadedContext threaded_ctx;
+  ThreadedContext ctx;
+  auto start_time = std::chrono::high_resolution_clock::now();
 
-  try {
-    DFTracerAnalyzer analyzer(time_granularity, 1e6, checkpoint_size, 
-                             checkpoint, checkpoint_dir);
+  dftracer::utils::analyzers::Analyzer analyzer;
+  auto result = analyzer.analyze_trace(ctx, trace_paths, view_types);
 
-    auto hlm_results = analyzer.analyze_trace(threaded_ctx, trace_paths, view_types);
+  // struct FileInfo {
+  //   std::string path;
+  //   size_t size;
+  // };
 
-    spdlog::info("=== Sample High-Level Metrics ===");
-    size_t sample_count =
-        std::min(static_cast<size_t>(5), hlm_results.size());
-    for (size_t i = 0; i < sample_count; ++i) {
-      const auto& hlm = hlm_results[i];
-      spdlog::info("Metric {}:", i + 1);
-      spdlog::info("  time_sum: {}", hlm.time_sum);
-      spdlog::info("  count_sum: {}", hlm.count_sum);
-      spdlog::info("  size_sum: {}", hlm.size_sum);
-      spdlog::info("  bin_columns: {}", hlm.bin_sums.size());
-      spdlog::info("  unique_sets: {}", hlm.unique_sets.size());
-    }
+  // std::vector<FileInfo> file_infos;
 
-  } catch (const std::exception& e) {
-    spdlog::error("Error during high-level metrics computation: {}",
-                  e.what());
-    return 1;
-  }
 
-  spdlog::info("=== High-level metrics computation completed successfully! ===");
+  // for (const auto& path : trace_paths) {
+  //   dftracer::utils::indexer::Indexer indexer(path, path + ".idx");
+  //   indexer.build();
+  //   auto max_bytes = indexer.get_max_bytes();
+  //   spdlog::info("Processing file: {} ({} bytes)", path, max_bytes);
+  //   file_infos.push_back({path, max_bytes});
+  // }
+
+  // struct WorkInfo {
+  //   std::string path;
+  //   size_t start;
+  //   size_t end;
+  // } work_info;
+
+  // constexpr size_t BATCH_SIZE = 128 * 1024; // 128KB
+
+  // std::vector<WorkInfo> work_items;
+
+  // for (const auto& file_info : file_infos) {
+  //   size_t start = 0;
+  //   size_t end = 0;
+
+  //   while (start < file_info.size) {
+  //     end = std::min(start + BATCH_SIZE, file_info.size);
+  //     work_items.push_back({file_info.path, start, end});
+  //     start = end;
+  //   }
+  // }
+
+  // auto data = Bag<WorkInfo>::from_sequence(std::move(work_items));
+
+  // auto pipeline = data.map_partitions([](const std::vector<WorkInfo>& partition) {
+  //     std::vector<dftracer::utils::json::JsonDocument> results;
+      
+  //     for (const auto& work : partition) {
+  //         dftracer::utils::reader::Reader reader(work.path, work.path + ".idx");
+  //         auto lines = reader.read_json_lines_bytes(work.start, work.end);
+  //         results.insert(results.end(), lines.begin(), lines.end());
+  //     }
+  //     return results;
+  // });
+
+  auto end_time = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double, std::milli> duration = end_time - start_time;
+  spdlog::info("Duration: {} ms", duration.count());
 
   return 0;
 }

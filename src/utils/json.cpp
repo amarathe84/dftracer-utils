@@ -43,7 +43,6 @@ JsonDocuments parse_json_lines(const char* data, size_t size) {
   size_t parse_len = find_last_newline(data, size);
   if (parse_len == 0) parse_len = size;
 
-  // Parse each line using DOM API - no conversion!
   const char* start = data;
   const char* end = data + parse_len;
 
@@ -56,7 +55,6 @@ JsonDocuments parse_json_lines(const char* data, size_t size) {
     if (line_end > start) {
       size_t line_size = static_cast<size_t>(line_end - start);
 
-      // Parse line with DOM parser - store directly without conversion
       auto doc = tl_parser.parse(start, line_size);
 
       if (!doc.error()) {
@@ -75,7 +73,6 @@ JsonDocuments parse_json_lines(const char* data, size_t size) {
 }
 
 std::ostream& operator<<(std::ostream& os, const JsonDocument& doc) {
-  // Use simdjson's built-in serialization for maximum efficiency
   os << simdjson::minify(doc);
   return os;
 }

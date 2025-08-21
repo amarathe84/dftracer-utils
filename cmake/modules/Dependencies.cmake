@@ -17,6 +17,22 @@ function(need_spdlog)
   endif()
 endfunction()
 
+function(need_cereal)
+  if(NOT cereal_ADDED)
+    CPMAddPackage(
+      NAME cereal
+      VERSION 1.3.2
+      GITHUB_REPOSITORY USCiLab/cereal
+      GIT_TAG a56bad8bbb770ee266e930c95d37fff2a5be7fea
+      OPTIONS
+        "SKIP_PORTABILITY_TEST ON"
+        "JUST_INSTALL_CEREAL ON"
+    )
+  endif()
+endfunction()
+
+
+
 function(need_argparse)
   if(NOT argparse_ADDED)
     CPMAddPackage(
@@ -41,6 +57,7 @@ function(need_diy)
       OPTIONS
         "DIY_BUILD_TESTS OFF"
         "build_tests OFF"
+        "DIY_SYSTEM_FMT ON"
       FORCE YES
     )
   endif()
@@ -69,6 +86,7 @@ function(need_simdjson)
         "SIMDJSON_BUILD_STATIC_LIB ON"
         "BUILD_SHARED_LIBS ON"
         "SIMDJSON_DISABLE_DEPRECATED_API ON"
+        "SIMDJSON_EXCEPTIONS ON"
       FORCE YES
     )
   endif()

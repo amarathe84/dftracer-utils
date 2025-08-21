@@ -14,12 +14,17 @@ need_argparse()
 need_ghc_filesystem()
 need_picosha2()
 need_simdjson()
-need_arrow()
-need_diy()
+# need_arrow()
+need_cereal()
+
 
 ##########################################
-# Constants
+# Libraries
 ##########################################
+
+#-----------------------------------------
+# Utils Base library
+#-----------------------------------------
 
 set(DFTRACER_UTILS_HEADERS
   indexer/indexer.h
@@ -29,11 +34,13 @@ set(DFTRACER_UTILS_HEADERS
   utils/file.h
   utils/logger.h
   utils/json.h
+
+  # pipeline
   pipeline/pipeline.h
-  pipeline/execution_context/sequential.h
-  pipeline/execution_context/threaded.h
-  pipeline/execution_context/mpi.h
-  analyzers/dftracer.h
+
+  # analyzer
+  analyzers/analyzer.h
+  analyzers/constants.h
 )
 
 set(DFTRACER_UTILS_SOURCES
@@ -42,12 +49,11 @@ set(DFTRACER_UTILS_SOURCES
   utils/file.cpp
   utils/logger.cpp
   utils/json.cpp
-  analyzers/dftracer.cpp
-)
 
-##########################################
-# Libraries
-##########################################
+  # analyzer
+  analyzers/analyzer.cpp
+  analyzers/constants.cpp
+)
 
 #+++++++++++++++++++++++++++++++++++++++++
 # Static library
@@ -61,14 +67,15 @@ set_target_properties(dftracer_utils PROPERTIES
 )
 target_link_libraries(dftracer_utils 
     PRIVATE spdlog::spdlog_header_only picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson_static
+    PUBLIC ghc_filesystem simdjson::simdjson_static cereal::cereal
 )
+# add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
 
 # Link SQLite3, zlib, and Arrow with appropriate variants for static library
 link_sqlite3(dftracer_utils STATIC)
 link_zlib(dftracer_utils STATIC)
-link_arrow(dftracer_utils STATIC)
+# link_arrow(dftracer_utils STATIC)
 
 target_include_directories(dftracer_utils 
     PUBLIC 
@@ -98,14 +105,15 @@ set_target_properties(dftracer_utils_shared PROPERTIES
 )
 target_link_libraries(dftracer_utils_shared 
     PRIVATE spdlog::spdlog_header_only picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson
+    PUBLIC ghc_filesystem simdjson::simdjson cereal::cereal
 )
+# add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
 
 # Link SQLite3, zlib, and Arrow with appropriate variants for shared library
 link_sqlite3(dftracer_utils_shared SHARED)
 link_zlib(dftracer_utils_shared SHARED)
-link_arrow(dftracer_utils_shared SHARED)
+# link_arrow(dftracer_utils_shared SHARED)
 
 target_include_directories(dftracer_utils_shared 
     PUBLIC 
@@ -119,6 +127,50 @@ if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(dftracer_utils_shared PRIVATE --coverage -fprofile-arcs -ftest-coverage)
     target_link_libraries(dftracer_utils_shared PRIVATE --coverage)
 endif()
+
+#-----------------------------------------
+# Analyzer library
+#-----------------------------------------
+
+# set(DFTRACER_UTILS_ANALYZER_HEADERS
+#   pipeline/pipeline.h
+#   analyzers/analyzer.h
+# )
+
+# set(DFTRACER_UTILS_ANALYZER_SOURCES
+#   analyzers/analyzer.cpp
+# )
+
+#+++++++++++++++++++++++++++++++++++++++++
+# Static library
+#+++++++++++++++++++++++++++++++++++++++++
+
+# add_library(dftracer_utils_analyzer STATIC ${DFTRACER_UTILS_ANALYZER_SOURCES})
+# add_library(dftracer_utils_analyzer::static ALIAS dftracer_utils_analyzer)
+
+# set_target_properties(dftracer_utils_analyzer PROPERTIES 
+#     OUTPUT_NAME dftracer_utils
+#     EXPORT_NAME shared
+#     VERSION ${PROJECT_VERSION}
+#     SOVERSION ${PROJECT_VERSION_MAJOR}
+# )
+# target_link_libraries(dftracer_utils_analyzer 
+#     PUBLIC dftracer_utils cereal::cereal
+# )
+# target_add_rpath(dftracer_utils_analyzer)
+
+# target_include_directories(dftracer_utils_analyzer 
+#     PUBLIC 
+#         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/analyzers>
+#         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/pipeline>
+#         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+# )
+# target_set_warnings(dftracer_utils_analyzer)
+
+# if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+#     target_compile_options(dftracer_utils_analyzer PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+#     target_link_libraries(dftracer_utils_analyzer PRIVATE --coverage)
+# endif()
 
 ##########################################
 # Executables
@@ -135,7 +187,7 @@ target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog_header_on
 # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_reader STATIC)
 link_zlib(dft_reader STATIC)
-link_arrow(dft_reader STATIC)
+# link_arrow(dft_reader STATIC)
 
 target_include_directories(dft_reader 
     PRIVATE ${CMAKE_SOURCE_DIR}/include)
@@ -167,19 +219,20 @@ add_executable(dft_map bin/dft_map.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_map PROPERTIES OUTPUT_NAME "dft_map")
 target_link_libraries(dft_map PRIVATE 
   dftracer_utils
+  # dftracer_utils_analyzer
   spdlog::spdlog_header_only 
   argparse::argparse
   ghc_filesystem
   picosha2
   simdjson::simdjson
-  diy
+  cereal::cereal
 )
-add_mpi_deps_if_needed(dft_map)
+# add_mpi_deps_if_needed(dft_map)
 
 # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_map STATIC)
 link_zlib(dft_map STATIC)
-link_arrow(dft_map STATIC)
+# link_arrow(dft_map STATIC)
 
 target_include_directories(dft_map 
     PRIVATE ${CMAKE_SOURCE_DIR}/include)
@@ -202,6 +255,51 @@ endif()
 
 # Install executable
 install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# ----------------------------------------
+# DFT Map MPI (only when MPI is enabled)
+# ----------------------------------------
+
+# if(DFTRACER_UTILS_MPI_ENABLE)
+#   add_executable(dft_map_mpi bin/dft_map_mpi.cpp ${DFTRACER_UTILS_SOURCES})
+#   set_target_properties(dft_map_mpi PROPERTIES OUTPUT_NAME "dft_map_mpi")
+#   target_link_libraries(dft_map_mpi PRIVATE 
+#     dftracer_utils
+#     spdlog::spdlog_header_only 
+#     argparse::argparse
+#     ghc_filesystem
+#     picosha2
+#     simdjson::simdjson
+#     cereal::cereal
+#   )
+#   add_mpi_deps_if_needed(dft_map_mpi)
+#   target_compile_definitions(dft_map_mpi PRIVATE DFTRACER_UTILS_MPI_ENABLE)
+
+#   # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
+#   link_sqlite3(dft_map_mpi STATIC)
+#   link_zlib(dft_map_mpi STATIC)
+#   # link_arrow(dft_map_mpi STATIC)
+
+#   target_include_directories(dft_map_mpi 
+#       PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+#   target_set_warnings(dft_map_mpi)
+
+#   # Apply coverage flags if enabled
+#   if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+#       target_compile_options(dft_map_mpi PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+#       target_link_libraries(dft_map_mpi PRIVATE --coverage)
+#   endif()
+
+#   # Make sure spdlog include directories are available
+#   get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
+#   if(SPDLOG_INCLUDE_DIRS)
+#       target_include_directories(dft_map_mpi PRIVATE ${SPDLOG_INCLUDE_DIRS})
+#   endif()
+
+#   # Install executable
+#   install(TARGETS dft_map_mpi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# endif()
 
 ##########################################
 # Python binding
@@ -263,7 +361,7 @@ endif()
 
 # Install directive for libraries  
 
-set(INSTALLABLE_TARGETS dftracer_utils dftracer_utils_shared)
+set(INSTALLABLE_TARGETS dftracer_utils dftracer_utils_shared) # dftracer_utils_analyzer)
 if(TARGET sqlite3)
     list(APPEND INSTALLABLE_TARGETS sqlite3)
 endif()
@@ -291,45 +389,48 @@ endif()
 if (TARGET dftracer_zlibstatic)
   list(APPEND INSTALLABLE_TARGETS dftracer_zlibstatic)
 endif()
-if (TARGET arrow_array)
-    list(APPEND INSTALLABLE_TARGETS arrow_array)
+if (TARGET cereal)
+  list(APPEND INSTALLABLE_TARGETS cereal)
 endif()
-if (TARGET arrow_ipc)
-    list(APPEND INSTALLABLE_TARGETS arrow_ipc)
-endif()
-if (TARGET arrow_util)
-    list(APPEND INSTALLABLE_TARGETS arrow_util)
-endif()
-if (TARGET arrow_compute_core)
-    list(APPEND INSTALLABLE_TARGETS arrow_compute_core)
-endif()
-if (TARGET arrow_vendored)
-    list(APPEND INSTALLABLE_TARGETS arrow_vendored)
-endif()
-foreach(boost_target IN ITEMS
-    boost_headers boost_algorithm boost_align boost_array boost_assert boost_bind boost_concept_check boost_config boost_container_hash boost_conversion boost_core boost_crc boost_describe boost_detail boost_exception boost_function boost_function_types boost_functional boost_fusion boost_integer boost_intrusive boost_io boost_iterator boost_lexical_cast boost_move boost_mp11 boost_mpl boost_optional boost_predef boost_preprocessor boost_range boost_ratio boost_regex boost_scope_exit boost_smart_ptr boost_static_assert boost_system boost_throw_exception boost_tokenizer boost_tuple boost_type_traits boost_typeof boost_unordered boost_utility boost_uuid boost_variant2 boost_winapi boost_numeric_conversion boost_comptarget_disable_autolinking boost_container)
-    if(TARGET ${boost_target})
-        list(APPEND INSTALLABLE_TARGETS ${boost_target})
-    endif()
-endforeach()
-if (TARGET arrow_memory_pool)
-    list(APPEND INSTALLABLE_TARGETS arrow_memory_pool)
-endif()
-if (TARGET arrow_io)
-    list(APPEND INSTALLABLE_TARGETS arrow_io)
-endif()
-if (TARGET arrow_static)
-    list(APPEND INSTALLABLE_TARGETS arrow_static)
-endif()
-if (TARGET arrow_shared)
-    list(APPEND INSTALLABLE_TARGETS arrow_shared)
-endif()
-if (TARGET parquet_static)
-    list(APPEND INSTALLABLE_TARGETS parquet_static)
-endif()
-if (TARGET parquet_shared)
-    list(APPEND INSTALLABLE_TARGETS parquet_shared)
-endif()
+# if (TARGET arrow_array)
+#     list(APPEND INSTALLABLE_TARGETS arrow_array)
+# endif()
+# if (TARGET arrow_ipc)
+#     list(APPEND INSTALLABLE_TARGETS arrow_ipc)
+# endif()
+# if (TARGET arrow_util)
+#     list(APPEND INSTALLABLE_TARGETS arrow_util)
+# endif()
+# if (TARGET arrow_compute_core)
+#     list(APPEND INSTALLABLE_TARGETS arrow_compute_core)
+# endif()
+# if (TARGET arrow_vendored)
+#     list(APPEND INSTALLABLE_TARGETS arrow_vendored)
+# endif()
+# foreach(boost_target IN ITEMS
+#     boost_headers boost_algorithm boost_align boost_array boost_assert boost_bind boost_concept_check boost_config boost_container_hash boost_conversion boost_core boost_crc boost_describe boost_detail boost_exception boost_function boost_function_types boost_functional boost_fusion boost_integer boost_intrusive boost_io boost_iterator boost_lexical_cast boost_move boost_mp11 boost_mpl boost_optional boost_predef boost_preprocessor boost_range boost_ratio boost_regex boost_scope_exit boost_smart_ptr boost_static_assert boost_system boost_throw_exception boost_tokenizer boost_tuple boost_type_traits boost_typeof boost_unordered boost_utility boost_uuid boost_variant2 boost_winapi boost_numeric_conversion boost_comptarget_disable_autolinking boost_container)
+#     if(TARGET ${boost_target})
+#         list(APPEND INSTALLABLE_TARGETS ${boost_target})
+#     endif()
+# endforeach()
+# if (TARGET arrow_memory_pool)
+#     list(APPEND INSTALLABLE_TARGETS arrow_memory_pool)
+# endif()
+# if (TARGET arrow_io)
+#     list(APPEND INSTALLABLE_TARGETS arrow_io)
+# endif()
+# if (TARGET arrow_static)
+#     list(APPEND INSTALLABLE_TARGETS arrow_static)
+# endif()
+# if (TARGET arrow_shared)
+#     list(APPEND INSTALLABLE_TARGETS arrow_shared)
+# endif()
+# if (TARGET parquet_static)
+#     list(APPEND INSTALLABLE_TARGETS parquet_static)
+# endif()
+# if (TARGET parquet_shared)
+#     list(APPEND INSTALLABLE_TARGETS parquet_shared)
+# endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)
 

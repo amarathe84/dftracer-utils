@@ -20,9 +20,10 @@ namespace reader {
 // Constants for better maintainability
 namespace constants {
 static constexpr size_t DEFAULT_BUFFER_SIZE =
-    65536;  // 64KB (increased from 16KB)
+    65536;  // 64KB
+static constexpr size_t DEFAULT_READER_BUFFER_SIZE = 128 * 1024;  // 128KB
 static constexpr size_t SKIP_BUFFER_SIZE =
-    131072;  // 128KB (increased from 64KB)
+    131072;  // 128KB
 static constexpr size_t SEARCH_BUFFER_SIZE = 2048;
 static constexpr size_t LINE_SEARCH_LOOKBACK = 512;
 static constexpr size_t FIRST_CHECKPOINT_THRESHOLD = 33554401;
@@ -802,7 +803,9 @@ class Reader::Impl {
  public:
   Impl(const std::string &gz_path, const std::string &idx_path,
        size_t index_ckpt_size)
-      : gz_path_(gz_path), idx_path_(idx_path), is_open_(false) {
+      : gz_path_(gz_path), idx_path_(idx_path), is_open_(false),
+        is_indexer_initialized_internally_(true),
+        default_buffer_size_(constants::DEFAULT_READER_BUFFER_SIZE) {
     try {
       indexer_ = new dftracer::utils::indexer::Indexer(gz_path, idx_path,
                                                        index_ckpt_size);
@@ -824,7 +827,8 @@ class Reader::Impl {
   }
 
   Impl(dftracer::utils::indexer::Indexer *indexer)
-      : indexer_(indexer), is_indexer_initialized_internally_(false) {
+      : indexer_(indexer), is_indexer_initialized_internally_(false),
+        default_buffer_size_(constants::DEFAULT_READER_BUFFER_SIZE) {
     if (!indexer_->is_valid()) {
       throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
                           "Invalid indexer provided");
@@ -851,7 +855,8 @@ class Reader::Impl {
         indexer_(std::move(other.indexer_)),
         session_factory_(std::move(other.session_factory_)),
         line_byte_session_(std::move(other.line_byte_session_)),
-        byte_session_(std::move(other.byte_session_)) {
+        byte_session_(std::move(other.byte_session_)),
+        default_buffer_size_(other.default_buffer_size_) {
     other.is_open_ = false;
   }
 
@@ -864,6 +869,7 @@ class Reader::Impl {
       session_factory_ = std::move(other.session_factory_);
       line_byte_session_ = std::move(other.line_byte_session_);
       byte_session_ = std::move(other.byte_session_);
+      default_buffer_size_ = other.default_buffer_size_;
       other.is_open_ = false;
     }
     return *this;
@@ -954,21 +960,28 @@ class Reader::Impl {
   }
 
   std::vector<dftracer::utils::json::JsonDocument> read_json_lines_bytes(
-      size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size) {
+      size_t start_bytes, size_t end_bytes) {
     ErrorHandler::check_reader_state(is_open_, indexer_);
-    ErrorHandler::validate_parameters(buffer, buffer_size, start_bytes,
+
+    auto buffer = std::make_unique<char[]>(default_buffer_size_);
+
+    ErrorHandler::validate_parameters(buffer.get(), default_buffer_size_, start_bytes,
                                       end_bytes, indexer_->get_max_bytes());
 
-    // Read lines using existing streaming method
-    size_t bytes_read =
-        read_line_bytes(start_bytes, end_bytes, buffer, buffer_size);
+    std::string buffer_content;
+    size_t bytes_read = 0;
+    size_t total_bytes = 0;
+    while ((bytes_read = read_line_bytes(start_bytes, end_bytes, buffer.get(), default_buffer_size_)) > 0) {
+      buffer_content.append(buffer.get(), bytes_read);
+      total_bytes += bytes_read;
+    }
 
-    if (bytes_read == 0) {
+    if (total_bytes == 0) {
       return std::vector<dftracer::utils::json::JsonDocument>();
     }
 
-    // Parse the buffer content as JSON Lines
-    return dftracer::utils::json::parse_json_lines(buffer, bytes_read);
+    return dftracer::utils::json::parse_json_lines(buffer_content.data(),
+                                                   buffer_content.size());
   }
 
   void reset() {
@@ -985,6 +998,10 @@ class Reader::Impl {
   const std::string &get_gz_path() const { return gz_path_; }
   const std::string &get_idx_path() const { return idx_path_; }
 
+  void set_buffer_size(size_t size) {
+    default_buffer_size_ = size;
+  }
+
  private:
   std::string read_lines_from_beginning(size_t start_line, size_t end_line) {
     size_t max_bytes = indexer_->get_max_bytes();
@@ -998,7 +1015,7 @@ class Reader::Impl {
     std::string result;
     size_t current_line = 1;
     std::string current_line_content;
-    const size_t buffer_size = 1 * 1024 * 1024;
+    const size_t buffer_size = default_buffer_size_;
     std::vector<char> buffer(buffer_size);
 
     while (!line_byte_session_->is_finished() && current_line <= end_line) {
@@ -1031,6 +1048,7 @@ class Reader::Impl {
   std::string gz_path_;
   std::string idx_path_;
   bool is_open_;
+  size_t default_buffer_size_;
 
   dftracer::utils::indexer::Indexer *indexer_;
   bool is_indexer_initialized_internally_;
@@ -1085,9 +1103,12 @@ std::vector<dftracer::utils::json::JsonDocument> Reader::read_json_lines(
 }
 
 std::vector<dftracer::utils::json::JsonDocument> Reader::read_json_lines_bytes(
-    size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size) {
-  return pImpl_->read_json_lines_bytes(start_bytes, end_bytes, buffer,
-                                       buffer_size);
+    size_t start_bytes, size_t end_bytes) {
+  return pImpl_->read_json_lines_bytes(start_bytes, end_bytes);
+}
+
+void Reader::set_buffer_size(size_t size) {
+  pImpl_->set_buffer_size(size);
 }
 
 void Reader::reset() { pImpl_->reset(); }

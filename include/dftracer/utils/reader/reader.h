@@ -249,13 +249,18 @@ class Reader {
    * returns empty vector.
    * @param start_bytes Start position in bytes
    * @param end_bytes End position in bytes
-   * @param buffer User-provided buffer for complete lines
-   * @param buffer_size Size of user-provided buffer
    * @return Vector of parsed JSON objects from the buffer
    * @throws std::runtime_error if operation fails
    */
   std::vector<dftracer::utils::json::JsonDocument> read_json_lines_bytes(
-      size_t start_bytes, size_t end_bytes, char *buffer, size_t buffer_size);
+      size_t start_bytes, size_t end_bytes);
+
+  /**
+   * Set default buffer size in bytes
+   *
+   * @param size New buffer size
+   */
+  void set_buffer_size(size_t size);
 
   /**
    * Reset the reader to the initial state
