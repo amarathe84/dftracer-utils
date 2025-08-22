@@ -365,87 +365,39 @@ inline auto postread_trace(Context& ctx, BagType&& events,
                            const std::vector<std::string>& view_types,
                            double time_granularity) {
 
-  // PHASE 1: epoch spans computation (even if not used, this maintains the original logic)
-  auto epoch_spans_bag =
-      events
-          .flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
-            if (constants::ai_dftracer::is_epoch_event(record.cat,
-                                                       record.func_name)) {
-              return {record};
-            }
-            return {};
-          })
-          .map([time_granularity](const TraceRecord& record) -> EpochSpanEntry {
-            uint64_t start_time_range = record.time_range;
-            uint64_t end_time_range =
-                helpers::calc_time_range(record.time_end, time_granularity);
-            uint64_t duration = end_time_range - start_time_range;
-            return {record.epoch, start_time_range, end_time_range, duration};
-          })
-          .distributed_groupby(
-              [](const EpochSpanEntry& entry) -> uint64_t {
-                return entry.epoch_num;
-              },
-              [](uint64_t epoch_num, const std::vector<EpochSpanEntry>& entries)
-                  -> std::pair<uint64_t, std::pair<uint64_t, uint64_t>> {
-                auto max_entry = *std::max_element(
-                    entries.begin(), entries.end(),
-                    [](const EpochSpanEntry& a, const EpochSpanEntry& b) {
-                      return a.duration < b.duration;
-                    });
-                return {epoch_num, {max_entry.start_time, max_entry.end_time}};
-              });
-
-  auto epoch_spans_vector = epoch_spans_bag.compute(ctx);
-  std::map<uint64_t, std::pair<uint64_t, uint64_t>> local_epoch_spans(
-      epoch_spans_vector.begin(), epoch_spans_vector.end());
-
-  // Properly share epoch spans across all ranks
-  std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans;
-  if constexpr (std::is_same_v<Context, context::MPIContext>) {
-    // Serialize local epoch spans
-    std::vector<char> local_data = ctx.serialize(epoch_spans_vector);
-    
-    // Gather all serialized data from all ranks
-    std::vector<std::vector<char>> all_data(ctx.size());
-    std::vector<int> recv_counts(ctx.size());
-    
-    // Get sizes from all ranks
-    int local_size = static_cast<int>(local_data.size());
-    MPI_Allgather(&local_size, 1, MPI_INT, recv_counts.data(), 1, MPI_INT, ctx.comm());
-    
-    // Calculate displacements
-    std::vector<int> displacements(ctx.size());
-    int total_size = 0;
-    for (int i = 0; i < ctx.size(); ++i) {
-      displacements[i] = total_size;
-      total_size += recv_counts[i];
-    }
-    
-    // Gather all data
-    std::vector<char> all_gathered_data(total_size);
-    MPI_Allgatherv(local_data.data(), local_size, MPI_BYTE,
-                   all_gathered_data.data(), recv_counts.data(), displacements.data(), 
-                   MPI_BYTE, ctx.comm());
-    
-    // Deserialize and merge all epoch spans
-    size_t offset = 0;
-    for (int rank = 0; rank < ctx.size(); ++rank) {
-      if (recv_counts[rank] > 0) {
-        std::vector<char> rank_data(all_gathered_data.begin() + offset,
-                                  all_gathered_data.begin() + offset + recv_counts[rank]);
-        auto rank_spans = ctx.template deserialize<std::vector<std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>>(rank_data);
-        for (const auto& span : rank_spans) {
-          epoch_spans[span.first] = span.second;
+  // PHASE 1: Collect epoch events globally and compute spans
+  auto all_epoch_events = events
+      .flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
+        if (constants::ai_dftracer::is_epoch_event(record.cat, record.func_name)) {
+          return {record};
         }
-        offset += recv_counts[rank];
-      }
-    }
-  } else {
-    epoch_spans = local_epoch_spans;
+        return {};
+      })
+      .collect()
+      .compute(ctx);
+
+  // Compute epoch spans from all collected events (same logic for all contexts)
+  std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans;
+  std::map<uint64_t, std::vector<EpochSpanEntry>> epoch_groups;
+  
+  for (const auto& record : all_epoch_events) {
+    uint64_t start_time_range = record.time_range;
+    uint64_t end_time_range = helpers::calc_time_range(record.time_end, time_granularity);
+    uint64_t duration = end_time_range - start_time_range;
+    epoch_groups[record.epoch].push_back({record.epoch, start_time_range, end_time_range, duration});
+  }
+  
+  for (const auto& [epoch_num, entries] : epoch_groups) {
+    auto max_entry = *std::max_element(entries.begin(), entries.end(),
+        [](const EpochSpanEntry& a, const EpochSpanEntry& b) {
+          return a.duration < b.duration;
+        });
+    epoch_spans[epoch_num] = {max_entry.start_time, max_entry.end_time};
   }
 
-  // PHASE 2: epoch event assignment using map_partitions for consistent return type
+  spdlog::info("Computed {} epoch spans from {} epoch events", epoch_spans.size(), all_epoch_events.size());
+
+  // PHASE 2: Apply epoch assignment using map_partitions for consistent return type
   return std::forward<BagType>(events).map_partitions(
       [epoch_spans, view_types](const std::vector<TraceRecord>& partition)
           -> std::vector<TraceRecord> {
@@ -454,7 +406,7 @@ inline auto postread_trace(Context& ctx, BagType&& events,
         bool process_epochs = std::find(view_types.begin(), view_types.end(), "epoch") != view_types.end();
         
         if (!process_epochs) {
-          spdlog::info("No epoch view type detected, skipping epoch processing for {} events", partition.size());
+          spdlog::debug("No epoch view type detected, skipping epoch processing for {} events", partition.size());
           return partition;
         }
 
@@ -485,7 +437,7 @@ inline auto postread_trace(Context& ctx, BagType&& events,
           }
         }
         
-        spdlog::info("Epoch assignment results: {} total, {} assigned, {} unassigned", 
+        spdlog::debug("Epoch assignment results: {} total, {} assigned, {} unassigned", 
                      total_events, assigned_events, unassigned_events);
         
         return result;

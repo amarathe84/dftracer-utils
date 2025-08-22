@@ -20,6 +20,11 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
     return ExecutionStrategy::Sequential;
   }
 
+  template <typename T>
+  std::vector<T> collect(const std::vector<T>& local_data) const {
+    return local_data;
+  }
+
   template <typename T, typename MapFunc>
   auto execute_map_impl(MapFunc&& func, const std::vector<T>& input) const
       -> std::vector<map_result_t<MapFunc, T>> {

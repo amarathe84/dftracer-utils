@@ -36,6 +36,11 @@ class MPIContext : public ExecutionContext<MPIContext> {
   virtual int size() const override { return size_; }
   MPI_Comm comm() const { return comm_; }
 
+  template <typename T>
+  std::vector<T> collect(const std::vector<T>& local_data) const {
+    return gather_all_data(local_data);
+  }
+
   // Map: work directly on distributed data - no scatter/gather
   template <typename T, typename MapFunc>
   auto execute_map_impl(MapFunc&& func, const std::vector<T>& input) const
@@ -264,8 +269,6 @@ class MPIContext : public ExecutionContext<MPIContext> {
     return local_results;
   }
 
-
-
   // Serialization helpers using cereal
   template <typename T>
   std::vector<char> serialize(const T& data) const {
@@ -277,8 +280,6 @@ class MPIContext : public ExecutionContext<MPIContext> {
     std::string str = ss.str();
     return std::vector<char>(str.begin(), str.end());
   }
-
-
 
   template <typename T>
   T deserialize(const std::vector<char>& data) const {

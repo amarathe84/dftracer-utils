@@ -240,6 +240,16 @@ class Bag<T, void> : public BagBase<T> {
       return local_results;
     }
   }
+
+  auto collect() const {
+    auto new_operation = [*this](const auto& context) -> std::vector<T> {
+      auto local_data = this->compute(context);
+      return context.collect(local_data);
+    };
+    
+    using operation_type = decltype(new_operation);
+    return Bag<T, operation_type>({}, std::move(new_operation));
+  }
 };
 
 template <typename T, typename Operation>
@@ -432,6 +442,16 @@ class Bag : public BagBase<T> {
       return local_results;
     }
   }
+
+  auto collect() const {
+    auto new_operation = [*this](const auto& context) -> std::vector<T> {
+      auto local_data = this->compute(context);
+      return context.collect(local_data);
+    };
+    
+    using operation_type = decltype(new_operation);
+    return Bag<T, operation_type>({}, std::move(new_operation));
+  }
 };
 
 template <typename T>
@@ -518,7 +538,7 @@ auto format_computed_bag(
                        typeid(T).name(), computed_data.size(), computed_data[0],
                        computed_data[1],
                        computed_data[computed_data.size() - 1]);
-  } else {
+    } else {
     return fmt::format("ComputedBag[{}]({} items)", typeid(T).name(),
                        computed_data.size());
   }
