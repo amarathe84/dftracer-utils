@@ -40,6 +40,8 @@ struct FileMetadata {
   }
 };
 
+namespace trace_reader {
+
 // Pipeline stage 1: Get file metadata
 inline auto get_traces_metadata(const std::vector<std::string>& traces) {
   return from_sequence(traces).map([](const std::string& path) {
@@ -69,7 +71,7 @@ inline auto generate_chunks(const std::vector<std::string>& traces, size_t batch
 }
 
 // Pipeline stage 3: Read and parse JSON from chunks
-inline auto read_traces(const std::vector<std::string>& traces, size_t batch_size) {
+inline auto load_traces(const std::vector<std::string>& traces, size_t batch_size) {
   return generate_chunks(traces, batch_size)
     .repartition("32MB")  // Repartition for better load balancing
     .map_partitions([](const auto& partition) -> OwnedJsonDocuments {
@@ -105,7 +107,7 @@ inline auto parse_and_filter_traces(const std::vector<std::string>& traces,
                                    size_t batch_size,
                                    const std::vector<std::string>& view_types,
                                    double time_granularity) {
-  return read_traces(traces, batch_size)
+  return trace_reader::load_traces(traces, batch_size)
     .repartition("64MB")  // Repartition after JSON parsing for better memory distribution
     .map_partitions([view_types, time_granularity](const auto& partition) -> std::vector<TraceRecord> {
       std::vector<TraceRecord> valid_records;
@@ -144,7 +146,204 @@ inline auto parse_and_filter_traces(const std::vector<std::string>& traces,
     });
 }
 
-// Pipeline stage 5: Compute high-level metrics using distributed groupby
+// Hash resolution stage - separate by event type and collect hash mappings
+template<typename BagType>
+inline auto separate_events_and_hashes(BagType&& trace_records) {
+    return std::forward<BagType>(trace_records)
+        .map_partitions([](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
+            std::vector<TraceRecord> result;
+            result.reserve(partition.size());
+            
+            // Collect hash mappings (global across all records)
+            std::unordered_map<std::string, std::string> file_hash_map;
+            std::unordered_map<std::string, std::string> host_hash_map;
+            
+            // First pass: collect all hash mappings
+            for (const auto& record : partition) {
+                if (record.event_type == 1 && !record.fhash.empty()) { // file hash
+                    file_hash_map[record.fhash] = record.func_name;
+                } else if (record.event_type == 2 && !record.hhash.empty()) { // host hash
+                    host_hash_map[record.hhash] = record.func_name;
+                }
+            }
+            
+            // Second pass: resolve hashes for regular events
+            for (auto record : partition) {
+                if (record.event_type == 0) { // regular event only
+                    // Resolve file hash to file name
+                    if (!record.fhash.empty()) {
+                        auto it = file_hash_map.find(record.fhash);
+                        if (it != file_hash_map.end()) {
+                            record.view_fields["file_name"] = it->second;
+                        }
+                    }
+                    
+                    // Resolve host hash to hostname
+                    if (!record.hhash.empty()) {
+                        auto it = host_hash_map.find(record.hhash);
+                        if (it != host_hash_map.end()) {
+                            record.view_fields["host_name"] = it->second;
+                        }
+                    }
+                    
+                    // Set proc_name
+                    std::string host_name = record.view_fields["host_name"];
+                    if (host_name.empty()) host_name = "unknown";
+                    record.view_fields["proc_name"] = "app#" + host_name + "#" + 
+                                                     std::to_string(record.pid) + "#" + 
+                                                     std::to_string(record.tid);
+                    
+                    // Category enrichment based on file_name
+                    std::string file_name = record.view_fields["file_name"];
+                    if (!file_name.empty() && (record.cat == "posix" || record.cat == "stdio")) {
+                        if (file_name.find("/checkpoint") != std::string::npos) {
+                            record.cat = record.cat + "_checkpoint";
+                        } else if (file_name.find("/data") != std::string::npos) {
+                            record.cat = record.cat + "_reader";
+                        } else if (file_name.find("/lustre") != std::string::npos) {
+                            record.cat = record.cat + "_lustre";
+                        } else if (file_name.find("/ssd") != std::string::npos) {
+                            record.cat = record.cat + "_ssd";
+                        }
+                    }
+
+                    // Filter ignored file patterns
+                    bool should_ignore_file = false;
+                    if (!file_name.empty()) {
+                        for (const auto& pattern : constants::IGNORED_FILE_PATTERNS) {
+                            if (file_name.find(pattern) != std::string::npos) {
+                                should_ignore_file = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!should_ignore_file) {
+                        result.push_back(record);
+                    }
+                }
+            }
+            
+            spdlog::debug("Processed {} regular events from {} total records", 
+                         result.size(), partition.size());
+            
+            return result;
+        });
+}
+} // namespace trace_reader
+
+// Complete pipeline orchestration with DFTracer-specific processing
+inline auto read_traces(
+    const std::vector<std::string>& traces,
+    size_t batch_size,
+    const std::vector<std::string>& view_types,
+    double time_granularity,
+    const std::string& hlm_partition_size = "128MB"
+) {
+    spdlog::info("DFTracer loading {} trace files", traces.size());
+
+    // Parse all events (including metadata)
+    auto all_events = trace_reader::parse_and_filter_traces(traces, batch_size, view_types, time_granularity);
+
+    // Separate events, resolve hashes, apply category enrichment and filtering
+    auto normalized_events = trace_reader::separate_events_and_hashes(all_events);
+    
+    // Return normalized events
+    return normalized_events;
+}
+
+
+// Timestamp normalization stage - find global minimum and normalize
+template<typename Context, typename BagType>
+inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records, double time_resolution, double time_granularity) {
+    // First pass: find global minimum timestamp
+    auto global_min_timestamp = trace_records.map([](const TraceRecord& record) -> uint64_t {
+        return record.time_start;
+    }).reduce(ctx, [](uint64_t a, uint64_t b) -> uint64_t {
+        return std::min(a, b);
+    });
+
+    // Second pass: normalize timestamps and recalculate time_range using global minimum
+    return trace_records.map([global_min_timestamp, time_resolution, time_granularity](TraceRecord record) -> TraceRecord {
+        // Normalize timestamps using global minimum
+        record.time_start = record.time_start - global_min_timestamp;
+        record.time_end = record.time_start + static_cast<uint64_t>(record.duration);
+        // Scale duration by time_resolution
+        record.duration = record.duration / time_resolution;
+        record.time_range = record.time_start / static_cast<uint64_t>(time_granularity);
+        return record;
+    });
+}
+
+template<typename Context, typename BagType>
+inline auto postread_trace(Context& ctx, BagType&& events, double time_granularity) {
+    // Step 2: Process epochs globally (equivalent to AIDFTracerAnalyzer.postread_trace)
+    
+    // First collect all epoch events across all partitions (for epoch mapping)
+    auto all_epoch_events = events.flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
+        if (constants::ai_dftracer::is_epoch_event(record.cat, record.func_name)) {
+          // spdlog::info("RAY DEBUG: Found epoch event: {}", record.func_name);
+            return {record};
+        }
+        return {};
+    });
+    
+    auto global_epoch_events = all_epoch_events.compute(ctx);
+    spdlog::info("Found {} total epoch events across all partitions", global_epoch_events.size());
+
+    // Step 1: Extract epoch numbers from args and find the longest duration for each epoch
+    std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans; // epoch_num -> (start, end)
+    
+    for (const auto& record : global_epoch_events) {
+        // Extract epoch number from the record (we need to parse this from the original JSON)
+        // This should be parsed from args.epoch
+        uint64_t epoch_num = record.epoch;
+        
+        uint64_t start_time_range = record.time_range;
+        uint64_t end_time_range = helpers::calc_time_range(record.time_end, time_granularity);
+        uint64_t duration = end_time_range - start_time_range;
+        
+        // For each epoch, keep the span with the longest duration (biggest window)
+        if (epoch_spans.find(epoch_num) == epoch_spans.end()) {
+            epoch_spans[epoch_num] = {start_time_range, end_time_range};
+        } else {
+            auto [existing_start, existing_end] = epoch_spans[epoch_num];
+            uint64_t existing_duration = existing_end - existing_start;
+            
+            if (duration > existing_duration) {
+                epoch_spans[epoch_num] = {start_time_range, end_time_range};
+            }
+        }
+    }
+    
+    // Step 2: Apply epoch assignment using span-based logic and filter out epoch=0 events
+    auto epoch_processed_events = events.map_partitions([epoch_spans](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
+        std::vector<TraceRecord> result;
+        result.reserve(partition.size());
+        
+        for (auto record : partition) {
+            uint64_t assigned_epoch = 0;
+
+            for (const auto& [epoch_num, span] : epoch_spans) {
+                auto [start, end] = span;
+                if (record.time_range >= start && record.time_range <= end) {
+                    assigned_epoch = epoch_num;
+                    break;
+                }
+            }
+
+            if (assigned_epoch != 0) {
+                record.epoch = assigned_epoch; 
+                result.push_back(record);
+            }
+        }
+        
+        return result;
+    });
+
+    return epoch_processed_events;
+}
+
 template<typename BagType>
 inline auto compute_high_level_metrics(
     BagType&& trace_records,
@@ -277,135 +476,6 @@ inline auto compute_high_level_metrics(
         // Repartition after aggregation for final processing
         .repartition(partition_size);
 }
-
-// Hash resolution stage - separate by event type and collect hash mappings
-template<typename BagType>
-inline auto separate_events_and_hashes(BagType&& trace_records) {
-    return std::forward<BagType>(trace_records)
-        .map_partitions([](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
-            std::vector<TraceRecord> result;
-            result.reserve(partition.size());
-            
-            // Collect hash mappings (global across all records)
-            std::unordered_map<std::string, std::string> file_hash_map;
-            std::unordered_map<std::string, std::string> host_hash_map;
-            
-            // First pass: collect all hash mappings
-            for (const auto& record : partition) {
-                if (record.event_type == 1 && !record.fhash.empty()) { // file hash
-                    file_hash_map[record.fhash] = record.func_name;
-                } else if (record.event_type == 2 && !record.hhash.empty()) { // host hash
-                    host_hash_map[record.hhash] = record.func_name;
-                }
-            }
-            
-            // Second pass: resolve hashes for regular events
-            for (auto record : partition) {
-                if (record.event_type == 0) { // regular event only
-                    // Resolve file hash to file name
-                    if (!record.fhash.empty()) {
-                        auto it = file_hash_map.find(record.fhash);
-                        if (it != file_hash_map.end()) {
-                            record.view_fields["file_name"] = it->second;
-                        }
-                    }
-                    
-                    // Resolve host hash to hostname
-                    if (!record.hhash.empty()) {
-                        auto it = host_hash_map.find(record.hhash);
-                        if (it != host_hash_map.end()) {
-                            record.view_fields["host_name"] = it->second;
-                        }
-                    }
-                    
-                    // Set proc_name
-                    std::string host_name = record.view_fields["host_name"];
-                    if (host_name.empty()) host_name = "unknown";
-                    record.view_fields["proc_name"] = "app#" + host_name + "#" + 
-                                                     std::to_string(record.pid) + "#" + 
-                                                     std::to_string(record.tid);
-                    
-                    // Category enrichment based on file_name
-                    std::string file_name = record.view_fields["file_name"];
-                    if (!file_name.empty() && (record.cat == "posix" || record.cat == "stdio")) {
-                        if (file_name.find("/checkpoint") != std::string::npos) {
-                            record.cat = record.cat + "_checkpoint";
-                        } else if (file_name.find("/data") != std::string::npos) {
-                            record.cat = record.cat + "_reader";
-                        } else if (file_name.find("/lustre") != std::string::npos) {
-                            record.cat = record.cat + "_lustre";
-                        } else if (file_name.find("/ssd") != std::string::npos) {
-                            record.cat = record.cat + "_ssd";
-                        }
-                    }
-
-                    // Filter ignored file patterns
-                    bool should_ignore_file = false;
-                    if (!file_name.empty()) {
-                        for (const auto& pattern : constants::IGNORED_FILE_PATTERNS) {
-                            if (file_name.find(pattern) != std::string::npos) {
-                                should_ignore_file = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (!should_ignore_file) {
-                        result.push_back(record);
-                    }
-                }
-            }
-            
-            spdlog::debug("Processed {} regular events from {} total records", 
-                         result.size(), partition.size());
-            
-            return result;
-        });
-}
-
-// Timestamp normalization stage - find global minimum and normalize
-template<typename BagType, typename Context>
-inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records, double time_resolution, double time_granularity) {
-    // First pass: find global minimum timestamp
-    auto global_min_timestamp = trace_records.map([](const TraceRecord& record) -> uint64_t {
-        return record.time_start;
-    }).reduce(ctx, [](uint64_t a, uint64_t b) -> uint64_t {
-        return std::min(a, b);
-    });
-
-    // Second pass: normalize timestamps and recalculate time_range using global minimum
-    return trace_records.map([global_min_timestamp, time_resolution, time_granularity](TraceRecord record) -> TraceRecord {
-        // Normalize timestamps using global minimum
-        record.time_start = record.time_start - global_min_timestamp;
-        record.time_end = record.time_start + static_cast<uint64_t>(record.duration);
-        // Scale duration by time_resolution
-        record.duration = record.duration / time_resolution;
-        record.time_range = record.time_start / static_cast<uint64_t>(time_granularity);
-        return record;
-    });
-}
-
-
-// Complete pipeline orchestration with DFTracer-specific processing
-inline auto build_full_analysis_pipeline(
-    const std::vector<std::string>& traces,
-    size_t batch_size,
-    const std::vector<std::string>& view_types,
-    double time_granularity,
-    const std::string& hlm_partition_size = "128MB"
-) {
-    spdlog::info("Building full DFTracer analysis pipeline for {} trace files", traces.size());
-    
-    // Parse all events (including metadata)
-    auto all_events = parse_and_filter_traces(traces, batch_size, view_types, time_granularity);
-    
-    // Separate events, resolve hashes, apply category enrichment and filtering
-    auto normalized_events = separate_events_and_hashes(all_events);
-    
-    // Return normalized events
-    return normalized_events;
-}
-
 } // namespace helpers
 
 template<typename Context>
@@ -426,8 +496,8 @@ AnalyzerResult Analyzer::analyze_trace(
         }
         std::sort(proc_view_types.begin(), proc_view_types.end());
         
-        // Step 1: Get separated trace events (before timestamp normalization)
-        auto separated_events = helpers::build_full_analysis_pipeline(
+        // Step 1: Get trace events
+        auto events = helpers::read_traces(
             traces,
             checkpoint_size_,
             proc_view_types,
@@ -435,90 +505,24 @@ AnalyzerResult Analyzer::analyze_trace(
             "128MB"
         );
         
-        // Step 1.5: Apply global timestamp normalization (Python line 514-516)
+        // Step 2: Apply global timestamp normalization
         auto normalized_events = helpers::normalize_timestamps_globally(
             ctx, 
-            separated_events,
+            events,
             constants::DEFAULT_TIME_RESOLUTION,
             time_granularity_
         );
-        
-        // Step 2: Process epochs globally (equivalent to AIDFTracerAnalyzer.postread_trace)
-        spdlog::info("=== RAY DEBUG: Processing epochs globally ===");
-        
-        // First collect all epoch events across all partitions (for epoch mapping)
-        auto all_epoch_events = normalized_events.flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
-            if (constants::ai_dftracer::is_epoch_event(record.cat, record.func_name)) {
-              // spdlog::info("RAY DEBUG: Found epoch event: {}", record.func_name);
-                return {record};
-            }
-            return {};
-        });
-        
-        auto global_epoch_events = all_epoch_events.compute(ctx);
-        spdlog::info("Found {} total epoch events across all partitions", global_epoch_events.size());
-        
-        // collect ALL events (including regular POSIX events) for processing
-        auto all_events_for_processing = normalized_events.compute(ctx);
-        spdlog::info("Found {} total events across all partitions (including regular events)", all_events_for_processing.size());
-        
-        // Step 1: Extract epoch numbers from args and find the longest duration for each epoch
-        std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans; // epoch_num -> (start, end)
-        
-        for (const auto& record : global_epoch_events) {
-            // Extract epoch number from the record (we need to parse this from the original JSON)
-            // This should be parsed from args.epoch
-            uint64_t epoch_num = record.epoch;
-            
-            uint64_t start_time_range = record.time_range;
-            uint64_t end_time_range = helpers::calc_time_range(record.time_end, time_granularity_);
-            uint64_t duration = end_time_range - start_time_range;
-            
-            // For each epoch, keep the span with the longest duration (biggest window)
-            if (epoch_spans.find(epoch_num) == epoch_spans.end()) {
-                epoch_spans[epoch_num] = {start_time_range, end_time_range};
-            } else {
-                auto [existing_start, existing_end] = epoch_spans[epoch_num];
-                uint64_t existing_duration = existing_end - existing_start;
-                
-                if (duration > existing_duration) {
-                    epoch_spans[epoch_num] = {start_time_range, end_time_range};
-                }
-            }
-        }
-        
-        for (const auto& [epoch_num, span] : epoch_spans) {
-            auto [start, end] = span;
-        }
 
-        // Step 2: Apply epoch assignment using span-based logic and filter out epoch=0 events
-        auto epoch_processed_events = normalized_events.map_partitions([epoch_spans](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
-            std::vector<TraceRecord> result;
-            result.reserve(partition.size());
-            
-            for (auto record : partition) {
-                uint64_t assigned_epoch = 0;
+        // Step 3: Post-process events
+        auto post_processed_events = helpers::postread_trace(
+            ctx,
+            normalized_events,
+            time_granularity_
+        );
 
-                for (const auto& [epoch_num, span] : epoch_spans) {
-                    auto [start, end] = span;
-                    if (record.time_range >= start && record.time_range <= end) {
-                        assigned_epoch = epoch_num;
-                        break;
-                    }
-                }
-
-                if (assigned_epoch != 0) {
-                    record.epoch = assigned_epoch; 
-                    result.push_back(record);
-                }
-            }
-            
-            return result;
-        });
-        
         // Step 4: Compute high-level metrics on epoch-processed events
         auto hlm_pipeline = helpers::compute_high_level_metrics(
-            epoch_processed_events,
+            post_processed_events,
             proc_view_types,
             "128MB",
             ""
@@ -561,33 +565,10 @@ AnalyzerResult Analyzer::analyze_trace(
             spdlog::info("  Total time: {:.2f}", total_time);
             spdlog::info("  Total size: {} bytes", total_size);
             spdlog::info("  Unique groups: {}", flattened_results.size());
-
-            // Output CSV format matching Python output
-            // std::cout << "C++ HLM CSV:" << std::endl;
             std::cout << helpers::hlms_to_csv(flattened_results);
-
-            // Also output groupby keys for comparison
-            // std::cout << "C++ Groupby Keys:" << std::endl;
-            // for (size_t i = 0; i < flattened_results.size(); ++i) {
-            //     const auto& hlm = flattened_results[i];
-                
-            //     // Create ordered group values matching Python's order: acc_pat, proc_name, time_range, cat, func_name, io_cat, epoch
-            //     std::vector<std::string> ordered_values = {
-            //         hlm.group_values.count("acc_pat") ? hlm.group_values.at("acc_pat") : "",
-            //         hlm.group_values.count("proc_name") ? hlm.group_values.at("proc_name") : "",
-            //         hlm.group_values.count("time_range") ? hlm.group_values.at("time_range") : "",
-            //         hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "",
-            //         hlm.group_values.count("func_name") ? hlm.group_values.at("func_name") : "",
-            //         hlm.group_values.count("io_cat") ? hlm.group_values.at("io_cat") : "",
-            //         hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : ""
-            //     };
-                
-            //     std::cout << fmt::format("{}", fmt::join(ordered_values, "|")) << std::endl;
-            // }
         }
-        
-        return AnalyzerResult{std::move(flattened_results)};
-        
+
+        return AnalyzerResult{std::move(flattened_results)};       
     } catch (const std::exception& e) {
         spdlog::error("Pipeline execution failed: {}", e.what());
         throw;
