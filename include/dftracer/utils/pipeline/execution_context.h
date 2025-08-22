@@ -630,7 +630,7 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
                                         KeyFunc&& key_func, AggFunc&& agg_func,
                                         size_t num_partitions) const {
     if (num_partitions == 0) {
-      num_partitions = std::max(num_threads_, input.size() / 1000);
+        num_partitions = std::max(num_threads_, input.size() / 1000);
     }
 
     using key_type = decltype(key_func(std::declval<T>()));
@@ -638,40 +638,41 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
 
     std::vector<std::vector<T>> hash_partitions(num_partitions);
     std::vector<std::mutex> partition_mutexes(num_partitions);
-    std::hash<key_type> hasher;
 
     size_t chunk_size = (input.size() + num_threads_ - 1) / num_threads_;
     std::vector<std::future<void>> futures;
 
     for (size_t t = 0; t < num_threads_; ++t) {
-      size_t start = t * chunk_size;
-      size_t end = std::min(start + chunk_size, input.size());
+        size_t start = t * chunk_size;
+        size_t end = std::min(start + chunk_size, input.size());
 
-      if (start < end) {
-        futures.emplace_back(std::async(
-            std::launch::async,
-            [&input, &hash_partitions, &partition_mutexes, &key_func, &hasher,
-             num_partitions, start, end]() {
-              std::vector<std::vector<T>> local_partitions(num_partitions);
+        if (start < end) {
+            futures.emplace_back(std::async(
+                std::launch::async,
+                [&input, &hash_partitions, &partition_mutexes,
+                 key_func,  // Capture by value
+                 num_partitions, start, end]() {
+                    std::hash<key_type> local_hasher;  // Create local instance
+                    std::vector<std::vector<T>> local_partitions(num_partitions);
 
-              for (size_t i = start; i < end; ++i) {
-                auto key = key_func(input[i]);
-                size_t hash_value = hasher(key);
-                size_t partition_idx = hash_value % num_partitions;
-                local_partitions[partition_idx].push_back(input[i]);
-              }
+                    for (size_t i = start; i < end; ++i) {
+                        auto key = key_func(input[i]);
+                        size_t hash_value = local_hasher(key);
+                        size_t partition_idx = hash_value % num_partitions;
+                        local_partitions[partition_idx].push_back(input[i]);
+                    }
 
-              for (size_t p = 0; p < num_partitions; ++p) {
-                if (!local_partitions[p].empty()) {
-                  std::lock_guard<std::mutex> lock(partition_mutexes[p]);
-                  auto& global_partition = hash_partitions[p];
-                  global_partition.insert(global_partition.end(),
-                                          local_partitions[p].begin(),
-                                          local_partitions[p].end());
-                }
-              }
-            }));
-      }
+                    for (size_t p = 0; p < num_partitions; ++p) {
+                        if (!local_partitions[p].empty()) {
+                            std::lock_guard<std::mutex> lock(partition_mutexes[p]);
+                            auto& global_partition = hash_partitions[p];
+                            global_partition.insert(global_partition.end(),
+                                                   local_partitions[p].begin(),
+                                                   local_partitions[p].end());
+                        }
+                    }
+                }));
+        }
     }
 
     for (auto& future : futures) {

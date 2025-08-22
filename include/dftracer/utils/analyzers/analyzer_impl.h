@@ -378,6 +378,7 @@ template <typename BagType>
 inline auto compute_high_level_metrics(
     BagType&& trace_records, const std::vector<std::string>& view_types,
     const std::string& partition_size = "128MB") {
+  spdlog::info("Computing high-level metrics...");
   // Create unified groupby columns (view_types + HLM_EXTRA_COLS)
   std::unordered_set<std::string> hlm_groupby_set(view_types.begin(),
                                                   view_types.end());
@@ -432,24 +433,6 @@ inline auto compute_high_level_metrics(
             }
 
             std::string key = key_stream.str();
-            static std::unordered_set<std::string> logged_keys;
-            static size_t record_count = 0;
-            record_count++;
-
-            if (logged_keys.size() < 2000 &&
-                logged_keys.find(key) == logged_keys.end()) {
-              spdlog::debug(
-                  "RAY DEBUG: Generated groupby key '{}' for record: cat={}, "
-                  "io_cat={}, acc_pat={}, func_name={}, time_range={}, "
-                  "epoch={}, proc_name={}",
-                  key, record.cat, record.io_cat, record.acc_pat,
-                  record.func_name, record.time_range, record.epoch,
-                  record.view_fields.count("proc_name")
-                      ? record.view_fields.at("proc_name")
-                      : "MISSING");
-              logged_keys.insert(key);
-            }
-
             return key;
           },
           // Aggregation
@@ -557,8 +540,7 @@ AnalyzerResult Analyzer::analyze_trace(
     auto hlm_pipeline = helpers::compute_high_level_metrics(
         post_processed_events, proc_view_types, "128MB");
 
-    spdlog::info("Computing high-level metrics...");
-    auto hlms = hlm_pipeline.flatmap([](const auto& hlms) { return hlms; })
+    auto hlms = hlm_pipeline.flatmap([](const auto& high_level_metrics) { return high_level_metrics; })
                     .compute(ctx);
 
     spdlog::info("HLM computation complete: {} groups generated", hlms.size());
