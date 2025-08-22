@@ -129,7 +129,8 @@ int main(int argc, char* argv[]) {
   spdlog::info("  View types: {}", view_types_oss.str());
   spdlog::info("  Trace files: {}", trace_paths.size());
 
-  ThreadedContext ctx;
+  // ThreadedContext ctx;
+  SequentialContext ctx;
   auto start_time = std::chrono::high_resolution_clock::now();
 
   dftracer::utils::analyzers::Analyzer analyzer;
@@ -179,11 +180,61 @@ int main(int argc, char* argv[]) {
       
   //     for (const auto& work : partition) {
   //         dftracer::utils::reader::Reader reader(work.path, work.path + ".idx");
-  //         auto lines = reader.read_json_lines_bytes(work.start, work.end);
-  //         results.insert(results.end(), lines.begin(), lines.end());
+  //         spdlog::info("Reading from {}: bytes {} to {}", work.path, work.start, work.end);
+  //         auto docs = reader.read_json_lines_bytes(work.start, work.end);
+  //         results.insert(results.end(), docs.begin(), docs.end());
+  //         // for (const auto& doc : docs) {
+  //             // spdlog::info("Parsed document: {}", doc);
+  //             // if (!doc.error()) {
+  //             //     results.push_back(doc.value());
+  //             // }
+  //         // }
+  //         // results.insert(results.end(), lines.begin(), lines.end());
   //     }
   //     return results;
   // });
+
+  // // Test JSON parsing
+  // spdlog::info("Computing pipeline to get JSON documents...");
+  // auto json_docs = pipeline.compute(ctx);
+  // spdlog::info("Got {} JSON documents", json_docs.size());
+  
+  // if (!json_docs.empty()) {
+  //   // Test parsing a few records manually
+  //   spdlog::info("Testing manual trace record parsing...");
+  //   using namespace dftracer::utils::json;
+    
+  //   for (size_t i = 0; i < std::min(size_t(5), json_docs.size()); ++i) {
+  //     const auto& doc = json_docs[i];
+  //     spdlog::info("=== Testing document {} ===", i);
+
+  //     spdlog::info("Document: {}", doc);
+
+  //     // // Test basic field extraction
+  //     // std::string cat = dftracer::utils::json::get_string_field(doc, "cat");
+  //     // std::string name = dftracer::utils::json::get_string_field(doc, "name"); 
+  //     // std::string ph = dftracer::utils::json::get_string_field(doc, "ph");
+
+  //     // spdlog::info("  cat: '{}'", cat);
+  //     // spdlog::info("  name: '{}'", name);
+  //     // spdlog::info("  ph: '{}'", ph);
+      
+  //     // // Test if doc is object
+  //     // spdlog::info("  is_object: {}", doc.is_object());
+      
+  //     // if (doc.is_object()) {
+  //     //   auto obj_result = doc.get_object();
+  //     //   if (!obj_result.error()) {
+  //     //     auto obj = obj_result.value();
+  //     //     spdlog::info("  Fields in object:");
+  //     //     for (auto field : obj) {
+  //     //       std::string field_key = std::string(field.key);
+  //     //       spdlog::info("    - '{}' (type: {})", field_key, static_cast<int>(field.value.type()));
+  //     //     }
+  //     //   }
+  //     // }
+  //   }
+  // }
 
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double, std::milli> duration = end_time - start_time;

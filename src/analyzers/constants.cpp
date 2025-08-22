@@ -5,6 +5,10 @@ namespace dftracer {
 namespace utils {
 namespace analyzers {
 namespace constants {
+std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat) {
+  os << std::to_string(static_cast<uint64_t>(io_cat));
+  return os;
+}
 
 // View types
 const std::vector<std::pair<std::string, std::string>> LOGICAL_VIEW_TYPES = {
@@ -58,6 +62,51 @@ const std::unordered_set<std::string> POSIX_PCTL_FUNCTIONS = {
 const std::unordered_set<std::string> POSIX_IPC_FUNCTIONS = {
     "msgctl", "msgget", "msgrcv", "msgsnd", "semctl", "semget", "semop",
     "shmat", "shmctl", "shmdt", "shmget"
+};
+
+IOCategory get_io_cat(const std::string& func_name) {
+    // if func_name is within POSIX_METADATA_FUNCTIONS then use metadata
+    if (POSIX_METADATA_FUNCTIONS.count(func_name)) {
+        return IOCategory::METADATA;
+    }
+
+    if (POSIX_READ_FUNCTIONS.count(func_name)) {
+        return IOCategory::READ;
+    }
+
+    if (POSIX_WRITE_FUNCTIONS.count(func_name)) {
+        return IOCategory::WRITE;
+    }
+
+    if (POSIX_SYNC_FUNCTIONS.count(func_name)) {
+        return IOCategory::SYNC;
+    }
+
+    if (POSIX_PCTL_FUNCTIONS.count(func_name)) {
+        return IOCategory::PCTL;
+    }
+
+    if (POSIX_IPC_FUNCTIONS.count(func_name)) {
+        return IOCategory::IPC;
+    }
+
+    return IOCategory::OTHER;
+}
+
+// File patterns to ignore (from Python dftracer.py lines 56-69)
+const std::vector<std::string> IGNORED_FILE_PATTERNS = {
+    "/dev/",
+    "/etc/",
+    "/gapps/python",
+    "/lib/python", 
+    "/proc/",
+    "/software/",
+    "/sys/",
+    "/usr/lib",
+    "/usr/tce/backend",
+    "/usr/tce/packages",
+    "/venv",
+    "__pycache__"
 };
 
 // Size constants

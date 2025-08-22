@@ -42,6 +42,8 @@ enum class IOCategory {
     SYNC = 7
 };
 
+std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat);
+
 enum class Layer {
     APP,
     DATALOADER,
@@ -93,6 +95,11 @@ extern const std::unordered_set<std::string> POSIX_SYNC_FUNCTIONS;
 extern const std::unordered_set<std::string> POSIX_METADATA_FUNCTIONS;
 extern const std::unordered_set<std::string> POSIX_PCTL_FUNCTIONS;
 extern const std::unordered_set<std::string> POSIX_IPC_FUNCTIONS;
+
+IOCategory get_io_cat(const std::string& func_name);
+
+// File patterns to ignore
+extern const std::vector<std::string> IGNORED_FILE_PATTERNS;
 
 // Size constants
 constexpr double KiB = 1024.0;
@@ -148,6 +155,51 @@ constexpr bool VIEW_PERMUTATIONS = false;
 
 const double DEFAULT_TIME_RESOLUTION = 1e6;
 const double DEFAULT_TIME_GRANULARITY = 1e6;
+
+// AI DFTracer constants for epoch processing
+namespace ai_dftracer {
+    constexpr const char* ROOT_NAME = "ai_root";
+    constexpr const char* ROOT_CAT = "ai_root";
+    constexpr const char* ITER_COUNT_NAME = "count";
+    constexpr const char* INIT_NAME = "init";
+    constexpr const char* BLOCK_NAME = "block";
+    constexpr const char* ITER_NAME = "iter";
+    constexpr const char* CTX_SEPARATOR = ".";
+    
+    // Categories
+    constexpr const char* CATEGORY_COMPUTE = "compute";
+    constexpr const char* CATEGORY_DATA = "data";
+    constexpr const char* CATEGORY_DATALOADER = "dataloader";
+    constexpr const char* CATEGORY_COMM = "comm";
+    constexpr const char* CATEGORY_DEVICE = "device";
+    constexpr const char* CATEGORY_CHECKPOINT = "checkpoint";
+    constexpr const char* CATEGORY_PIPELINE = "pipeline";
+    
+    // Pipeline functions
+    constexpr const char* PIPELINE_EPOCH = "epoch";
+    constexpr const char* PIPELINE_TRAIN = "train";
+    constexpr const char* PIPELINE_EVALUATE = "evaluate";
+    constexpr const char* PIPELINE_TEST = "test";
+    
+    // Helper functions
+    inline std::string get_block(const std::string& func_name) {
+        return func_name + CTX_SEPARATOR + BLOCK_NAME;
+    }
+    
+    inline std::string get_iter(const std::string& func_name) {
+        return func_name + CTX_SEPARATOR + ITER_NAME;
+    }
+    
+    inline std::string get_init(const std::string& func_name) {
+        return func_name + CTX_SEPARATOR + INIT_NAME;
+    }
+    
+    // Check if a record matches epoch criteria
+    inline bool is_epoch_event(const std::string& cat, const std::string& func_name) {
+        return cat == CATEGORY_PIPELINE && 
+               (func_name == get_block(PIPELINE_EPOCH) || func_name == PIPELINE_EPOCH);
+    }
+}
 } // namespace constants
 } // namespace analyzers
 } // namespace utils

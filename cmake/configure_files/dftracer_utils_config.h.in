@@ -32,6 +32,13 @@
 // #cmakedefine DFTRACER_UTILS_MPI_ENABLE 1
 
 //==========================
+// Common include
+//==========================
+// #include <spdlog/fmt/bundled/std.h>
+// #include <spdlog/fmt/bundled/ranges.h>
+// #include <spdlog/fmt/bundled/ostream.h>
+
+//==========================
 // Common macro definitions
 //==========================
 

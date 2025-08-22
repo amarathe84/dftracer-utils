@@ -79,9 +79,9 @@ const std::vector<std::string> IGNORED_FUNC_PATTERNS = {
 }
 
 namespace helpers {
-uint8_t encode_io_cat(const std::string& io_cat_str) {
-  auto it = constants::IO_CAT_TO_CODE.find(io_cat_str);
-  return (it != constants::IO_CAT_TO_CODE.end()) ? it->second : 3; // default to "other"
+
+uint64_t calc_time_range(uint64_t time, double time_granularity) {
+  return static_cast<uint64_t>(std::floor(time / time_granularity));
 }
 
 std::string derive_io_cat(const std::string& func_name) {
@@ -100,7 +100,8 @@ std::string derive_io_cat(const std::string& func_name) {
 
 bool should_ignore_event(const std::string& func_name,
                          const std::string& phase) {
-  if (phase == "M") return true;
+  // Don't filter out metadata events (ph == "M") - they need to be processed!
+  // if (phase == "M") return true;
 
   if (constants::IGNORED_FUNC_NAMES.find(func_name) != constants::IGNORED_FUNC_NAMES.end()) {
     return true;
@@ -127,7 +128,7 @@ int get_size_bin_index(uint64_t size) {
   return bin_index;
 }
 
-void set_size_bins(TraceRecord& record) {
+static void set_size_bins(TraceRecord& record) {
   if (record.size > 0) {
     int bin_index = get_size_bin_index(record.size);
 
@@ -144,79 +145,150 @@ void set_size_bins(TraceRecord& record) {
   }
 }
 
-TraceRecord parse_trace_record(const dftracer::utils::json::JsonDocument& doc,
+std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc,
                                const std::vector<std::string>& view_types,
                                double time_granularity) {
   using namespace dftracer::utils::json;
 
-  TraceRecord record;
+  TraceRecord record = {};  // Initialize all fields to zero/empty
 
-  std::string cat = get_string_field(doc, "cat");
-  std::string func_name = get_string_field(doc, "name");
-  std::string phase = get_string_field(doc, "ph");
+  try {
+    if (!doc.is_object()) { return std::nullopt; }
+  
+    std::string func_name = get_string_field_owned(doc, "name");
+    std::string phase = get_string_field_owned(doc, "ph");
 
-  if (should_ignore_event(func_name, phase)) {
-    return record;
-  }
-
-  std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
-
-  record.cat = cat;
-  record.func_name = func_name;
-  record.time = get_double_field(doc, "dur");
-  record.count = 1;
-
-  // Calculate time_range: ((ts + dur) / 2.0) / time_granularity
-  double ts = get_double_field(doc, "ts");
-  double dur = record.time;
-  record.time_range =
-      static_cast<uint64_t>(((ts + dur) / 2.0) / time_granularity);
-
-  record.size = 0;
-  if (cat == "posix" || cat == "stdio") {
-    record.io_cat = derive_io_cat(func_name);
-
-    std::string ret_str = get_args_string_field(doc, "ret");
-    if (!ret_str.empty()) {
-      try {
-        uint64_t ret_value = std::stoull(ret_str);
-        if (ret_value > 0 &&
-            (record.io_cat == "read" || record.io_cat == "write")) {
-          record.size = ret_value;
-        }
-      } catch (...) {
-      }
+    if (should_ignore_event(func_name, phase)) {
+      return std::nullopt;
     }
-  } else {
-    record.io_cat = "other";
-  }
 
-  record.acc_pat = "0";
+    // Get basic fields that all events have
+    record.func_name = func_name;
+    
+    // Debug logging for first few records
+    static size_t parse_count = 0;
+    parse_count++;
+    if (parse_count <= 10) {
+      spdlog::debug("RAY DEBUG: Parsing record #{}: name='{}', ph='{}', cat='{}'", 
+                   parse_count, func_name, phase, get_string_field_owned(doc, "cat"));
+    }
 
-  for (const auto& view_type : view_types) {
-    if (view_type == "proc_name") {
-      std::string hostname = get_args_string_field(doc, "hostname");
-      std::string pid = get_string_field(doc, "pid");
-      std::string tid = get_string_field(doc, "tid");
+    auto obj = doc.get_object().value();
+    
+    // Extract cat field
+    std::string cat = get_string_field_owned(doc, "cat");
+    if (!cat.empty()) {
+      std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
+      record.cat = cat;
+    }
+    
+    // Extract pid and tid
+    record.pid = get_uint64_field_owned(doc, "pid");
+    record.tid = get_uint64_field_owned(doc, "tid");
 
-      if (hostname.empty()) hostname = "unknown";
-      record.view_fields[view_type] = "app#" + hostname + "#" + pid + "#" + tid;
-    } else if (view_type == "file_name") {
-      std::string fname = get_args_string_field(doc, "fname");
-      if (fname.empty()) {
-        fname = get_args_string_field(doc, "name");
+    // Extract hhash from args if available
+    record.hhash = get_args_string_field_owned(doc, "hhash");
+
+    // Handle metadata events (phase == "M")
+    if (phase == "M") {
+      if (func_name == "FH") {
+        record.event_type = 1; // file hash
+        record.func_name = get_args_string_field_owned(doc, "name");
+        record.fhash = get_args_string_field_owned(doc, "value");
+      } else if (func_name == "HH") {
+        record.event_type = 2; // host hash
+        record.func_name = get_args_string_field_owned(doc, "name");
+        record.hhash = get_args_string_field_owned(doc, "value");
+      } else if (func_name == "SH") {
+        record.event_type = 3; // string hash
+        record.func_name = get_args_string_field_owned(doc, "name");
+        // Store hash in fhash field for simplicity
+        record.fhash = get_args_string_field_owned(doc, "value");
+      } else if (func_name == "PR") {
+        record.event_type = 5; // process metadata
+        record.func_name = get_args_string_field_owned(doc, "name");
+        record.fhash = get_args_string_field_owned(doc, "value");
+      } else {
+        record.event_type = 4; // other metadata
+        record.func_name = get_args_string_field_owned(doc, "name");
+        record.fhash = get_args_string_field_owned(doc, "value");
       }
-      record.view_fields[view_type] = fname;
     } else {
-      std::string value = get_string_field(doc, view_type);
-      if (value.empty()) {
-        value = get_args_string_field(doc, view_type);
-      }
-      record.view_fields[view_type] = value;
-    }
-  }
+      // Regular event (type = 0)
+      record.event_type = 0;
+      
+      // Extract duration and timestamp
+      record.duration = get_double_field_owned(doc, "dur");
+      record.time_start = get_uint64_field_owned(doc, "ts");
+      record.time_end = record.time_start + static_cast<uint64_t>(record.duration);
+      record.count = 1;
 
-  set_size_bins(record);
+      // Don't calculate time_range here - will be calculated after timestamp normalization
+      // to match Python's behavior: ts = ts - min(ts), then trange = ts // granularity
+      record.time_range = 0; // Will be recalculated later
+
+      // Extract IO-related fields
+      record.fhash = get_args_string_field_owned(doc, "fhash");
+      record.size = 0;
+      
+      if (record.cat == "posix" || record.cat == "stdio") {
+        record.io_cat = derive_io_cat(func_name);
+        
+        std::string ret_str = get_args_string_field_owned(doc, "ret");
+        if (!ret_str.empty()) {
+          try {
+            uint64_t ret_value = std::stoull(ret_str);
+            if (ret_value > 0 && (record.io_cat == "read" || record.io_cat == "write")) {
+              record.size = ret_value;
+            }
+          } catch (...) {
+            // Ignore parse errors
+          }
+        }
+
+        std::string offset_str = get_args_string_field_owned(doc, "offset");
+        if (!offset_str.empty()) {
+          try {
+            record.offset = std::stoull(offset_str);
+          } catch (...) {
+            // Ignore parse errors
+          }
+        }
+      } else {
+        record.io_cat = "other";
+        
+        // Extract image_id for non-POSIX events
+        std::string image_idx_str = get_args_string_field_owned(doc, "image_idx");
+        if (!image_idx_str.empty()) {
+          try {
+            record.image_id = std::stoull(image_idx_str);
+          } catch (...) {
+            // Ignore parse errors
+          }
+        }
+      }
+
+      record.acc_pat = "0";
+      
+      // Extract epoch from args if available
+      std::string epoch_str = get_args_string_field_owned(doc, "epoch");
+      if (!epoch_str.empty()) {
+        try {
+          record.epoch = std::stoull(epoch_str);
+        } catch (...) {
+          record.epoch = 0; // Default if parsing fails
+        }
+      }
+
+      // Set size bins for regular events
+      set_size_bins(record);
+    }
+
+  } catch (const std::exception& e) {
+    spdlog::debug("Exception in parse_trace_record: {}", e.what());
+    // Return empty record on error
+    return std::nullopt;
+  }
 
   return record;
 }
@@ -232,18 +304,6 @@ Analyzer::Analyzer(double time_granularity,
       checkpoint_size_(checkpoint_size),
       checkpoint_(checkpoint),
       checkpoint_dir_(checkpoint_dir) {}
-
-// Template implementation moved to analyzer_impl.h
-
-Bag<HighLevelMetrics> Analyzer::compute_high_level_metrics(
-    const std::vector<TraceRecord>& records,
-    const std::vector<std::string>& view_types,
-    const std::string& partition_size,
-    const std::string& checkpoint_name
-) {
-    // @TODO: implement this
-    return from_sequence<HighLevelMetrics>({});
-}
 
 Bag<TraceRecord> Analyzer::read_trace(
     const std::string& trace_path,
@@ -280,6 +340,7 @@ bool Analyzer::has_checkpoint(const std::string& name) const {
   std::string metadata_path = checkpoint_path + "/_checkpoint_metadata";
   return fs::exists(metadata_path);
 }
+
 
 } // namespace analyzers
 } // namespace utils

@@ -83,7 +83,7 @@ inline size_t parse_size_string(const std::string& size_str) {
     throw std::invalid_argument("Unknown size unit: " + unit);
 }
 
-// CRTP Base execution context with partition awareness
+// CRTP Base execution context with partition awareness and distributed groupby
 template<typename Derived>
 class ExecutionContext {
 public:
@@ -142,6 +142,13 @@ public:
         return static_cast<const Derived*>(this)->template execute_groupby_impl<T, KeyFunc>(
             input, std::forward<KeyFunc>(key_func));
     }
+    
+    // NEW: Distributed groupby with aggregation for large datasets
+    template<typename T, typename KeyFunc, typename AggFunc>
+    auto execute_distributed_groupby(const std::vector<T>& input, KeyFunc&& key_func, AggFunc&& agg_func, size_t num_partitions = 0) const {
+        return static_cast<const Derived*>(this)->template execute_distributed_groupby_impl<T, KeyFunc, AggFunc>(
+            input, std::forward<KeyFunc>(key_func), std::forward<AggFunc>(agg_func), num_partitions);
+    }
 };
 
 // Sequential execution context
@@ -171,7 +178,7 @@ public:
         
         for (size_t i = 0; i < input.size(); i += partition_size) {
             size_t end = std::min(i + partition_size, input.size());
-            std::vector<T> partition(input.begin() + i, input.begin() + end);
+            std::vector<T> partition(input.begin() + static_cast<std::ptrdiff_t>(i), input.begin() + static_cast<std::ptrdiff_t>(end));
             
             auto partition_result = func(partition);
             final_result.insert(final_result.end(), 
@@ -231,53 +238,52 @@ public:
     }
     
     template<typename T>
-auto execute_repartition_by_bytes_impl(const std::vector<T>& input, size_t target_bytes, bool estimate = true) const 
-    -> std::vector<std::vector<T>> {
-    if (target_bytes == 0) {
-        throw std::invalid_argument("Target bytes cannot be zero");
-    }
-    
-    if (input.empty()) {
-        return {};
-    }
-    
-    if (estimate) {
-        size_t estimated_element_size = estimate_element_size(input);
-        if (estimated_element_size == 0) {
-            estimated_element_size = 1; // Avoid division by zero
+    auto execute_repartition_by_bytes_impl(const std::vector<T>& input, size_t target_bytes, bool estimate = true) const 
+        -> std::vector<std::vector<T>> {
+        if (target_bytes == 0) {
+            throw std::invalid_argument("Target bytes cannot be zero");
         }
         
-        size_t elements_per_partition = std::max(target_bytes / estimated_element_size, size_t(1));
-        size_t num_partitions = (input.size() + elements_per_partition - 1) / elements_per_partition;
+        if (input.empty()) {
+            return {};
+        }
         
-        return execute_repartition_impl(input, num_partitions);
-    } else {
-        std::vector<std::vector<T>> partitions;
-        std::vector<T> current_partition;
-        size_t current_bytes = 0;
-        
-        for (const auto& item : input) {
-            size_t item_size = get_actual_size(item);
-            
-            // Avoid infinite loop if single item is larger than target
-            if (current_bytes + item_size > target_bytes && !current_partition.empty()) {
-                partitions.push_back(std::move(current_partition));
-                current_partition.clear();
-                current_bytes = 0;
+        if (estimate) {
+            size_t estimated_element_size = estimate_element_size(input);
+            if (estimated_element_size == 0) {
+                estimated_element_size = 1; // Avoid division by zero
             }
             
-            current_partition.push_back(item);
-            current_bytes += item_size;
+            size_t elements_per_partition = std::max(target_bytes / estimated_element_size, size_t(1));
+            size_t num_partitions = (input.size() + elements_per_partition - 1) / elements_per_partition;
+            
+            return execute_repartition_impl(input, num_partitions);
+        } else {
+            std::vector<std::vector<T>> partitions;
+            std::vector<T> current_partition;
+            size_t current_bytes = 0;
+            
+            for (const auto& item : input) {
+                size_t item_size = get_actual_size(item);
+                
+                // Avoid infinite loop if single item is larger than target
+                if (current_bytes + item_size > target_bytes && !current_partition.empty()) {
+                    partitions.push_back(std::move(current_partition));
+                    current_partition.clear();
+                    current_bytes = 0;
+                }
+                
+                current_partition.push_back(item);
+                current_bytes += item_size;
+            }
+            
+            if (!current_partition.empty()) {
+                partitions.push_back(std::move(current_partition));
+            }
+            
+            return partitions;
         }
-        
-        if (!current_partition.empty()) {
-            partitions.push_back(std::move(current_partition));
-        }
-        
-        return partitions;
     }
-}
-
     
     template<typename T, typename HashFunc>
     auto execute_repartition_by_hash_impl(const std::vector<T>& input, size_t num_partitions, HashFunc&& hash_func) const 
@@ -308,6 +314,49 @@ auto execute_repartition_by_bytes_impl(const std::vector<T>& input, size_t targe
         
         return groups;
     }
+    
+    // NEW: Distributed groupby implementation for large datasets
+    template<typename T, typename KeyFunc, typename AggFunc>
+    auto execute_distributed_groupby_impl(const std::vector<T>& input, KeyFunc&& key_func, AggFunc&& agg_func, size_t num_partitions) const {
+        if (num_partitions == 0) {
+            num_partitions = std::max(size_t(1), input.size() / 1000); // Auto-partition for large datasets
+        }
+        
+        using key_type = decltype(key_func(std::declval<T>()));
+        using agg_result_type = decltype(agg_func(key_type{}, std::vector<T>{}));
+
+        // Phase 1: Hash partition by key
+        std::vector<std::vector<T>> hash_partitions(num_partitions);
+        std::hash<key_type> hasher;
+        
+        for (const auto& item : input) {
+            auto key = key_func(item);
+            size_t hash_value = hasher(key);
+            size_t partition_idx = hash_value % num_partitions;
+            hash_partitions[partition_idx].push_back(item);
+        }
+        
+        // Phase 2: Local groupby + aggregation within each partition
+        std::vector<agg_result_type> partition_results;
+        
+        for (const auto& partition : hash_partitions) {
+            std::unordered_map<key_type, std::vector<T>> local_groups;
+            
+            // Group within partition
+            for (const auto& item : partition) {
+                auto key = key_func(item);
+                local_groups[key].push_back(item);
+            }
+            
+            // Apply aggregation to each group
+            for (const auto& [key, group] : local_groups) {
+                auto agg_result = agg_func(key, group);
+                partition_results.push_back(std::move(agg_result));
+            }
+        }
+        
+        return partition_results;
+    }
 
 private:
     // Helper traits for size calculation
@@ -337,16 +386,16 @@ private:
     
     template<typename T>
     typename std::enable_if_t<!std::is_arithmetic_v<T> && !has_size_method<T>::value, size_t>
-    estimate_element_size_impl(const std::vector<T>& input) const {
+    estimate_element_size_impl(const std::vector<T>&) const {
         return sizeof(T);
     }
 
     template<typename T>
-size_t estimate_element_size(const std::vector<T>& input) const {
-    if (input.empty()) return sizeof(T); // Fallback for empty input
-    
-    return estimate_element_size_impl(input);
-}
+    size_t estimate_element_size(const std::vector<T>& input) const {
+        if (input.empty()) return sizeof(T); // Fallback for empty input
+        
+        return estimate_element_size_impl(input);
+    }
     
     template<typename T>
     typename std::enable_if_t<std::is_arithmetic_v<T>, size_t>
@@ -362,7 +411,7 @@ size_t estimate_element_size(const std::vector<T>& input) const {
     
     template<typename T>
     typename std::enable_if_t<!std::is_arithmetic_v<T> && !has_size_method<T>::value, size_t>
-    get_actual_size_impl(const T& item) const {
+    get_actual_size_impl(const T&) const {
         return sizeof(T);
     }
     
@@ -372,7 +421,7 @@ size_t estimate_element_size(const std::vector<T>& input) const {
     }
 };
 
-// Threaded execution context
+// Threaded execution context with distributed groupby
 class ThreadedContext : public ExecutionContext<ThreadedContext> {
 public:
     ThreadedContext(size_t num_threads = std::thread::hardware_concurrency()) 
@@ -608,6 +657,96 @@ public:
         
         return final_groups;
     }
+    
+    // NEW: Parallel distributed groupby implementation
+    template<typename T, typename KeyFunc, typename AggFunc>
+    auto execute_distributed_groupby_impl(const std::vector<T>& input, KeyFunc&& key_func, AggFunc&& agg_func, size_t num_partitions) const {
+        if (num_partitions == 0) {
+            num_partitions = std::max(num_threads_, input.size() / 1000);
+        }
+        
+        using key_type = decltype(key_func(std::declval<T>()));
+        using agg_result_type = decltype(agg_func(key_type{}, std::vector<T>{}));
+
+        // Phase 1: Parallel hash partitioning
+        std::vector<std::vector<T>> hash_partitions(num_partitions);
+        std::vector<std::mutex> partition_mutexes(num_partitions);
+        std::hash<key_type> hasher;
+        
+        size_t chunk_size = (input.size() + num_threads_ - 1) / num_threads_;
+        std::vector<std::future<void>> futures;
+        
+        for (size_t t = 0; t < num_threads_; ++t) {
+            size_t start = t * chunk_size;
+            size_t end = std::min(start + chunk_size, input.size());
+            
+            if (start < end) {
+                futures.emplace_back(std::async(std::launch::async,
+                    [&input, &hash_partitions, &partition_mutexes, &key_func, &hasher, num_partitions, start, end]() {
+                        std::vector<std::vector<T>> local_partitions(num_partitions);
+                        
+                        // Local partitioning
+                        for (size_t i = start; i < end; ++i) {
+                            auto key = key_func(input[i]);
+                            size_t hash_value = hasher(key);
+                            size_t partition_idx = hash_value % num_partitions;
+                            local_partitions[partition_idx].push_back(input[i]);
+                        }
+                        
+                        // Merge into global partitions
+                        for (size_t p = 0; p < num_partitions; ++p) {
+                            if (!local_partitions[p].empty()) {
+                                std::lock_guard<std::mutex> lock(partition_mutexes[p]);
+                                auto& global_partition = hash_partitions[p];
+                                global_partition.insert(global_partition.end(),
+                                                      local_partitions[p].begin(),
+                                                      local_partitions[p].end());
+                            }
+                        }
+                    }));
+            }
+        }
+        
+        for (auto& future : futures) {
+            future.wait();
+        }
+        
+        // Phase 2: Parallel local groupby + aggregation within each partition
+        std::vector<std::future<std::vector<agg_result_type>>> partition_futures;
+        
+        for (const auto& partition : hash_partitions) {
+            partition_futures.emplace_back(std::async(std::launch::async,
+                [&partition, &key_func, &agg_func]() -> std::vector<agg_result_type> {
+                    std::unordered_map<key_type, std::vector<T>> local_groups;
+                    
+                    // Group within partition
+                    for (const auto& item : partition) {
+                        auto key = key_func(item);
+                        local_groups[key].push_back(item);
+                    }
+                    
+                    // Apply aggregation to each group
+                    std::vector<agg_result_type> partition_results;
+                    for (const auto& [key, group] : local_groups) {
+                        auto agg_result = agg_func(key, group);
+                        partition_results.push_back(std::move(agg_result));
+                    }
+                    
+                    return partition_results;
+                }));
+        }
+        
+        // Collect all results
+        std::vector<agg_result_type> final_results;
+        for (auto& future : partition_futures) {
+            auto partition_results = future.get();
+            final_results.insert(final_results.end(),
+                                partition_results.begin(),
+                                partition_results.end());
+        }
+        
+        return final_results;
+    }
 
 private:
     size_t num_threads_;
@@ -665,7 +804,7 @@ public:
     
     // Compute method
     template<typename Context>
-    std::vector<T> compute(const Context& ctx) const {
+    std::vector<T> compute(const Context&) const {
         return data_;
     }
     
@@ -776,6 +915,26 @@ public:
         using key_type = decltype(key_func(std::declval<T>()));
         using result_type = std::unordered_map<key_type, std::vector<T>>;
         return Bag<result_type, operation_type>({}, std::move(new_operation));
+    }
+    
+    // NEW: Distributed groupby with aggregation
+    template<typename KeyFunc, typename AggFunc>
+    auto distributed_groupby(KeyFunc key_func, AggFunc agg_func, size_t num_partitions = 0) const {
+        using agg_result_type = decltype(agg_func(std::vector<T>{}));
+        
+        auto new_operation = [*this, key_func, agg_func, num_partitions](const auto& context) -> std::vector<agg_result_type> {
+            auto input_data = this->compute(context);
+            return context.execute_distributed_groupby(input_data, key_func, agg_func, num_partitions);
+        };
+        
+        using operation_type = decltype(new_operation);
+        return Bag<agg_result_type, operation_type>({}, std::move(new_operation));
+    }
+    
+    // Pipe operator for function composition
+    template<typename Func>
+    auto operator|(Func&& func) const -> decltype(func(*this)) {
+        return func(*this);
     }
 };
 
@@ -931,6 +1090,27 @@ public:
         using key_type = decltype(key_func(std::declval<T>()));
         using result_type = std::unordered_map<key_type, std::vector<T>>;
         return Bag<result_type, operation_type>({}, std::move(new_operation));
+    }
+    
+    // NEW: Distributed groupby with aggregation
+    template<typename KeyFunc, typename AggFunc>
+    auto distributed_groupby(KeyFunc key_func, AggFunc agg_func, size_t num_partitions = 0) const {
+        using key_result_type = decltype(key_func(std::declval<T>()));
+        using agg_result_type = decltype(agg_func(key_result_type{}, std::vector<T>{}));
+
+        auto new_operation = [*this, key_func, agg_func, num_partitions](const auto& context) -> std::vector<agg_result_type> {
+            auto input_data = this->compute(context);
+            return context.execute_distributed_groupby(input_data, key_func, agg_func, num_partitions);
+        };
+        
+        using operation_type = decltype(new_operation);
+        return Bag<agg_result_type, operation_type>({}, std::move(new_operation));
+    }
+    
+    // Pipe operator for function composition
+    template<typename Func>
+    auto operator|(Func&& func) const -> decltype(func(*this)) {
+        return func(*this);
     }
 };
 

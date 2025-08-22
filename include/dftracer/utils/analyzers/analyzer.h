@@ -5,10 +5,12 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <optional>
 
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/analyzers/constants.h>
 #include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/utils/json.h>
 
 namespace dftracer {
 namespace utils {
@@ -16,24 +18,58 @@ namespace analyzers {
 
 using namespace dftracer::utils::pipeline;
 
+struct TraceRecord;
+
+namespace helpers {
+std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc,
+                               const std::vector<std::string>& view_types,
+                               double time_granularity);
+
+uint64_t calc_time_range(uint64_t time, double time_granularity);
+}
+
 struct TraceRecord {
   std::string cat;
   std::string io_cat;
   std::string acc_pat;
   std::string func_name;
-  double time;
+  double duration;
   uint64_t count;
-  uint64_t size;
   uint64_t time_range;
+  uint64_t time_start;
+  uint64_t time_end;
+  uint64_t epoch;
+  uint64_t pid;
+  uint64_t tid;
+  std::string fhash;
+  std::string hhash;
+  uint64_t image_id;
+  uint8_t event_type; // 0=regular, 1=file_hash, 2=host_hash, 3=string_hash, 4=other_metadata
+  uint64_t size = std::numeric_limits<uint64_t>::quiet_NaN();
+  uint64_t offset = std::numeric_limits<uint64_t>::quiet_NaN();
   std::unordered_map<std::string, std::string> view_fields;
   std::unordered_map<std::string, uint32_t> bin_fields;
-
 
   template<class Archive>
   void serialize(Archive& ar)
   {
-      ar(cat, io_cat, acc_pat, func_name, time, 
-         count, size, time_range, view_fields, bin_fields);
+      ar(cat, io_cat, acc_pat, func_name, time, count, size, time_range,
+         time_start, time_end, epoch, pid, tid, fhash, hhash, image_id, offset, event_type,
+         view_fields, bin_fields);
+  }
+};
+
+struct HashEntry {
+  std::string name;
+  std::string hash;
+  uint64_t pid;
+  uint64_t tid;
+  std::string hhash;
+  
+  template<class Archive>
+  void serialize(Archive& ar)
+  {
+      ar(name, hash, pid, tid, hhash);
   }
 };
 
@@ -53,7 +89,7 @@ struct HighLevelMetrics {
 };
 
 struct AnalyzerResult {
-  HighLevelMetrics _hlms;
+  std::vector<HighLevelMetrics> _hlms;
 
   template<class Archive>
   void serialize(Archive& ar)
@@ -84,13 +120,6 @@ public:
         // @TODO: add extra_columns_fn
     );
 
-    Bag<HighLevelMetrics> compute_high_level_metrics(
-        const std::vector<TraceRecord>& records,
-        const std::vector<std::string>& view_types,
-        const std::string& partition_size = "128MB",
-        const std::string& checkpoint_name = ""
-    );
-
     Bag<TraceRecord> read_trace(
         const std::string& trace_path,
         const std::unordered_map<std::string, std::string>& extra_columns = {}
@@ -111,11 +140,6 @@ protected:
     std::string get_checkpoint_path(const std::string& name) const;
     bool has_checkpoint(const std::string& name) const;
 
-    HighLevelMetrics _compute_high_level_metrics(
-        const std::vector<TraceRecord>& traces,
-        const std::vector<std::string>& view_types,
-        const std::string& partition_size
-    );
 
 private:
   double time_granularity_;
