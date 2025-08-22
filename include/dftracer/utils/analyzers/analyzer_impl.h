@@ -277,71 +277,67 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
 
 template<typename Context, typename BagType>
 inline auto postread_trace(Context& ctx, BagType&& events, double time_granularity) {
-    // Step 2: Process epochs globally (equivalent to AIDFTracerAnalyzer.postread_trace)
-    
-    // First collect all epoch events across all partitions (for epoch mapping)
-    auto all_epoch_events = events.flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
-        if (constants::ai_dftracer::is_epoch_event(record.cat, record.func_name)) {
-          // spdlog::info("RAY DEBUG: Found epoch event: {}", record.func_name);
-            return {record};
-        }
-        return {};
-    });
-    
-    auto global_epoch_events = all_epoch_events.compute(ctx);
-    spdlog::info("Found {} total epoch events across all partitions", global_epoch_events.size());
+      struct EpochSpanEntry {
+          uint64_t epoch_num;
+          uint64_t start_time;
+          uint64_t end_time;
+          uint64_t duration;
+      };
 
-    // Step 1: Extract epoch numbers from args and find the longest duration for each epoch
-    std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans; // epoch_num -> (start, end)
-    
-    for (const auto& record : global_epoch_events) {
-        // Extract epoch number from the record (we need to parse this from the original JSON)
-        // This should be parsed from args.epoch
-        uint64_t epoch_num = record.epoch;
-        
-        uint64_t start_time_range = record.time_range;
-        uint64_t end_time_range = helpers::calc_time_range(record.time_end, time_granularity);
-        uint64_t duration = end_time_range - start_time_range;
-        
-        // For each epoch, keep the span with the longest duration (biggest window)
-        if (epoch_spans.find(epoch_num) == epoch_spans.end()) {
-            epoch_spans[epoch_num] = {start_time_range, end_time_range};
-        } else {
-            auto [existing_start, existing_end] = epoch_spans[epoch_num];
-            uint64_t existing_duration = existing_end - existing_start;
-            
-            if (duration > existing_duration) {
-                epoch_spans[epoch_num] = {start_time_range, end_time_range};
-            }
-        }
-    }
-    
-    // Step 2: Apply epoch assignment using span-based logic and filter out epoch=0 events
-    auto epoch_processed_events = events.map_partitions([epoch_spans](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
-        std::vector<TraceRecord> result;
-        result.reserve(partition.size());
-        
-        for (auto record : partition) {
-            uint64_t assigned_epoch = 0;
+      // PHASE 1: epoch spans computation
+      auto epoch_spans_bag = events
+          .flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
+              if (constants::ai_dftracer::is_epoch_event(record.cat, record.func_name)) {
+                  return {record};
+              }
+              return {};
+          })
+          .map([time_granularity](const TraceRecord& record) -> EpochSpanEntry {
+              uint64_t start_time_range = record.time_range;
+              uint64_t end_time_range = helpers::calc_time_range(record.time_end, time_granularity);
+              uint64_t duration = end_time_range - start_time_range;
+              return {record.epoch, start_time_range, end_time_range, duration};
+          })
+          .distributed_groupby(
+              [](const EpochSpanEntry& entry) -> uint64_t {
+                  return entry.epoch_num;
+              },
+              [](uint64_t epoch_num, const std::vector<EpochSpanEntry>& entries) -> std::pair<uint64_t, std::pair<uint64_t, uint64_t>> {
+                  auto max_entry = *std::max_element(entries.begin(), entries.end(),
+                      [](const EpochSpanEntry& a, const EpochSpanEntry& b) {
+                          return a.duration < b.duration;
+                      });
+                  return {epoch_num, {max_entry.start_time, max_entry.end_time}};
+              }
+          );
 
-            for (const auto& [epoch_num, span] : epoch_spans) {
-                auto [start, end] = span;
-                if (record.time_range >= start && record.time_range <= end) {
-                    assigned_epoch = epoch_num;
-                    break;
-                }
-            }
+      auto epoch_spans_vector = epoch_spans_bag.compute(ctx);
+      std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans(
+          epoch_spans_vector.begin(), epoch_spans_vector.end()
+      );
 
-            if (assigned_epoch != 0) {
-                record.epoch = assigned_epoch; 
-                result.push_back(record);
-            }
-        }
-        
-        return result;
-    });
+      // PHASE 2: epoch event assignment
+      return std::forward<BagType>(events)
+          .map_partitions([epoch_spans](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
+              std::vector<TraceRecord> result;
+              result.reserve(partition.size());
 
-    return epoch_processed_events;
+              for (auto record : partition) {
+                  uint64_t assigned_epoch = 0;
+                  for (const auto& [epoch_num, span] : epoch_spans) {
+                      auto [start, end] = span;
+                      if (record.time_range >= start && record.time_range <= end) {
+                          assigned_epoch = epoch_num;
+                          break;
+                      }
+                  }
+                  if (assigned_epoch != 0) {
+                      record.epoch = assigned_epoch;
+                      result.push_back(record);
+                  }
+              }
+              return result;
+          });
 }
 
 template<typename BagType>
