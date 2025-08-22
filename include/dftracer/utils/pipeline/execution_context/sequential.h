@@ -1,11 +1,11 @@
 #ifndef __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_SEQUENTIAL_H
 #define __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_SEQUENTIAL_H
 
-#include <vector>
-#include <utility>
-
-#include <dftracer/utils/pipeline/internal.h>
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
+#include <dftracer/utils/pipeline/internal.h>
+
+#include <utility>
+#include <vector>
 
 namespace dftracer {
 namespace utils {
@@ -301,9 +301,9 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
     return get_actual_size_impl(item);
   }
 };
-}
-}
-}
-}
+}  // namespace context
+}  // namespace pipeline
+}  // namespace utils
+}  // namespace dftracer
 
-#endif // __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_SEQUENTIAL_H
+#endif  // __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_SEQUENTIAL_H

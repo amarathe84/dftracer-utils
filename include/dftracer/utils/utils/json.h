@@ -70,7 +70,7 @@ class OwnedJsonDocument {
   std::string minify() const;
 
   template <class Archive>
-  void serialize(Archive &ar) {
+  void serialize(Archive& ar) {
     ar(data_);
   }
 };

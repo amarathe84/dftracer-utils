@@ -1,15 +1,14 @@
 #include <dftracer/utils/analyzers/analyzer.h>
 #include <dftracer/utils/config.h>
 #include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/execution_context/mpi.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/utils/logger.h>
+#include <mpi.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
-
-#include <mpi.h>
 
 #include <argparse/argparse.hpp>
 #include <iostream>
@@ -20,28 +19,22 @@
 using namespace dftracer::utils;
 
 class MPI {
-  public:
-    MPI(int& argc, char**& argv) {
-      MPI_Init(&argc, &argv);
-      MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank_);
-      MPI_Comm_size(MPI_COMM_WORLD, &mpi_size_);
-    }
+ public:
+  MPI(int& argc, char**& argv) {
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank_);
+    MPI_Comm_size(MPI_COMM_WORLD, &mpi_size_);
+  }
 
-    ~MPI() {
-      MPI_Finalize();
-    }
+  ~MPI() { MPI_Finalize(); }
 
-    int rank() const {
-      return mpi_rank_;
-    }
+  int rank() const { return mpi_rank_; }
 
-    int size() const {
-      return mpi_size_;
-    }
+  int size() const { return mpi_size_; }
 
-  private:
-    int mpi_rank_;
-    int mpi_size_;
+ private:
+  int mpi_rank_;
+  int mpi_size_;
 };
 
 int main(int argc, char* argv[]) {

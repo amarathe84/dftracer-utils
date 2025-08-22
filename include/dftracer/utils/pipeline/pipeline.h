@@ -1,6 +1,9 @@
 #ifndef __DFTRACER_UTILS_PIPELINE_PIPELINE_H
 #define __DFTRACER_UTILS_PIPELINE_PIPELINE_H
 
+#include <dftracer/utils/pipeline/execution_context/mpi.h>
+#include <dftracer/utils/pipeline/internal.h>
+
 #include <algorithm>
 #include <cctype>
 #include <functional>
@@ -14,9 +17,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
-
-#include <dftracer/utils/pipeline/internal.h>
-#include <dftracer/utils/pipeline/execution_context/mpi.h>
 
 namespace dftracer {
 namespace utils {
@@ -62,8 +62,9 @@ class Bag<T, void> : public BagBase<T> {
     return Bag<T, void>(std::move(data));
   }
 
-  template<typename Context>
-  static Bag<T, void> from_sequence_distributed(Context& ctx, const std::vector<T>& data) {
+  template <typename Context>
+  static Bag<T, void> from_sequence_distributed(Context& ctx,
+                                                const std::vector<T>& data) {
     if constexpr (std::is_same_v<Context, context::MPIContext>) {
       std::vector<T> my_data;
       for (size_t i = ctx.rank(); i < data.size(); i += ctx.size()) {
@@ -233,7 +234,7 @@ class Bag<T, void> : public BagBase<T> {
   template <typename Context>
   auto collect(const Context& ctx) const {
     auto local_results = compute(ctx);
-  
+
     if constexpr (std::is_same_v<Context, context::MPIContext>) {
       return ctx.gather_results(local_results);
     } else {
@@ -246,7 +247,7 @@ class Bag<T, void> : public BagBase<T> {
       auto local_data = this->compute(context);
       return context.collect(local_data);
     };
-    
+
     using operation_type = decltype(new_operation);
     return Bag<T, operation_type>({}, std::move(new_operation));
   }
@@ -435,7 +436,7 @@ class Bag : public BagBase<T> {
   template <typename Context>
   auto collect(const Context& ctx) const {
     auto local_results = compute(ctx);
-  
+
     if constexpr (std::is_same_v<Context, context::MPIContext>) {
       return ctx.gather_results(local_results);
     } else {
@@ -448,7 +449,7 @@ class Bag : public BagBase<T> {
       auto local_data = this->compute(context);
       return context.collect(local_data);
     };
-    
+
     using operation_type = decltype(new_operation);
     return Bag<T, operation_type>({}, std::move(new_operation));
   }
@@ -459,7 +460,7 @@ auto from_sequence(std::vector<T> data) -> Bag<T, void> {
   return Bag<T, void>(std::move(data));
 }
 
-template<typename T, typename Context>
+template <typename T, typename Context>
 auto from_sequence_distributed(Context& ctx, const std::vector<T>& data) {
   if constexpr (std::is_same_v<Context, context::MPIContext>) {
     std::vector<T> my_data;
@@ -538,7 +539,7 @@ auto format_computed_bag(
                        typeid(T).name(), computed_data.size(), computed_data[0],
                        computed_data[1],
                        computed_data[computed_data.size() - 1]);
-    } else {
+  } else {
     return fmt::format("ComputedBag[{}]({} items)", typeid(T).name(),
                        computed_data.size());
   }

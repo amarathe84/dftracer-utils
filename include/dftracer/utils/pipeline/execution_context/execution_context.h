@@ -1,10 +1,10 @@
 #ifndef __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_EXECUTION_CONTEXT_H
 #define __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_EXECUTION_CONTEXT_H
 
-#include <vector>
-#include <utility>
-
 #include <dftracer/utils/pipeline/internal.h>
+
+#include <utility>
+#include <vector>
 
 namespace dftracer {
 namespace utils {
@@ -19,13 +19,9 @@ class ExecutionContext {
   virtual ~ExecutionContext() = default;
   virtual ExecutionStrategy strategy() const = 0;
 
-  virtual int rank() const {
-      return 0;
-  }
+  virtual int rank() const { return 0; }
 
-  virtual int size() const {
-      return 1;
-  }
+  virtual int size() const { return 1; }
 
   template <typename T, typename MapFunc>
   auto execute_map(const std::vector<T>& input, MapFunc&& func) const
@@ -106,9 +102,9 @@ class ExecutionContext {
             std::forward<AggFunc>(agg_func), num_partitions);
   }
 };
-}
-}
-}
-}
+}  // namespace context
+}  // namespace pipeline
+}  // namespace utils
+}  // namespace dftracer
 
-#endif // __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_EXECUTION_CONTEXT_H
+#endif  // __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_EXECUTION_CONTEXT_H

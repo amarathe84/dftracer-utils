@@ -1,12 +1,12 @@
 #ifndef __DFTRACER_UTILS_PIPELINE_INTERNAL_H
 #define __DFTRACER_UTILS_PIPELINE_INTERNAL_H
 
-#include <string>
-#include <vector>
-#include <stdexcept>
 #include <algorithm>
 #include <cctype>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
+#include <vector>
 
 namespace dftracer {
 namespace utils {
@@ -67,9 +67,9 @@ inline size_t parse_size_string(const std::string& size_str) {
   throw std::invalid_argument("Unknown size unit: " + unit);
 }
 
-} // namespace internal
-} // namespace pipeline
-} // namespace utils
-} // namespace dftracer
+}  // namespace internal
+}  // namespace pipeline
+}  // namespace utils
+}  // namespace dftracer
 
-#endif // __DFTRACER_UTILS_PIPELINE_INTERNAL_H
+#endif  // __DFTRACER_UTILS_PIPELINE_INTERNAL_H

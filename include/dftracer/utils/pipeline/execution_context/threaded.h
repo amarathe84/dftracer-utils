@@ -1,13 +1,13 @@
 #ifndef __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_THREADED_H
 #define __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_THREADED_H
 
-#include <vector>
-#include <utility>
-#include <thread>
-
-#include <dftracer/utils/pipeline/internal.h>
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
 #include <dftracer/utils/pipeline/execution_context/sequential.h>
+#include <dftracer/utils/pipeline/internal.h>
+
+#include <thread>
+#include <utility>
+#include <vector>
 
 namespace dftracer {
 namespace utils {
@@ -74,11 +74,13 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
       size_t end = std::min(start + partition_size, input.size());
 
       if (start < end) {
-        futures.emplace_back(std::async(std::launch::async, [&input, &func,
-                                                             start, end]() {
-          std::vector<T> partition(input.begin() +  static_cast<std::ptrdiff_t>(start), input.begin() +  static_cast<std::ptrdiff_t>(end));
-          return func(partition);
-        }));
+        futures.emplace_back(
+            std::async(std::launch::async, [&input, &func, start, end]() {
+              std::vector<T> partition(
+                  input.begin() + static_cast<std::ptrdiff_t>(start),
+                  input.begin() + static_cast<std::ptrdiff_t>(end));
+              return func(partition);
+            }));
       }
     }
 
@@ -270,7 +272,7 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
                                         KeyFunc&& key_func, AggFunc&& agg_func,
                                         size_t num_partitions) const {
     if (num_partitions == 0) {
-        num_partitions = std::max(num_threads_, input.size() / 1000);
+      num_partitions = std::max(num_threads_, input.size() / 1000);
     }
 
     using key_type = decltype(key_func(std::declval<T>()));
@@ -283,48 +285,49 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
     std::vector<std::future<void>> futures;
 
     for (size_t t = 0; t < num_threads_; ++t) {
-        size_t start = t * chunk_size;
-        size_t end = std::min(start + chunk_size, input.size());
+      size_t start = t * chunk_size;
+      size_t end = std::min(start + chunk_size, input.size());
 
-        if (start < end) {
-            futures.emplace_back(std::async(
-                std::launch::async,
-                [&input, &hash_partitions, &partition_mutexes,
-                 key_func,  // Capture by value
-                 num_partitions, start, end]() {
-                    std::hash<key_type> local_hasher;  // Create local instance
-                    std::vector<std::vector<T>> local_partitions(num_partitions);
+      if (start < end) {
+        futures.emplace_back(std::async(
+            std::launch::async, [&input, &hash_partitions, &partition_mutexes,
+                                 key_func,  // Capture by value
+                                 num_partitions, start, end]() {
+              std::hash<key_type> local_hasher;  // Create local instance
+              std::vector<std::vector<T>> local_partitions(num_partitions);
 
-                    for (size_t i = start; i < end; ++i) {
-                        auto key = key_func(input[i]);
-                        size_t hash_value = local_hasher(key);
-                        size_t partition_idx = hash_value % num_partitions;
-                        local_partitions[partition_idx].push_back(input[i]);
-                    }
+              for (size_t i = start; i < end; ++i) {
+                auto key = key_func(input[i]);
+                size_t hash_value = local_hasher(key);
+                size_t partition_idx = hash_value % num_partitions;
+                local_partitions[partition_idx].push_back(input[i]);
+              }
 
-                    for (size_t p = 0; p < num_partitions; ++p) {
-                        if (!local_partitions[p].empty()) {
-                            std::lock_guard<std::mutex> lock(partition_mutexes[p]);
-                            auto& global_partition = hash_partitions[p];
-                            global_partition.insert(global_partition.end(),
-                                                   local_partitions[p].begin(),
-                                                   local_partitions[p].end());
-                        }
-                    }
-                }));
-        }
+              for (size_t p = 0; p < num_partitions; ++p) {
+                if (!local_partitions[p].empty()) {
+                  std::lock_guard<std::mutex> lock(partition_mutexes[p]);
+                  auto& global_partition = hash_partitions[p];
+                  global_partition.insert(global_partition.end(),
+                                          local_partitions[p].begin(),
+                                          local_partitions[p].end());
+                }
+              }
+            }));
+      }
     }
 
     for (auto& future : futures) {
       future.wait();
     }
 
-    std::vector<std::future<std::vector<std::pair<key_type, agg_result_type>>>> partition_futures;
+    std::vector<std::future<std::vector<std::pair<key_type, agg_result_type>>>>
+        partition_futures;
 
     for (const auto& partition : hash_partitions) {
       partition_futures.emplace_back(std::async(
           std::launch::async,
-          [&partition, &key_func, &agg_func]() -> std::vector<std::pair<key_type, agg_result_type>> {
+          [&partition, &key_func,
+           &agg_func]() -> std::vector<std::pair<key_type, agg_result_type>> {
             std::unordered_map<key_type, std::vector<T>> local_groups;
 
             for (const auto& item : partition) {
@@ -344,7 +347,7 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
 
     // Collect all partition results and merge duplicates by key
     std::unordered_map<key_type, agg_result_type> merged_results;
-    
+
     for (auto& future : partition_futures) {
       auto partition_results = future.get();
       for (auto& [key, result] : partition_results) {
@@ -366,9 +369,9 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
  private:
   size_t num_threads_;
 };
-}
-}
-}
-}
+}  // namespace context
+}  // namespace pipeline
+}  // namespace utils
+}  // namespace dftracer
 
-#endif // __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_THREADED_H
+#endif  // __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_THREADED_H
