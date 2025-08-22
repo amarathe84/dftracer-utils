@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <utility>
+#include <thread>
 
 #include <dftracer/utils/pipeline/internal.h>
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>

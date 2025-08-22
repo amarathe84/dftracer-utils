@@ -191,7 +191,7 @@ inline auto collect_global_hash_mappings(Context& ctx, BagType&& trace_records) 
   return std::make_pair(std::move(file_hash_map), std::move(host_hash_map));
 }
 
-// Pass 2: Apply global hash mappings and filter events
+// Apply global hash mappings and filter events
 template <typename BagType>
 inline auto separate_events_and_hashes(BagType&& trace_records,
                                        const std::unordered_map<std::string, std::string>& file_hash_map,
@@ -268,37 +268,12 @@ inline auto separate_events_and_hashes(BagType&& trace_records,
 }
 }  // namespace trace_reader
 
-// Complete pipeline orchestration with DFTracer-specific processing
-// template <typename Context>
-// inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
-//                         size_t batch_size,
-//                         const std::vector<std::string>& view_types,
-//                         double time_granularity) {
-//   spdlog::info("DFTracer loading {} trace files", traces.size());
-
-//   // Parse all events (including metadata)
-//   auto all_events = trace_reader::parse_and_filter_traces(
-//       traces, batch_size, view_types, time_granularity);
-
-//   // Pass 1: Collect global hash mappings
-//   auto [file_hash_map, host_hash_map] = trace_reader::collect_global_hash_mappings(ctx, all_events);
-  
-//   spdlog::info("Collected {} file hashes and {} host hashes", 
-//                file_hash_map.size(), host_hash_map.size());
-
-//   // Pass 2: Apply global hash mappings and filter events
-//   auto normalized_events = trace_reader::separate_events_and_hashes(all_events, file_hash_map, host_hash_map);
-
-//   // Return normalized events
-//   return normalized_events;
-// }
-
 template <typename Context>
 inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
                         size_t batch_size,
                         const std::vector<std::string>& view_types,
                         double time_granularity) {
-  spdlog::info("DFTracer loading {} trace files", traces.size());
+  spdlog::debug("DFTracer loading {} trace files", traces.size());
 
   // Each process parses only its assigned files
   auto my_events = trace_reader::parse_and_filter_traces(
@@ -326,10 +301,8 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
             return std::min(a, b);
           });
 
-   spdlog::info("Reduce completed. Global minimum timestamp: {}", global_min_timestamp);
-
-  // Second pass: normalize timestamps
-  spdlog::info("Starting map operation for timestamp normalization...");
+  spdlog::debug("Reduce completed. Global minimum timestamp: {}", global_min_timestamp);
+  spdlog::debug("Starting map operation for timestamp normalization...");
 
   // Second pass: normalize timestamps and recalculate time_range using global
   // minimum
@@ -395,7 +368,7 @@ inline auto postread_trace(Context& ctx, BagType&& events,
     epoch_spans[epoch_num] = {max_entry.start_time, max_entry.end_time};
   }
 
-  spdlog::info("Computed {} epoch spans from {} epoch events", epoch_spans.size(), all_epoch_events.size());
+  spdlog::debug("Computed {} epoch spans from {} epoch events", epoch_spans.size(), all_epoch_events.size());
 
   // PHASE 2: Apply epoch assignment using map_partitions for consistent return type
   return std::forward<BagType>(events).map_partitions(
@@ -432,8 +405,6 @@ inline auto postread_trace(Context& ctx, BagType&& events,
             assigned_events++;
           } else {
             unassigned_events++;
-            // Keep all events (assigned or not) to maintain original behavior
-            // result.push_back(record);
           }
         }
         
@@ -443,116 +414,13 @@ inline auto postread_trace(Context& ctx, BagType&& events,
         return result;
       });
 }
-// template <typename Context, typename BagType>
-// inline auto postread_trace(Context& ctx, BagType&& events,
-//                            const std::vector<std::string>& view_types,
-//                            double time_granularity) {
-
-//   // Always process through the pipeline to ensure consistent return type
-  
-//   // PHASE 1: epoch spans computation
-//   auto epoch_spans_bag =
-//       events
-//           .flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
-//             if (constants::ai_dftracer::is_epoch_event(record.cat,
-//                                                        record.func_name)) {
-//               spdlog::debug("Found epoch event: cat={}, func_name={}, epoch={}", 
-//                            record.cat, record.func_name, record.epoch);
-//               return {record};
-//             }
-//             return {};
-//           })
-//           .map([time_granularity](const TraceRecord& record) -> EpochSpanEntry {
-//             uint64_t start_time_range = record.time_range;
-//             uint64_t end_time_range =
-//                 helpers::calc_time_range(record.time_end, time_granularity);
-//             uint64_t duration = end_time_range - start_time_range;
-//             spdlog::debug("Creating epoch span: epoch={}, start={}, end={}, duration={}", 
-//                          record.epoch, start_time_range, end_time_range, duration);
-//             return {record.epoch, start_time_range, end_time_range, duration};
-//           })
-//           .distributed_groupby(
-//               [](const EpochSpanEntry& entry) -> uint64_t {
-//                 return entry.epoch_num;
-//               },
-//               [](uint64_t epoch_num, const std::vector<EpochSpanEntry>& entries)
-//                   -> std::pair<uint64_t, std::pair<uint64_t, uint64_t>> {
-//                 auto max_entry = *std::max_element(
-//                     entries.begin(), entries.end(),
-//                     [](const EpochSpanEntry& a, const EpochSpanEntry& b) {
-//                       return a.duration < b.duration;
-//                     });
-//                 return {epoch_num, {max_entry.start_time, max_entry.end_time}};
-//               });
-
-//   auto epoch_spans_vector = epoch_spans_bag.compute(ctx);
-//   std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans(
-//       epoch_spans_vector.begin(), epoch_spans_vector.end());
-
-//   spdlog::info("Found {} epoch spans", epoch_spans.size());
-//   for (const auto& [epoch_num, span] : epoch_spans) {
-//     spdlog::info("Epoch {}: time range [{}, {}]", epoch_num, span.first, span.second);
-//   }
-
-//   // Check if epoch processing is needed
-//   bool process_epochs = std::find(view_types.begin(), view_types.end(), "epoch") != view_types.end();
-  
-//   if (!process_epochs) {
-//     spdlog::info("No epoch view type detected, skipping epoch processing");
-//   }
-
-//   // PHASE 2: epoch event assignment
-//   return std::forward<BagType>(events).map_partitions(
-//       [epoch_spans, process_epochs](const std::vector<TraceRecord>& partition)
-//           -> std::vector<TraceRecord> {
-        
-//         if (!process_epochs) {
-//           // Just return all events without epoch processing
-//           return partition;
-//         }
-        
-//         std::vector<TraceRecord> result;
-//         result.reserve(partition.size());
-
-//         size_t total_events = partition.size();
-//         size_t assigned_events = 0;
-//         size_t unassigned_events = 0;
-
-//         for (auto record : partition) {
-//           uint64_t assigned_epoch = 0;
-//           for (const auto& [epoch_num, span] : epoch_spans) {
-//             auto [start, end] = span;
-//             if (record.time_range >= start && record.time_range <= end) {
-//               assigned_epoch = epoch_num;
-//               break;
-//             }
-//           }
-//           if (assigned_epoch != 0) {
-//             record.epoch = assigned_epoch;
-//             result.push_back(record);
-//             assigned_events++;
-//           } else {
-//             unassigned_events++;
-//             // For debugging: let's keep some unassigned events anyway if no epochs found
-//             if (epoch_spans.empty()) {
-//               result.push_back(record);
-//             }
-//           }
-//         }
-        
-//         spdlog::info("Epoch assignment results: {} total, {} assigned, {} unassigned", 
-//                      total_events, assigned_events, unassigned_events);
-        
-//         return result;
-//       });
-// }
 
 template <typename BagType>
 inline auto compute_high_level_metrics(
     BagType&& trace_records, const std::vector<std::string>& view_types,
     const std::string& partition_size = "128MB") {
-  spdlog::info("Computing high-level metrics...");
-  
+  spdlog::debug("Computing high-level metrics...");
+
   // Create unified groupby columns (view_types + HLM_EXTRA_COLS)
   std::unordered_set<std::string> hlm_groupby_set(view_types.begin(), view_types.end());
   hlm_groupby_set.insert(constants::HLM_EXTRA_COLS.begin(), constants::HLM_EXTRA_COLS.end());
@@ -566,8 +434,8 @@ inline auto compute_high_level_metrics(
     }
   }
 
-  spdlog::info("HLM groupby columns: {}", hlm_groupby);
-  spdlog::info("View types for unique_set: {}", view_types_diff);
+  spdlog::debug("HLM groupby columns: {}", hlm_groupby);
+  spdlog::debug("View types for unique_set: {}", view_types_diff);
 
   // Use distributed groupby for large datasets
   return std::forward<BagType>(trace_records)
@@ -605,14 +473,6 @@ inline auto compute_high_level_metrics(
 
             std::string key = key_stream.str();
             
-            // Debug: Log some sample keys
-            static std::atomic<int> key_counter{0};
-            if (key_counter.fetch_add(1) < 10) {
-              spdlog::info("HLM Key {}: '{}'", key_counter.load(), key);
-              spdlog::info("  Record: cat='{}', func='{}', time_range={}, epoch={}", 
-                           record.cat, record.func_name, record.time_range, record.epoch);
-            }
-            
             return key;
           },
           
@@ -620,14 +480,7 @@ inline auto compute_high_level_metrics(
           [hlm_groupby_set, view_types_diff](
               const std::string& key,
               const std::vector<TraceRecord>& records) -> HighLevelMetrics {
-            
-            // Debug: Log some sample aggregations
-            static std::atomic<int> agg_counter{0};
-            if (agg_counter.fetch_add(1) < 5) {
-              spdlog::info("HLM Agg {}: key='{}', {} records", 
-                           agg_counter.load(), key, records.size());
-            }
-            
+
             HighLevelMetrics hlm;
 
             // Sum aggregations
@@ -679,141 +532,9 @@ inline auto compute_high_level_metrics(
             }
 
             return hlm;
-          },
-          0  // Auto partitions
-          )
+          })
       .repartition(partition_size);
 }
-
-// template <typename BagType>
-// inline auto compute_high_level_metrics(
-//     BagType&& trace_records, const std::vector<std::string>& view_types,
-//     const std::string& partition_size = "128MB") {
-//   spdlog::info("Computing high-level metrics...");
-//   // Create unified groupby columns (view_types + HLM_EXTRA_COLS)
-//   std::unordered_set<std::string> hlm_groupby_set(view_types.begin(),
-//                                                   view_types.end());
-//   hlm_groupby_set.insert(constants::HLM_EXTRA_COLS.begin(),
-//                          constants::HLM_EXTRA_COLS.end());
-//   std::vector<std::string> hlm_groupby(hlm_groupby_set.begin(),
-//                                        hlm_groupby_set.end());
-
-//   // Get view_types_diff for unique_set aggregation
-//   std::vector<std::string> view_types_diff;
-//   for (const auto& vt : constants::VIEW_TYPES) {
-//     if (hlm_groupby_set.find(vt) == hlm_groupby_set.end()) {
-//       view_types_diff.push_back(vt);
-//     }
-//   }
-
-//   spdlog::info("HLM groupby columns: {}", hlm_groupby);
-//   spdlog::info("View types for unique_set: {}", view_types_diff);
-
-//   // Use distributed groupby for large datasets - this scales with data size
-//   return std::forward<BagType>(trace_records)
-//       .distributed_groupby(
-//           // Key function
-//           [hlm_groupby](const TraceRecord& record) -> std::string {
-//             std::ostringstream key_stream;
-//             bool first = true;
-
-//             for (const auto& col : hlm_groupby) {
-//               if (!first) key_stream << "|";
-//               first = false;
-
-//               if (col == "cat") {
-//                 key_stream << record.cat;
-//               } else if (col == "io_cat") {
-//                 key_stream << constants::get_io_cat(record.func_name);
-//               } else if (col == "acc_pat") {
-//                 key_stream << record.acc_pat;
-//               } else if (col == "func_name") {
-//                 key_stream << record.func_name;
-//               } else if (col == "time_range") {
-//                 key_stream << record.time_range;
-//               } else if (col == "epoch") {
-//                 key_stream << record.epoch;
-//               } else {
-//                 auto it = record.view_fields.find(col);
-//                 if (it != record.view_fields.end()) {
-//                   key_stream << it->second;
-//                 } else {
-//                   key_stream << "";
-//                 }
-//               }
-//             }
-
-//             std::string key = key_stream.str();
-//             return key;
-//           },
-//           // Aggregation
-//           [hlm_groupby_set, view_types_diff](
-//               const std::string&,
-//               const std::vector<TraceRecord>& records) -> HighLevelMetrics {
-//             HighLevelMetrics hlm;
-
-//             // Apply HLM_AGG aggregations (sum for duration, count, size)
-//             for (const auto& record : records) {
-//               hlm.time_sum += record.duration;
-//               hlm.count_sum += record.count;
-
-//               // Handle optional size aggregation (like Python's NaN handling)
-//               if (record.size.has_value()) {
-//                 if (!hlm.size_sum.has_value()) {
-//                   hlm.size_sum = 0;
-//                 }
-//                 hlm.size_sum = hlm.size_sum.value() + record.size.value();
-//               }
-
-//               // Sum bin fields (matches: hlm_agg.update({col: sum for col in
-//               // bin_cols}))
-//               for (const auto& [bin_field, value] : record.bin_fields) {
-//                 if (value.has_value()) {
-//                   if (!hlm.bin_sums[bin_field].has_value()) {
-//                     hlm.bin_sums[bin_field] = 0;
-//                   }
-//                   hlm.bin_sums[bin_field] =
-//                       hlm.bin_sums[bin_field].value() + value.value();
-//                 }
-//                 // If value is nullopt, keep bin_sums[bin_field] as nullopt
-//                 // (don't initialize)
-//               }
-//             }
-
-//             // Store group values (first() equivalent)
-//             if (!records.empty()) {
-//               const auto& first_record = records[0];
-//               hlm.group_values["cat"] = first_record.cat;
-//               hlm.group_values["io_cat"] = std::to_string(static_cast<uint64_t>(
-//                   constants::get_io_cat(first_record.func_name)));
-//               hlm.group_values["acc_pat"] = first_record.acc_pat;
-//               hlm.group_values["func_name"] = first_record.func_name;
-//               hlm.group_values["time_range"] =
-//                   std::to_string(first_record.time_range);
-//               hlm.group_values["epoch"] = std::to_string(first_record.epoch);
-
-//               for (const auto& [field, value] : first_record.view_fields) {
-//                 hlm.group_values[field] = value;
-//               }
-//             }
-
-//             // Apply unique_set() for view_types_diff
-//             for (const auto& col : view_types_diff) {
-//               for (const auto& record : records) {
-//                 auto it = record.view_fields.find(col);
-//                 if (it != record.view_fields.end()) {
-//                   hlm.unique_sets[col].insert(it->second);
-//                 }
-//               }
-//             }
-
-//             return hlm;
-//           },
-//           0  // Auto-determine number of partitions based on data size
-//           )
-//       // Repartition after aggregation for final processing
-//       .repartition(partition_size);
-// }
 }  // namespace helpers
 
 template <typename Context>
@@ -822,10 +543,6 @@ AnalyzerResult Analyzer::analyze_trace(
     const std::vector<std::string>& view_types,
     const std::vector<std::string>& exclude_characteristics,
     const std::unordered_map<std::string, std::string>& extra_columns) {
-  spdlog::info(
-      "=== RAY DEBUG: Starting full pipeline analysis of {} trace files ===",
-      traces.size());
-
   try {
     // Ensure proc_name is included in view_types
     std::vector<std::string> proc_view_types = view_types;
@@ -871,7 +588,7 @@ AnalyzerResult Analyzer::analyze_trace(
           }
         }
 
-        spdlog::info("Analysis summary:");
+        spdlog::info("HLMs summary:");
         spdlog::info("  Total operations: {}", total_count);
         spdlog::info("  Total time: {:.2f}", total_time);
         spdlog::info("  Total size: {} bytes", total_size);
