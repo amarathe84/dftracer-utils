@@ -101,8 +101,10 @@ int main(int argc, char* argv[]) {
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception& err) {
-    spdlog::error("Error occurred: {}", err.what());
-    std::cerr << program;
+    if (mpi.rank() == 0) {
+      spdlog::error("Error occurred: {}", err.what());
+      std::cerr << program;
+    }
     return 1;
   }
 
@@ -130,37 +132,44 @@ int main(int argc, char* argv[]) {
   }
 
   if (trace_paths.empty()) {
-    spdlog::error("No trace files specified");
-    std::cerr << program;
+    if (mpi.rank() == 0) {
+      spdlog::error("No trace files specified");
+      std::cerr << program;
+    }
     return 1;
   }
 
   // Validate checkpoint arguments
   if (checkpoint && checkpoint_dir.empty()) {
-    spdlog::error(
-        "--checkpoint-dir must be specified when --checkpoint is enabled");
-    std::cerr << program;
+    if (mpi.rank() == 0) {
+      spdlog::error(
+          "--checkpoint-dir must be specified when --checkpoint is enabled");
+      std::cerr << program;
+    }
     return 1;
   }
 
-  spdlog::info("=== DFTracer High-Level Metrics Computation ===");
-  spdlog::info("Configuration:");
-  spdlog::info("  Checkpoint size: {} MB", checkpoint_size / (1024 * 1024));
-  spdlog::info("  Force rebuild: {}", force_rebuild ? "true" : "false");
-  spdlog::info("  Time granularity: {} µs", time_granularity);
-  spdlog::info("  Checkpointing: {}", checkpoint ? "enabled" : "disabled");
-  if (checkpoint) {
-    spdlog::info("  Checkpoint directory: {}", checkpoint_dir);
+  if (mpi.rank() == 0) {
+    spdlog::info("=== DFTracer High-Level Metrics Computation ===");
+    spdlog::info("Configuration:");
+    spdlog::info("  Checkpoint size: {} MB", checkpoint_size / (1024 * 1024));
+    spdlog::info("  Force rebuild: {}", force_rebuild ? "true" : "false");
+    spdlog::info("  Time granularity: {} µs", time_granularity);
+    spdlog::info("  Checkpointing: {}", checkpoint ? "enabled" : "disabled");
+    if (checkpoint) {
+      spdlog::info("  Checkpoint directory: {}", checkpoint_dir);
+    }
   }
+
   std::ostringstream view_types_oss;
   for (size_t i = 0; i < view_types.size(); ++i) {
     view_types_oss << view_types[i];
     if (i < view_types.size() - 1) view_types_oss << ", ";
   }
-  spdlog::info("  View types: {}", view_types_oss.str());
-  spdlog::info("  Trace files: {}", trace_paths.size());
 
   if (mpi.rank() == 0) {
+    spdlog::info("  View types: {}", view_types_oss.str());
+    spdlog::info("  Trace files: {}", trace_paths.size());
     spdlog::info("Running with MPI: Rank {}/{}", mpi.rank(), mpi.size());
   }
 
@@ -173,7 +182,10 @@ int main(int argc, char* argv[]) {
 
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double, std::milli> duration = end_time - start_time;
-  spdlog::info("Duration: {} ms", duration.count());
+
+  if (mpi.rank() == 0) {
+    spdlog::debug("Duration: {} ms", duration.count());
+  }
 
   return 0;
 }

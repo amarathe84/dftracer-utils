@@ -265,6 +265,30 @@ inline auto separate_events_and_hashes(BagType&& trace_records,
 }  // namespace trace_reader
 
 // Complete pipeline orchestration with DFTracer-specific processing
+// template <typename Context>
+// inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
+//                         size_t batch_size,
+//                         const std::vector<std::string>& view_types,
+//                         double time_granularity) {
+//   spdlog::info("DFTracer loading {} trace files", traces.size());
+
+//   // Parse all events (including metadata)
+//   auto all_events = trace_reader::parse_and_filter_traces(
+//       traces, batch_size, view_types, time_granularity);
+
+//   // Pass 1: Collect global hash mappings
+//   auto [file_hash_map, host_hash_map] = trace_reader::collect_global_hash_mappings(ctx, all_events);
+  
+//   spdlog::info("Collected {} file hashes and {} host hashes", 
+//                file_hash_map.size(), host_hash_map.size());
+
+//   // Pass 2: Apply global hash mappings and filter events
+//   auto normalized_events = trace_reader::separate_events_and_hashes(all_events, file_hash_map, host_hash_map);
+
+//   // Return normalized events
+//   return normalized_events;
+// }
+
 template <typename Context>
 inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
                         size_t batch_size,
@@ -272,21 +296,26 @@ inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
                         double time_granularity) {
   spdlog::info("DFTracer loading {} trace files", traces.size());
 
-  // Parse all events (including metadata)
-  auto all_events = trace_reader::parse_and_filter_traces(
-      traces, batch_size, view_types, time_granularity);
+  // Distribute trace files across MPI processes
+  std::vector<std::string> my_traces;
+  if constexpr (std::is_same_v<Context, context::MPIContext>) {
+    for (size_t i = ctx.rank(); i < traces.size(); i += ctx.size()) {
+      my_traces.push_back(traces[i]);
+    }
+    spdlog::info("Rank {} processing {} of {} files", ctx.rank(), my_traces.size(), traces.size());
+  } else {
+    my_traces = traces;
+  }
 
-  // Pass 1: Collect global hash mappings
-  auto [file_hash_map, host_hash_map] = trace_reader::collect_global_hash_mappings(ctx, all_events);
+  // Each process parses only its assigned files
+  auto my_events = trace_reader::parse_and_filter_traces(
+      my_traces, batch_size, view_types, time_granularity);
+
+  // Collect hashes from all processes  
+  auto [file_hash_map, host_hash_map] = trace_reader::collect_global_hash_mappings(ctx, my_events);
   
-  spdlog::info("Collected {} file hashes and {} host hashes", 
-               file_hash_map.size(), host_hash_map.size());
-
-  // Pass 2: Apply global hash mappings and filter events
-  auto normalized_events = trace_reader::separate_events_and_hashes(all_events, file_hash_map, host_hash_map);
-
-  // Return normalized events
-  return normalized_events;
+  // Apply hash mappings to local events only
+  return trace_reader::separate_events_and_hashes(my_events, file_hash_map, host_hash_map);
 }
 
 // Timestamp normalization stage - find global minimum and normalize
@@ -343,7 +372,7 @@ inline auto postread_trace(Context& ctx, BagType&& events,
                            const std::vector<std::string>& view_types,
                            double time_granularity) {
 
-  // PHASE 1: epoch spans computation
+  // PHASE 1: epoch spans computation (even if not used, this maintains the original logic)
   auto epoch_spans_bag =
       events
           .flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
@@ -375,23 +404,78 @@ inline auto postread_trace(Context& ctx, BagType&& events,
               });
 
   auto epoch_spans_vector = epoch_spans_bag.compute(ctx);
-  std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans(
+  std::map<uint64_t, std::pair<uint64_t, uint64_t>> local_epoch_spans(
       epoch_spans_vector.begin(), epoch_spans_vector.end());
 
-  // PHASE 2: epoch event assignment
+  // Properly share epoch spans across all ranks
+  std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans;
+  if constexpr (std::is_same_v<Context, context::MPIContext>) {
+    // Serialize local epoch spans
+    std::vector<char> local_data = ctx.serialize(epoch_spans_vector);
+    
+    // Gather all serialized data from all ranks
+    std::vector<std::vector<char>> all_data(ctx.size());
+    std::vector<int> recv_counts(ctx.size());
+    
+    // Get sizes from all ranks
+    int local_size = static_cast<int>(local_data.size());
+    MPI_Allgather(&local_size, 1, MPI_INT, recv_counts.data(), 1, MPI_INT, ctx.comm());
+    
+    // Calculate displacements
+    std::vector<int> displacements(ctx.size());
+    int total_size = 0;
+    for (int i = 0; i < ctx.size(); ++i) {
+      displacements[i] = total_size;
+      total_size += recv_counts[i];
+    }
+    
+    // Gather all data
+    std::vector<char> all_gathered_data(total_size);
+    MPI_Allgatherv(local_data.data(), local_size, MPI_BYTE,
+                   all_gathered_data.data(), recv_counts.data(), displacements.data(), 
+                   MPI_BYTE, ctx.comm());
+    
+    // Deserialize and merge all epoch spans
+    size_t offset = 0;
+    for (int rank = 0; rank < ctx.size(); ++rank) {
+      if (recv_counts[rank] > 0) {
+        std::vector<char> rank_data(all_gathered_data.begin() + offset,
+                                  all_gathered_data.begin() + offset + recv_counts[rank]);
+        auto rank_spans = ctx.template deserialize<std::vector<std::pair<uint64_t, std::pair<uint64_t, uint64_t>>>>(rank_data);
+        for (const auto& span : rank_spans) {
+          epoch_spans[span.first] = span.second;
+        }
+        offset += recv_counts[rank];
+      }
+    }
+  } else {
+    epoch_spans = local_epoch_spans;
+  }
+
+  spdlog::info("[RANK {}] Found {} epoch spans after MPI sharing", ctx.rank(), epoch_spans.size());
+  for (const auto& [epoch_num, span] : epoch_spans) {
+    spdlog::info("[RANK {}] Epoch {}: time range [{}, {}]", ctx.rank(), epoch_num, span.first, span.second);
+  }
+
+  // PHASE 2: epoch event assignment using map_partitions for consistent return type
   return std::forward<BagType>(events).map_partitions(
       [epoch_spans, view_types](const std::vector<TraceRecord>& partition)
           -> std::vector<TraceRecord> {
-        // check if view_types contain epoch, if not just return events
-        if (std::find(view_types.begin(), view_types.end(), "epoch") ==
-            view_types.end()) {
-          spdlog::info(
-              "No epoch view type detected, skipping epoch processing");
+        
+        // Check if epoch processing is needed
+        bool process_epochs = std::find(view_types.begin(), view_types.end(), "epoch") != view_types.end();
+        
+        if (!process_epochs) {
+          spdlog::info("No epoch view type detected, skipping epoch processing for {} events", partition.size());
           return partition;
         }
 
         std::vector<TraceRecord> result;
         result.reserve(partition.size());
+
+        size_t total_events = partition.size();
+        size_t assigned_events = 0;
+        size_t unassigned_events = 0;
 
         for (auto record : partition) {
           uint64_t assigned_epoch = 0;
@@ -405,24 +489,134 @@ inline auto postread_trace(Context& ctx, BagType&& events,
           if (assigned_epoch != 0) {
             record.epoch = assigned_epoch;
             result.push_back(record);
+            assigned_events++;
+          } else {
+            unassigned_events++;
+            // Keep all events (assigned or not) to maintain original behavior
+            // result.push_back(record);
           }
         }
+        
+        spdlog::info("Epoch assignment results: {} total, {} assigned, {} unassigned", 
+                     total_events, assigned_events, unassigned_events);
+        
         return result;
       });
 }
+// template <typename Context, typename BagType>
+// inline auto postread_trace(Context& ctx, BagType&& events,
+//                            const std::vector<std::string>& view_types,
+//                            double time_granularity) {
+
+//   // Always process through the pipeline to ensure consistent return type
+  
+//   // PHASE 1: epoch spans computation
+//   auto epoch_spans_bag =
+//       events
+//           .flatmap([](const TraceRecord& record) -> std::vector<TraceRecord> {
+//             if (constants::ai_dftracer::is_epoch_event(record.cat,
+//                                                        record.func_name)) {
+//               spdlog::debug("Found epoch event: cat={}, func_name={}, epoch={}", 
+//                            record.cat, record.func_name, record.epoch);
+//               return {record};
+//             }
+//             return {};
+//           })
+//           .map([time_granularity](const TraceRecord& record) -> EpochSpanEntry {
+//             uint64_t start_time_range = record.time_range;
+//             uint64_t end_time_range =
+//                 helpers::calc_time_range(record.time_end, time_granularity);
+//             uint64_t duration = end_time_range - start_time_range;
+//             spdlog::debug("Creating epoch span: epoch={}, start={}, end={}, duration={}", 
+//                          record.epoch, start_time_range, end_time_range, duration);
+//             return {record.epoch, start_time_range, end_time_range, duration};
+//           })
+//           .distributed_groupby(
+//               [](const EpochSpanEntry& entry) -> uint64_t {
+//                 return entry.epoch_num;
+//               },
+//               [](uint64_t epoch_num, const std::vector<EpochSpanEntry>& entries)
+//                   -> std::pair<uint64_t, std::pair<uint64_t, uint64_t>> {
+//                 auto max_entry = *std::max_element(
+//                     entries.begin(), entries.end(),
+//                     [](const EpochSpanEntry& a, const EpochSpanEntry& b) {
+//                       return a.duration < b.duration;
+//                     });
+//                 return {epoch_num, {max_entry.start_time, max_entry.end_time}};
+//               });
+
+//   auto epoch_spans_vector = epoch_spans_bag.compute(ctx);
+//   std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans(
+//       epoch_spans_vector.begin(), epoch_spans_vector.end());
+
+//   spdlog::info("Found {} epoch spans", epoch_spans.size());
+//   for (const auto& [epoch_num, span] : epoch_spans) {
+//     spdlog::info("Epoch {}: time range [{}, {}]", epoch_num, span.first, span.second);
+//   }
+
+//   // Check if epoch processing is needed
+//   bool process_epochs = std::find(view_types.begin(), view_types.end(), "epoch") != view_types.end();
+  
+//   if (!process_epochs) {
+//     spdlog::info("No epoch view type detected, skipping epoch processing");
+//   }
+
+//   // PHASE 2: epoch event assignment
+//   return std::forward<BagType>(events).map_partitions(
+//       [epoch_spans, process_epochs](const std::vector<TraceRecord>& partition)
+//           -> std::vector<TraceRecord> {
+        
+//         if (!process_epochs) {
+//           // Just return all events without epoch processing
+//           return partition;
+//         }
+        
+//         std::vector<TraceRecord> result;
+//         result.reserve(partition.size());
+
+//         size_t total_events = partition.size();
+//         size_t assigned_events = 0;
+//         size_t unassigned_events = 0;
+
+//         for (auto record : partition) {
+//           uint64_t assigned_epoch = 0;
+//           for (const auto& [epoch_num, span] : epoch_spans) {
+//             auto [start, end] = span;
+//             if (record.time_range >= start && record.time_range <= end) {
+//               assigned_epoch = epoch_num;
+//               break;
+//             }
+//           }
+//           if (assigned_epoch != 0) {
+//             record.epoch = assigned_epoch;
+//             result.push_back(record);
+//             assigned_events++;
+//           } else {
+//             unassigned_events++;
+//             // For debugging: let's keep some unassigned events anyway if no epochs found
+//             if (epoch_spans.empty()) {
+//               result.push_back(record);
+//             }
+//           }
+//         }
+        
+//         spdlog::info("Epoch assignment results: {} total, {} assigned, {} unassigned", 
+//                      total_events, assigned_events, unassigned_events);
+        
+//         return result;
+//       });
+// }
 
 template <typename BagType>
 inline auto compute_high_level_metrics(
     BagType&& trace_records, const std::vector<std::string>& view_types,
     const std::string& partition_size = "128MB") {
   spdlog::info("Computing high-level metrics...");
+  
   // Create unified groupby columns (view_types + HLM_EXTRA_COLS)
-  std::unordered_set<std::string> hlm_groupby_set(view_types.begin(),
-                                                  view_types.end());
-  hlm_groupby_set.insert(constants::HLM_EXTRA_COLS.begin(),
-                         constants::HLM_EXTRA_COLS.end());
-  std::vector<std::string> hlm_groupby(hlm_groupby_set.begin(),
-                                       hlm_groupby_set.end());
+  std::unordered_set<std::string> hlm_groupby_set(view_types.begin(), view_types.end());
+  hlm_groupby_set.insert(constants::HLM_EXTRA_COLS.begin(), constants::HLM_EXTRA_COLS.end());
+  std::vector<std::string> hlm_groupby(hlm_groupby_set.begin(), hlm_groupby_set.end());
 
   // Get view_types_diff for unique_set aggregation
   std::vector<std::string> view_types_diff;
@@ -435,7 +629,7 @@ inline auto compute_high_level_metrics(
   spdlog::info("HLM groupby columns: {}", hlm_groupby);
   spdlog::info("View types for unique_set: {}", view_types_diff);
 
-  // Use distributed groupby for large datasets - this scales with data size
+  // Use distributed groupby for large datasets
   return std::forward<BagType>(trace_records)
       .distributed_groupby(
           // Key function
@@ -470,20 +664,37 @@ inline auto compute_high_level_metrics(
             }
 
             std::string key = key_stream.str();
+            
+            // Debug: Log some sample keys
+            static std::atomic<int> key_counter{0};
+            if (key_counter.fetch_add(1) < 10) {
+              spdlog::info("HLM Key {}: '{}'", key_counter.load(), key);
+              spdlog::info("  Record: cat='{}', func='{}', time_range={}, epoch={}", 
+                           record.cat, record.func_name, record.time_range, record.epoch);
+            }
+            
             return key;
           },
-          // Aggregation
+          
+          // Aggregation function
           [hlm_groupby_set, view_types_diff](
-              const std::string&,
+              const std::string& key,
               const std::vector<TraceRecord>& records) -> HighLevelMetrics {
+            
+            // Debug: Log some sample aggregations
+            static std::atomic<int> agg_counter{0};
+            if (agg_counter.fetch_add(1) < 5) {
+              spdlog::info("HLM Agg {}: key='{}', {} records", 
+                           agg_counter.load(), key, records.size());
+            }
+            
             HighLevelMetrics hlm;
 
-            // Apply HLM_AGG aggregations (sum for duration, count, size)
+            // Sum aggregations
             for (const auto& record : records) {
               hlm.time_sum += record.duration;
               hlm.count_sum += record.count;
 
-              // Handle optional size aggregation (like Python's NaN handling)
               if (record.size.has_value()) {
                 if (!hlm.size_sum.has_value()) {
                   hlm.size_sum = 0;
@@ -491,22 +702,17 @@ inline auto compute_high_level_metrics(
                 hlm.size_sum = hlm.size_sum.value() + record.size.value();
               }
 
-              // Sum bin fields (matches: hlm_agg.update({col: sum for col in
-              // bin_cols}))
               for (const auto& [bin_field, value] : record.bin_fields) {
                 if (value.has_value()) {
                   if (!hlm.bin_sums[bin_field].has_value()) {
                     hlm.bin_sums[bin_field] = 0;
                   }
-                  hlm.bin_sums[bin_field] =
-                      hlm.bin_sums[bin_field].value() + value.value();
+                  hlm.bin_sums[bin_field] = hlm.bin_sums[bin_field].value() + value.value();
                 }
-                // If value is nullopt, keep bin_sums[bin_field] as nullopt
-                // (don't initialize)
               }
             }
 
-            // Store group values (first() equivalent)
+            // Store group values (first record)
             if (!records.empty()) {
               const auto& first_record = records[0];
               hlm.group_values["cat"] = first_record.cat;
@@ -514,8 +720,7 @@ inline auto compute_high_level_metrics(
                   constants::get_io_cat(first_record.func_name)));
               hlm.group_values["acc_pat"] = first_record.acc_pat;
               hlm.group_values["func_name"] = first_record.func_name;
-              hlm.group_values["time_range"] =
-                  std::to_string(first_record.time_range);
+              hlm.group_values["time_range"] = std::to_string(first_record.time_range);
               hlm.group_values["epoch"] = std::to_string(first_record.epoch);
 
               for (const auto& [field, value] : first_record.view_fields) {
@@ -523,7 +728,7 @@ inline auto compute_high_level_metrics(
               }
             }
 
-            // Apply unique_set() for view_types_diff
+            // Unique sets for view_types_diff
             for (const auto& col : view_types_diff) {
               for (const auto& record : records) {
                 auto it = record.view_fields.find(col);
@@ -535,11 +740,140 @@ inline auto compute_high_level_metrics(
 
             return hlm;
           },
-          0  // Auto-determine number of partitions based on data size
+          0  // Auto partitions
           )
-      // Repartition after aggregation for final processing
       .repartition(partition_size);
 }
+
+// template <typename BagType>
+// inline auto compute_high_level_metrics(
+//     BagType&& trace_records, const std::vector<std::string>& view_types,
+//     const std::string& partition_size = "128MB") {
+//   spdlog::info("Computing high-level metrics...");
+//   // Create unified groupby columns (view_types + HLM_EXTRA_COLS)
+//   std::unordered_set<std::string> hlm_groupby_set(view_types.begin(),
+//                                                   view_types.end());
+//   hlm_groupby_set.insert(constants::HLM_EXTRA_COLS.begin(),
+//                          constants::HLM_EXTRA_COLS.end());
+//   std::vector<std::string> hlm_groupby(hlm_groupby_set.begin(),
+//                                        hlm_groupby_set.end());
+
+//   // Get view_types_diff for unique_set aggregation
+//   std::vector<std::string> view_types_diff;
+//   for (const auto& vt : constants::VIEW_TYPES) {
+//     if (hlm_groupby_set.find(vt) == hlm_groupby_set.end()) {
+//       view_types_diff.push_back(vt);
+//     }
+//   }
+
+//   spdlog::info("HLM groupby columns: {}", hlm_groupby);
+//   spdlog::info("View types for unique_set: {}", view_types_diff);
+
+//   // Use distributed groupby for large datasets - this scales with data size
+//   return std::forward<BagType>(trace_records)
+//       .distributed_groupby(
+//           // Key function
+//           [hlm_groupby](const TraceRecord& record) -> std::string {
+//             std::ostringstream key_stream;
+//             bool first = true;
+
+//             for (const auto& col : hlm_groupby) {
+//               if (!first) key_stream << "|";
+//               first = false;
+
+//               if (col == "cat") {
+//                 key_stream << record.cat;
+//               } else if (col == "io_cat") {
+//                 key_stream << constants::get_io_cat(record.func_name);
+//               } else if (col == "acc_pat") {
+//                 key_stream << record.acc_pat;
+//               } else if (col == "func_name") {
+//                 key_stream << record.func_name;
+//               } else if (col == "time_range") {
+//                 key_stream << record.time_range;
+//               } else if (col == "epoch") {
+//                 key_stream << record.epoch;
+//               } else {
+//                 auto it = record.view_fields.find(col);
+//                 if (it != record.view_fields.end()) {
+//                   key_stream << it->second;
+//                 } else {
+//                   key_stream << "";
+//                 }
+//               }
+//             }
+
+//             std::string key = key_stream.str();
+//             return key;
+//           },
+//           // Aggregation
+//           [hlm_groupby_set, view_types_diff](
+//               const std::string&,
+//               const std::vector<TraceRecord>& records) -> HighLevelMetrics {
+//             HighLevelMetrics hlm;
+
+//             // Apply HLM_AGG aggregations (sum for duration, count, size)
+//             for (const auto& record : records) {
+//               hlm.time_sum += record.duration;
+//               hlm.count_sum += record.count;
+
+//               // Handle optional size aggregation (like Python's NaN handling)
+//               if (record.size.has_value()) {
+//                 if (!hlm.size_sum.has_value()) {
+//                   hlm.size_sum = 0;
+//                 }
+//                 hlm.size_sum = hlm.size_sum.value() + record.size.value();
+//               }
+
+//               // Sum bin fields (matches: hlm_agg.update({col: sum for col in
+//               // bin_cols}))
+//               for (const auto& [bin_field, value] : record.bin_fields) {
+//                 if (value.has_value()) {
+//                   if (!hlm.bin_sums[bin_field].has_value()) {
+//                     hlm.bin_sums[bin_field] = 0;
+//                   }
+//                   hlm.bin_sums[bin_field] =
+//                       hlm.bin_sums[bin_field].value() + value.value();
+//                 }
+//                 // If value is nullopt, keep bin_sums[bin_field] as nullopt
+//                 // (don't initialize)
+//               }
+//             }
+
+//             // Store group values (first() equivalent)
+//             if (!records.empty()) {
+//               const auto& first_record = records[0];
+//               hlm.group_values["cat"] = first_record.cat;
+//               hlm.group_values["io_cat"] = std::to_string(static_cast<uint64_t>(
+//                   constants::get_io_cat(first_record.func_name)));
+//               hlm.group_values["acc_pat"] = first_record.acc_pat;
+//               hlm.group_values["func_name"] = first_record.func_name;
+//               hlm.group_values["time_range"] =
+//                   std::to_string(first_record.time_range);
+//               hlm.group_values["epoch"] = std::to_string(first_record.epoch);
+
+//               for (const auto& [field, value] : first_record.view_fields) {
+//                 hlm.group_values[field] = value;
+//               }
+//             }
+
+//             // Apply unique_set() for view_types_diff
+//             for (const auto& col : view_types_diff) {
+//               for (const auto& record : records) {
+//                 auto it = record.view_fields.find(col);
+//                 if (it != record.view_fields.end()) {
+//                   hlm.unique_sets[col].insert(it->second);
+//                 }
+//               }
+//             }
+
+//             return hlm;
+//           },
+//           0  // Auto-determine number of partitions based on data size
+//           )
+//       // Repartition after aggregation for final processing
+//       .repartition(partition_size);
+// }
 }  // namespace helpers
 
 template <typename Context>
@@ -569,52 +903,50 @@ AnalyzerResult Analyzer::analyze_trace(
     auto normalized_events = helpers::normalize_timestamps_globally(
         ctx, events, constants::DEFAULT_TIME_RESOLUTION, time_granularity_);
 
+        if constexpr (std::is_same_v<Context, context::MPIContext>) {
+    auto debug_count = normalized_events.map([](const TraceRecord& r) { return 1; }).compute(ctx);
+    spdlog::info("Rank {} has {} normalized events", ctx.rank(), debug_count.size());
+}
     spdlog::info("Global timestamp normalization complete");
 
     // Step 3: Post-process events
     auto post_processed_events = helpers::postread_trace(
         ctx, normalized_events, proc_view_types, time_granularity_);
 
+        if constexpr (std::is_same_v<Context, context::MPIContext>) {
+    auto debug_count = post_processed_events.map([](const TraceRecord& r) { return 1; }).compute(ctx);
+    spdlog::info("Rank {} has {} post-processed events", ctx.rank(), debug_count.size());
+}
+
     // Step 4: Compute high-level metrics on epoch-processed events
-    auto hlm_pipeline = helpers::compute_high_level_metrics(
-        post_processed_events, proc_view_types, "128MB");
+    auto hlms = helpers::compute_high_level_metrics(
+        post_processed_events, proc_view_types, "128MB")
+        .flatmap([&](const auto& container) {
+          return container;
+        }).compute(ctx);
 
-    
-    std::vector<HighLevelMetrics> hlms;
-    if constexpr (std::is_same_v<Context, context::MPIContext>) {
-      // hlms = hlm_pipeline.collect(ctx);
-      hlms = hlm_pipeline.flatmap([&](const auto& container) {
-        return container;
-      }).compute(ctx);
-    } else {
-      hlms = hlm_pipeline.flatmap([&](const auto& container) {
-        return container;
-      }).compute(ctx);
-    }
+    if (ctx.rank() == 0) {
+      spdlog::info("HLM computation complete: {} groups generated", hlms.size());
 
-    spdlog::info("HLM computation complete: {} groups generated", hlms.size());
+      // Log some statistics
+      if (!hlms.empty()) {
+        size_t total_count = 0;
+        double total_time = 0.0;
+        size_t total_size = 0;
 
-    // Log some statistics
-    if (!hlms.empty()) {
-      size_t total_count = 0;
-      double total_time = 0.0;
-      size_t total_size = 0;
-
-      for (const auto& hlm : hlms) {
-        total_count += hlm.count_sum;
-        total_time += hlm.time_sum;
-        if (hlm.size_sum.has_value()) {
-          total_size += hlm.size_sum.value();
+        for (const auto& hlm : hlms) {
+          total_count += hlm.count_sum;
+          total_time += hlm.time_sum;
+          if (hlm.size_sum.has_value()) {
+            total_size += hlm.size_sum.value();
+          }
         }
-      }
 
-      spdlog::info("Analysis summary:");
-      spdlog::info("  Total operations: {}", total_count);
-      spdlog::info("  Total time: {:.2f}", total_time);
-      spdlog::info("  Total size: {} bytes", total_size);
-      spdlog::info("  Unique groups: {}", hlms.size());
-
-      if (ctx.rank() == 0) {
+        spdlog::info("Analysis summary:");
+        spdlog::info("  Total operations: {}", total_count);
+        spdlog::info("  Total time: {:.2f}", total_time);
+        spdlog::info("  Total size: {} bytes", total_size);
+        spdlog::info("  Unique groups: {}", hlms.size());
         std::cout << helpers::hlms_to_csv(hlms);
       }
     }
