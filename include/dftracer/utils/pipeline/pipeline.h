@@ -62,6 +62,19 @@ class Bag<T, void> : public BagBase<T> {
     return Bag<T, void>(std::move(data));
   }
 
+  template<typename Context>
+  static Bag<T, void> from_sequence_distributed(Context& ctx, const std::vector<T>& data) {
+    if constexpr (std::is_same_v<Context, context::MPIContext>) {
+      std::vector<T> my_data;
+      for (size_t i = ctx.rank(); i < data.size(); i += ctx.size()) {
+        my_data.push_back(data[i]);
+      }
+      return from_sequence(my_data);
+    } else {
+      return from_sequence(data);
+    }
+  }
+
   size_t size() const { return data_.size(); }
   const std::vector<T>& data() const { return data_; }
   bool empty() const { return data_.empty(); }
@@ -426,6 +439,18 @@ auto from_sequence(std::vector<T> data) -> Bag<T, void> {
   return Bag<T, void>(std::move(data));
 }
 
+template<typename T, typename Context>
+auto from_sequence_distributed(Context& ctx, const std::vector<T>& data) {
+  if constexpr (std::is_same_v<Context, context::MPIContext>) {
+    std::vector<T> my_data;
+    for (size_t i = ctx.rank(); i < data.size(); i += ctx.size()) {
+      my_data.push_back(data[i]);
+    }
+    return from_sequence(my_data);
+  } else {
+    return from_sequence(data);
+  }
+}
 }  // namespace pipeline
 }  // namespace utils
 }  // namespace dftracer

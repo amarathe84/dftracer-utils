@@ -43,8 +43,9 @@ struct FileMetadata {
 namespace trace_reader {
 
 // Pipeline stage 1: Get file metadata
-inline auto get_traces_metadata(const std::vector<std::string>& traces) {
-  return from_sequence(traces).map([](const std::string& path) {
+template<typename Context>
+inline auto get_traces_metadata(Context& ctx, const std::vector<std::string>& traces) {
+  return from_sequence_distributed(ctx, traces).map([](const std::string& path) {
     dftracer::utils::indexer::Indexer indexer(path, path + ".idx");
     indexer.build();
     auto max_bytes = indexer.get_max_bytes();
@@ -54,9 +55,10 @@ inline auto get_traces_metadata(const std::vector<std::string>& traces) {
 }
 
 // Pipeline stage 2: Generate work chunks
-inline auto generate_chunks(const std::vector<std::string>& traces,
+template<typename Context>
+inline auto generate_chunks(Context& ctx, const std::vector<std::string>& traces,
                             size_t batch_size) {
-  return get_traces_metadata(traces).flatmap(
+  return get_traces_metadata(ctx, traces).flatmap(
       [batch_size](const FileMetadata& file_info) {
         std::vector<WorkInfo> work_items;
         size_t start = 0;
@@ -73,9 +75,10 @@ inline auto generate_chunks(const std::vector<std::string>& traces,
 }
 
 // Pipeline stage 3: Read and parse JSON from chunks
-inline auto load_traces(const std::vector<std::string>& traces,
+template<typename Context>
+inline auto load_traces(Context& ctx, const std::vector<std::string>& traces,
                         size_t batch_size) {
-  return generate_chunks(traces, batch_size)
+  return generate_chunks(ctx, traces, batch_size)
       .repartition("32MB")  // Repartition for better load balancing
       .map_partitions([](const auto& partition) -> OwnedJsonDocuments {
         OwnedJsonDocuments results;
@@ -110,11 +113,12 @@ inline auto load_traces(const std::vector<std::string>& traces,
 }
 
 // Pipeline stage 4: Parse JSON to TraceRecords with filtering
-inline auto parse_and_filter_traces(const std::vector<std::string>& traces,
+template<typename Context>
+inline auto parse_and_filter_traces(Context& ctx, const std::vector<std::string>& traces,
                                     size_t batch_size,
                                     const std::vector<std::string>& view_types,
                                     double time_granularity) {
-  return trace_reader::load_traces(traces, batch_size)
+  return trace_reader::load_traces(ctx, traces, batch_size)
       .repartition("64MB")  // Repartition after JSON parsing for better memory
                             // distribution
       .map_partitions([view_types, time_granularity](
@@ -296,20 +300,9 @@ inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
                         double time_granularity) {
   spdlog::info("DFTracer loading {} trace files", traces.size());
 
-  // Distribute trace files across MPI processes
-  std::vector<std::string> my_traces;
-  if constexpr (std::is_same_v<Context, context::MPIContext>) {
-    for (size_t i = ctx.rank(); i < traces.size(); i += ctx.size()) {
-      my_traces.push_back(traces[i]);
-    }
-    spdlog::info("Rank {} processing {} of {} files", ctx.rank(), my_traces.size(), traces.size());
-  } else {
-    my_traces = traces;
-  }
-
   // Each process parses only its assigned files
   auto my_events = trace_reader::parse_and_filter_traces(
-      my_traces, batch_size, view_types, time_granularity);
+      ctx, traces, batch_size, view_types, time_granularity);
 
   // Collect hashes from all processes  
   auto [file_hash_map, host_hash_map] = trace_reader::collect_global_hash_mappings(ctx, my_events);
@@ -450,11 +443,6 @@ inline auto postread_trace(Context& ctx, BagType&& events,
     }
   } else {
     epoch_spans = local_epoch_spans;
-  }
-
-  spdlog::info("[RANK {}] Found {} epoch spans after MPI sharing", ctx.rank(), epoch_spans.size());
-  for (const auto& [epoch_num, span] : epoch_spans) {
-    spdlog::info("[RANK {}] Epoch {}: time range [{}, {}]", ctx.rank(), epoch_num, span.first, span.second);
   }
 
   // PHASE 2: epoch event assignment using map_partitions for consistent return type
@@ -903,20 +891,9 @@ AnalyzerResult Analyzer::analyze_trace(
     auto normalized_events = helpers::normalize_timestamps_globally(
         ctx, events, constants::DEFAULT_TIME_RESOLUTION, time_granularity_);
 
-        if constexpr (std::is_same_v<Context, context::MPIContext>) {
-    auto debug_count = normalized_events.map([](const TraceRecord& r) { return 1; }).compute(ctx);
-    spdlog::info("Rank {} has {} normalized events", ctx.rank(), debug_count.size());
-}
-    spdlog::info("Global timestamp normalization complete");
-
     // Step 3: Post-process events
     auto post_processed_events = helpers::postread_trace(
         ctx, normalized_events, proc_view_types, time_granularity_);
-
-        if constexpr (std::is_same_v<Context, context::MPIContext>) {
-    auto debug_count = post_processed_events.map([](const TraceRecord& r) { return 1; }).compute(ctx);
-    spdlog::info("Rank {} has {} post-processed events", ctx.rank(), debug_count.size());
-}
 
     // Step 4: Compute high-level metrics on epoch-processed events
     auto hlms = helpers::compute_high_level_metrics(
