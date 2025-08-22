@@ -237,8 +237,7 @@ inline auto read_traces(
     const std::vector<std::string>& traces,
     size_t batch_size,
     const std::vector<std::string>& view_types,
-    double time_granularity,
-    const std::string& hlm_partition_size = "128MB"
+    double time_granularity
 ) {
     spdlog::info("DFTracer loading {} trace files", traces.size());
 
@@ -276,7 +275,7 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
 }
 
 template<typename Context, typename BagType>
-inline auto postread_trace(Context& ctx, BagType&& events, double time_granularity) {
+inline auto postread_trace(Context& ctx, BagType&& events, const std::vector<std::string>& view_types, double time_granularity) {
       struct EpochSpanEntry {
           uint64_t epoch_num;
           uint64_t start_time;
@@ -318,7 +317,14 @@ inline auto postread_trace(Context& ctx, BagType&& events, double time_granulari
 
       // PHASE 2: epoch event assignment
       return std::forward<BagType>(events)
-          .map_partitions([epoch_spans](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
+          .map_partitions([epoch_spans, view_types](const std::vector<TraceRecord>& partition) -> std::vector<TraceRecord> {
+
+              // check if view_types contain epoch, if not just return events
+              if (std::find(view_types.begin(), view_types.end(), "epoch") == view_types.end()) {
+                  spdlog::info("No epoch view type detected, skipping epoch processing");
+                  return partition;
+              }
+
               std::vector<TraceRecord> result;
               result.reserve(partition.size());
 
@@ -344,8 +350,7 @@ template<typename BagType>
 inline auto compute_high_level_metrics(
     BagType&& trace_records,
     const std::vector<std::string>& view_types,
-    const std::string& partition_size = "128MB",
-    const std::string& /* checkpoint_name */ = ""
+    const std::string& partition_size = "128MB"
 ) {
     // Create unified groupby columns (view_types + HLM_EXTRA_COLS)
     std::unordered_set<std::string> hlm_groupby_set(view_types.begin(), view_types.end());
@@ -485,7 +490,7 @@ AnalyzerResult Analyzer::analyze_trace(
     spdlog::info("=== RAY DEBUG: Starting full pipeline analysis of {} trace files ===", traces.size());
     
     try {
-        // Ensure proc_name is included in view_types (Python line 162)
+        // Ensure proc_name is included in view_types
         std::vector<std::string> proc_view_types = view_types;
         if (std::find(proc_view_types.begin(), proc_view_types.end(), constants::COL_PROC_NAME) == proc_view_types.end()) {
             proc_view_types.push_back(constants::COL_PROC_NAME);
@@ -497,8 +502,7 @@ AnalyzerResult Analyzer::analyze_trace(
             traces,
             checkpoint_size_,
             proc_view_types,
-            time_granularity_,
-            "128MB"
+            time_granularity_
         );
         
         // Step 2: Apply global timestamp normalization
@@ -513,6 +517,7 @@ AnalyzerResult Analyzer::analyze_trace(
         auto post_processed_events = helpers::postread_trace(
             ctx,
             normalized_events,
+            proc_view_types,
             time_granularity_
         );
 
@@ -520,35 +525,25 @@ AnalyzerResult Analyzer::analyze_trace(
         auto hlm_pipeline = helpers::compute_high_level_metrics(
             post_processed_events,
             proc_view_types,
-            "128MB",
-            ""
+            "128MB"
         );
         
         spdlog::info("Computing high-level metrics...");
-        auto hlm_results = hlm_pipeline.compute(ctx);
-        spdlog::info("HLM computation complete: {} groups generated", hlm_results.size());
-        
-        size_t total_flat_groups = 0;
-        for (const auto& partition : hlm_results) {
-            total_flat_groups += partition.size();
-        }
+        auto hlms = hlm_pipeline
+          .flatmap([](const auto& hlms) {
+              return hlms;
+          })
+          .compute(ctx);
 
-        // Flatten the results from vector of vectors to single vector
-        // Keep all groups like Python (replace(0, np.nan) keeps groups but marks as NaN)
-        std::vector<HighLevelMetrics> flattened_results;
-        for (const auto& partition_results : hlm_results) {
-            for (const auto& hlm : partition_results) {
-                flattened_results.push_back(hlm);
-            }
-        }
-        
+        spdlog::info("HLM computation complete: {} groups generated", hlms.size());
+
         // Log some statistics
-        if (!flattened_results.empty()) {
+        if (!hlms.empty()) {
             size_t total_count = 0;
             double total_time = 0.0;
             size_t total_size = 0;
-            
-            for (const auto& hlm : flattened_results) {
+
+            for (const auto& hlm : hlms) {
                 total_count += hlm.count_sum;
                 total_time += hlm.time_sum;
                 if (hlm.size_sum.has_value()) {
@@ -560,11 +555,11 @@ AnalyzerResult Analyzer::analyze_trace(
             spdlog::info("  Total operations: {}", total_count);
             spdlog::info("  Total time: {:.2f}", total_time);
             spdlog::info("  Total size: {} bytes", total_size);
-            spdlog::info("  Unique groups: {}", flattened_results.size());
-            std::cout << helpers::hlms_to_csv(flattened_results);
+            spdlog::info("  Unique groups: {}", hlms.size());
+            std::cout << helpers::hlms_to_csv(hlms);
         }
 
-        return AnalyzerResult{std::move(flattened_results)};       
+        return AnalyzerResult{std::move(hlms)};
     } catch (const std::exception& e) {
         spdlog::error("Pipeline execution failed: {}", e.what());
         throw;
