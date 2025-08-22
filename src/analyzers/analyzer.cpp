@@ -129,20 +129,19 @@ int get_size_bin_index(uint64_t size) {
 }
 
 static void set_size_bins(TraceRecord& record) {
-  if (record.size > 0) {
-    int bin_index = get_size_bin_index(record.size);
-
-    for (size_t i = 0; i < constants::SIZE_BIN_SUFFIXES.size(); ++i) {
-      std::string bin_name = "size_bin_" + constants::SIZE_BIN_SUFFIXES[i];
-      record.bin_fields[bin_name] =
-          (i == static_cast<size_t>(bin_index)) ? 1 : 0;
-    }
-  } else {
-    for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
-      std::string bin_name = "size_bin_" + suffix;
-      record.bin_fields[bin_name] = 0;
-    }
+  // Initialize all bins as nullopt first
+  for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
+    std::string bin_name = "size_bin_" + suffix;
+    record.bin_fields[bin_name] = std::nullopt;
   }
+  
+  if (record.size.has_value() && record.size.value() > 0) {
+    // For records with valid size, set ONLY the matching bin to 1, others remain nullopt
+    int bin_index = get_size_bin_index(record.size.value());
+    std::string matching_bin = "size_bin_" + constants::SIZE_BIN_SUFFIXES[bin_index];
+    record.bin_fields[matching_bin] = 1;
+  }
+  // For records without size, all bins remain nullopt (already set above)
 }
 
 std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc,
@@ -229,7 +228,7 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
 
       // Extract IO-related fields
       record.fhash = get_args_string_field_owned(doc, "fhash");
-      record.size = 0;
+      // size starts as nullopt (NaN equivalent)
       
       if (record.cat == "posix" || record.cat == "stdio") {
         record.io_cat = derive_io_cat(func_name);
@@ -274,7 +273,7 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
           try {
             record.offset = std::stoull(offset_str);
           } catch (...) {
-            // Ignore parse errors
+            // Ignore parse errors - offset remains nullopt
           }
         }
       } else {
@@ -308,12 +307,13 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
       
       // Debug size parsing for first few read records
       if (parse_count <= 10) {
+        std::string size_str = record.size.has_value() ? std::to_string(record.size.value()) : "nullopt";
         spdlog::info("RAY DEBUG: Record #{} size={} for func='{}', cat='{}', io_cat='{}'", 
-                     parse_count, record.size, record.func_name, record.cat, record.io_cat);
-        if (record.size > 0) {
+                     parse_count, size_str, record.func_name, record.cat, record.io_cat);
+        if (record.size.has_value() && record.size.value() > 0) {
           for (const auto& [bin_name, bin_value] : record.bin_fields) {
-            if (bin_value > 0) {
-              spdlog::info("RAY DEBUG: Size bin set: {}={}", bin_name, bin_value);
+            if (bin_value.has_value() && bin_value.value() > 0) {
+              spdlog::info("RAY DEBUG: Size bin set: {}={}", bin_name, bin_value.value());
             }
           }
         }

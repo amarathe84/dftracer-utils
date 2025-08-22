@@ -45,10 +45,10 @@ struct TraceRecord {
   std::string hhash;
   uint64_t image_id;
   uint8_t event_type; // 0=regular, 1=file_hash, 2=host_hash, 3=string_hash, 4=other_metadata
-  uint64_t size = 0;
-  uint64_t offset = 0;
+  std::optional<uint64_t> size;
+  std::optional<uint64_t> offset;
   std::unordered_map<std::string, std::string> view_fields;
-  std::unordered_map<std::string, uint32_t> bin_fields;
+  std::unordered_map<std::string, std::optional<uint32_t>> bin_fields;
 
   template<class Archive>
   void serialize(Archive& ar)
@@ -76,8 +76,8 @@ struct HashEntry {
 struct HighLevelMetrics {
   double time_sum = 0.0;
   uint64_t count_sum = 0;
-  uint64_t size_sum = 0;
-  std::unordered_map<std::string, uint32_t> bin_sums;
+  std::optional<uint64_t> size_sum;
+  std::unordered_map<std::string, std::optional<uint32_t>> bin_sums;
   std::unordered_map<std::string, std::unordered_set<std::string>> unique_sets;
   std::unordered_map<std::string, std::string> group_values;
 

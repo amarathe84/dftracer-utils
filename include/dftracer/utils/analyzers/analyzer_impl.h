@@ -224,11 +224,24 @@ inline auto compute_high_level_metrics(
                 for (const auto& record : records) {
                     hlm.time_sum += record.duration;
                     hlm.count_sum += record.count;
-                    hlm.size_sum += record.size;
+                    
+                    // Handle optional size aggregation (like Python's NaN handling)
+                    if (record.size.has_value()) {
+                        if (!hlm.size_sum.has_value()) {
+                            hlm.size_sum = 0;
+                        }
+                        hlm.size_sum = hlm.size_sum.value() + record.size.value();
+                    }
                     
                     // Sum bin fields (matches: hlm_agg.update({col: sum for col in bin_cols}))
                     for (const auto& [bin_field, value] : record.bin_fields) {
-                        hlm.bin_sums[bin_field] += value;
+                        if (value.has_value()) {
+                            if (!hlm.bin_sums[bin_field].has_value()) {
+                                hlm.bin_sums[bin_field] = 0;
+                            }
+                            hlm.bin_sums[bin_field] = hlm.bin_sums[bin_field].value() + value.value();
+                        }
+                        // If value is nullopt, keep bin_sums[bin_field] as nullopt (don't initialize)
                     }
                 }
                 
@@ -562,7 +575,9 @@ AnalyzerResult Analyzer::analyze_trace(
             for (const auto& hlm : flattened_results) {
                 total_count += hlm.count_sum;
                 total_time += hlm.time_sum;
-                total_size += hlm.size_sum;
+                if (hlm.size_sum.has_value()) {
+                    total_size += hlm.size_sum.value();
+                }
             }
             
             spdlog::info("Analysis summary:");
@@ -572,7 +587,7 @@ AnalyzerResult Analyzer::analyze_trace(
             spdlog::info("  Unique groups: {}", flattened_results.size());
 
             // Output CSV format matching Python output
-            std::cout << "C++ HLM CSV:" << std::endl;
+            // std::cout << "C++ HLM CSV:" << std::endl;
             
             // CSV Header - matching Python column order
             std::cout << "cat,acc_pat,epoch,io_cat,func_name,proc_name,time_range,time,count,size,"
@@ -595,7 +610,13 @@ AnalyzerResult Analyzer::analyze_trace(
                 // Output row with proper CSV formatting
                 std::cout << cat << "," << acc_pat << "," << epoch << "," << io_cat << "," 
                           << func_name << "," << proc_name << "," << time_range << ","
-                          << hlm.time_sum << "," << hlm.count_sum << "," << hlm.size_sum;
+                          << hlm.time_sum << "," << hlm.count_sum << ",";
+                
+                // Handle optional size_sum (nullopt -> empty string for NaN in Parquet)
+                if (hlm.size_sum.has_value()) {
+                    std::cout << hlm.size_sum.value();
+                }
+                // else output empty string (implicit for NaN)
                 
                 // Output size bins in the correct order
                 std::vector<std::string> size_bin_names = {
@@ -606,10 +627,10 @@ AnalyzerResult Analyzer::analyze_trace(
                 
                 for (const auto& bin_name : size_bin_names) {
                     std::cout << ",";
-                    if (hlm.bin_sums.count(bin_name)) {
-                        std::cout << hlm.bin_sums.at(bin_name);
+                    if (hlm.bin_sums.count(bin_name) && hlm.bin_sums.at(bin_name).has_value()) {
+                        std::cout << hlm.bin_sums.at(bin_name).value();
                     }
-                    // else output empty string (already done by default)
+                    // else output empty string for nullopt (NaN equivalent) - matches Python's behavior
                 }
                 
                 std::cout << std::endl;
