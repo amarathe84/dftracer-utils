@@ -19,11 +19,9 @@ namespace dftracer {
 namespace utils {
 namespace pipeline {
 
-// Forward declarations
 template <typename T, typename Operation = void>
 class Bag;
 
-// SFINAE-based type checking
 template <typename F, typename T, typename = void>
 struct is_map_function : std::false_type {};
 
@@ -35,14 +33,11 @@ struct is_map_function<
 template <typename F, typename T>
 using map_result_t = decltype(std::declval<F>()(std::declval<T>()));
 
-// Execution strategies
 enum class ExecutionStrategy { Sequential, Threaded, MPI };
 
-// Helper trait to check if Operation is void (leaf bag)
 template <typename Operation>
 struct is_leaf_bag : std::is_same<Operation, void> {};
 
-// Helper trait to detect if we're working with partitioned data
 template <typename T>
 struct is_partitioned_data : std::false_type {};
 
@@ -71,7 +66,6 @@ inline size_t parse_size_string(const std::string& size_str) {
   std::string unit = size_str.substr(pos);
   std::transform(unit.begin(), unit.end(), unit.begin(), ::tolower);
 
-  // Remove whitespace
   unit.erase(std::remove_if(unit.begin(), unit.end(), ::isspace), unit.end());
 
   if (unit == "b" || unit.empty()) return static_cast<size_t>(value);
@@ -82,7 +76,6 @@ inline size_t parse_size_string(const std::string& size_str) {
   throw std::invalid_argument("Unknown size unit: " + unit);
 }
 
-// CRTP Base execution context with partition awareness and distributed groupby
 template <typename Derived>
 class ExecutionContext {
  public:
@@ -105,7 +98,6 @@ class ExecutionContext {
             std::forward<MapPartitionsFunc>(func), input);
   }
 
-  // Partition-aware execution for repartitioned data
   template <typename T, typename MapPartitionsFunc>
   auto execute_repartitioned_map_partitions(
       const std::vector<std::vector<T>>& partitions,
@@ -159,7 +151,6 @@ class ExecutionContext {
             input, std::forward<KeyFunc>(key_func));
   }
 
-  // NEW: Distributed groupby with aggregation for large datasets
   template <typename T, typename KeyFunc, typename AggFunc>
   auto execute_distributed_groupby(const std::vector<T>& input,
                                    KeyFunc&& key_func, AggFunc&& agg_func,
@@ -171,7 +162,6 @@ class ExecutionContext {
   }
 };
 
-// Sequential execution context
 class SequentialContext : public ExecutionContext<SequentialContext> {
  public:
   ExecutionStrategy strategy() const override {
@@ -213,7 +203,6 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
     return final_result;
   }
 
-  // Partition-aware execution - each partition processed independently
   template <typename T, typename MapPartitionsFunc>
   auto execute_repartitioned_map_partitions_impl(
       const std::vector<std::vector<T>>& partitions,
@@ -223,7 +212,6 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
 
     std::vector<element_t> final_result;
 
-    // Process each partition sequentially but as independent units
     for (const auto& partition : partitions) {
       auto partition_result = func(partition);
       final_result.insert(final_result.end(), partition_result.begin(),
@@ -281,7 +269,7 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
     if (estimate) {
       size_t estimated_element_size = estimate_element_size(input);
       if (estimated_element_size == 0) {
-        estimated_element_size = 1;  // Avoid division by zero
+        estimated_element_size = 1;
       }
 
       size_t elements_per_partition =
@@ -298,7 +286,6 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
       for (const auto& item : input) {
         size_t item_size = get_actual_size(item);
 
-        // Avoid infinite loop if single item is larger than target
         if (current_bytes + item_size > target_bytes &&
             !current_partition.empty()) {
           partitions.push_back(std::move(current_partition));
@@ -351,20 +338,17 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
     return groups;
   }
 
-  // NEW: Distributed groupby implementation for large datasets
   template <typename T, typename KeyFunc, typename AggFunc>
   auto execute_distributed_groupby_impl(const std::vector<T>& input,
                                         KeyFunc&& key_func, AggFunc&& agg_func,
                                         size_t num_partitions) const {
     if (num_partitions == 0) {
-      num_partitions = std::max(
-          size_t(1), input.size() / 1000);  // Auto-partition for large datasets
+      num_partitions = std::max(size_t(1), input.size() / 1000);
     }
 
     using key_type = decltype(key_func(std::declval<T>()));
     using agg_result_type = decltype(agg_func(key_type{}, std::vector<T>{}));
 
-    // Phase 1: Hash partition by key
     std::vector<std::vector<T>> hash_partitions(num_partitions);
     std::hash<key_type> hasher;
 
@@ -375,19 +359,16 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
       hash_partitions[partition_idx].push_back(item);
     }
 
-    // Phase 2: Local groupby + aggregation within each partition
     std::vector<agg_result_type> partition_results;
 
     for (const auto& partition : hash_partitions) {
       std::unordered_map<key_type, std::vector<T>> local_groups;
 
-      // Group within partition
       for (const auto& item : partition) {
         auto key = key_func(item);
         local_groups[key].push_back(item);
       }
 
-      // Apply aggregation to each group
       for (const auto& [key, group] : local_groups) {
         auto agg_result = agg_func(key, group);
         partition_results.push_back(std::move(agg_result));
@@ -398,7 +379,6 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
   }
 
  private:
-  // Helper traits for size calculation
   template <typename T, typename = void>
   struct has_size_method : std::false_type {};
 
@@ -434,7 +414,7 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
 
   template <typename T>
   size_t estimate_element_size(const std::vector<T>& input) const {
-    if (input.empty()) return sizeof(T);  // Fallback for empty input
+    if (input.empty()) return sizeof(T);
 
     return estimate_element_size_impl(input);
   }
@@ -465,7 +445,6 @@ class SequentialContext : public ExecutionContext<SequentialContext> {
   }
 };
 
-// Threaded execution context with distributed groupby
 class ThreadedContext : public ExecutionContext<ThreadedContext> {
  public:
   ThreadedContext(size_t num_threads = std::thread::hardware_concurrency())
@@ -537,8 +516,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
     return final_result;
   }
 
-  // Partition-aware execution - each partition gets independent parallel
-  // processing
   template <typename T, typename MapPartitionsFunc>
   auto execute_repartitioned_map_partitions_impl(
       const std::vector<std::vector<T>>& partitions,
@@ -546,7 +523,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
     using partition_result_t = decltype(func(std::declval<std::vector<T>>()));
     using element_t = typename partition_result_t::value_type;
 
-    // Each partition becomes an independent parallel task - Dask-like behavior!
     std::vector<std::future<partition_result_t>> futures;
 
     for (const auto& partition : partitions) {
@@ -555,7 +531,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
                      [&partition, &func]() { return func(partition); }));
     }
 
-    // Collect results while preserving partition processing order
     std::vector<element_t> final_result;
     for (auto& future : futures) {
       auto partition_result = future.get();
@@ -619,7 +594,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
                                          size_t target_bytes,
                                          bool estimate = true) const
       -> std::vector<std::vector<T>> {
-    // For simplicity, delegate to sequential implementation
     SequentialContext seq_ctx;
     return seq_ctx.execute_repartition_by_bytes_impl(input, target_bytes,
                                                      estimate);
@@ -715,7 +689,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
     return final_groups;
   }
 
-  // NEW: Parallel distributed groupby implementation
   template <typename T, typename KeyFunc, typename AggFunc>
   auto execute_distributed_groupby_impl(const std::vector<T>& input,
                                         KeyFunc&& key_func, AggFunc&& agg_func,
@@ -727,7 +700,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
     using key_type = decltype(key_func(std::declval<T>()));
     using agg_result_type = decltype(agg_func(key_type{}, std::vector<T>{}));
 
-    // Phase 1: Parallel hash partitioning
     std::vector<std::vector<T>> hash_partitions(num_partitions);
     std::vector<std::mutex> partition_mutexes(num_partitions);
     std::hash<key_type> hasher;
@@ -746,7 +718,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
              num_partitions, start, end]() {
               std::vector<std::vector<T>> local_partitions(num_partitions);
 
-              // Local partitioning
               for (size_t i = start; i < end; ++i) {
                 auto key = key_func(input[i]);
                 size_t hash_value = hasher(key);
@@ -754,7 +725,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
                 local_partitions[partition_idx].push_back(input[i]);
               }
 
-              // Merge into global partitions
               for (size_t p = 0; p < num_partitions; ++p) {
                 if (!local_partitions[p].empty()) {
                   std::lock_guard<std::mutex> lock(partition_mutexes[p]);
@@ -772,7 +742,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
       future.wait();
     }
 
-    // Phase 2: Parallel local groupby + aggregation within each partition
     std::vector<std::future<std::vector<agg_result_type>>> partition_futures;
 
     for (const auto& partition : hash_partitions) {
@@ -781,13 +750,11 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
           [&partition, &key_func, &agg_func]() -> std::vector<agg_result_type> {
             std::unordered_map<key_type, std::vector<T>> local_groups;
 
-            // Group within partition
             for (const auto& item : partition) {
               auto key = key_func(item);
               local_groups[key].push_back(item);
             }
 
-            // Apply aggregation to each group
             std::vector<agg_result_type> partition_results;
             for (const auto& [key, group] : local_groups) {
               auto agg_result = agg_func(key, group);
@@ -798,7 +765,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
           }));
     }
 
-    // Collect all results
     std::vector<agg_result_type> final_results;
     for (auto& future : partition_futures) {
       auto partition_results = future.get();
@@ -813,7 +779,6 @@ class ThreadedContext : public ExecutionContext<ThreadedContext> {
   size_t num_threads_;
 };
 
-// Base class for bags without operations
 template <typename T>
 class BagBase {
  protected:
@@ -837,7 +802,6 @@ class BagBase {
   }
 };
 
-// Specialization for leaf bags (Operation = void)
 template <typename T>
 class Bag<T, void> : public BagBase<T> {
  public:
@@ -850,12 +814,10 @@ class Bag<T, void> : public BagBase<T> {
     return Bag<T, void>(std::move(data));
   }
 
-  // Basic accessors
   size_t size() const { return data_.size(); }
   const std::vector<T>& data() const { return data_; }
   bool empty() const { return data_.empty(); }
 
-  // Vector-like interface
   auto begin() { return data_.begin(); }
   auto end() { return data_.end(); }
   auto begin() const { return data_.begin(); }
@@ -863,13 +825,11 @@ class Bag<T, void> : public BagBase<T> {
   T& operator[](size_t index) { return data_[index]; }
   const T& operator[](size_t index) const { return data_[index]; }
 
-  // Compute method
   template <typename Context>
   std::vector<T> compute(const Context&) const {
     return data_;
   }
 
-  // Lazy operations
   template <typename MapFunc>
   auto map(MapFunc func) const {
     using result_type = decltype(func(std::declval<T>()));
@@ -916,12 +876,9 @@ class Bag<T, void> : public BagBase<T> {
                           func](const auto& context) -> std::vector<element_t> {
       auto input_data = this->compute(context);
 
-      // Check if we're working with partitioned data (vector<vector<T>>)
       if constexpr (is_partitioned_data<T>::value) {
-        // Use partition-aware execution for Dask-like behavior
         return context.execute_repartitioned_map_partitions(input_data, func);
       } else {
-        // Use regular map_partitions for non-partitioned data
         return context.execute_map_partitions(input_data, func);
       }
     };
@@ -990,7 +947,6 @@ class Bag<T, void> : public BagBase<T> {
     return Bag<result_type, operation_type>({}, std::move(new_operation));
   }
 
-  // NEW: Distributed groupby with aggregation
   template <typename KeyFunc, typename AggFunc>
   auto distributed_groupby(KeyFunc key_func, AggFunc agg_func,
                            size_t num_partitions = 0) const {
@@ -1008,14 +964,12 @@ class Bag<T, void> : public BagBase<T> {
     return Bag<agg_result_type, operation_type>({}, std::move(new_operation));
   }
 
-  // Pipe operator for function composition
   template <typename Func>
   auto operator|(Func&& func) const -> decltype(func(*this)) {
     return func(*this);
   }
 };
 
-// General template for operation bags
 template <typename T, typename Operation>
 class Bag : public BagBase<T> {
  public:
@@ -1026,18 +980,14 @@ class Bag : public BagBase<T> {
   Operation operation_;
 
  public:
-  // Operation bag constructor
   Bag(std::vector<T> data, Operation operation)
       : BagBase<T>(std::move(data)), operation_(std::move(operation)) {}
 
-  // Copy constructor
   Bag(const Bag& other) : BagBase<T>(other), operation_(other.operation_) {}
 
-  // Move constructor
   Bag(Bag&& other) noexcept
       : BagBase<T>(std::move(other)), operation_(std::move(other.operation_)) {}
 
-  // Assignment operators
   Bag& operator=(const Bag& other) {
     if (this != &other) {
       BagBase<T>::operator=(other);
@@ -1054,13 +1004,11 @@ class Bag : public BagBase<T> {
     return *this;
   }
 
-  // Compute method - execute the operation chain
   template <typename Context>
   std::vector<T> compute(const Context& ctx) const {
     return operation_(ctx);
   }
 
-  // Lazy operations
   template <typename MapFunc>
   auto map(MapFunc func) const {
     using result_type = decltype(func(std::declval<T>()));
@@ -1107,12 +1055,9 @@ class Bag : public BagBase<T> {
                           func](const auto& context) -> std::vector<element_t> {
       auto input_data = this->compute(context);
 
-      // Check if we're working with partitioned data (vector<vector<T>>)
       if constexpr (is_partitioned_data<T>::value) {
-        // Use partition-aware execution for Dask-like behavior
         return context.execute_repartitioned_map_partitions(input_data, func);
       } else {
-        // Use regular map_partitions for non-partitioned data
         return context.execute_map_partitions(input_data, func);
       }
     };
@@ -1181,7 +1126,6 @@ class Bag : public BagBase<T> {
     return Bag<result_type, operation_type>({}, std::move(new_operation));
   }
 
-  // NEW: Distributed groupby with aggregation
   template <typename KeyFunc, typename AggFunc>
   auto distributed_groupby(KeyFunc key_func, AggFunc agg_func,
                            size_t num_partitions = 0) const {
@@ -1201,14 +1145,12 @@ class Bag : public BagBase<T> {
     return Bag<agg_result_type, operation_type>({}, std::move(new_operation));
   }
 
-  // Pipe operator for function composition
   template <typename Func>
   auto operator|(Func&& func) const -> decltype(func(*this)) {
     return func(*this);
   }
 };
 
-// Helper function to create bags
 template <typename T>
 auto from_sequence(std::vector<T> data) -> Bag<T, void> {
   return Bag<T, void>(std::move(data));
@@ -1218,11 +1160,9 @@ auto from_sequence(std::vector<T> data) -> Bag<T, void> {
 }  // namespace utils
 }  // namespace dftracer
 
-// fmt::formatter specializations
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/fmt/ranges.h>
 
-// Forward declaration for operation bags
 template <typename T, typename Operation>
 struct fmt::formatter<dftracer::utils::pipeline::Bag<T, Operation>> {
   constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) {
@@ -1237,7 +1177,6 @@ struct fmt::formatter<dftracer::utils::pipeline::Bag<T, Operation>> {
   }
 };
 
-// Specialization for leaf bags (void operation)
 template <typename T>
 struct fmt::formatter<dftracer::utils::pipeline::Bag<T, void>> {
   bool show_data = false;
@@ -1271,7 +1210,6 @@ struct fmt::formatter<dftracer::utils::pipeline::Bag<T, void>> {
   }
 };
 
-// Utility function to format computed bags
 template <typename T, typename Operation, typename Context>
 auto format_computed_bag(
     const dftracer::utils::pipeline::Bag<T, Operation>& bag, const Context& ctx,
