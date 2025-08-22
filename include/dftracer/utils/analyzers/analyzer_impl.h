@@ -374,6 +374,7 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
     // Second pass: normalize timestamps and recalculate time_range using global minimum
     return trace_records.map([global_min_timestamp, time_resolution, time_granularity](TraceRecord record) -> TraceRecord {
         // Normalize timestamps using global minimum (Python line 514)
+        auto old_time_start = record.time_start;
         record.time_start = record.time_start - global_min_timestamp;
         record.time_end = record.time_start + static_cast<uint64_t>(record.duration);
 
@@ -386,8 +387,8 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
         record.time_range = record.time_start / static_cast<uint64_t>(time_granularity);
         
         if (old_time_range != record.time_range) {
-            spdlog::info("RAY DEBUG: time_range changed from {} to {} for ts={}", 
-                         old_time_range, record.time_range, record.time_start);
+            spdlog::info("RAY DEBUG: time_range changed from {} to {}, time start changed from {} to {}, time_granularity changed from {}",
+                         old_time_range, record.time_range, old_time_start, record.time_start, time_granularity);
         }
         
         return record;

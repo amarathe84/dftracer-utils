@@ -119,16 +119,6 @@ public:
         const std::unordered_map<std::string, std::string>& extra_columns = {}
         // @TODO: add extra_columns_fn
     );
-
-    Bag<TraceRecord> read_trace(
-        const std::string& trace_path,
-        const std::unordered_map<std::string, std::string>& extra_columns = {}
-    );
-
-    Bag<TraceRecord> postread_trace(
-        const std::vector<TraceRecord>& traces,
-        const std::vector<std::string>& view_types
-    );
     
     template<typename T, typename FallbackFunc>
     T restore_view(const std::string& checkpoint_name, FallbackFunc fallback,

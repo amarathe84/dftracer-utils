@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
   SequentialContext ctx;
   auto start_time = std::chrono::high_resolution_clock::now();
 
-  dftracer::utils::analyzers::Analyzer analyzer;
+  dftracer::utils::analyzers::Analyzer analyzer(time_granularity);
   auto result = analyzer.analyze_trace(ctx, trace_paths, view_types);
 
   // struct FileInfo {

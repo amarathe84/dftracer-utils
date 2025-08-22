@@ -305,22 +305,6 @@ Analyzer::Analyzer(double time_granularity,
       checkpoint_(checkpoint),
       checkpoint_dir_(checkpoint_dir) {}
 
-Bag<TraceRecord> Analyzer::read_trace(
-    const std::string& trace_path,
-    const std::unordered_map<std::string, std::string>& extra_columns
-) {
-    // @TODO: implement this
-    return from_sequence<TraceRecord>({});
-}
-
-Bag<TraceRecord> Analyzer::postread_trace(
-    const std::vector<TraceRecord>& traces,
-    const std::vector<std::string>& view_types
-) {
-    // @TODO: implement this
-    return from_sequence(traces);
-}
-
 std::string Analyzer::get_checkpoint_path(const std::string& name) const {
   return checkpoint_dir_ + "/" + name;
 }
