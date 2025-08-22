@@ -1,13 +1,12 @@
+#include <dftracer/utils/analyzers/analyzer.h>
 #include <dftracer/utils/config.h>
 #include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/utils/logger.h>
-#include <dftracer/utils/pipeline/pipeline.h>
-#include <dftracer/utils/analyzers/analyzer.h>
-
-#include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 #include <argparse/argparse.hpp>
 #include <iostream>
@@ -65,7 +64,9 @@ int main(int argc, char* argv[]) {
       .flag();
 
   program.add_argument("--checkpoint-dir")
-      .help("Directory to store checkpoint data (required if --checkpoint is used)")
+      .help(
+          "Directory to store checkpoint data (required if --checkpoint is "
+          "used)")
       .default_value(std::string(""));
 
   try {
@@ -78,7 +79,8 @@ int main(int argc, char* argv[]) {
 
   auto logger = spdlog::stderr_color_mt("stderr");
   spdlog::set_default_logger(logger);
-  dftracer::utils::logger::set_log_level(program.get<std::string>("--log-level"));
+  dftracer::utils::logger::set_log_level(
+      program.get<std::string>("--log-level"));
 
   auto trace_paths = program.get<std::vector<std::string>>("files");
   size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
@@ -107,7 +109,8 @@ int main(int argc, char* argv[]) {
 
   // Validate checkpoint arguments
   if (checkpoint && checkpoint_dir.empty()) {
-    spdlog::error("--checkpoint-dir must be specified when --checkpoint is enabled");
+    spdlog::error(
+        "--checkpoint-dir must be specified when --checkpoint is enabled");
     std::cerr << program;
     return 1;
   }
@@ -143,7 +146,6 @@ int main(int argc, char* argv[]) {
 
   // std::vector<FileInfo> file_infos;
 
-
   // for (const auto& path : trace_paths) {
   //   dftracer::utils::indexer::Indexer indexer(path, path + ".idx");
   //   indexer.build();
@@ -175,13 +177,15 @@ int main(int argc, char* argv[]) {
 
   // auto data = Bag<WorkInfo>::from_sequence(std::move(work_items));
 
-  // auto pipeline = data.map_partitions([](const std::vector<WorkInfo>& partition) {
+  // auto pipeline = data.map_partitions([](const std::vector<WorkInfo>&
+  // partition) {
   //     std::vector<dftracer::utils::json::JsonDocument> results;
-      
+
   //     for (const auto& work : partition) {
-  //         dftracer::utils::reader::Reader reader(work.path, work.path + ".idx");
-  //         spdlog::info("Reading from {}: bytes {} to {}", work.path, work.start, work.end);
-  //         auto docs = reader.read_json_lines_bytes(work.start, work.end);
+  //         dftracer::utils::reader::Reader reader(work.path, work.path +
+  //         ".idx"); spdlog::info("Reading from {}: bytes {} to {}", work.path,
+  //         work.start, work.end); auto docs =
+  //         reader.read_json_lines_bytes(work.start, work.end);
   //         results.insert(results.end(), docs.begin(), docs.end());
   //         // for (const auto& doc : docs) {
   //             // spdlog::info("Parsed document: {}", doc);
@@ -198,12 +202,12 @@ int main(int argc, char* argv[]) {
   // spdlog::info("Computing pipeline to get JSON documents...");
   // auto json_docs = pipeline.compute(ctx);
   // spdlog::info("Got {} JSON documents", json_docs.size());
-  
+
   // if (!json_docs.empty()) {
   //   // Test parsing a few records manually
   //   spdlog::info("Testing manual trace record parsing...");
   //   using namespace dftracer::utils::json;
-    
+
   //   for (size_t i = 0; i < std::min(size_t(5), json_docs.size()); ++i) {
   //     const auto& doc = json_docs[i];
   //     spdlog::info("=== Testing document {} ===", i);
@@ -211,17 +215,19 @@ int main(int argc, char* argv[]) {
   //     spdlog::info("Document: {}", doc);
 
   //     // // Test basic field extraction
-  //     // std::string cat = dftracer::utils::json::get_string_field(doc, "cat");
-  //     // std::string name = dftracer::utils::json::get_string_field(doc, "name"); 
+  //     // std::string cat = dftracer::utils::json::get_string_field(doc,
+  //     "cat");
+  //     // std::string name = dftracer::utils::json::get_string_field(doc,
+  //     "name");
   //     // std::string ph = dftracer::utils::json::get_string_field(doc, "ph");
 
   //     // spdlog::info("  cat: '{}'", cat);
   //     // spdlog::info("  name: '{}'", name);
   //     // spdlog::info("  ph: '{}'", ph);
-      
+
   //     // // Test if doc is object
   //     // spdlog::info("  is_object: {}", doc.is_object());
-      
+
   //     // if (doc.is_object()) {
   //     //   auto obj_result = doc.get_object();
   //     //   if (!obj_result.error()) {
@@ -229,7 +235,8 @@ int main(int argc, char* argv[]) {
   //     //     spdlog::info("  Fields in object:");
   //     //     for (auto field : obj) {
   //     //       std::string field_key = std::string(field.key);
-  //     //       spdlog::info("    - '{}' (type: {})", field_key, static_cast<int>(field.value.type()));
+  //     //       spdlog::info("    - '{}' (type: {})", field_key,
+  //     static_cast<int>(field.value.type()));
   //     //     }
   //     //   }
   //     // }

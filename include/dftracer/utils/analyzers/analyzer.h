@@ -1,16 +1,16 @@
 #ifndef __DFTRACER_UTILS_ANALYZERS_ANALYZER_H__
 #define __DFTRACER_UTILS_ANALYZERS_ANALYZER_H__
 
-#include <memory>
-#include <string>
-#include <vector>
-#include <unordered_map>
-#include <optional>
-
-#include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/analyzers/constants.h>
+#include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/utils/json.h>
+
+#include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace dftracer {
 namespace utils {
@@ -22,10 +22,12 @@ struct TraceRecord;
 struct HighLevelMetrics;
 
 namespace helpers {
-std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc);
+std::optional<TraceRecord> parse_trace_record(
+    const dftracer::utils::json::OwnedJsonDocument& doc);
 uint64_t calc_time_range(uint64_t time, double time_granularity);
-std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms, bool header = true);
-}
+std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
+                        bool header = true);
+}  // namespace helpers
 
 struct TraceRecord {
   std::string cat;
@@ -43,18 +45,18 @@ struct TraceRecord {
   std::string fhash;
   std::string hhash;
   uint64_t image_id;
-  uint8_t event_type; // 0=regular, 1=file_hash, 2=host_hash, 3=string_hash, 4=other_metadata
+  uint8_t event_type;  // 0=regular, 1=file_hash, 2=host_hash, 3=string_hash,
+                       // 4=other_metadata
   std::optional<uint64_t> size;
   std::optional<uint64_t> offset;
   std::unordered_map<std::string, std::string> view_fields;
   std::unordered_map<std::string, std::optional<uint32_t>> bin_fields;
 
-  template<class Archive>
-  void serialize(Archive& ar)
-  {
-      ar(cat, io_cat, acc_pat, func_name, time, count, size, time_range,
-         time_start, time_end, epoch, pid, tid, fhash, hhash, image_id, offset, event_type,
-         view_fields, bin_fields);
+  template <class Archive>
+  void serialize(Archive& ar) {
+    ar(cat, io_cat, acc_pat, func_name, time, count, size, time_range,
+       time_start, time_end, epoch, pid, tid, fhash, hhash, image_id, offset,
+       event_type, view_fields, bin_fields);
   }
 };
 
@@ -64,11 +66,10 @@ struct HashEntry {
   uint64_t pid;
   uint64_t tid;
   std::string hhash;
-  
-  template<class Archive>
-  void serialize(Archive& ar)
-  {
-      ar(name, hash, pid, tid, hhash);
+
+  template <class Archive>
+  void serialize(Archive& ar) {
+    ar(name, hash, pid, tid, hhash);
   }
 };
 
@@ -80,57 +81,52 @@ struct HighLevelMetrics {
   std::unordered_map<std::string, std::unordered_set<std::string>> unique_sets;
   std::unordered_map<std::string, std::string> group_values;
 
-  template<class Archive>
-  void serialize(Archive& ar)
-  {
-      ar(time_sum, count_sum, size_sum, bin_sums, unique_sets, group_values);
+  template <class Archive>
+  void serialize(Archive& ar) {
+    ar(time_sum, count_sum, size_sum, bin_sums, unique_sets, group_values);
   }
 };
 
 struct AnalyzerResult {
   std::vector<HighLevelMetrics> _hlms;
 
-  template<class Archive>
-  void serialize(Archive& ar)
-  {
-      ar(_hlms);
+  template <class Archive>
+  void serialize(Archive& ar) {
+    ar(_hlms);
   }
 };
 
 class Analyzer {
-public:
-    Analyzer(
-      double time_granularity = constants::DEFAULT_TIME_GRANULARITY,
-      double time_resolution = constants::DEFAULT_TIME_RESOLUTION,
-      size_t checkpoint_size =
-          dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE,
-      bool checkpoint = false,
-      const std::string& checkpoint_dir = "");
+ public:
+  Analyzer(double time_granularity = constants::DEFAULT_TIME_GRANULARITY,
+           double time_resolution = constants::DEFAULT_TIME_RESOLUTION,
+           size_t checkpoint_size =
+               dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE,
+           bool checkpoint = false, const std::string& checkpoint_dir = "");
 
-    ~Analyzer() = default;
+  ~Analyzer() = default;
 
-    template<typename Context>
-    AnalyzerResult analyze_trace(
-        Context& ctx,
-        const std::vector<std::string>& traces,
-        const std::vector<std::string>& view_types,
-        const std::vector<std::string>& exclude_characteristics = {},
-        const std::unordered_map<std::string, std::string>& extra_columns = {}
-        // @TODO: add extra_columns_fn
-    );
-    
-    template<typename T, typename FallbackFunc>
-    T restore_view(const std::string& checkpoint_name, FallbackFunc fallback,
-      bool force = false, bool write_to_disk = true,
-      bool read_from_disk = false, const std::vector<std::string>& view_types = {});
-      
-protected:
-    std::string get_checkpoint_name(const std::vector<std::string>& args) const;
-    std::string get_checkpoint_path(const std::string& name) const;
-    bool has_checkpoint(const std::string& name) const;
+  template <typename Context>
+  AnalyzerResult analyze_trace(
+      Context& ctx, const std::vector<std::string>& traces,
+      const std::vector<std::string>& view_types,
+      const std::vector<std::string>& exclude_characteristics = {},
+      const std::unordered_map<std::string, std::string>& extra_columns = {}
+      // @TODO: add extra_columns_fn
+  );
 
+  template <typename T, typename FallbackFunc>
+  T restore_view(const std::string& checkpoint_name, FallbackFunc fallback,
+                 bool force = false, bool write_to_disk = true,
+                 bool read_from_disk = false,
+                 const std::vector<std::string>& view_types = {});
 
-private:
+ protected:
+  std::string get_checkpoint_name(const std::vector<std::string>& args) const;
+  std::string get_checkpoint_path(const std::string& name) const;
+  bool has_checkpoint(const std::string& name) const;
+
+ private:
   double time_granularity_;
   double time_resolution_;
   size_t checkpoint_size_;
@@ -138,10 +134,10 @@ private:
   bool checkpoint_;
 };
 
-} // namespace analyzers
-} // namespace utils
-} // namespace dftracer
+}  // namespace analyzers
+}  // namespace utils
+}  // namespace dftracer
 
 #include <dftracer/utils/analyzers/analyzer_impl.h>
 
-#endif // __DFTRACER_UTILS_ANALYZERS_ANALYZER_H__
+#endif  // __DFTRACER_UTILS_ANALYZERS_ANALYZER_H__

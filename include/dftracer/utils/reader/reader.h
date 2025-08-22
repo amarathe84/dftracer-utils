@@ -250,7 +250,8 @@ class Reader {
    * @return Vector of parsed JSON objects
    * @throws std::runtime_error if operation fails
    */
-  dftracer::utils::json::OwnedJsonDocuments read_json_lines_owned(size_t start, size_t end);
+  dftracer::utils::json::OwnedJsonDocuments read_json_lines_owned(size_t start,
+                                                                  size_t end);
 
   /**
    * Read bytes from gzip file and parse as JSON Lines
@@ -261,8 +262,8 @@ class Reader {
    * @return Vector of parsed JSON objects from the buffer
    * @throws std::runtime_error if operation fails
    */
-  dftracer::utils::json::JsonDocuments read_json_lines_bytes(
-      size_t start_bytes, size_t end_bytes);
+  dftracer::utils::json::JsonDocuments read_json_lines_bytes(size_t start_bytes,
+                                                             size_t end_bytes);
 
   /**
    * Read bytes from gzip file and parse as JSON Lines (owned)

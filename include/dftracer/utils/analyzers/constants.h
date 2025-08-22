@@ -1,12 +1,11 @@
 #ifndef __DFTRACER_UTILS_ANALYZERS_CONSTANTS_H__
 #define __DFTRACER_UTILS_ANALYZERS_CONSTANTS_H__
 
-
+#include <limits>
 #include <string>
-#include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <limits>
+#include <vector>
 
 namespace dftracer {
 namespace utils {
@@ -14,45 +13,34 @@ namespace analyzers {
 namespace constants {
 
 // Enums
-enum class AccessPattern {
-    SEQUENTIAL = 0,
-    RANDOM = 1
-};
+enum class AccessPattern { SEQUENTIAL = 0, RANDOM = 1 };
 
 enum class EventType {
-    ATTACH_REASONS,
-    COMPUTE_HLM,
-    COMPUTE_MAIN_VIEW,
-    COMPUTE_METRIC_BOUNDARIES,
-    COMPUTE_PERSPECTIVES,
-    COMPUTE_VIEW,
-    DETECT_CHARACTERISTICS,
-    EVALUATE_VIEW,
-    READ_TRACES,
-    SAVE_VIEWS
+  ATTACH_REASONS,
+  COMPUTE_HLM,
+  COMPUTE_MAIN_VIEW,
+  COMPUTE_METRIC_BOUNDARIES,
+  COMPUTE_PERSPECTIVES,
+  COMPUTE_VIEW,
+  DETECT_CHARACTERISTICS,
+  EVALUATE_VIEW,
+  READ_TRACES,
+  SAVE_VIEWS
 };
 
 enum class IOCategory {
-    READ = 1,
-    WRITE = 2,
-    METADATA = 3,
-    PCTL = 4,
-    IPC = 5,
-    OTHER = 6,
-    SYNC = 7
+  READ = 1,
+  WRITE = 2,
+  METADATA = 3,
+  PCTL = 4,
+  IPC = 5,
+  OTHER = 6,
+  SYNC = 7
 };
 
 std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat);
 
-enum class Layer {
-    APP,
-    DATALOADER,
-    NETCDF,
-    PNETCDF,
-    HDF5,
-    MPI,
-    POSIX
-};
+enum class Layer { APP, DATALOADER, NETCDF, PNETCDF, HDF5, MPI, POSIX };
 
 // Column names
 constexpr const char* COL_ACC_PAT = "acc_pat";
@@ -79,7 +67,8 @@ constexpr const char* COL_TIME_START = "time_start";
 constexpr const char* COL_TIME_END = "time_end";
 
 // View types
-extern const std::vector<std::pair<std::string, std::string>> LOGICAL_VIEW_TYPES;
+extern const std::vector<std::pair<std::string, std::string>>
+    LOGICAL_VIEW_TYPES;
 extern const std::vector<std::string> VIEW_TYPES;
 
 // Analysis constants
@@ -112,7 +101,7 @@ extern const std::vector<std::string> SIZE_BIN_LABELS;
 extern const std::vector<std::string> SIZE_BIN_NAMES;
 extern const std::vector<std::string> SIZE_BIN_SUFFIXES;
 
-constexpr size_t NUM_SIZE_BINS = 12; // SIZE_BINS.size() - 1
+constexpr size_t NUM_SIZE_BINS = 12;  // SIZE_BINS.size() - 1
 
 // Patterns and separators
 constexpr const char* FILE_PATTERN_PLACEHOLDER = "[0-9]";
@@ -159,51 +148,52 @@ const double DEFAULT_TIME_GRANULARITY = 1e6;
 
 // AI DFTracer constants for epoch processing
 namespace ai_dftracer {
-    constexpr const char* ROOT_NAME = "ai_root";
-    constexpr const char* ROOT_CAT = "ai_root";
-    constexpr const char* ITER_COUNT_NAME = "count";
-    constexpr const char* INIT_NAME = "init";
-    constexpr const char* BLOCK_NAME = "block";
-    constexpr const char* ITER_NAME = "iter";
-    constexpr const char* CTX_SEPARATOR = ".";
-    
-    // Categories
-    constexpr const char* CATEGORY_COMPUTE = "compute";
-    constexpr const char* CATEGORY_DATA = "data";
-    constexpr const char* CATEGORY_DATALOADER = "dataloader";
-    constexpr const char* CATEGORY_COMM = "comm";
-    constexpr const char* CATEGORY_DEVICE = "device";
-    constexpr const char* CATEGORY_CHECKPOINT = "checkpoint";
-    constexpr const char* CATEGORY_PIPELINE = "pipeline";
-    
-    // Pipeline functions
-    constexpr const char* PIPELINE_EPOCH = "epoch";
-    constexpr const char* PIPELINE_TRAIN = "train";
-    constexpr const char* PIPELINE_EVALUATE = "evaluate";
-    constexpr const char* PIPELINE_TEST = "test";
-    
-    // Helper functions
-    inline std::string get_block(const std::string& func_name) {
-        return func_name + CTX_SEPARATOR + BLOCK_NAME;
-    }
-    
-    inline std::string get_iter(const std::string& func_name) {
-        return func_name + CTX_SEPARATOR + ITER_NAME;
-    }
-    
-    inline std::string get_init(const std::string& func_name) {
-        return func_name + CTX_SEPARATOR + INIT_NAME;
-    }
-    
-    // Check if a record matches epoch criteria
-    inline bool is_epoch_event(const std::string& cat, const std::string& func_name) {
-        return cat == CATEGORY_PIPELINE && 
-               (func_name == get_block(PIPELINE_EPOCH) || func_name == PIPELINE_EPOCH);
-    }
-}
-} // namespace constants
-} // namespace analyzers
-} // namespace utils
-} // namespace dftracer
+constexpr const char* ROOT_NAME = "ai_root";
+constexpr const char* ROOT_CAT = "ai_root";
+constexpr const char* ITER_COUNT_NAME = "count";
+constexpr const char* INIT_NAME = "init";
+constexpr const char* BLOCK_NAME = "block";
+constexpr const char* ITER_NAME = "iter";
+constexpr const char* CTX_SEPARATOR = ".";
 
-#endif // __DFTRACER_UTILS_ANALYZERS_CONSTANTS_H__
+// Categories
+constexpr const char* CATEGORY_COMPUTE = "compute";
+constexpr const char* CATEGORY_DATA = "data";
+constexpr const char* CATEGORY_DATALOADER = "dataloader";
+constexpr const char* CATEGORY_COMM = "comm";
+constexpr const char* CATEGORY_DEVICE = "device";
+constexpr const char* CATEGORY_CHECKPOINT = "checkpoint";
+constexpr const char* CATEGORY_PIPELINE = "pipeline";
+
+// Pipeline functions
+constexpr const char* PIPELINE_EPOCH = "epoch";
+constexpr const char* PIPELINE_TRAIN = "train";
+constexpr const char* PIPELINE_EVALUATE = "evaluate";
+constexpr const char* PIPELINE_TEST = "test";
+
+// Helper functions
+inline std::string get_block(const std::string& func_name) {
+  return func_name + CTX_SEPARATOR + BLOCK_NAME;
+}
+
+inline std::string get_iter(const std::string& func_name) {
+  return func_name + CTX_SEPARATOR + ITER_NAME;
+}
+
+inline std::string get_init(const std::string& func_name) {
+  return func_name + CTX_SEPARATOR + INIT_NAME;
+}
+
+// Check if a record matches epoch criteria
+inline bool is_epoch_event(const std::string& cat,
+                           const std::string& func_name) {
+  return cat == CATEGORY_PIPELINE && (func_name == get_block(PIPELINE_EPOCH) ||
+                                      func_name == PIPELINE_EPOCH);
+}
+}  // namespace ai_dftracer
+}  // namespace constants
+}  // namespace analyzers
+}  // namespace utils
+}  // namespace dftracer
+
+#endif  // __DFTRACER_UTILS_ANALYZERS_CONSTANTS_H__
