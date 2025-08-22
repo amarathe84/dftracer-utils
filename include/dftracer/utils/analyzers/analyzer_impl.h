@@ -295,16 +295,22 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
       });
 }
 
+struct EpochSpanEntry {
+  uint64_t epoch_num;
+  uint64_t start_time;
+  uint64_t end_time;
+  uint64_t duration;
+
+  template <typename Archive>
+  void serialize(Archive& ar) {
+    ar(epoch_num, start_time, end_time, duration);
+  }
+};
+
 template <typename Context, typename BagType>
 inline auto postread_trace(Context& ctx, BagType&& events,
                            const std::vector<std::string>& view_types,
                            double time_granularity) {
-  struct EpochSpanEntry {
-    uint64_t epoch_num;
-    uint64_t start_time;
-    uint64_t end_time;
-    uint64_t duration;
-  };
 
   // PHASE 1: epoch spans computation
   auto epoch_spans_bag =

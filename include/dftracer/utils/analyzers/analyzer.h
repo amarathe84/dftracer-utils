@@ -54,7 +54,7 @@ struct TraceRecord {
 
   template <class Archive>
   void serialize(Archive& ar) {
-    ar(cat, io_cat, acc_pat, func_name, time, count, size, time_range,
+    ar(cat, io_cat, acc_pat, func_name, duration, count, size, time_range,
        time_start, time_end, epoch, pid, tid, fhash, hhash, image_id, offset,
        event_type, view_fields, bin_fields);
   }

@@ -68,6 +68,11 @@ class OwnedJsonDocument {
   bool is_valid() const;
   const std::string& raw_data() const;
   std::string minify() const;
+
+  template <class Archive>
+  void serialize(Archive &ar) {
+    ar(data_);
+  }
 };
 
 using JsonDocument = simdjson::dom::element;

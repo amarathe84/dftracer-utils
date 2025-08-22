@@ -220,7 +220,6 @@ add_executable(dft_map bin/dft_map.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_map PROPERTIES OUTPUT_NAME "dft_map")
 target_link_libraries(dft_map PRIVATE 
   dftracer_utils
-  # dftracer_utils_analyzer
   spdlog::spdlog_header_only 
   argparse::argparse
   ghc_filesystem
@@ -261,46 +260,46 @@ install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # DFT Map MPI (only when MPI is enabled)
 # ----------------------------------------
 
-# if(DFTRACER_UTILS_MPI_ENABLE)
-#   add_executable(dft_map_mpi bin/dft_map_mpi.cpp ${DFTRACER_UTILS_SOURCES})
-#   set_target_properties(dft_map_mpi PROPERTIES OUTPUT_NAME "dft_map_mpi")
-#   target_link_libraries(dft_map_mpi PRIVATE 
-#     dftracer_utils
-#     spdlog::spdlog_header_only 
-#     argparse::argparse
-#     ghc_filesystem
-#     picosha2
-#     simdjson::simdjson
-#     cereal::cereal
-#   )
-#   add_mpi_deps_if_needed(dft_map_mpi)
-#   target_compile_definitions(dft_map_mpi PRIVATE DFTRACER_UTILS_MPI_ENABLE)
+if(DFTRACER_UTILS_MPI_ENABLE)
+  add_executable(dft_map_mpi bin/dft_map_mpi.cpp ${DFTRACER_UTILS_SOURCES})
+  set_target_properties(dft_map_mpi PROPERTIES OUTPUT_NAME "dft_map_mpi")
+  target_link_libraries(dft_map_mpi PRIVATE 
+    dftracer_utils
+    spdlog::spdlog_header_only 
+    argparse::argparse
+    ghc_filesystem
+    picosha2
+    simdjson::simdjson
+    cereal::cereal
+  )
+  add_mpi_deps_if_needed(dft_map_mpi)
+  target_compile_definitions(dft_map_mpi PRIVATE DFTRACER_UTILS_MPI_ENABLE)
 
-#   # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
-#   link_sqlite3(dft_map_mpi STATIC)
-#   link_zlib(dft_map_mpi STATIC)
-#   # link_arrow(dft_map_mpi STATIC)
+  # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
+  link_sqlite3(dft_map_mpi STATIC)
+  link_zlib(dft_map_mpi STATIC)
+  # link_arrow(dft_map_mpi STATIC)
 
-#   target_include_directories(dft_map_mpi 
-#       PRIVATE ${CMAKE_SOURCE_DIR}/include)
+  target_include_directories(dft_map_mpi 
+      PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-#   target_set_warnings(dft_map_mpi)
+  target_set_warnings(dft_map_mpi)
 
-#   # Apply coverage flags if enabled
-#   if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#       target_compile_options(dft_map_mpi PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-#       target_link_libraries(dft_map_mpi PRIVATE --coverage)
-#   endif()
+  # Apply coverage flags if enabled
+  if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      target_compile_options(dft_map_mpi PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+      target_link_libraries(dft_map_mpi PRIVATE --coverage)
+  endif()
 
-#   # Make sure spdlog include directories are available
-#   get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
-#   if(SPDLOG_INCLUDE_DIRS)
-#       target_include_directories(dft_map_mpi PRIVATE ${SPDLOG_INCLUDE_DIRS})
-#   endif()
+  # Make sure spdlog include directories are available
+  get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
+  if(SPDLOG_INCLUDE_DIRS)
+      target_include_directories(dft_map_mpi PRIVATE ${SPDLOG_INCLUDE_DIRS})
+  endif()
 
-#   # Install executable
-#   install(TARGETS dft_map_mpi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# endif()
+  # Install executable
+  install(TARGETS dft_map_mpi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 ##########################################
 # Python binding
