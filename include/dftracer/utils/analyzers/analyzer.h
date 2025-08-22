@@ -45,8 +45,8 @@ struct TraceRecord {
   std::string hhash;
   uint64_t image_id;
   uint8_t event_type; // 0=regular, 1=file_hash, 2=host_hash, 3=string_hash, 4=other_metadata
-  uint64_t size = std::numeric_limits<uint64_t>::quiet_NaN();
-  uint64_t offset = std::numeric_limits<uint64_t>::quiet_NaN();
+  uint64_t size = 0;
+  uint64_t offset = 0;
   std::unordered_map<std::string, std::string> view_fields;
   std::unordered_map<std::string, uint32_t> bin_fields;
 

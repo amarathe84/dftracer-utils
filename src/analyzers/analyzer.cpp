@@ -234,15 +234,38 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
       if (record.cat == "posix" || record.cat == "stdio") {
         record.io_cat = derive_io_cat(func_name);
         
-        std::string ret_str = get_args_string_field_owned(doc, "ret");
-        if (!ret_str.empty()) {
-          try {
-            uint64_t ret_value = std::stoull(ret_str);
-            if (ret_value > 0 && (record.io_cat == "read" || record.io_cat == "write")) {
-              record.size = ret_value;
+        // Get ret value directly as numeric from args
+        auto obj_result = doc.get_object();
+        if (!obj_result.error()) {
+          auto obj = obj_result.value();
+          for (auto field : obj) {
+            std::string field_key = std::string(field.key);
+            if (field_key == "args" && field.value.is_object()) {
+              auto args_result = field.value.get_object();
+              if (!args_result.error()) {
+                auto args = args_result.value();
+                for (auto arg_field : args) {
+                  std::string arg_key = std::string(arg_field.key);
+                  if (arg_key == "ret") {
+                    uint64_t ret_value = 0;
+                    if (arg_field.value.is_uint64()) {
+                      ret_value = arg_field.value.get_uint64();
+                    } else if (arg_field.value.is_int64()) {
+                      int64_t signed_ret = arg_field.value.get_int64();
+                      if (signed_ret > 0) {
+                        ret_value = static_cast<uint64_t>(signed_ret);
+                      }
+                    }
+                    
+                    if (ret_value > 0 && (record.io_cat == "read" || record.io_cat == "write")) {
+                      record.size = ret_value;
+                    }
+                    break;
+                  }
+                }
+              }
+              break;
             }
-          } catch (...) {
-            // Ignore parse errors
           }
         }
 
@@ -282,6 +305,19 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
 
       // Set size bins for regular events
       set_size_bins(record);
+      
+      // Debug size parsing for first few read records
+      if (parse_count <= 10) {
+        spdlog::info("RAY DEBUG: Record #{} size={} for func='{}', cat='{}', io_cat='{}'", 
+                     parse_count, record.size, record.func_name, record.cat, record.io_cat);
+        if (record.size > 0) {
+          for (const auto& [bin_name, bin_value] : record.bin_fields) {
+            if (bin_value > 0) {
+              spdlog::info("RAY DEBUG: Size bin set: {}={}", bin_name, bin_value);
+            }
+          }
+        }
+      }
     }
 
   } catch (const std::exception& e) {

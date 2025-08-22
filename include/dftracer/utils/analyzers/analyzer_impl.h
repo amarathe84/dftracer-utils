@@ -571,24 +571,68 @@ AnalyzerResult Analyzer::analyze_trace(
             spdlog::info("  Total size: {} bytes", total_size);
             spdlog::info("  Unique groups: {}", flattened_results.size());
 
-            // Output all groupby keys like Python for comparison
-            std::cout << "C++ Groupby Keys:" << std::endl;
-            for (size_t i = 0; i < flattened_results.size(); ++i) {
-                const auto& hlm = flattened_results[i];
+            // Output CSV format matching Python output
+            std::cout << "C++ HLM CSV:" << std::endl;
+            
+            // CSV Header - matching Python column order
+            std::cout << "cat,acc_pat,epoch,io_cat,func_name,proc_name,time_range,time,count,size,"
+                      << "size_bin_0_4kib,size_bin_4kib_16kib,size_bin_16kib_64kib,size_bin_64kib_256kib,"
+                      << "size_bin_256kib_1mib,size_bin_1mib_4mib,size_bin_4mib_16mib,size_bin_16mib_64mib,"
+                      << "size_bin_64mib_256mib,size_bin_256mib_1gib,size_bin_1gib_4gib,size_bin_4gib_plus" 
+                      << std::endl;
+            
+            // CSV Data rows
+            for (const auto& hlm : flattened_results) {
+                // Get basic fields
+                std::string cat = hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "";
+                std::string acc_pat = hlm.group_values.count("acc_pat") ? hlm.group_values.at("acc_pat") : "";
+                std::string epoch = hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : "";
+                std::string io_cat = hlm.group_values.count("io_cat") ? hlm.group_values.at("io_cat") : "";
+                std::string func_name = hlm.group_values.count("func_name") ? hlm.group_values.at("func_name") : "";
+                std::string proc_name = hlm.group_values.count("proc_name") ? hlm.group_values.at("proc_name") : "";
+                std::string time_range = hlm.group_values.count("time_range") ? hlm.group_values.at("time_range") : "";
                 
-                // Create ordered group values matching Python's order: acc_pat, proc_name, time_range, cat, func_name, io_cat, epoch
-                std::vector<std::string> ordered_values = {
-                    hlm.group_values.count("acc_pat") ? hlm.group_values.at("acc_pat") : "",
-                    hlm.group_values.count("proc_name") ? hlm.group_values.at("proc_name") : "",
-                    hlm.group_values.count("time_range") ? hlm.group_values.at("time_range") : "",
-                    hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "",
-                    hlm.group_values.count("func_name") ? hlm.group_values.at("func_name") : "",
-                    hlm.group_values.count("io_cat") ? hlm.group_values.at("io_cat") : "",
-                    hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : ""
+                // Output row with proper CSV formatting
+                std::cout << cat << "," << acc_pat << "," << epoch << "," << io_cat << "," 
+                          << func_name << "," << proc_name << "," << time_range << ","
+                          << hlm.time_sum << "," << hlm.count_sum << "," << hlm.size_sum;
+                
+                // Output size bins in the correct order
+                std::vector<std::string> size_bin_names = {
+                    "size_bin_0_4kib", "size_bin_4kib_16kib", "size_bin_16kib_64kib", "size_bin_64kib_256kib",
+                    "size_bin_256kib_1mib", "size_bin_1mib_4mib", "size_bin_4mib_16mib", "size_bin_16mib_64mib",
+                    "size_bin_64mib_256mib", "size_bin_256mib_1gib", "size_bin_1gib_4gib", "size_bin_4gib_plus"
                 };
                 
-                std::cout << fmt::format("{}", fmt::join(ordered_values, "|")) << std::endl;
+                for (const auto& bin_name : size_bin_names) {
+                    std::cout << ",";
+                    if (hlm.bin_sums.count(bin_name)) {
+                        std::cout << hlm.bin_sums.at(bin_name);
+                    }
+                    // else output empty string (already done by default)
+                }
+                
+                std::cout << std::endl;
             }
+
+            // Also output groupby keys for comparison
+            // std::cout << "C++ Groupby Keys:" << std::endl;
+            // for (size_t i = 0; i < flattened_results.size(); ++i) {
+            //     const auto& hlm = flattened_results[i];
+                
+            //     // Create ordered group values matching Python's order: acc_pat, proc_name, time_range, cat, func_name, io_cat, epoch
+            //     std::vector<std::string> ordered_values = {
+            //         hlm.group_values.count("acc_pat") ? hlm.group_values.at("acc_pat") : "",
+            //         hlm.group_values.count("proc_name") ? hlm.group_values.at("proc_name") : "",
+            //         hlm.group_values.count("time_range") ? hlm.group_values.at("time_range") : "",
+            //         hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "",
+            //         hlm.group_values.count("func_name") ? hlm.group_values.at("func_name") : "",
+            //         hlm.group_values.count("io_cat") ? hlm.group_values.at("io_cat") : "",
+            //         hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : ""
+            //     };
+                
+            //     std::cout << fmt::format("{}", fmt::join(ordered_values, "|")) << std::endl;
+            // }
         }
         
         return AnalyzerResult{std::move(flattened_results)};
