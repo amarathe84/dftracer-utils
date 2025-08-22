@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -116,6 +117,12 @@ static std::ptrdiff_t get_size_bin_index(uint64_t size) {
                              constants::SIZE_BINS.end(), size_double);
   std::ptrdiff_t bin_index =
       std::distance(constants::SIZE_BINS.begin(), it) - 1;
+  
+  // Adjust to match Python's bin placement (shift one bin earlier)
+  if (bin_index > 0) {
+    bin_index = bin_index - 1;
+  }
+  
   bin_index =
       std::max(static_cast<std::ptrdiff_t>(0),
                std::min(bin_index, static_cast<std::ptrdiff_t>(
@@ -313,8 +320,9 @@ static std::vector<std::string> generate_size_bins_vec() {
 
 static std::string generate_size_bin_headers() {
   std::ostringstream header_stream;
-  for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
-    header_stream << constants::SIZE_BIN_PREFIX << suffix << ",";
+  for (size_t i = 0; i < constants::SIZE_BIN_SUFFIXES.size(); ++i) {
+    if (i > 0) header_stream << ",";
+    header_stream << constants::SIZE_BIN_PREFIX << constants::SIZE_BIN_SUFFIXES[i];
   }
   return header_stream.str();
 }
@@ -325,9 +333,10 @@ std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
 
   // CSV Header
   if (header) {
-    csv_stream << "cat,acc_pat,epoch,io_cat,func_name,proc_name,time_range,"
-                  "time,count,size,"
-               << generate_size_bin_headers() << std::endl;
+    csv_stream << "proc_name,cat,epoch,acc_pat,func_name,io_cat,time_range,"
+               << "time,count,size,"
+               << generate_size_bin_headers();
+    csv_stream << std::endl;
   }
 
   // CSV Data rows
@@ -352,20 +361,21 @@ std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
                                  : "";
 
     // Output row with proper CSV formatting
-    csv_stream << cat << "," << acc_pat << "," << epoch << "," << io_cat << ","
-               << func_name << "," << proc_name << "," << time_range << ","
-               << hlm.time_sum << "," << hlm.count_sum << ",";
+    csv_stream << proc_name << "," << cat << "," << epoch << "," << acc_pat << ","
+               << func_name << "," << io_cat << "," << time_range << ","
+               << std::fixed << std::setprecision(6) << hlm.time_sum << std::defaultfloat << "," << hlm.count_sum << ",";
 
     // Handle optional size_sum (nullopt -> empty string for NaN)
     if (hlm.size_sum.has_value()) {
       csv_stream << hlm.size_sum.value();
     }
 
-    for (const auto& bin_name : generate_size_bins_vec()) {
+    auto size_bins = generate_size_bins_vec();
+    for (size_t i = 0; i < size_bins.size(); ++i) {
       csv_stream << ",";
-      if (hlm.bin_sums.count(bin_name) &&
-          hlm.bin_sums.at(bin_name).has_value()) {
-        csv_stream << hlm.bin_sums.at(bin_name).value();
+      if (hlm.bin_sums.count(size_bins[i]) &&
+          hlm.bin_sums.at(size_bins[i]).has_value()) {
+        csv_stream << hlm.bin_sums.at(size_bins[i]).value();
       }
       // else output empty string for nullopt (NaN equivalent)
     }

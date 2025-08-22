@@ -37,7 +37,10 @@ set(DFTRACER_UTILS_HEADERS
 
   # pipeline
   pipeline/pipeline.h
-  pipeline/execution_context.h
+  pipeline/execution_context/execution_context.h
+  pipeline/execution_context/sequential.h
+  pipeline/execution_context/threaded.h
+  pipeline/execution_context/mpi.h
 
   # analyzer
   analyzers/analyzer.h

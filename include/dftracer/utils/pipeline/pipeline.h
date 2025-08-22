@@ -15,64 +15,17 @@
 #include <unordered_map>
 #include <vector>
 
+#include <dftracer/utils/pipeline/internal.h>
+#include <dftracer/utils/pipeline/execution_context/mpi.h>
+
 namespace dftracer {
 namespace utils {
 namespace pipeline {
 
+using namespace internal;
+
 template <typename T, typename Operation = void>
 class Bag;
-
-template <typename F, typename T, typename = void>
-struct is_map_function : std::false_type {};
-
-template <typename F, typename T>
-struct is_map_function<
-    F, T, std::void_t<decltype(std::declval<F>()(std::declval<T>()))>>
-    : std::true_type {};
-
-template <typename F, typename T>
-using map_result_t = decltype(std::declval<F>()(std::declval<T>()));
-
-template <typename Operation>
-struct is_leaf_bag : std::is_same<Operation, void> {};
-
-template <typename T>
-struct is_partitioned_data : std::false_type {};
-
-template <typename T>
-struct is_partitioned_data<std::vector<T>> : std::true_type {};
-
-inline size_t parse_size_string(const std::string& size_str) {
-  if (size_str.empty()) {
-    throw std::invalid_argument("Empty size string");
-  }
-
-  size_t pos = 0;
-  double value;
-
-  try {
-    value = std::stod(size_str, &pos);
-  } catch (const std::exception& e) {
-    throw std::invalid_argument("Invalid numeric value in size string: " +
-                                size_str);
-  }
-
-  if (value < 0) {
-    throw std::invalid_argument("Size cannot be negative");
-  }
-
-  std::string unit = size_str.substr(pos);
-  std::transform(unit.begin(), unit.end(), unit.begin(), ::tolower);
-
-  unit.erase(std::remove_if(unit.begin(), unit.end(), ::isspace), unit.end());
-
-  if (unit == "b" || unit.empty()) return static_cast<size_t>(value);
-  if (unit == "kb") return static_cast<size_t>(value * 1024);
-  if (unit == "mb") return static_cast<size_t>(value * 1024 * 1024);
-  if (unit == "gb") return static_cast<size_t>(value * 1024 * 1024 * 1024);
-
-  throw std::invalid_argument("Unknown size unit: " + unit);
-}
 
 template <typename T>
 class BagBase {
@@ -263,6 +216,17 @@ class Bag<T, void> : public BagBase<T> {
   auto operator|(Func&& func) const -> decltype(func(*this)) {
     return func(*this);
   }
+
+  template <typename Context>
+  auto collect(const Context& ctx) const {
+    auto local_results = compute(ctx);
+  
+    if constexpr (std::is_same_v<Context, context::MPIContext>) {
+      return ctx.gather_results(local_results);
+    } else {
+      return local_results;
+    }
+  }
 };
 
 template <typename T, typename Operation>
@@ -443,6 +407,17 @@ class Bag : public BagBase<T> {
   template <typename Func>
   auto operator|(Func&& func) const -> decltype(func(*this)) {
     return func(*this);
+  }
+
+  template <typename Context>
+  auto collect(const Context& ctx) const {
+    auto local_results = compute(ctx);
+  
+    if constexpr (std::is_same_v<Context, context::MPIContext>) {
+      return ctx.gather_results(local_results);
+    } else {
+      return local_results;
+    }
   }
 };
 

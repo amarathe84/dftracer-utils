@@ -2,12 +2,14 @@
 #include <dftracer/utils/config.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/pipeline/pipeline.h>
-#include <dftracer/utils/pipeline/execution_context/threaded.h>
+#include <dftracer/utils/pipeline/execution_context/mpi.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/utils/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+
+#include <mpi.h>
 
 #include <argparse/argparse.hpp>
 #include <iostream>
@@ -17,7 +19,34 @@
 
 using namespace dftracer::utils;
 
+class MPI {
+  public:
+    MPI(int& argc, char**& argv) {
+      MPI_Init(&argc, &argv);
+      MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank_);
+      MPI_Comm_size(MPI_COMM_WORLD, &mpi_size_);
+    }
+
+    ~MPI() {
+      MPI_Finalize();
+    }
+
+    int rank() const {
+      return mpi_rank_;
+    }
+
+    int size() const {
+      return mpi_size_;
+    }
+
+  private:
+    int mpi_rank_;
+    int mpi_size_;
+};
+
 int main(int argc, char* argv[]) {
+  MPI mpi(argc, argv);
+
   size_t default_checkpoint_size =
       dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
   auto default_checkpoint_size_str =
@@ -131,119 +160,20 @@ int main(int argc, char* argv[]) {
   spdlog::info("  View types: {}", view_types_oss.str());
   spdlog::info("  Trace files: {}", trace_paths.size());
 
-  pipeline::context::ThreadedContext ctx;
+  if (mpi.rank() == 0) {
+    spdlog::info("Running with MPI: Rank {}/{}", mpi.rank(), mpi.size());
+  }
+
+  pipeline::context::MPIContext ctx;
+
   auto start_time = std::chrono::high_resolution_clock::now();
 
   analyzers::Analyzer analyzer(time_granularity);
   auto result = analyzer.analyze_trace(ctx, trace_paths, view_types);
 
-  // struct FileInfo {
-  //   std::string path;
-  //   size_t size;
-  // };
-
-  // std::vector<FileInfo> file_infos;
-
-  // for (const auto& path : trace_paths) {
-  //   dftracer::utils::indexer::Indexer indexer(path, path + ".idx");
-  //   indexer.build();
-  //   auto max_bytes = indexer.get_max_bytes();
-  //   spdlog::info("Processing file: {} ({} bytes)", path, max_bytes);
-  //   file_infos.push_back({path, max_bytes});
-  // }
-
-  // struct WorkInfo {
-  //   std::string path;
-  //   size_t start;
-  //   size_t end;
-  // } work_info;
-
-  // constexpr size_t BATCH_SIZE = 128 * 1024; // 128KB
-
-  // std::vector<WorkInfo> work_items;
-
-  // for (const auto& file_info : file_infos) {
-  //   size_t start = 0;
-  //   size_t end = 0;
-
-  //   while (start < file_info.size) {
-  //     end = std::min(start + BATCH_SIZE, file_info.size);
-  //     work_items.push_back({file_info.path, start, end});
-  //     start = end;
-  //   }
-  // }
-
-  // auto data = Bag<WorkInfo>::from_sequence(std::move(work_items));
-
-  // auto pipeline = data.map_partitions([](const std::vector<WorkInfo>&
-  // partition) {
-  //     std::vector<dftracer::utils::json::JsonDocument> results;
-
-  //     for (const auto& work : partition) {
-  //         dftracer::utils::reader::Reader reader(work.path, work.path +
-  //         ".idx"); spdlog::info("Reading from {}: bytes {} to {}", work.path,
-  //         work.start, work.end); auto docs =
-  //         reader.read_json_lines_bytes(work.start, work.end);
-  //         results.insert(results.end(), docs.begin(), docs.end());
-  //         // for (const auto& doc : docs) {
-  //             // spdlog::info("Parsed document: {}", doc);
-  //             // if (!doc.error()) {
-  //             //     results.push_back(doc.value());
-  //             // }
-  //         // }
-  //         // results.insert(results.end(), lines.begin(), lines.end());
-  //     }
-  //     return results;
-  // });
-
-  // // Test JSON parsing
-  // spdlog::info("Computing pipeline to get JSON documents...");
-  // auto json_docs = pipeline.compute(ctx);
-  // spdlog::info("Got {} JSON documents", json_docs.size());
-
-  // if (!json_docs.empty()) {
-  //   // Test parsing a few records manually
-  //   spdlog::info("Testing manual trace record parsing...");
-  //   using namespace dftracer::utils::json;
-
-  //   for (size_t i = 0; i < std::min(size_t(5), json_docs.size()); ++i) {
-  //     const auto& doc = json_docs[i];
-  //     spdlog::info("=== Testing document {} ===", i);
-
-  //     spdlog::info("Document: {}", doc);
-
-  //     // // Test basic field extraction
-  //     // std::string cat = dftracer::utils::json::get_string_field(doc,
-  //     "cat");
-  //     // std::string name = dftracer::utils::json::get_string_field(doc,
-  //     "name");
-  //     // std::string ph = dftracer::utils::json::get_string_field(doc, "ph");
-
-  //     // spdlog::info("  cat: '{}'", cat);
-  //     // spdlog::info("  name: '{}'", name);
-  //     // spdlog::info("  ph: '{}'", ph);
-
-  //     // // Test if doc is object
-  //     // spdlog::info("  is_object: {}", doc.is_object());
-
-  //     // if (doc.is_object()) {
-  //     //   auto obj_result = doc.get_object();
-  //     //   if (!obj_result.error()) {
-  //     //     auto obj = obj_result.value();
-  //     //     spdlog::info("  Fields in object:");
-  //     //     for (auto field : obj) {
-  //     //       std::string field_key = std::string(field.key);
-  //     //       spdlog::info("    - '{}' (type: {})", field_key,
-  //     static_cast<int>(field.value.type()));
-  //     //     }
-  //     //   }
-  //     // }
-  //   }
-  // }
-
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double, std::milli> duration = end_time - start_time;
-  // spdlog::info("Duration: {} ms", duration.count());
+  spdlog::info("Duration: {} ms", duration.count());
 
   return 0;
 }

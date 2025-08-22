@@ -156,33 +156,52 @@ inline auto parse_and_filter_traces(const std::vector<std::string>& traces,
       });
 }
 
-// Hash resolution stage - separate by event type and collect hash mappings
+// Pass 1: Collect all hash mappings globally
+template <typename Context, typename BagType>
+inline auto collect_global_hash_mappings(Context& ctx, BagType&& trace_records) {
+  auto hash_pairs = trace_records
+      .flatmap([](const TraceRecord& record) -> std::vector<std::pair<std::string, std::string>> {
+        std::vector<std::pair<std::string, std::string>> hash_mappings;
+        if (record.event_type == 1 && !record.fhash.empty()) {  // file hash
+          hash_mappings.emplace_back("file:" + record.fhash, record.func_name);
+        } else if (record.event_type == 2 && !record.hhash.empty()) {  // host hash
+          hash_mappings.emplace_back("host:" + record.hhash, record.func_name);
+        }
+        return hash_mappings;
+      });
+
+  auto all_hash_pairs = hash_pairs.compute(ctx);
+  
+  // Build global hash maps
+  std::unordered_map<std::string, std::string> file_hash_map;
+  std::unordered_map<std::string, std::string> host_hash_map;
+  
+  for (const auto& [key, value] : all_hash_pairs) {
+    if (key.size() >= 5 && key.substr(0, 5) == "file:") {
+      file_hash_map[key.substr(5)] = value;  // Remove "file:" prefix
+    } else if (key.size() >= 5 && key.substr(0, 5) == "host:") {
+      host_hash_map[key.substr(5)] = value;  // Remove "host:" prefix
+    }
+  }
+  
+  return std::make_pair(std::move(file_hash_map), std::move(host_hash_map));
+}
+
+// Pass 2: Apply global hash mappings and filter events
 template <typename BagType>
-inline auto separate_events_and_hashes(BagType&& trace_records) {
+inline auto separate_events_and_hashes(BagType&& trace_records,
+                                       const std::unordered_map<std::string, std::string>& file_hash_map,
+                                       const std::unordered_map<std::string, std::string>& host_hash_map) {
   return std::forward<BagType>(trace_records)
-      .map_partitions([](const std::vector<TraceRecord>& partition)
+      .map_partitions([file_hash_map, host_hash_map](const std::vector<TraceRecord>& partition)
                           -> std::vector<TraceRecord> {
         std::vector<TraceRecord> result;
         result.reserve(partition.size());
 
-        // Collect hash mappings (global across all records)
-        std::unordered_map<std::string, std::string> file_hash_map;
-        std::unordered_map<std::string, std::string> host_hash_map;
-
-        // First pass: collect all hash mappings
-        for (const auto& record : partition) {
-          if (record.event_type == 1 && !record.fhash.empty()) {  // file hash
-            file_hash_map[record.fhash] = record.func_name;
-          } else if (record.event_type == 2 &&
-                     !record.hhash.empty()) {  // host hash
-            host_hash_map[record.hhash] = record.func_name;
-          }
-        }
-
-        // Second pass: resolve hashes for regular events
+        // Process only regular events using global hash mappings
         for (auto record : partition) {
           if (record.event_type == 0) {  // regular event only
-            // Resolve file hash to file name
+            // Resolve file hash to file name using global mapping
             if (!record.fhash.empty()) {
               auto it = file_hash_map.find(record.fhash);
               if (it != file_hash_map.end()) {
@@ -190,7 +209,7 @@ inline auto separate_events_and_hashes(BagType&& trace_records) {
               }
             }
 
-            // Resolve host hash to hostname
+            // Resolve host hash to hostname using global mapping
             if (!record.hhash.empty()) {
               auto it = host_hash_map.find(record.hhash);
               if (it != host_hash_map.end()) {
@@ -246,7 +265,8 @@ inline auto separate_events_and_hashes(BagType&& trace_records) {
 }  // namespace trace_reader
 
 // Complete pipeline orchestration with DFTracer-specific processing
-inline auto read_traces(const std::vector<std::string>& traces,
+template <typename Context>
+inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
                         size_t batch_size,
                         const std::vector<std::string>& view_types,
                         double time_granularity) {
@@ -256,8 +276,14 @@ inline auto read_traces(const std::vector<std::string>& traces,
   auto all_events = trace_reader::parse_and_filter_traces(
       traces, batch_size, view_types, time_granularity);
 
-  // Separate events, resolve hashes, apply category enrichment and filtering
-  auto normalized_events = trace_reader::separate_events_and_hashes(all_events);
+  // Pass 1: Collect global hash mappings
+  auto [file_hash_map, host_hash_map] = trace_reader::collect_global_hash_mappings(ctx, all_events);
+  
+  spdlog::info("Collected {} file hashes and {} host hashes", 
+               file_hash_map.size(), host_hash_map.size());
+
+  // Pass 2: Apply global hash mappings and filter events
+  auto normalized_events = trace_reader::separate_events_and_hashes(all_events, file_hash_map, host_hash_map);
 
   // Return normalized events
   return normalized_events;
@@ -277,6 +303,11 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
           .reduce(ctx, [](uint64_t a, uint64_t b) -> uint64_t {
             return std::min(a, b);
           });
+
+   spdlog::info("Reduce completed. Global minimum timestamp: {}", global_min_timestamp);
+
+  // Second pass: normalize timestamps
+  spdlog::info("Starting map operation for timestamp normalization...");
 
   // Second pass: normalize timestamps and recalculate time_range using global
   // minimum
@@ -531,12 +562,14 @@ AnalyzerResult Analyzer::analyze_trace(
     std::sort(proc_view_types.begin(), proc_view_types.end());
 
     // Step 1: Get trace events
-    auto events = helpers::read_traces(traces, checkpoint_size_,
+    auto events = helpers::read_traces(ctx, traces, checkpoint_size_,
                                        proc_view_types, time_granularity_);
 
     // Step 2: Apply global timestamp normalization
     auto normalized_events = helpers::normalize_timestamps_globally(
         ctx, events, constants::DEFAULT_TIME_RESOLUTION, time_granularity_);
+
+    spdlog::info("Global timestamp normalization complete");
 
     // Step 3: Post-process events
     auto post_processed_events = helpers::postread_trace(
@@ -546,8 +579,18 @@ AnalyzerResult Analyzer::analyze_trace(
     auto hlm_pipeline = helpers::compute_high_level_metrics(
         post_processed_events, proc_view_types, "128MB");
 
-    auto hlms = hlm_pipeline.flatmap([](const auto& high_level_metrics) { return high_level_metrics; })
-                    .compute(ctx);
+    
+    std::vector<HighLevelMetrics> hlms;
+    if constexpr (std::is_same_v<Context, context::MPIContext>) {
+      // hlms = hlm_pipeline.collect(ctx);
+      hlms = hlm_pipeline.flatmap([&](const auto& container) {
+        return container;
+      }).compute(ctx);
+    } else {
+      hlms = hlm_pipeline.flatmap([&](const auto& container) {
+        return container;
+      }).compute(ctx);
+    }
 
     spdlog::info("HLM computation complete: {} groups generated", hlms.size());
 
@@ -570,7 +613,10 @@ AnalyzerResult Analyzer::analyze_trace(
       spdlog::info("  Total time: {:.2f}", total_time);
       spdlog::info("  Total size: {} bytes", total_size);
       spdlog::info("  Unique groups: {}", hlms.size());
-      std::cout << helpers::hlms_to_csv(hlms);
+
+      if (ctx.rank() == 0) {
+        std::cout << helpers::hlms_to_csv(hlms);
+      }
     }
 
     return AnalyzerResult{std::move(hlms)};
