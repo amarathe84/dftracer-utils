@@ -115,7 +115,7 @@ inline auto parse_and_filter_traces(const std::vector<std::string>& traces,
       
       for (const auto& doc : partition) {
         try {
-          auto record = parse_trace_record(doc, view_types, time_granularity);
+          auto record = parse_trace_record(doc);
 
           // check if optional
           if (!record) {
@@ -152,12 +152,12 @@ inline auto compute_high_level_metrics(
     const std::string& partition_size = "128MB",
     const std::string& /* checkpoint_name */ = ""
 ) {
-    // Create unified groupby columns (view_types + HLM_EXTRA_COLS) - matches Dask
+    // Create unified groupby columns (view_types + HLM_EXTRA_COLS)
     std::unordered_set<std::string> hlm_groupby_set(view_types.begin(), view_types.end());
     hlm_groupby_set.insert(constants::HLM_EXTRA_COLS.begin(), constants::HLM_EXTRA_COLS.end());
     std::vector<std::string> hlm_groupby(hlm_groupby_set.begin(), hlm_groupby_set.end());
     
-    // Get view_types_diff for unique_set aggregation - matches your Dask logic
+    // Get view_types_diff for unique_set aggregation
     std::vector<std::string> view_types_diff;
     for (const auto& vt : constants::VIEW_TYPES) {
         if (hlm_groupby_set.find(vt) == hlm_groupby_set.end()) {
@@ -171,7 +171,7 @@ inline auto compute_high_level_metrics(
     // Use distributed groupby for large datasets - this scales with data size
     return std::forward<BagType>(trace_records)
         .distributed_groupby(
-            // Key function: Create grouping key exactly like Dask groupby
+            // Key function
             [hlm_groupby](const TraceRecord& record) -> std::string {
                 std::ostringstream key_stream;
                 bool first = true;
@@ -216,7 +216,7 @@ inline auto compute_high_level_metrics(
                 
                 return key;
             },
-            // Aggregation function: Apply aggregations exactly like Dask's hlm_agg
+            // Aggregation
             [hlm_groupby_set, view_types_diff](const std::string&, const std::vector<TraceRecord>& records) -> HighLevelMetrics {
                 HighLevelMetrics hlm;
                 
@@ -260,7 +260,7 @@ inline auto compute_high_level_metrics(
                     }
                 }
                 
-                // Apply unique_set() for view_types_diff (matches: hlm_agg.update({col: unique_set() for col in view_types_diff}))
+                // Apply unique_set() for view_types_diff
                 for (const auto& col : view_types_diff) {
                     for (const auto& record : records) {
                         auto it = record.view_fields.find(col);
@@ -274,7 +274,7 @@ inline auto compute_high_level_metrics(
             },
             0  // Auto-determine number of partitions based on data size
         )
-        // Repartition after aggregation for final processing (matches: .repartition(partition_size=partition_size))
+        // Repartition after aggregation for final processing
         .repartition(partition_size);
 }
 
@@ -318,14 +318,14 @@ inline auto separate_events_and_hashes(BagType&& trace_records) {
                         }
                     }
                     
-                    // Set proc_name (Python lines 589-596)
+                    // Set proc_name
                     std::string host_name = record.view_fields["host_name"];
                     if (host_name.empty()) host_name = "unknown";
                     record.view_fields["proc_name"] = "app#" + host_name + "#" + 
                                                      std::to_string(record.pid) + "#" + 
                                                      std::to_string(record.tid);
                     
-                    // Category enrichment based on file_name (Python category enrichment logic)
+                    // Category enrichment based on file_name
                     std::string file_name = record.view_fields["file_name"];
                     if (!file_name.empty() && (record.cat == "posix" || record.cat == "stdio")) {
                         if (file_name.find("/checkpoint") != std::string::npos) {
@@ -338,8 +338,8 @@ inline auto separate_events_and_hashes(BagType&& trace_records) {
                             record.cat = record.cat + "_ssd";
                         }
                     }
-                    
-                    // Filter ignored file patterns (Python lines 584-586)
+
+                    // Filter ignored file patterns
                     bool should_ignore_file = false;
                     if (!file_name.empty()) {
                         for (const auto& pattern : constants::IGNORED_FILE_PATTERNS) {
@@ -373,37 +373,14 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
         return std::min(a, b);
     });
 
-    // uint64_t global_min_timestamp = UINT64_MAX;
-    // for (const auto& partition_mins : min_timestamps) {
-    //     for (uint64_t ts : partition_mins) {
-    //         if (ts < global_min_timestamp) {
-    //             global_min_timestamp = ts;
-    //         }
-    //     }
-    // }
-    
-    spdlog::info("RAY DEBUG: Global minimum timestamp: {}", global_min_timestamp);
-    
     // Second pass: normalize timestamps and recalculate time_range using global minimum
     return trace_records.map([global_min_timestamp, time_resolution, time_granularity](TraceRecord record) -> TraceRecord {
-        // Normalize timestamps using global minimum (Python line 514)
-        auto old_time_start = record.time_start;
+        // Normalize timestamps using global minimum
         record.time_start = record.time_start - global_min_timestamp;
         record.time_end = record.time_start + static_cast<uint64_t>(record.duration);
-
-        // Scale duration by time_resolution (Python line 551)
+        // Scale duration by time_resolution
         record.duration = record.duration / time_resolution;
-
-        // Recalculate time_range using normalized timestamp (Python line 518)
-        // Python: self.events["trange"] = self.events["ts"] // self.time_granularity
-        uint64_t old_time_range = record.time_range;
         record.time_range = record.time_start / static_cast<uint64_t>(time_granularity);
-        
-        if (old_time_range != record.time_range) {
-            spdlog::info("RAY DEBUG: time_range changed from {} to {}, time start changed from {} to {}, time_granularity changed from {}",
-                         old_time_range, record.time_range, old_time_start, record.time_start, time_granularity);
-        }
-        
         return record;
     });
 }
@@ -425,7 +402,7 @@ inline auto build_full_analysis_pipeline(
     // Separate events, resolve hashes, apply category enrichment and filtering
     auto normalized_events = separate_events_and_hashes(all_events);
     
-    // Return normalized events - epoch processing will be done at the analyze_trace level
+    // Return normalized events
     return normalized_events;
 }
 
@@ -481,18 +458,17 @@ AnalyzerResult Analyzer::analyze_trace(
         auto global_epoch_events = all_epoch_events.compute(ctx);
         spdlog::info("Found {} total epoch events across all partitions", global_epoch_events.size());
         
-        // Also collect ALL events (including regular POSIX events) for processing
+        // collect ALL events (including regular POSIX events) for processing
         auto all_events_for_processing = normalized_events.compute(ctx);
         spdlog::info("Found {} total events across all partitions (including regular events)", all_events_for_processing.size());
         
         // Step 1: Extract epoch numbers from args and find the longest duration for each epoch
-        // Parse "epoch" from JSON args to get the actual epoch number
         std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans; // epoch_num -> (start, end)
         
         for (const auto& record : global_epoch_events) {
             // Extract epoch number from the record (we need to parse this from the original JSON)
-            // For now, assume we can get it from view_fields or add epoch parsing
-            uint64_t epoch_num = record.epoch; // This should be parsed from args.epoch
+            // This should be parsed from args.epoch
+            uint64_t epoch_num = record.epoch;
             
             uint64_t start_time_range = record.time_range;
             uint64_t end_time_range = helpers::calc_time_range(record.time_end, time_granularity_);
@@ -588,53 +564,7 @@ AnalyzerResult Analyzer::analyze_trace(
 
             // Output CSV format matching Python output
             // std::cout << "C++ HLM CSV:" << std::endl;
-            
-            // CSV Header - matching Python column order
-            std::cout << "cat,acc_pat,epoch,io_cat,func_name,proc_name,time_range,time,count,size,"
-                      << "size_bin_0_4kib,size_bin_4kib_16kib,size_bin_16kib_64kib,size_bin_64kib_256kib,"
-                      << "size_bin_256kib_1mib,size_bin_1mib_4mib,size_bin_4mib_16mib,size_bin_16mib_64mib,"
-                      << "size_bin_64mib_256mib,size_bin_256mib_1gib,size_bin_1gib_4gib,size_bin_4gib_plus" 
-                      << std::endl;
-            
-            // CSV Data rows
-            for (const auto& hlm : flattened_results) {
-                // Get basic fields
-                std::string cat = hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "";
-                std::string acc_pat = hlm.group_values.count("acc_pat") ? hlm.group_values.at("acc_pat") : "";
-                std::string epoch = hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : "";
-                std::string io_cat = hlm.group_values.count("io_cat") ? hlm.group_values.at("io_cat") : "";
-                std::string func_name = hlm.group_values.count("func_name") ? hlm.group_values.at("func_name") : "";
-                std::string proc_name = hlm.group_values.count("proc_name") ? hlm.group_values.at("proc_name") : "";
-                std::string time_range = hlm.group_values.count("time_range") ? hlm.group_values.at("time_range") : "";
-                
-                // Output row with proper CSV formatting
-                std::cout << cat << "," << acc_pat << "," << epoch << "," << io_cat << "," 
-                          << func_name << "," << proc_name << "," << time_range << ","
-                          << hlm.time_sum << "," << hlm.count_sum << ",";
-                
-                // Handle optional size_sum (nullopt -> empty string for NaN in Parquet)
-                if (hlm.size_sum.has_value()) {
-                    std::cout << hlm.size_sum.value();
-                }
-                // else output empty string (implicit for NaN)
-                
-                // Output size bins in the correct order
-                std::vector<std::string> size_bin_names = {
-                    "size_bin_0_4kib", "size_bin_4kib_16kib", "size_bin_16kib_64kib", "size_bin_64kib_256kib",
-                    "size_bin_256kib_1mib", "size_bin_1mib_4mib", "size_bin_4mib_16mib", "size_bin_16mib_64mib",
-                    "size_bin_64mib_256mib", "size_bin_256mib_1gib", "size_bin_1gib_4gib", "size_bin_4gib_plus"
-                };
-                
-                for (const auto& bin_name : size_bin_names) {
-                    std::cout << ",";
-                    if (hlm.bin_sums.count(bin_name) && hlm.bin_sums.at(bin_name).has_value()) {
-                        std::cout << hlm.bin_sums.at(bin_name).value();
-                    }
-                    // else output empty string for nullopt (NaN equivalent) - matches Python's behavior
-                }
-                
-                std::cout << std::endl;
-            }
+            std::cout << helpers::hlms_to_csv(flattened_results);
 
             // Also output groupby keys for comparison
             // std::cout << "C++ Groupby Keys:" << std::endl;

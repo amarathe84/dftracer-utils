@@ -81,10 +81,11 @@ const std::vector<std::string> IGNORED_FUNC_PATTERNS = {
 namespace helpers {
 
 uint64_t calc_time_range(uint64_t time, double time_granularity) {
-  return static_cast<uint64_t>(std::floor(time / time_granularity));
+  if (time_granularity <= 0.0) return 0;
+  return static_cast<uint64_t>(static_cast<double>(time) / time_granularity);
 }
 
-std::string derive_io_cat(const std::string& func_name) {
+static std::string derive_io_cat(const std::string& func_name) {
   if (constants::POSIX_METADATA_FUNCTIONS.find(func_name) !=
       constants::POSIX_METADATA_FUNCTIONS.end()) {
     return "metadata";
@@ -98,11 +99,7 @@ std::string derive_io_cat(const std::string& func_name) {
   return "other";
 }
 
-bool should_ignore_event(const std::string& func_name,
-                         const std::string& phase) {
-  // Don't filter out metadata events (ph == "M") - they need to be processed!
-  // if (phase == "M") return true;
-
+static bool should_ignore_event(const std::string& func_name) {
   if (constants::IGNORED_FUNC_NAMES.find(func_name) != constants::IGNORED_FUNC_NAMES.end()) {
     return true;
   }
@@ -116,40 +113,35 @@ bool should_ignore_event(const std::string& func_name,
   return false;
 }
 
-// Calculate size bin using Python pd.cut logic
-int get_size_bin_index(uint64_t size) {
+static std::ptrdiff_t get_size_bin_index(uint64_t size) {
   double size_double = static_cast<double>(size);
 
   auto it = std::upper_bound(constants::SIZE_BINS.begin(), constants::SIZE_BINS.end(), size_double);
-  int bin_index = std::distance(constants::SIZE_BINS.begin(), it) - 1;
+  std::ptrdiff_t bin_index = std::distance(constants::SIZE_BINS.begin(), it) - 1;
   bin_index = std::max(
-      0, std::min(bin_index, static_cast<int>(constants::SIZE_BIN_SUFFIXES.size()) - 1));
+      static_cast<std::ptrdiff_t>(0), std::min(bin_index, static_cast<std::ptrdiff_t>(constants::SIZE_BIN_SUFFIXES.size()) - 1));
 
   return bin_index;
 }
 
 static void set_size_bins(TraceRecord& record) {
-  // Initialize all bins as nullopt first
+  // Initialize all bins as nullopt first to mimic NaN
   for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
-    std::string bin_name = "size_bin_" + suffix;
+    std::string bin_name = constants::SIZE_BIN_PREFIX + suffix;
     record.bin_fields[bin_name] = std::nullopt;
   }
   
   if (record.size.has_value() && record.size.value() > 0) {
-    // For records with valid size, set ONLY the matching bin to 1, others remain nullopt
-    int bin_index = get_size_bin_index(record.size.value());
-    std::string matching_bin = "size_bin_" + constants::SIZE_BIN_SUFFIXES[bin_index];
+    size_t bin_index = static_cast<size_t>(get_size_bin_index(record.size.value()));
+    std::string matching_bin = constants::SIZE_BIN_PREFIX + constants::SIZE_BIN_SUFFIXES[bin_index];
     record.bin_fields[matching_bin] = 1;
   }
-  // For records without size, all bins remain nullopt (already set above)
 }
 
-std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc,
-                               const std::vector<std::string>& view_types,
-                               double time_granularity) {
+std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc) {
   using namespace dftracer::utils::json;
 
-  TraceRecord record = {};  // Initialize all fields to zero/empty
+  TraceRecord record = {};
 
   try {
     if (!doc.is_object()) { return std::nullopt; }
@@ -157,22 +149,11 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
     std::string func_name = get_string_field_owned(doc, "name");
     std::string phase = get_string_field_owned(doc, "ph");
 
-    if (should_ignore_event(func_name, phase)) {
+    if (should_ignore_event(func_name)) {
       return std::nullopt;
     }
 
-    // Get basic fields that all events have
     record.func_name = func_name;
-    
-    // Debug logging for first few records
-    static size_t parse_count = 0;
-    parse_count++;
-    if (parse_count <= 10) {
-      spdlog::debug("RAY DEBUG: Parsing record #{}: name='{}', ph='{}', cat='{}'", 
-                   parse_count, func_name, phase, get_string_field_owned(doc, "cat"));
-    }
-
-    auto obj = doc.get_object().value();
     
     // Extract cat field
     std::string cat = get_string_field_owned(doc, "cat");
@@ -222,13 +203,11 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
       record.time_end = record.time_start + static_cast<uint64_t>(record.duration);
       record.count = 1;
 
-      // Don't calculate time_range here - will be calculated after timestamp normalization
-      // to match Python's behavior: ts = ts - min(ts), then trange = ts // granularity
-      record.time_range = 0; // Will be recalculated later
+      // this will be recalculated later
+      record.time_range = 0;
 
       // Extract IO-related fields
       record.fhash = get_args_string_field_owned(doc, "fhash");
-      // size starts as nullopt (NaN equivalent)
       
       if (record.cat == "posix" || record.cat == "stdio") {
         record.io_cat = derive_io_cat(func_name);
@@ -302,22 +281,8 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
         }
       }
 
-      // Set size bins for regular events
+      // Set size bins
       set_size_bins(record);
-      
-      // Debug size parsing for first few read records
-      if (parse_count <= 10) {
-        std::string size_str = record.size.has_value() ? std::to_string(record.size.value()) : "nullopt";
-        spdlog::info("RAY DEBUG: Record #{} size={} for func='{}', cat='{}', io_cat='{}'", 
-                     parse_count, size_str, record.func_name, record.cat, record.io_cat);
-        if (record.size.has_value() && record.size.value() > 0) {
-          for (const auto& [bin_name, bin_value] : record.bin_fields) {
-            if (bin_value.has_value() && bin_value.value() > 0) {
-              spdlog::info("RAY DEBUG: Size bin set: {}={}", bin_name, bin_value.value());
-            }
-          }
-        }
-      }
     }
 
   } catch (const std::exception& e) {
@@ -327,6 +292,66 @@ std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::Owned
   }
 
   return record;
+}
+
+static std::vector<std::string> generate_size_bins_vec() {
+  std::vector<std::string> size_bins;
+  for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
+    size_bins.push_back(constants::SIZE_BIN_PREFIX + suffix);
+  }
+  return size_bins;
+}
+
+static std::string generate_size_bin_headers() {
+  std::ostringstream header_stream;
+  for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
+    header_stream << constants::SIZE_BIN_PREFIX << suffix << ",";
+  }
+  return header_stream.str();
+}
+
+std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms, bool header) {
+  std::ostringstream csv_stream;
+  
+  // CSV Header
+  if (header) {
+    csv_stream << "cat,acc_pat,epoch,io_cat,func_name,proc_name,time_range,time,count,size,"
+               << generate_size_bin_headers()
+               << std::endl;
+  }
+
+  // CSV Data rows
+  for (const auto& hlm : hlms) {
+      // Get basic fields
+      std::string cat = hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "";
+      std::string acc_pat = hlm.group_values.count("acc_pat") ? hlm.group_values.at("acc_pat") : "";
+      std::string epoch = hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : "";
+      std::string io_cat = hlm.group_values.count("io_cat") ? hlm.group_values.at("io_cat") : "";
+      std::string func_name = hlm.group_values.count("func_name") ? hlm.group_values.at("func_name") : "";
+      std::string proc_name = hlm.group_values.count("proc_name") ? hlm.group_values.at("proc_name") : "";
+      std::string time_range = hlm.group_values.count("time_range") ? hlm.group_values.at("time_range") : "";
+      
+      // Output row with proper CSV formatting
+      csv_stream << cat << "," << acc_pat << "," << epoch << "," << io_cat << "," 
+                  << func_name << "," << proc_name << "," << time_range << ","
+                  << hlm.time_sum << "," << hlm.count_sum << ",";
+
+      // Handle optional size_sum (nullopt -> empty string for NaN)
+      if (hlm.size_sum.has_value()) {
+          csv_stream << hlm.size_sum.value();
+      }
+
+      for (const auto& bin_name : generate_size_bins_vec()) {
+          csv_stream << ",";
+          if (hlm.bin_sums.count(bin_name) && hlm.bin_sums.at(bin_name).has_value()) {
+              csv_stream << hlm.bin_sums.at(bin_name).value();
+          }
+          // else output empty string for nullopt (NaN equivalent)
+      }
+
+      csv_stream << std::endl;
+  }
+  return csv_stream.str();
 }
 } // namespace helpers
 
@@ -338,8 +363,8 @@ Analyzer::Analyzer(double time_granularity,
     : time_granularity_(time_granularity),
       time_resolution_(time_resolution),
       checkpoint_size_(checkpoint_size),
-      checkpoint_(checkpoint),
-      checkpoint_dir_(checkpoint_dir) {}
+      checkpoint_dir_(checkpoint_dir),
+      checkpoint_(checkpoint) {}
 
 std::string Analyzer::get_checkpoint_path(const std::string& name) const {
   return checkpoint_dir_ + "/" + name;

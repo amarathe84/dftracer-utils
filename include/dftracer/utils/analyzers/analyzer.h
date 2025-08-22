@@ -19,13 +19,12 @@ namespace analyzers {
 using namespace dftracer::utils::pipeline;
 
 struct TraceRecord;
+struct HighLevelMetrics;
 
 namespace helpers {
-std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc,
-                               const std::vector<std::string>& view_types,
-                               double time_granularity);
-
+std::optional<TraceRecord> parse_trace_record(const dftracer::utils::json::OwnedJsonDocument& doc);
 uint64_t calc_time_range(uint64_t time, double time_granularity);
+std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms, bool header = true);
 }
 
 struct TraceRecord {

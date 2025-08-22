@@ -110,6 +110,8 @@ const std::vector<std::string> IGNORED_FILE_PATTERNS = {
 };
 
 // Size constants
+const std::string SIZE_BIN_PREFIX = "size_bin_";
+
 const std::vector<double> SIZE_BINS = {
     -std::numeric_limits<double>::infinity(),
     4 * KiB,

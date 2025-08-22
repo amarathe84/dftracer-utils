@@ -106,6 +106,7 @@ constexpr double KiB = 1024.0;
 constexpr double MiB = KiB * KiB;
 constexpr double GiB = KiB * MiB;
 
+extern const std::string SIZE_BIN_PREFIX;
 extern const std::vector<double> SIZE_BINS;
 extern const std::vector<std::string> SIZE_BIN_LABELS;
 extern const std::vector<std::string> SIZE_BIN_NAMES;
