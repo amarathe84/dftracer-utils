@@ -37,6 +37,7 @@ set(DFTRACER_UTILS_HEADERS
 
   # pipeline
   pipeline/pipeline.h
+  pipeline/execution_context.h
 
   # analyzer
   analyzers/analyzer.h

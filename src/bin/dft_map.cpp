@@ -2,6 +2,7 @@
 #include <dftracer/utils/config.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/execution_context.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/utils/logger.h>
@@ -14,8 +15,7 @@
 #include <string>
 #include <vector>
 
-using namespace dftracer::utils::pipeline;
-// using namespace dftracer::analyzers;
+using namespace dftracer::utils;
 
 int main(int argc, char* argv[]) {
   size_t default_checkpoint_size =
@@ -79,8 +79,7 @@ int main(int argc, char* argv[]) {
 
   auto logger = spdlog::stderr_color_mt("stderr");
   spdlog::set_default_logger(logger);
-  dftracer::utils::logger::set_log_level(
-      program.get<std::string>("--log-level"));
+  logger::set_log_level(program.get<std::string>("--log-level"));
 
   auto trace_paths = program.get<std::vector<std::string>>("files");
   size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
@@ -132,11 +131,10 @@ int main(int argc, char* argv[]) {
   spdlog::info("  View types: {}", view_types_oss.str());
   spdlog::info("  Trace files: {}", trace_paths.size());
 
-  // ThreadedContext ctx;
-  SequentialContext ctx;
+  pipeline::context::ThreadedContext ctx;
   auto start_time = std::chrono::high_resolution_clock::now();
 
-  dftracer::utils::analyzers::Analyzer analyzer(time_granularity);
+  analyzers::Analyzer analyzer(time_granularity);
   auto result = analyzer.analyze_trace(ctx, trace_paths, view_types);
 
   // struct FileInfo {
