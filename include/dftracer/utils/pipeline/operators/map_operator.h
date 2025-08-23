@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_PIPELINE_OPERATOR_MAP_H
-#define __DFTRACER_UTILS_PIPELINE_OPERATOR_MAP_H
+#ifndef __DFTRACER_UTILS_PIPELINE_OPERATOR_MAP_OPERATOR_H
+#define __DFTRACER_UTILS_PIPELINE_OPERATOR_MAP_OPERATOR_H
 
 #include <dftracer/utils/pipeline/operators/operator.h>
 
@@ -37,4 +37,4 @@ class MapOperator : public Operator {
 }  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_PIPELINE_OPERATOR_MAP_H
+#endif  // __DFTRACER_UTILS_PIPELINE_OPERATOR_MAP_OPERATOR_H

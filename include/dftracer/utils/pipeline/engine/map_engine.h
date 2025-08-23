@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_PIPELINE_ENGINE_MAP_H
-#define __DFTRACER_UTILS_PIPELINE_ENGINE_MAP_H
+#ifndef __DFTRACER_UTILS_PIPELINE_ENGINE_MAP_ENGINE_H
+#define __DFTRACER_UTILS_PIPELINE_ENGINE_MAP_ENGINE_H
 
 #include <dftracer/utils/pipeline/engine/buffer.h>
 
@@ -28,4 +28,4 @@ std::vector<std::byte> run_map_alloc(context::ExecutionContext& ctx,
 }  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_PIPELINE_ENGINE_MAP_H
+#endif  // __DFTRACER_UTILS_PIPELINE_ENGINE_MAP_ENGINE_H

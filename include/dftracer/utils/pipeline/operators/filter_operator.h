@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_PIPELINE_OPERATOR_FILTER_H
-#define __DFTRACER_UTILS_PIPELINE_OPERATOR_FILTER_H
+#ifndef __DFTRACER_UTILS_PIPELINE_OPERATOR_FILTER_OPERATOR_H
+#define __DFTRACER_UTILS_PIPELINE_OPERATOR_FILTER_OPERATOR_H
 
 #include <dftracer/utils/pipeline/operators/operator.h>
 
@@ -36,4 +36,4 @@ class FilterOperator : public Operator {
 }  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_PIPELINE_OPERATOR_FILTER_H
+#endif  // __DFTRACER_UTILS_PIPELINE_OPERATOR_FILTER_OPERATOR_H

@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_PIPELINE_OPERATOR_SOURCE_H
-#define __DFTRACER_UTILS_PIPELINE_OPERATOR_SOURCE_H
+#ifndef __DFTRACER_UTILS_PIPELINE_OPERATOR_SOURCE_OPERATOR_H
+#define __DFTRACER_UTILS_PIPELINE_OPERATOR_SOURCE_OPERATOR_H
 
 #include <dftracer/utils/pipeline/operators/operator.h>
 
@@ -64,4 +64,4 @@ class SourceOperator : public Operator {
 }  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_PIPELINE_OPERATOR_SOURCE_H
+#endif  // __DFTRACER_UTILS_PIPELINE_OPERATOR_SOURCE_OPERATOR_H

@@ -2,6 +2,7 @@
 #define __DFTRACER_UTILS_PIPELINE_ENGINE_BUFFER_H
 
 #include <cstddef>
+#include <vector>
 
 namespace dftracer {
 namespace utils {
@@ -20,6 +21,17 @@ struct MutBuffer {
   std::size_t elem_size = 0;  // bytes per element
   std::size_t stride = 0;     // byte step between elements; 0 => elem_size
 };
+
+template <class T>
+inline ConstBuffer to_const_buffer(const std::vector<T>& v) {
+  return ConstBuffer{static_cast<const void*>(v.data()), v.size(), sizeof(T),
+                     0};
+}
+
+template <class T>
+inline MutBuffer to_mut_buffer(std::vector<T>& v) {
+  return MutBuffer{static_cast<void*>(v.data()), v.size(), sizeof(T), 0};
+}
 }  // namespace engine
 }  // namespace pipeline
 }  // namespace utils

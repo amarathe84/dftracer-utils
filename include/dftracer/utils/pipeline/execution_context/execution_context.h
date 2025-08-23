@@ -94,7 +94,12 @@ class ExecutionContext {
    * @param op        Reduction operation (e.g., SUM, MIN, MAX).
    */
   virtual void all_reduce(void* buf, std::size_t count, std::size_t elem_size,
-                          ReduceOp op) {}
+                          ReduceOp op) {
+    (void)buf;
+    (void)count;
+    (void)elem_size;
+    (void)op;
+  }
 
   /**
    * @brief Gather equal-sized values from all ranks.
@@ -110,7 +115,12 @@ class ExecutionContext {
    */
   virtual void all_gather(const void* send_buf, std::size_t send_count,
                           std::size_t elem_size,
-                          std::vector<std::byte>& recv_buf) {}
+                          std::vector<std::byte>& recv_buf) {
+    (void)send_buf;
+    (void)send_count;
+    (void)elem_size;
+    (void)recv_buf;
+  }
 
   /**
    * @brief Exchange variable-sized values between all ranks.
@@ -132,7 +142,13 @@ class ExecutionContext {
   virtual void all_to_allv(const void* send_buf, const std::size_t* send_counts,
                            std::size_t elem_size,
                            std::vector<std::byte>& recv_buf,
-                           std::vector<std::size_t>& recv_counts) {}
+                           std::vector<std::size_t>& recv_counts) {
+    (void)send_buf;
+    (void)send_counts;
+    (void)elem_size;
+    (void)recv_buf;
+    (void)recv_counts;
+  }
 };
 
 }  // namespace context

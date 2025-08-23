@@ -1,10 +1,9 @@
 
 
 #include <dftracer/utils/pipeline/engine/filter.h>
-#include <dftracer/utils/pipeline/operators/filter.h>
-#include <dftracer/utils/pipeline/execution_context/execution_context.h>
-
 #include <dftracer/utils/pipeline/engine/helpers.h>
+#include <dftracer/utils/pipeline/execution_context/execution_context.h>
+#include <dftracer/utils/pipeline/operators/filter.h>
 
 #include <algorithm>
 #include <cstring>
@@ -20,10 +19,8 @@ namespace engine {
 
 using operators::FilterOperator;
 
-std::size_t run_filter(context::ExecutionContext& ctx,
-                       const FilterOperator& op,
-                       ConstBuffer in,
-                       MutBuffer out) {
+std::size_t run_filter(context::ExecutionContext& ctx, const FilterOperator& op,
+                       ConstBuffer in, MutBuffer out) {
   if (!op.pred && !op.pred_with_state) {
     throw std::invalid_argument("run_filter: null predicate");
   }
@@ -34,11 +31,11 @@ std::size_t run_filter(context::ExecutionContext& ctx,
     throw std::invalid_argument("run_filter: output elem_size mismatch");
   }
 
-  const auto in_stride  = effective_stride(in.stride,  in.elem_size);
+  const auto in_stride = effective_stride(in.stride, in.elem_size);
   const auto out_stride = effective_stride(out.stride, out.elem_size);
 
-  const auto* base_in  = static_cast<const std::byte*>(in.data);
-  auto*       base_out = static_cast<std::byte*>(out.data);
+  const auto* base_in = static_cast<const std::byte*>(in.data);
+  auto* base_out = static_cast<std::byte*>(out.data);
 
   if (in.count == 0 || out.count == 0) {
     return 0;
@@ -86,7 +83,7 @@ std::size_t run_filter(context::ExecutionContext& ctx,
     if (dst_index >= limit) return;  // respect output capacity
 
     const void* src = base_in + i * in_stride;
-    void*       dst = base_out + dst_index * out_stride;
+    void* dst = base_out + dst_index * out_stride;
     std::memcpy(dst, src, op.in_size);
   });
 
@@ -100,14 +97,14 @@ std::vector<std::byte> run_filter_alloc(context::ExecutionContext& ctx,
   if (in.count == 0) return out_bytes;
 
   out_bytes.resize(in.count * op.in_size);
-  MutBuffer out{ out_bytes.data(), in.count, op.in_size, 0 };
+  MutBuffer out{out_bytes.data(), in.count, op.in_size, 0};
 
   const std::size_t kept = run_filter(ctx, op, in, out);
   out_bytes.resize(kept * op.in_size);
   return out_bytes;
 }
 
-} // namespace engine
-} // namespace pipeline
-} // namespace utils
-} // namespace dftracer
+}  // namespace engine
+}  // namespace pipeline
+}  // namespace utils
+}  // namespace dftracer

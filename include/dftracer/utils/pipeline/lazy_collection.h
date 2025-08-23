@@ -1,12 +1,12 @@
 #ifndef __DFTRACER_UTILS_PIPELINE_LAZY_COLLECTION_H
 #define __DFTRACER_UTILS_PIPELINE_LAZY_COLLECTION_H
 
-#include <dftracer/utils/pipeline/engine/map.h>
+#include <dftracer/utils/pipeline/engine/map_engine.h>
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
 #include <dftracer/utils/pipeline/lazy_collections/planner.h>
-#include <dftracer/utils/pipeline/operators/map.h>
+#include <dftracer/utils/pipeline/operators/map_operator.h>
 #include <dftracer/utils/pipeline/operators/operator.h>
-#include <dftracer/utils/pipeline/operators/source.h>
+#include <dftracer/utils/pipeline/operators/source_operator.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -57,7 +57,7 @@ class LazyCollection {
     struct State {
       void (*fp)(const T&, U&);
     };
-    auto cookie = std::make_shared<State>(State{fn});
+    auto state = std::make_shared<State>(State{fn});
 
     auto mop = std::make_unique<operators::MapOperator>(sizeof(T), sizeof(U));
     mop->fn_with_state = +[](const void* in, void* out, void* st) {
@@ -66,13 +66,13 @@ class LazyCollection {
       U& to = *static_cast<U*>(out);
       s->fp(ti, to);
     };
-    mop->state = cookie.get();
+    mop->state = state.get();
 
     OutputLayout out{sizeof(U), true};
 
     LazyCollection<U> res;
     res.plan_ = plan_;
-    res.node_ = plan_->add_node(std::move(mop), {node_}, out, cookie);
+    res.node_ = plan_->add_node(std::move(mop), {node_}, out, state);
     return res;
   }
 
@@ -83,7 +83,7 @@ class LazyCollection {
     struct State {
       Fn fn;
     };
-    auto cookie = std::make_shared<State>(State{std::move(fn)});
+    auto state = std::make_shared<State>(State{std::move(fn)});
 
     auto mop = std::make_unique<operators::MapOperator>(sizeof(T), sizeof(U));
     mop->fn_with_state = +[](const void* in, void* out, void* st) {
@@ -92,13 +92,13 @@ class LazyCollection {
       U& to = *static_cast<U*>(out);
       to = s->fn(ti);
     };
-    mop->state = cookie.get();
+    mop->state = state.get();
 
     OutputLayout out{sizeof(U), true};
 
     LazyCollection<U> res;
     res.plan_ = plan_;
-    res.node_ = plan_->add_node(std::move(mop), {node_}, out, cookie);
+    res.node_ = plan_->add_node(std::move(mop), {node_}, out, state);
     return res;
   }
 
