@@ -37,10 +37,6 @@ set(DFTRACER_UTILS_HEADERS
 
   # pipeline
   pipeline/pipeline.h
-  pipeline/execution_context/execution_context.h
-  pipeline/execution_context/sequential.h
-  pipeline/execution_context/threaded.h
-  pipeline/execution_context/mpi.h
 
   # analyzer
   # analyzers/analyzer.h
@@ -55,7 +51,7 @@ set(DFTRACER_UTILS_SOURCES
   utils/json.cpp
 
   # pipeline
-  pipeline/execution_context/sequential.cpp
+  pipeline/engine/map.cpp
 
   # analyzer
   # analyzers/analyzer.cpp
@@ -217,6 +213,50 @@ endif()
 
 # Install executable
 install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# ----------------------------------------
+# DFT Pipeline (TEMPORARY)
+# ----------------------------------------
+
+add_executable(dft_pipeline bin/dft_pipeline.cpp ${DFTRACER_UTILS_SOURCES})
+set_target_properties(dft_pipeline PROPERTIES OUTPUT_NAME "dft_pipeline")
+target_link_libraries(dft_pipeline PRIVATE 
+  dftracer_utils
+  spdlog::spdlog_header_only 
+  argparse::argparse
+  ghc_filesystem
+  picosha2
+  simdjson::simdjson
+  # cereal::cereal
+)
+# add_mpi_deps_if_needed(dft_map)
+
+# Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
+link_sqlite3(dft_pipeline STATIC)
+link_zlib(dft_pipeline STATIC)
+# link_arrow(dft_pipeline STATIC)
+
+target_include_directories(dft_pipeline 
+    PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+target_set_warnings(dft_pipeline)
+
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_pipeline PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_pipeline PRIVATE --coverage)
+endif()
+
+# Make sure spdlog include directories are available for all targets
+get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
+if(SPDLOG_INCLUDE_DIRS)
+    target_include_directories(dftracer_utils PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dftracer_utils_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
+    target_include_directories(dft_pipeline PRIVATE ${SPDLOG_INCLUDE_DIRS})
+endif()
+
+# Install executable
+install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ----------------------------------------
 # DFT Map

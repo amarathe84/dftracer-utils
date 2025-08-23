@@ -2,40 +2,30 @@
 #define __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_SEQUENTIAL_H
 
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
-#include <dftracer/utils/pipeline/internal.h>
-
-#include <utility>
-#include <vector>
+#include <cstddef>
 
 namespace dftracer {
 namespace utils {
 namespace pipeline {
 namespace context {
 
-// forward declarations
-class ThreadPoolContext;
-class MPIContext;
-
-using namespace internal;
-
 class SequentialContext : public ExecutionContext {
-public:
-    SequentialContext() : ExecutionContext(ExecutionMode::SEQUENTIAL) {}
+ public:
+  SequentialContext() = default;
+  ~SequentialContext() override = default;
 
-    friend class ThreadPoolContext;
-    friend class MPIContext;
+  std::size_t concurrency() const noexcept override { return 1; }
+  void parallel_for(std::size_t n, const ForTask& task) override {
+    for (std::size_t i = 0; i < n; ++i) task(i);
+  }
 
-protected:
-    void map(const operators::Operator& op, const void* input, void* output) override;
-    void filter(const operators::Operator& op, const void* input, void* output) override;
-    void reduce(const operators::Operator& op, const void* input, void* output) override;
-    void repartition_by_hash(const operators::Operator& op, const void* input, void* output) override;
-    void repartition_by_num_partitions(const operators::Operator& op, const void* input, void* output) override;
-    void repartition_by_size(const operators::Operator& op, const void* input, void* output) override;
-    void groupby(const operators::Operator& op, const void* input, void* output) override;
-    void map_partitions(const operators::Operator& op, const void* input, void* output) override;
-    void spread(const operators::Operator& op, const void* input, void* output) override;
-    void flatmap(const operators::Operator& op, const void* input, void* output) override;
+  bool is_distributed() const noexcept override { return false; }
+
+  std::size_t rank() const noexcept override { return 0; }
+
+  std::size_t size() const noexcept override { return 1; }
+
+  void barrier() override {}
 };
 }  // namespace context
 }  // namespace pipeline
