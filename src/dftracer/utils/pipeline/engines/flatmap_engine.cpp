@@ -115,22 +115,65 @@ std::size_t run_flatmap(ExecutionContext& ctx, const FlatMapOperator& op,
 std::vector<std::byte> run_flatmap_alloc(ExecutionContext& ctx,
                                          const FlatMapOperator& op,
                                          ConstBuffer in) {
-  // Capacity heuristic from hint; otherwise start with input count.
-  std::size_t capacity_elems = in.count;
-  if (op.expansion_hint > 0) {
-    const double h = op.expansion_hint;
-    const double cap =
-        static_cast<double>(in.count) * std::max<double>(1.0, h * 1.5);
-    if (cap > static_cast<double>(capacity_elems)) {
-      capacity_elems = static_cast<std::size_t>(cap);
+  if (!op.fn && !op.fn_with_state) {
+    throw std::invalid_argument("run_flatmap_alloc: null kernel");
+  }
+  if (in.elem_size != op.in_size) {
+    throw std::invalid_argument("run_flatmap_alloc: input elem_size mismatch");
+  }
+  if (in.count == 0) return {};
+
+  const auto in_stride = effective_stride(in.stride, in.elem_size);
+  const auto* base_in = static_cast<const std::byte*>(in.data);
+
+  // Phase 1: per-input local buffers (collect produced bytes)
+  std::vector<std::vector<std::byte>> locals(in.count);
+  std::exception_ptr eptr;
+  std::mutex m;
+  ctx.parallel_for(in.count, [&](std::size_t i) {
+    try {
+      const void* src = base_in + i * in_stride;
+      auto& buf = locals[i];
+      auto emit_one = [&](const void* out_elem) {
+        const auto n = op.out_size;
+        const auto* oe = static_cast<const std::byte*>(out_elem);
+        const auto old = buf.size();
+        buf.resize(old + n);
+        std::memcpy(buf.data() + old, oe, n);
+      };
+      FlatMapOperator::Emitter em{+[](void* c, const void* oe) {
+                                    (*static_cast<decltype(emit_one)*>(c))(oe);
+                                  },
+                                  &emit_one};
+      if (op.fn_with_state)
+        op.fn_with_state(src, em, op.state);
+      else
+        op.fn(src, em);
+    } catch (...) {
+      std::lock_guard<std::mutex> lk(m);
+      if (!eptr) eptr = std::current_exception();
     }
+  });
+  if (eptr) std::rethrow_exception(eptr);
+
+  // Phase 2: compute element counts and total
+  std::vector<std::size_t> counts(in.count, 0), offsets(in.count, 0);
+  std::size_t total = 0;
+  for (std::size_t i = 0; i < in.count; ++i) {
+    counts[i] = locals[i].size() / op.out_size;
+    offsets[i] = total;
+    total += counts[i];
   }
 
-  std::vector<std::byte> out_bytes(capacity_elems * op.out_size);
-  MutBuffer out{out_bytes.data(), capacity_elems, op.out_size, 0};
-
-  const std::size_t produced = run_flatmap(ctx, op, in, out);
-  out_bytes.resize(produced * op.out_size);
+  // Phase 3: allocate exact output and scatter
+  std::vector<std::byte> out_bytes(total * op.out_size);
+  auto* base_out = out_bytes.data();
+  const std::size_t out_stride = op.out_size;  // packed
+  ctx.parallel_for(in.count, [&](std::size_t i) {
+    if (counts[i] == 0) return;
+    const auto bytes = counts[i] * op.out_size;
+    std::memcpy(base_out + offsets[i] * out_stride, locals[i].data(), bytes);
+  });
   return out_bytes;
 }
 

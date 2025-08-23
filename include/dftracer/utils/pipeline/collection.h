@@ -74,7 +74,7 @@ class Collection {
       -> Collection<T> {
     static_assert(std::is_trivially_copyable_v<T>,
                   "Collection::filter currently requires T to be trivially "
-                  "copyable; add serde to support complex types.");
+                  "copyable.");
     std::vector<T> out(data_.size());
     auto h = adapters::make_filter_op<T>(pred);
     auto in_buf = engines::to_const_buffer(data_);
@@ -84,8 +84,6 @@ class Collection {
     return Collection<T>(std::move(out));
   }
 
-  // ---- flatmap: each element can emit zero or more outputs ----
-  // Emitter or transform forms supported via adapters. Caller specifies U.
   template <class U, class Fn>
   auto flatmap(Fn fn) const -> Collection<U> {
     context::SequentialContext seq;
@@ -96,11 +94,10 @@ class Collection {
   auto flatmap(Fn fn, context::ExecutionContext& ctx) const -> Collection<U> {
     static_assert(std::is_trivially_copyable_v<U>,
                   "Collection::flatmap currently requires U to be trivially "
-                  "copyable; add serde to support complex types.");
-    // Build operator descriptor via adapters
+                  "copyable.");
     auto h = adapters::make_flatmap_op<T, U>(std::move(fn));
-    // Execute and materialize bytes
-    auto in_buf = engines::to_const_buffer(data_);
+    engines::ConstBuffer in_buf{static_cast<const void*>(data_.data()),
+                                data_.size(), sizeof(T), 0};
     std::vector<std::byte> out_bytes =
         engines::run_flatmap_alloc(ctx, h.op, in_buf);
     const std::size_t n = out_bytes.size() / sizeof(U);

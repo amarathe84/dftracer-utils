@@ -22,10 +22,14 @@ namespace utils {
 namespace pipeline {
 namespace lazy_collections {
 namespace detail {
+// Helper for **bounded** unary operators where the number of outputs is
+// guaranteed to be <= input count (e.g., map: N->N, filter: N-><=N).
+// If an operator produces more than the preallocated capacity, we throw to
+// avoid silent truncation. For unbounded ops (e.g., flatmap), use alloc path.
 template <typename ProduceFn>
-void run_unary(std::shared_ptr<std::vector<std::byte>>& cur_bytes,
-               std::size_t& cur_elem, std::size_t out_elem_size,
-               ProduceFn&& produce_fn) {
+void run_unary_bounded(std::shared_ptr<std::vector<std::byte>>& cur_bytes,
+                       std::size_t& cur_elem, std::size_t out_elem_size,
+                       ProduceFn&& produce_fn) {
   if (!cur_bytes) throw std::logic_error("unary op has no input bytes");
   const std::size_t count = cur_elem ? (cur_bytes->size() / cur_elem) : 0;
   std::vector<std::byte> out_bytes(count * out_elem_size);  // max capacity
@@ -35,17 +39,36 @@ void run_unary(std::shared_ptr<std::vector<std::byte>>& cur_bytes,
   const std::size_t produced = produce_fn(in, out, count);
   const std::size_t max_cap =
       (out_elem_size ? out_bytes.size() / out_elem_size : 0);
-  const std::size_t final_elems = std::min(produced, max_cap);
-  if (final_elems < max_cap) {
-    out_bytes.resize(final_elems * out_elem_size);
+  if (produced > max_cap) {
+    throw std::logic_error(
+        "run_unary_bounded: operator produced more than bounded capacity; use "
+        "alloc path (e.g., flatmap)");
   }
+  out_bytes.resize(produced * out_elem_size);
   cur_bytes = std::make_shared<std::vector<std::byte>>(std::move(out_bytes));
   cur_elem = out_elem_size;
+}
+
+// Helper for **unbounded** unary operators where outputs may exceed inputs,
+// e.g., flatmap. This version delegates to an engine alloc path to ensure no
+// truncation occurs.
+template <typename ProduceAllocFn>
+void run_unary_unbounded(std::shared_ptr<std::vector<std::byte>>& cur_bytes,
+                         std::size_t& cur_elem, std::size_t out_elem_size,
+                         ProduceAllocFn&& produce_alloc_fn) {
+  if (!cur_bytes) throw std::logic_error("unary op has no input bytes");
+  const std::size_t count = cur_elem ? (cur_bytes->size() / cur_elem) : 0;
+  engines::ConstBuffer in{cur_bytes->data(), count, cur_elem, 0};
+
+  std::vector<std::byte> out_bytes = produce_alloc_fn(in);
+  cur_elem = out_elem_size;
+  cur_bytes = std::make_shared<std::vector<std::byte>>(std::move(out_bytes));
 }
 }  // namespace detail
 }  // namespace lazy_collections
 
-using lazy_collections::detail::run_unary;
+using lazy_collections::detail::run_unary_bounded;
+using lazy_collections::detail::run_unary_unbounded;
 using namespace lazy_collections;
 template <class T>
 class LazyCollection {
@@ -156,30 +179,32 @@ class LazyCollection {
         }
         case operators::Op::MAP: {
           auto* mop = static_cast<operators::MapOperator*>(node.op.get());
-          run_unary(cur_bytes, cur_elem, node.out.elem_size,
-                    [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
-                        std::size_t /*count*/) -> std::size_t {
-                      engines::run_map(ctx, *mop, in, out);
-                      return in.count;  // map preserves cardinality
-                    });
+          run_unary_bounded(
+              cur_bytes, cur_elem, node.out.elem_size,
+              [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
+                  std::size_t /*count*/) -> std::size_t {
+                engines::run_map(ctx, *mop, in, out);
+                return in.count;  // map preserves cardinality
+              });
           break;
         }
         case operators::Op::FILTER: {
           auto* fop = static_cast<operators::FilterOperator*>(node.op.get());
-          run_unary(cur_bytes, cur_elem, node.out.elem_size,
-                    [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
-                        std::size_t /*count*/) -> std::size_t {
-                      return engines::run_filter(ctx, *fop, in, out);
-                    });
+          run_unary_bounded(
+              cur_bytes, cur_elem, node.out.elem_size,
+              [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
+                  std::size_t /*count*/) -> std::size_t {
+                return engines::run_filter(ctx, *fop, in, out);
+              });
           break;
         }
         case operators::Op::FLATMAP: {
           auto* fop = static_cast<operators::FlatMapOperator*>(node.op.get());
-          run_unary(cur_bytes, cur_elem, node.out.elem_size,
-                    [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
-                        std::size_t /*count*/) -> std::size_t {
-                      return engines::run_flatmap(ctx, *fop, in, out);
-                    });
+          run_unary_unbounded(
+              cur_bytes, cur_elem, node.out.elem_size,
+              [&](const engines::ConstBuffer& in) -> std::vector<std::byte> {
+                return engines::run_flatmap_alloc(ctx, *fop, in);
+              });
           break;
         }
         default:
