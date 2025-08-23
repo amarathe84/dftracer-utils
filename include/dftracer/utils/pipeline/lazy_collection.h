@@ -7,6 +7,7 @@
 #include <dftracer/utils/pipeline/lazy_collections/planner.h>
 #include <dftracer/utils/pipeline/operators/operators.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -19,9 +20,33 @@
 namespace dftracer {
 namespace utils {
 namespace pipeline {
+namespace lazy_collections {
+namespace detail {
+template <typename ProduceFn>
+void run_unary(std::shared_ptr<std::vector<std::byte>>& cur_bytes,
+               std::size_t& cur_elem, std::size_t out_elem_size,
+               ProduceFn&& produce_fn) {
+  if (!cur_bytes) throw std::logic_error("unary op has no input bytes");
+  const std::size_t count = cur_elem ? (cur_bytes->size() / cur_elem) : 0;
+  std::vector<std::byte> out_bytes(count * out_elem_size);  // max capacity
+  engine::ConstBuffer in{cur_bytes->data(), count, cur_elem, 0};
+  engine::MutBuffer out{out_bytes.data(), count, out_elem_size, 0};
 
+  const std::size_t produced = produce_fn(in, out, count);
+  const std::size_t max_cap =
+      (out_elem_size ? out_bytes.size() / out_elem_size : 0);
+  const std::size_t final_elems = std::min(produced, max_cap);
+  if (final_elems < max_cap) {
+    out_bytes.resize(final_elems * out_elem_size);
+  }
+  cur_bytes = std::make_shared<std::vector<std::byte>>(std::move(out_bytes));
+  cur_elem = out_elem_size;
+}
+}  // namespace detail
+}  // namespace lazy_collections
+
+using lazy_collections::detail::run_unary;
 using namespace lazy_collections;
-
 template <class T>
 class LazyCollection {
  public:
@@ -69,6 +94,27 @@ class LazyCollection {
     return res;
   }
 
+  LazyCollection<T> filter(bool (*pred)(const T&)) const {
+    auto h = adapters::make_filter_op<T>(pred);
+    auto fop = std::make_unique<operators::FilterOperator>(h.op);
+    OutputLayout out{sizeof(T), true};
+    LazyCollection<T> res;
+    res.plan_ = plan_;
+    res.node_ = plan_->add_node(std::move(fop), {node_}, out, h.state);
+    return res;
+  }
+
+  template <class Pred>
+  LazyCollection<T> filter(Pred pred) const {
+    auto h = adapters::make_filter_op<T>(std::move(pred));
+    auto fop = std::make_unique<operators::FilterOperator>(h.op);
+    OutputLayout out{sizeof(T), true};
+    LazyCollection<T> res;
+    res.plan_ = plan_;
+    res.node_ = plan_->add_node(std::move(fop), {node_}, out, h.state);
+    return res;
+  }
+
   std::vector<T> collect_local(context::ExecutionContext& ctx) const {
     std::vector<NodeId> chain;
     for (NodeId cur = node_;;) {
@@ -92,17 +138,22 @@ class LazyCollection {
           break;
         }
         case operators::Op::MAP: {
-          if (!cur_bytes) throw std::logic_error("map has no input bytes");
-          const std::size_t count =
-              cur_elem ? (cur_bytes->size() / cur_elem) : 0;
-          std::vector<std::byte> out_bytes(count * node.out.elem_size);
-          engine::ConstBuffer in{cur_bytes->data(), count, cur_elem, 0};
-          engine::MutBuffer out{out_bytes.data(), count, node.out.elem_size, 0};
           auto* mop = static_cast<operators::MapOperator*>(node.op.get());
-          engine::run_map(ctx, *mop, in, out);
-          cur_bytes =
-              std::make_shared<std::vector<std::byte>>(std::move(out_bytes));
-          cur_elem = node.out.elem_size;
+          run_unary(cur_bytes, cur_elem, node.out.elem_size,
+                    [&](const engine::ConstBuffer& in, engine::MutBuffer& out,
+                        std::size_t /*count*/) -> std::size_t {
+                      engine::run_map(ctx, *mop, in, out);
+                      return in.count;  // map preserves cardinality
+                    });
+          break;
+        }
+        case operators::Op::FILTER: {
+          auto* fop = static_cast<operators::FilterOperator*>(node.op.get());
+          run_unary(cur_bytes, cur_elem, node.out.elem_size,
+                    [&](const engine::ConstBuffer& in, engine::MutBuffer& out,
+                        std::size_t /*count*/) -> std::size_t {
+                      return engine::run_filter(ctx, *fop, in, out);
+                    });
           break;
         }
         default:

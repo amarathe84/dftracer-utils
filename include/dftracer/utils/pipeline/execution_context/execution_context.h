@@ -93,8 +93,8 @@ class ExecutionContext {
    * @param elem_size Size of each element in bytes.
    * @param op        Reduction operation (e.g., SUM, MIN, MAX).
    */
-  inline virtual void all_reduce(void* buf, std::size_t count, std::size_t elem_size,
-                          ReduceOp op) {
+  inline virtual void all_reduce(void* buf, std::size_t count,
+                                 std::size_t elem_size, ReduceOp op) {
     (void)buf;
     (void)count;
     (void)elem_size;
@@ -114,8 +114,8 @@ class ExecutionContext {
    * @param recv_buf   Destination buffer for the gathered elements.
    */
   inline virtual void all_gather(const void* send_buf, std::size_t send_count,
-                          std::size_t elem_size,
-                          std::vector<std::byte>& recv_buf) {
+                                 std::size_t elem_size,
+                                 std::vector<std::byte>& recv_buf) {
     (void)send_buf;
     (void)send_count;
     (void)elem_size;
@@ -139,10 +139,11 @@ class ExecutionContext {
    * @param recv_counts  Output array of counts of elements received from each
    *                     rank.
    */
-  inline virtual void all_to_allv(const void* send_buf, const std::size_t* send_counts,
-                           std::size_t elem_size,
-                           std::vector<std::byte>& recv_buf,
-                           std::vector<std::size_t>& recv_counts) {
+  inline virtual void all_to_allv(const void* send_buf,
+                                  const std::size_t* send_counts,
+                                  std::size_t elem_size,
+                                  std::vector<std::byte>& recv_buf,
+                                  std::vector<std::size_t>& recv_counts) {
     (void)send_buf;
     (void)send_counts;
     (void)elem_size;
