@@ -52,21 +52,21 @@ class ExecutionContext {
    *
    * Returns false for purely local contexts.
    */
-  virtual bool is_distributed() const noexcept { return false; }
+  inline virtual bool is_distributed() const noexcept { return false; }
 
   /**
    * @brief The rank of this context within the distributed communicator.
    *
    * Returns 0 for non-distributed contexts.
    */
-  virtual std::size_t rank() const noexcept { return 0; }
+  inline virtual std::size_t rank() const noexcept { return 0; }
 
   /**
    * @brief The size of the distributed communicator.
    *
    * Returns 1 for non-distributed contexts.
    */
-  virtual std::size_t size() const noexcept { return 1; }
+  inline virtual std::size_t size() const noexcept { return 1; }
 
   /**
    * @brief Synchronize all ranks in distributed contexts.
@@ -74,7 +74,7 @@ class ExecutionContext {
    * This is a no-op in non-distributed contexts. Use this to ensure all
    * previous work has completed before proceeding.
    */
-  virtual void barrier() {}
+  inline virtual void barrier() {}
 
   /**
    * @brief Reduction operations supported by all_reduce and scan.
@@ -93,7 +93,7 @@ class ExecutionContext {
    * @param elem_size Size of each element in bytes.
    * @param op        Reduction operation (e.g., SUM, MIN, MAX).
    */
-  virtual void all_reduce(void* buf, std::size_t count, std::size_t elem_size,
+  inline virtual void all_reduce(void* buf, std::size_t count, std::size_t elem_size,
                           ReduceOp op) {
     (void)buf;
     (void)count;
@@ -113,7 +113,7 @@ class ExecutionContext {
    * @param elem_size  Size of each element in bytes.
    * @param recv_buf   Destination buffer for the gathered elements.
    */
-  virtual void all_gather(const void* send_buf, std::size_t send_count,
+  inline virtual void all_gather(const void* send_buf, std::size_t send_count,
                           std::size_t elem_size,
                           std::vector<std::byte>& recv_buf) {
     (void)send_buf;
@@ -139,7 +139,7 @@ class ExecutionContext {
    * @param recv_counts  Output array of counts of elements received from each
    *                     rank.
    */
-  virtual void all_to_allv(const void* send_buf, const std::size_t* send_counts,
+  inline virtual void all_to_allv(const void* send_buf, const std::size_t* send_counts,
                            std::size_t elem_size,
                            std::vector<std::byte>& recv_buf,
                            std::vector<std::size_t>& recv_counts) {
