@@ -26,36 +26,19 @@ need_simdjson()
 # Utils Base library
 #-----------------------------------------
 
-set(DFTRACER_UTILS_HEADERS
-  indexer/indexer.h
-  reader/reader.h
-  utils/platform_compat.h
-  utils/filesystem.h
-  utils/file.h
-  utils/logger.h
-  utils/json.h
-
-  # pipeline
-  pipeline/pipeline.h
-
-  # analyzer
-  # analyzers/analyzer.h
-  analyzers/constants.h
-)
-
 set(DFTRACER_UTILS_SOURCES
-  indexer/indexer.cpp
-  reader/reader.cpp
-  utils/file.cpp
-  utils/logger.cpp
-  utils/json.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/file.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/logger.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
 
   # pipeline
-  pipeline/engine/map.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engine/map.cpp
 
   # analyzer
   # analyzers/analyzer.cpp
-  analyzers/constants.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/analyzers/constants.cpp
 )
 
 #+++++++++++++++++++++++++++++++++++++++++
@@ -83,6 +66,7 @@ link_zlib(dftracer_utils STATIC)
 target_include_directories(dftracer_utils 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
 )
 target_set_warnings(dftracer_utils)
@@ -121,6 +105,7 @@ link_zlib(dftracer_utils_shared SHARED)
 target_include_directories(dftracer_utils_shared 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
 )
 target_set_warnings(dftracer_utils_shared)
@@ -183,7 +168,7 @@ endif()
 # DFT Reader
 # ----------------------------------------
 
-add_executable(dft_reader bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
+add_executable(dft_reader ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
 target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
 
@@ -193,7 +178,10 @@ link_zlib(dft_reader STATIC)
 # link_arrow(dft_reader STATIC)
 
 target_include_directories(dft_reader 
-    PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    PRIVATE ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_BINARY_DIR}/include
+)
 
 target_set_warnings(dft_reader)
 
@@ -218,7 +206,7 @@ install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # DFT Pipeline (TEMPORARY)
 # ----------------------------------------
 
-add_executable(dft_pipeline bin/dft_pipeline.cpp ${DFTRACER_UTILS_SOURCES})
+add_executable(dft_pipeline ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_pipeline PROPERTIES OUTPUT_NAME "dft_pipeline")
 target_link_libraries(dft_pipeline PRIVATE 
   dftracer_utils
@@ -237,7 +225,9 @@ link_zlib(dft_pipeline STATIC)
 # link_arrow(dft_pipeline STATIC)
 
 target_include_directories(dft_pipeline 
-    PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    PRIVATE ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_BINARY_DIR}/include)
 
 target_set_warnings(dft_pipeline)
 

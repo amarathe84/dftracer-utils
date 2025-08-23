@@ -6,7 +6,9 @@
 namespace dftracer {
 namespace utils {
 namespace pipeline {
-namespace context { class ExecutionContext; }
+namespace context {
+class ExecutionContext;
+}
 namespace operators {
 
 enum class Op {
@@ -32,8 +34,8 @@ class Operator {
   Op op_;
 
  public:
-  const char* name;    // optional debug/telemetry label (static or long-lived)
-  std::uint64_t id;    // optional stable id for DAG nodes (0 if unused)
+  const char* name;  // optional debug/telemetry label (static or long-lived)
+  std::uint64_t id;  // optional stable id for DAG nodes (0 if unused)
 
   explicit Operator(Op op, const char* n = nullptr, std::uint64_t op_id = 0)
       : op_(op), name(n), id(op_id) {}

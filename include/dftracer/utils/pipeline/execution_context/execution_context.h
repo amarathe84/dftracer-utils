@@ -13,10 +13,10 @@ namespace context {
 /**
  * @brief Base class for execution contexts.
  *
- * An execution context describes how to execute work locally (e.g., sequentially
- * or on a thread pool) and optionally how to coordinate across multiple
- * distributed ranks (e.g., under MPI). Concrete subclasses implement the
- * scheduling and collective primitives, while algorithms are implemented
+ * An execution context describes how to execute work locally (e.g.,
+ * sequentially or on a thread pool) and optionally how to coordinate across
+ * multiple distributed ranks (e.g., under MPI). Concrete subclasses implement
+ * the scheduling and collective primitives, while algorithms are implemented
  * externally in terms of these primitives.
  */
 class ExecutionContext {

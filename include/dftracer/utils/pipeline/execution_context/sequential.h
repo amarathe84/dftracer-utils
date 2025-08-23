@@ -2,6 +2,7 @@
 #define __DFTRACER_UTILS_PIPELINE_EXECUTION_CONTEXT_SEQUENTIAL_H
 
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
+
 #include <cstddef>
 
 namespace dftracer {
