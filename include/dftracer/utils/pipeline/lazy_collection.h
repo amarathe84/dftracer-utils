@@ -54,7 +54,7 @@ class LazyCollection {
 
   LazyCollection() : plan_(std::make_shared<Planner>()), node_{} {}
 
-  static LazyCollection from_vector(const std::vector<T>& local) {
+  static LazyCollection from_sequence(const std::vector<T>& local) {
     auto plan = std::make_shared<lazy_collections::Planner>();
     auto bytes = std::make_shared<std::vector<std::byte>>();
     bytes->resize(local.size() * sizeof(T));
