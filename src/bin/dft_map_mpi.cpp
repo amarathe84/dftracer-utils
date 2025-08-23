@@ -169,7 +169,13 @@ int main(int argc, char* argv[]) {
 
   auto start_time = std::chrono::high_resolution_clock::now();
 
-  analyzers::Analyzer analyzer(time_granularity);
+  auto config = analyzers::AnalyzerConfig::Default()
+      .set_time_granularity(time_granularity)
+      .set_checkpoint(checkpoint)
+      .set_checkpoint_dir(checkpoint_dir)
+      .set_checkpoint_size(checkpoint_size);
+
+  analyzers::Analyzer analyzer(config);
   auto result = analyzer.analyze_trace(ctx, trace_paths, view_types);
 
   auto end_time = std::chrono::high_resolution_clock::now();

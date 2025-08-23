@@ -13,6 +13,7 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/writer.h>
+#include <parquet/arrow/reader.h>
 
 using namespace dftracer::utils::json;
 
@@ -524,19 +525,194 @@ arrow::Status hlms_to_parquet(const std::vector<HighLevelMetrics>& hlms,
 
   return arrow::Status::OK();
 }
+
+arrow::Result<std::vector<HighLevelMetrics>> hlms_from_parquet(
+    const std::string& input_path) {
+  // Read parquet file
+  std::shared_ptr<arrow::io::ReadableFile> infile;
+  ARROW_ASSIGN_OR_RAISE(infile,
+                        arrow::io::ReadableFile::Open(input_path));
+
+  std::unique_ptr<parquet::arrow::FileReader> reader;
+  ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+
+  std::shared_ptr<arrow::Table> table;
+  ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
+
+  std::vector<HighLevelMetrics> hlms;
+  int64_t num_rows = table->num_rows();
+
+  if (num_rows == 0) {
+    return hlms;
+  }
+
+  // Get column arrays
+  auto proc_name_array = std::static_pointer_cast<arrow::StringArray>(
+      table->GetColumnByName("proc_name")->chunk(0));
+  auto cat_array = std::static_pointer_cast<arrow::StringArray>(
+      table->GetColumnByName("cat")->chunk(0));
+  auto epoch_array = std::static_pointer_cast<arrow::StringArray>(
+      table->GetColumnByName("epoch")->chunk(0));
+  auto acc_pat_array = std::static_pointer_cast<arrow::StringArray>(
+      table->GetColumnByName("acc_pat")->chunk(0));
+  auto func_name_array = std::static_pointer_cast<arrow::StringArray>(
+      table->GetColumnByName("func_name")->chunk(0));
+  auto io_cat_array = std::static_pointer_cast<arrow::StringArray>(
+      table->GetColumnByName("io_cat")->chunk(0));
+  auto time_range_array = std::static_pointer_cast<arrow::StringArray>(
+      table->GetColumnByName("time_range")->chunk(0));
+  auto time_array = std::static_pointer_cast<arrow::DoubleArray>(
+      table->GetColumnByName("time")->chunk(0));
+  auto count_array = std::static_pointer_cast<arrow::UInt64Array>(
+      table->GetColumnByName("count")->chunk(0));
+  auto size_array = std::static_pointer_cast<arrow::UInt64Array>(
+      table->GetColumnByName("size")->chunk(0));
+
+  // Get size bin columns
+  std::vector<std::shared_ptr<arrow::UInt32Array>> size_bin_arrays;
+  for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
+    std::string col_name = constants::SIZE_BIN_PREFIX + suffix;
+    auto col = table->GetColumnByName(col_name);
+    if (col) {
+      size_bin_arrays.push_back(
+          std::static_pointer_cast<arrow::UInt32Array>(col->chunk(0)));
+    } else {
+      size_bin_arrays.push_back(nullptr);
+    }
+  }
+
+  hlms.reserve(num_rows);
+
+  for (int64_t i = 0; i < num_rows; i++) {
+    HighLevelMetrics hlm;
+
+    // Basic numeric fields
+    hlm.time_sum = time_array->Value(i);
+    hlm.count_sum = count_array->Value(i);
+
+    // Handle optional size
+    if (size_array->IsNull(i)) {
+      hlm.size_sum = std::nullopt;
+    } else {
+      hlm.size_sum = size_array->Value(i);
+    }
+
+    // Group values
+    hlm.group_values["proc_name"] = proc_name_array->GetString(i);
+    hlm.group_values["cat"] = cat_array->GetString(i);
+    hlm.group_values["epoch"] = epoch_array->GetString(i);
+    hlm.group_values["acc_pat"] = acc_pat_array->GetString(i);
+    hlm.group_values["func_name"] = func_name_array->GetString(i);
+    hlm.group_values["io_cat"] = io_cat_array->GetString(i);
+    hlm.group_values["time_range"] = time_range_array->GetString(i);
+
+    // Handle size bins
+    auto size_bins = generate_size_bins_vec();
+    for (size_t j = 0; j < size_bins.size() && j < size_bin_arrays.size(); ++j) {
+      if (size_bin_arrays[j] && !size_bin_arrays[j]->IsNull(i)) {
+        hlm.bin_sums[size_bins[j]] = size_bin_arrays[j]->Value(i);
+      } else {
+        hlm.bin_sums[size_bins[j]] = std::nullopt;
+      }
+    }
+
+    hlms.push_back(std::move(hlm));
+  }
+
+  return hlms;
+}
 }  // namespace helpers
 
-Analyzer::Analyzer(double time_granularity, double time_resolution,
-                   size_t checkpoint_size, bool checkpoint,
-                   const std::string& checkpoint_dir)
+AnalyzerConfig::AnalyzerConfig(double time_granularity,
+                                 bool checkpoint,
+                                 const std::string& checkpoint_dir,
+                                 size_t checkpoint_size,
+                                 double time_resolution)
     : time_granularity_(time_granularity),
-      time_resolution_(time_resolution),
-      checkpoint_size_(checkpoint_size),
+      checkpoint_(checkpoint),
       checkpoint_dir_(checkpoint_dir),
-      checkpoint_(checkpoint) {}
+      checkpoint_size_(checkpoint_size),
+      time_resolution_(time_resolution) {
+  if (checkpoint_) {
+    if (checkpoint_dir_.empty()) {
+      throw std::invalid_argument(
+          "Checkpointing is enabled but checkpoint_dir is empty.");
+    }
+    // Create checkpoint directory if it doesn't exist
+    if (!fs::exists(checkpoint_dir_)) {
+      fs::create_directories(checkpoint_dir_);
+    }
+  }
+}
+
+AnalyzerConfig AnalyzerConfig::Default() {
+  return AnalyzerConfig();
+}
+
+AnalyzerConfig AnalyzerConfig::create(double time_granularity,
+                          bool checkpoint,
+                          const std::string& checkpoint_dir,
+                          size_t checkpoint_size,
+                          double time_resolution) {
+  return AnalyzerConfig(time_granularity, checkpoint, checkpoint_dir, checkpoint_size, time_resolution);
+}
+
+double AnalyzerConfig::time_granularity() const {
+  return time_granularity_;
+}
+
+bool AnalyzerConfig::checkpoint() const {
+  return checkpoint_;
+}
+
+const std::string& AnalyzerConfig::checkpoint_dir() const {
+  return checkpoint_dir_;
+}
+
+size_t AnalyzerConfig::checkpoint_size() const {
+  return checkpoint_size_;
+}
+
+double AnalyzerConfig::time_resolution() const {
+  return time_resolution_;
+}
+
+AnalyzerConfig& AnalyzerConfig::set_time_granularity(double time_granularity) {
+  time_granularity_ = time_granularity;
+  return *this;
+}
+
+AnalyzerConfig& AnalyzerConfig::set_checkpoint(bool checkpoint) {
+  checkpoint_ = checkpoint;
+  return *this;
+}
+
+AnalyzerConfig& AnalyzerConfig::set_checkpoint_dir(const std::string& checkpoint_dir) {
+  checkpoint_dir_ = checkpoint_dir;
+  return *this;
+}
+
+AnalyzerConfig& AnalyzerConfig::set_checkpoint_size(size_t checkpoint_size) {
+  checkpoint_size_ = checkpoint_size;
+  return *this;
+}
+
+AnalyzerConfig& AnalyzerConfig::set_time_resolution(double time_resolution) {
+  time_resolution_ = time_resolution;
+  return *this;
+}
+
+Analyzer::Analyzer(double time_granularity, 
+                   bool checkpoint,
+                   const std::string& checkpoint_dir,
+                   size_t checkpoint_size,
+                   double time_resolution)
+    : config_(time_granularity, checkpoint, checkpoint_dir, checkpoint_size, time_resolution) {}
+
+Analyzer::Analyzer(const AnalyzerConfig& config) : config_(config) {}
 
 std::string Analyzer::get_checkpoint_path(const std::string& name) const {
-  return checkpoint_dir_ + "/" + name;
+  return config_.checkpoint_dir() + "/" + name;
 }
 
 std::string Analyzer::get_checkpoint_name(
@@ -546,7 +722,7 @@ std::string Analyzer::get_checkpoint_name(
     if (i > 0) name_stream << "_";
     name_stream << args[i];
   }
-  name_stream << "_" << static_cast<int>(time_granularity_);
+  name_stream << "_" << static_cast<int>(config_.time_granularity());
   return name_stream.str();
 }
 
