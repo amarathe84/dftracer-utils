@@ -3,8 +3,18 @@
 
 #include <dftracer/utils/pipeline/internal.h>
 
+#include <dftracer/utils/pipeline/operators/filter.h>
+#include <dftracer/utils/pipeline/operators/map.h>
+#include <dftracer/utils/pipeline/operators/reduce.h>
+#include <dftracer/utils/pipeline/operators/repartition.h>
+#include <dftracer/utils/pipeline/operators/groupby.h>
+#include <dftracer/utils/pipeline/operators/map_partitions.h>
+#include <dftracer/utils/pipeline/operators/spread.h>
+#include <dftracer/utils/pipeline/operators/flatmap.h>
+
 #include <utility>
 #include <vector>
+#include <stdexcept>
 
 namespace dftracer {
 namespace utils {
@@ -13,94 +23,67 @@ namespace context {
 
 using namespace internal;
 
-template <typename Derived>
+enum class ExecutionMode { SEQUENTIAL, THREADPOOL, MPI };
+
 class ExecutionContext {
- public:
-  virtual ~ExecutionContext() = default;
-  virtual ExecutionStrategy strategy() const = 0;
+  private:
+    ExecutionMode mode_;
+public:
+    explicit ExecutionContext(ExecutionMode mode) : mode_(mode) {}
+    virtual ~ExecutionContext() = default;
 
-  virtual size_t rank() const { return 0; }
+    virtual ExecutionMode mode() const { return mode_; }
+    virtual size_t rank() const { return 0; }
+    virtual size_t size() const { return 1; }
 
-  virtual size_t size() const { return 1; }
-
-  template <typename T, typename MapFunc>
-  auto execute_map(const std::vector<T>& input, MapFunc&& func) const
-      -> std::vector<map_result_t<MapFunc, T>> {
-    return static_cast<const Derived*>(this)
-        ->template execute_map_impl<T, MapFunc>(std::forward<MapFunc>(func),
-                                                input);
+    virtual void execute(const operators::Operator& op, const void* input, void* output) {
+        switch (op.type()) {
+        case operators::Op::MAP:
+            map(op, input, output);
+            break;
+        case operators::Op::FILTER:
+            filter(op, input, output);
+            break;
+        case operators::Op::REDUCE:
+            reduce(op, input, output);
+            break;
+        case operators::Op::REPARTITION_BY_HASH:
+            repartition_by_hash(op, input, output);
+            break;
+        case operators::Op::REPARTITION_BY_NUM_PARTITIONS:
+            repartition_by_num_partitions(op, input, output);
+            break;
+        case operators::Op::REPARTITION_BY_SIZE:
+            repartition_by_size(op, input, output);
+            break;
+        case operators::Op::GROUPBY:
+            groupby(op, input, output);
+            break;
+        case operators::Op::MAP_PARTITIONS:
+            map_partitions(op, input, output);
+            break;
+        case operators::Op::SPREAD:
+            spread(op, input, output);
+            break;
+        case operators::Op::FLATMAP:
+            flatmap(op, input, output);
+            break;
+        default:
+            throw std::runtime_error("Unknown operator type");
+    }
   }
 
-  template <typename T, typename MapPartitionsFunc>
-  auto execute_map_partitions(const std::vector<T>& input,
-                              MapPartitionsFunc&& func) const {
-    return static_cast<const Derived*>(this)
-        ->template execute_map_partitions_impl<T, MapPartitionsFunc>(
-            std::forward<MapPartitionsFunc>(func), input);
-  }
-
-  template <typename T, typename MapPartitionsFunc>
-  auto execute_repartitioned_map_partitions(
-      const std::vector<std::vector<T>>& partitions,
-      MapPartitionsFunc&& func) const {
-    return static_cast<const Derived*>(this)
-        ->template execute_repartitioned_map_partitions_impl<T,
-                                                             MapPartitionsFunc>(
-            partitions, std::forward<MapPartitionsFunc>(func));
-  }
-
-  template <typename T, typename ReduceFunc>
-  auto execute_reduce(const std::vector<T>& input, ReduceFunc&& func) const
-      -> std::vector<T> {
-    return static_cast<const Derived*>(this)
-        ->template execute_reduce_impl<T, ReduceFunc>(
-            std::forward<ReduceFunc>(func), input);
-  }
-
-  template <typename T>
-  auto execute_repartition(const std::vector<T>& input,
-                           size_t num_partitions) const
-      -> std::vector<std::vector<T>> {
-    return static_cast<const Derived*>(this)
-        ->template execute_repartition_impl<T>(input, num_partitions);
-  }
-
-  template <typename T>
-  auto execute_repartition_by_bytes(const std::vector<T>& input,
-                                    size_t target_bytes,
-                                    bool estimate = true) const
-      -> std::vector<std::vector<T>> {
-    return static_cast<const Derived*>(this)
-        ->template execute_repartition_by_bytes_impl<T>(input, target_bytes,
-                                                        estimate);
-  }
-
-  template <typename T, typename HashFunc>
-  auto execute_repartition_by_hash(const std::vector<T>& input,
-                                   size_t num_partitions,
-                                   HashFunc&& hash_func) const
-      -> std::vector<std::vector<T>> {
-    return static_cast<const Derived*>(this)
-        ->template execute_repartition_by_hash_impl<T, HashFunc>(
-            input, num_partitions, std::forward<HashFunc>(hash_func));
-  }
-
-  template <typename T, typename KeyFunc>
-  auto execute_groupby(const std::vector<T>& input, KeyFunc&& key_func) const {
-    return static_cast<const Derived*>(this)
-        ->template execute_groupby_impl<T, KeyFunc>(
-            input, std::forward<KeyFunc>(key_func));
-  }
-
-  template <typename T, typename KeyFunc, typename AggFunc>
-  auto execute_distributed_groupby(const std::vector<T>& input,
-                                   KeyFunc&& key_func, AggFunc&& agg_func,
-                                   size_t num_partitions = 0) const {
-    return static_cast<const Derived*>(this)
-        ->template execute_distributed_groupby_impl<T, KeyFunc, AggFunc>(
-            input, std::forward<KeyFunc>(key_func),
-            std::forward<AggFunc>(agg_func), num_partitions);
-  }
+protected:
+  virtual void map(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void filter(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void reduce(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void repartition_by_hash(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void repartition_by_num_partitions(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void repartition_by_size(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void groupby(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void map_partitions(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void spread(const operators::Operator& op, const void* input, void* output) = 0;
+  virtual void flatmap(const operators::Operator& op, const void* input, void* output) = 0;
 };
 }  // namespace context
 }  // namespace pipeline

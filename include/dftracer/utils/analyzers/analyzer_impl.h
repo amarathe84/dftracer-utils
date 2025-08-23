@@ -1,21 +1,20 @@
 #ifndef __DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H__
 #define __DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H__
 
+#include <arrow/result.h>
+#include <arrow/status.h>
 #include <dftracer/utils/analyzers/constants.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/pipeline/bag.h>
 #include <dftracer/utils/reader/reader.h>
-#include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/utils/filesystem.h>
+#include <dftracer/utils/utils/json.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <map>
 #include <optional>
 #include <unordered_map>
-
-#include <arrow/status.h>
-#include <arrow/result.h>
 
 namespace dftracer {
 namespace utils {
@@ -175,15 +174,15 @@ inline auto load_traces(Context& ctx, const std::vector<std::string>& traces,
 
 // Pipeline: Parse JSON to TraceRecords with filtering
 template <typename Context>
-inline auto parse_and_filter_traces(Context& ctx,
-                                    const std::vector<std::string>& traces,
-                                    const AnalyzerConfig& config,
-                                    size_t batch_size,
-                                    const std::vector<std::string>& view_types) {
+inline auto parse_and_filter_traces(
+    Context& ctx, const std::vector<std::string>& traces,
+    const AnalyzerConfig& config, size_t batch_size,
+    const std::vector<std::string>& view_types) {
   return trace_reader::load_traces(ctx, traces, batch_size)
       .repartition("64MB")  // Repartition after JSON parsing for better memory
                             // distribution
-      .map_partitions([view_types, config](const auto& partition) -> std::vector<TraceRecord> {
+      .map_partitions([view_types, config](
+                          const auto& partition) -> std::vector<TraceRecord> {
         std::vector<TraceRecord> valid_records;
         valid_records.reserve(partition.size());
 
@@ -336,8 +335,7 @@ inline auto separate_events_and_hashes(
 
 template <typename Context>
 inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
-                        const AnalyzerConfig& config,
-                        size_t batch_size,
+                        const AnalyzerConfig& config, size_t batch_size,
                         const std::vector<std::string>& view_types) {
   spdlog::debug("DFTracer loading {} trace files", traces.size());
 
@@ -374,18 +372,18 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
 
   // Second pass: normalize timestamps and recalculate time_range using global
   // minimum
-  return trace_records.map(
-      [global_min_timestamp, config](TraceRecord record) -> TraceRecord {
-        // Normalize timestamps using global minimum
-        record.time_start = record.time_start - global_min_timestamp;
-        record.time_end =
-            record.time_start + static_cast<uint64_t>(record.duration);
-        // Scale duration by time_resolution
-        record.duration = record.duration / config.time_resolution();
-        record.time_range =
-            record.time_start / static_cast<uint64_t>(config.time_granularity());
-        return record;
-      });
+  return trace_records.map([global_min_timestamp,
+                            config](TraceRecord record) -> TraceRecord {
+    // Normalize timestamps using global minimum
+    record.time_start = record.time_start - global_min_timestamp;
+    record.time_end =
+        record.time_start + static_cast<uint64_t>(record.duration);
+    // Scale duration by time_resolution
+    record.duration = record.duration / config.time_resolution();
+    record.time_range =
+        record.time_start / static_cast<uint64_t>(config.time_granularity());
+    return record;
+  });
 }
 
 struct EpochSpanEntry {
@@ -633,43 +631,47 @@ T restore_view(Context& ctx, const std::string& checkpoint_name,
 
 // Specialized restore_view for HighLevelMetrics
 template <typename Context, typename FallbackFunc>
-std::vector<HighLevelMetrics> restore_view(Context& ctx, const std::string& checkpoint_name,
-                                           FallbackFunc fallback, bool force = false,
-                                           bool write_to_disk = true, bool read_from_disk = false,
-                                           const std::vector<std::string>& view_types = {}) {
+std::vector<HighLevelMetrics> restore_view(
+    Context& ctx, const std::string& checkpoint_name, FallbackFunc fallback,
+    bool force = false, bool write_to_disk = true, bool read_from_disk = false,
+    const std::vector<std::string>& view_types = {}) {
   // Get checkpoint path based on Analyzer's checkpoint settings
   std::string checkpoint_path = checkpoint_name + ".parquet";
-  
+
   // Check if we should try to read from existing checkpoint
   if (!force && read_from_disk && fs::exists(checkpoint_path)) {
     spdlog::debug("Loading HLMs from checkpoint: {}", checkpoint_path);
-    
+
     auto hlms_result = helpers::hlms_from_parquet(checkpoint_path);
     if (hlms_result.ok()) {
-      spdlog::info("Successfully loaded {} HLMs from checkpoint", hlms_result->size());
+      spdlog::info("Successfully loaded {} HLMs from checkpoint",
+                   hlms_result->size());
       return std::move(*hlms_result);
     } else {
-      spdlog::warn("Failed to read checkpoint {}: {}", checkpoint_path, hlms_result.status().message());
+      spdlog::warn("Failed to read checkpoint {}: {}", checkpoint_path,
+                   hlms_result.status().message());
       // Fall through to compute fresh HLMs
     }
   }
-  
+
   // Compute fresh HLMs using fallback function
   spdlog::debug("Computing fresh HLMs using fallback function");
   std::vector<HighLevelMetrics> hlms = fallback();
-  
+
   // Write to disk if requested
   if (write_to_disk) {
-    spdlog::debug("Writing {} HLMs to checkpoint: {}", hlms.size(), checkpoint_path);
-    
+    spdlog::debug("Writing {} HLMs to checkpoint: {}", hlms.size(),
+                  checkpoint_path);
+
     auto status = helpers::hlms_to_parquet(hlms, checkpoint_path);
     if (!status.ok()) {
-      spdlog::error("Failed to write HLMs to checkpoint {}: {}", checkpoint_path, status.message());
+      spdlog::error("Failed to write HLMs to checkpoint {}: {}",
+                    checkpoint_path, status.message());
     } else {
       spdlog::info("Successfully wrote {} HLMs to checkpoint", hlms.size());
     }
   }
-  
+
   return hlms;
 }
 }  // namespace pipeline
@@ -689,7 +691,8 @@ AnalyzerResult Analyzer::analyze_trace(
     std::sort(proc_view_types.begin(), proc_view_types.end());
 
     std::vector<std::string> checkpoint_args = {"_hlm"};
-    checkpoint_args.insert(checkpoint_args.end(), proc_view_types.begin(), proc_view_types.end());
+    checkpoint_args.insert(checkpoint_args.end(), proc_view_types.begin(),
+                           proc_view_types.end());
 
     fs::create_directories(get_checkpoint_dir());
     std::string checkpoint_name = get_checkpoint_name(checkpoint_args);
@@ -701,26 +704,26 @@ AnalyzerResult Analyzer::analyze_trace(
           // Fallback: compute HLMs
 
           // Step 1: Get trace events
-          auto events = pipeline::read_traces(ctx, traces, config_, config_.checkpoint_size(), proc_view_types);
+          auto events = pipeline::read_traces(
+              ctx, traces, config_, config_.checkpoint_size(), proc_view_types);
 
           // Step 2: Apply global timestamp normalization
-          auto normalized_events = pipeline::normalize_timestamps_globally(
-              ctx, events, config_);
+          auto normalized_events =
+              pipeline::normalize_timestamps_globally(ctx, events, config_);
 
           // Step 3: Post-process events
           auto post_processed_events = pipeline::postread_trace(
               ctx, normalized_events, config_, proc_view_types);
 
           return pipeline::compute_high_level_metrics(post_processed_events,
-                                                     proc_view_types, "128MB")
-                    .flatmap([&](const auto& container) { return container; })
-                    .compute(ctx);
+                                                      proc_view_types, "128MB")
+              .flatmap([&](const auto& container) { return container; })
+              .compute(ctx);
         },
-        false,  // force
+        false,                 // force
         config_.checkpoint(),  // write_to_disk
         config_.checkpoint(),  // read_from_disk
-        proc_view_types
-    );
+        proc_view_types);
 
     if (ctx.rank() == 0) {
       spdlog::info("HLM computation complete: {} groups generated",

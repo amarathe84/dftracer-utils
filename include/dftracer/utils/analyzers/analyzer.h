@@ -51,12 +51,12 @@ class AnalyzerConfig {
                  double time_resolution = constants::DEFAULT_TIME_RESOLUTION);
 
   static AnalyzerConfig Default();
-  static AnalyzerConfig create(double time_granularity = constants::DEFAULT_TIME_GRANULARITY,
-                                bool checkpoint = false,
-                                const std::string& checkpoint_dir = "",
-                                size_t checkpoint_size =
-                                    dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE,
-                                double time_resolution = constants::DEFAULT_TIME_RESOLUTION);
+  static AnalyzerConfig create(
+      double time_granularity = constants::DEFAULT_TIME_GRANULARITY,
+      bool checkpoint = false, const std::string& checkpoint_dir = "",
+      size_t checkpoint_size =
+          dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE,
+      double time_resolution = constants::DEFAULT_TIME_RESOLUTION);
 
   AnalyzerConfig(const AnalyzerConfig&) = default;
   AnalyzerConfig& operator=(const AnalyzerConfig&) = default;
@@ -77,7 +77,7 @@ class AnalyzerConfig {
   AnalyzerConfig& set_checkpoint_size(size_t checkpoint_size);
   AnalyzerConfig& set_time_resolution(double time_resolution);
 
-private:
+ private:
   double time_granularity_;
   bool checkpoint_;
   std::string checkpoint_dir_;

@@ -1,5 +1,9 @@
+// #include <arrow/api.h>
+// #include <arrow/io/api.h>
 #include <dftracer/utils/analyzers/analyzer.h>
 #include <dftracer/utils/utils/filesystem.h>
+#include <parquet/arrow/reader.h>
+#include <parquet/arrow/writer.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -9,11 +13,6 @@
 #include <memory>
 #include <sstream>
 #include <stdexcept>
-
-#include <arrow/api.h>
-#include <arrow/io/api.h>
-#include <parquet/arrow/writer.h>
-#include <parquet/arrow/reader.h>
 
 using namespace dftracer::utils::json;
 
@@ -497,16 +496,16 @@ arrow::Status hlms_to_parquet(const std::vector<HighLevelMetrics>& hlms,
 
   // Add size bin fields
   for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
-    fields.push_back(arrow::field(constants::SIZE_BIN_PREFIX + suffix,
-                                  arrow::uint32()));
+    fields.push_back(
+        arrow::field(constants::SIZE_BIN_PREFIX + suffix, arrow::uint32()));
   }
 
   auto schema = arrow::schema(fields);
 
   // Create arrays vector
   std::vector<std::shared_ptr<arrow::Array>> arrays = {
-      proc_name_array, cat_array,       epoch_array,    acc_pat_array,
-      func_name_array, io_cat_array,    time_range_array, time_array,
+      proc_name_array, cat_array,    epoch_array,      acc_pat_array,
+      func_name_array, io_cat_array, time_range_array, time_array,
       count_array,     size_array};
 
   // Add size bin arrays
@@ -520,8 +519,8 @@ arrow::Status hlms_to_parquet(const std::vector<HighLevelMetrics>& hlms,
   ARROW_ASSIGN_OR_RAISE(outfile,
                         arrow::io::FileOutputStream::Open(output_path));
 
-  ARROW_RETURN_NOT_OK(parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
-                                                 outfile, /*chunk_size=*/1024));
+  ARROW_RETURN_NOT_OK(parquet::arrow::WriteTable(
+      *table, arrow::default_memory_pool(), outfile, /*chunk_size=*/1024));
 
   return arrow::Status::OK();
 }
@@ -530,11 +529,11 @@ arrow::Result<std::vector<HighLevelMetrics>> hlms_from_parquet(
     const std::string& input_path) {
   // Read parquet file
   std::shared_ptr<arrow::io::ReadableFile> infile;
-  ARROW_ASSIGN_OR_RAISE(infile,
-                        arrow::io::ReadableFile::Open(input_path));
+  ARROW_ASSIGN_OR_RAISE(infile, arrow::io::ReadableFile::Open(input_path));
 
   std::unique_ptr<parquet::arrow::FileReader> reader;
-  ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+  ARROW_ASSIGN_OR_RAISE(
+      reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
 
   std::shared_ptr<arrow::Table> table;
   ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
@@ -608,7 +607,8 @@ arrow::Result<std::vector<HighLevelMetrics>> hlms_from_parquet(
 
     // Handle size bins
     auto size_bins = generate_size_bins_vec();
-    for (size_t j = 0; j < size_bins.size() && j < size_bin_arrays.size(); ++j) {
+    for (size_t j = 0; j < size_bins.size() && j < size_bin_arrays.size();
+         ++j) {
       if (size_bin_arrays[j] && !size_bin_arrays[j]->IsNull(i)) {
         hlm.bin_sums[size_bins[j]] = size_bin_arrays[j]->Value(i);
       } else {
@@ -623,11 +623,9 @@ arrow::Result<std::vector<HighLevelMetrics>> hlms_from_parquet(
 }
 }  // namespace helpers
 
-AnalyzerConfig::AnalyzerConfig(double time_granularity,
-                                 bool checkpoint,
-                                 const std::string& checkpoint_dir,
-                                 size_t checkpoint_size,
-                                 double time_resolution)
+AnalyzerConfig::AnalyzerConfig(double time_granularity, bool checkpoint,
+                               const std::string& checkpoint_dir,
+                               size_t checkpoint_size, double time_resolution)
     : time_granularity_(time_granularity),
       checkpoint_(checkpoint),
       checkpoint_dir_(checkpoint_dir),
@@ -645,37 +643,27 @@ AnalyzerConfig::AnalyzerConfig(double time_granularity,
   }
 }
 
-AnalyzerConfig AnalyzerConfig::Default() {
-  return AnalyzerConfig();
+AnalyzerConfig AnalyzerConfig::Default() { return AnalyzerConfig(); }
+
+AnalyzerConfig AnalyzerConfig::create(double time_granularity, bool checkpoint,
+                                      const std::string& checkpoint_dir,
+                                      size_t checkpoint_size,
+                                      double time_resolution) {
+  return AnalyzerConfig(time_granularity, checkpoint, checkpoint_dir,
+                        checkpoint_size, time_resolution);
 }
 
-AnalyzerConfig AnalyzerConfig::create(double time_granularity,
-                          bool checkpoint,
-                          const std::string& checkpoint_dir,
-                          size_t checkpoint_size,
-                          double time_resolution) {
-  return AnalyzerConfig(time_granularity, checkpoint, checkpoint_dir, checkpoint_size, time_resolution);
-}
+double AnalyzerConfig::time_granularity() const { return time_granularity_; }
 
-double AnalyzerConfig::time_granularity() const {
-  return time_granularity_;
-}
-
-bool AnalyzerConfig::checkpoint() const {
-  return checkpoint_;
-}
+bool AnalyzerConfig::checkpoint() const { return checkpoint_; }
 
 const std::string& AnalyzerConfig::checkpoint_dir() const {
   return checkpoint_dir_;
 }
 
-size_t AnalyzerConfig::checkpoint_size() const {
-  return checkpoint_size_;
-}
+size_t AnalyzerConfig::checkpoint_size() const { return checkpoint_size_; }
 
-double AnalyzerConfig::time_resolution() const {
-  return time_resolution_;
-}
+double AnalyzerConfig::time_resolution() const { return time_resolution_; }
 
 AnalyzerConfig& AnalyzerConfig::set_time_granularity(double time_granularity) {
   time_granularity_ = time_granularity;
@@ -687,7 +675,8 @@ AnalyzerConfig& AnalyzerConfig::set_checkpoint(bool checkpoint) {
   return *this;
 }
 
-AnalyzerConfig& AnalyzerConfig::set_checkpoint_dir(const std::string& checkpoint_dir) {
+AnalyzerConfig& AnalyzerConfig::set_checkpoint_dir(
+    const std::string& checkpoint_dir) {
   checkpoint_dir_ = checkpoint_dir;
   return *this;
 }
@@ -702,12 +691,11 @@ AnalyzerConfig& AnalyzerConfig::set_time_resolution(double time_resolution) {
   return *this;
 }
 
-Analyzer::Analyzer(double time_granularity, 
-                   bool checkpoint,
-                   const std::string& checkpoint_dir,
-                   size_t checkpoint_size,
+Analyzer::Analyzer(double time_granularity, bool checkpoint,
+                   const std::string& checkpoint_dir, size_t checkpoint_size,
                    double time_resolution)
-    : config_(time_granularity, checkpoint, checkpoint_dir, checkpoint_size, time_resolution) {}
+    : config_(time_granularity, checkpoint, checkpoint_dir, checkpoint_size,
+              time_resolution) {}
 
 Analyzer::Analyzer(const AnalyzerConfig& config) : config_(config) {}
 
