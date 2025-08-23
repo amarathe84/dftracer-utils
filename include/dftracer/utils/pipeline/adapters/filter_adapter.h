@@ -4,6 +4,8 @@
 #include <dftracer/utils/pipeline/adapters/adapter.h>
 #include <dftracer/utils/pipeline/operators/filter_operator.h>
 
+#include <memory>
+
 namespace dftracer {
 namespace utils {
 namespace pipeline {
@@ -23,30 +25,30 @@ struct FilterState {
 
 // Function pointer predicate
 template <class T>
-inline OpHandle<operators::FilterOperator> make_filter_op(
+inline OpHandler<operators::FilterOperator> make_filter_op(
     bool (*pred)(const T&)) {
   using S = detail::FilterState<decltype(pred), T>;
-  auto cookie = std::make_shared<S>(S{pred});
+  auto state = std::make_shared<S>(S{pred});
 
-  OpHandle<operators::FilterOperator> h{operators::FilterOperator(sizeof(T)),
-                                        nullptr};
+  OpHandler<operators::FilterOperator> h{operators::FilterOperator(sizeof(T)),
+                                         nullptr};
   h.op.pred_with_state = &S::tramp;
-  h.op.state = cookie.get();
-  h.cookie = std::move(cookie);
+  h.op.state = state.get();
+  h.state = std::move(state);
   return h;
 }
 
 // Generic callable (captures ok): bool(const T&)
 template <class T, class Pred>
-inline OpHandle<operators::FilterOperator> make_filter_op(Pred pred) {
+inline OpHandler<operators::FilterOperator> make_filter_op(Pred pred) {
   using S = detail::FilterState<Pred, T>;
-  auto cookie = std::make_shared<S>(S{std::move(pred)});
+  auto state = std::make_shared<S>(S{std::move(pred)});
 
-  OpHandle<operators::FilterOperator> h{operators::FilterOperator(sizeof(T)),
-                                        nullptr};
+  OpHandler<operators::FilterOperator> h{operators::FilterOperator(sizeof(T)),
+                                         nullptr};
   h.op.pred_with_state = &S::tramp;
-  h.op.state = cookie.get();
-  h.cookie = std::move(cookie);
+  h.op.state = state.get();
+  h.state = std::move(state);
   return h;
 }
 

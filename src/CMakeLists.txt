@@ -34,7 +34,8 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
 
   # pipeline
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engine/map.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/map.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/filter.cpp
 
   # analyzer
   # analyzers/analyzer.cpp

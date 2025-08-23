@@ -1,9 +1,9 @@
 
 
-#include <dftracer/utils/pipeline/engine/filter.h>
-#include <dftracer/utils/pipeline/engine/helpers.h>
+#include <dftracer/utils/pipeline/engines/filter_engine.h>
+#include <dftracer/utils/pipeline/engines/helpers.h>
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
-#include <dftracer/utils/pipeline/operators/filter.h>
+#include <dftracer/utils/pipeline/operators/filter_operator.h>
 
 #include <algorithm>
 #include <cstring>

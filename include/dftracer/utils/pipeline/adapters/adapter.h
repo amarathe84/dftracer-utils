@@ -1,12 +1,14 @@
-#ifndef __DFTRACER_UTILS_PIPELINE_ADAPtER_ADAPTER_H
-#define __DFTRACER_UTILS_PIPELINE_ADAPtER_ADAPTER_H
+#ifndef __DFTRACER_UTILS_PIPELINE_ADAPTERS_ADAPTER_H
+#define __DFTRACER_UTILS_PIPELINE_ADAPTERS_ADAPTER_H
+
+#include <memory>
 
 namespace dftracer {
 namespace utils {
 namespace pipeline {
 namespace adapters {
 template <class Op>
-struct OpHandle {
+struct OpHandler {
   Op op;
   std::shared_ptr<void> state;
 };

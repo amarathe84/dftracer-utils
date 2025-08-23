@@ -15,8 +15,8 @@ struct Planner {
 
   NodeId add_node(std::unique_ptr<operators::Operator> op,
                   std::vector<NodeId> parents, OutputLayout out,
-                  std::shared_ptr<void> cookie = nullptr) {
-    if (cookie) keep_alive.push_back(std::move(cookie));
+                  std::shared_ptr<void> state = nullptr) {
+    if (state) keep_alive.push_back(std::move(state));
     NodeId id{static_cast<std::uint32_t>(nodes.size())};
     PlannerNode n;
     n.parents = std::move(parents);

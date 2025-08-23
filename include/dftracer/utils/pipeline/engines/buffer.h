@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_PIPELINE_ENGINE_BUFFER_H
-#define __DFTRACER_UTILS_PIPELINE_ENGINE_BUFFER_H
+#ifndef __DFTRACER_UTILS_PIPELINE_ENGINES_BUFFER_H
+#define __DFTRACER_UTILS_PIPELINE_ENGINES_BUFFER_H
 
 #include <cstddef>
 #include <vector>
@@ -37,4 +37,4 @@ inline MutBuffer to_mut_buffer(std::vector<T>& v) {
 }  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_PIPELINE_ENGINE_BUFFER_H
+#endif  // __DFTRACER_UTILS_PIPELINE_ENGINES_BUFFER_H

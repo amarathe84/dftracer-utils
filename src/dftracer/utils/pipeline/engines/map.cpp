@@ -1,5 +1,5 @@
-#include <dftracer/utils/pipeline/engine/helpers.h>
-#include <dftracer/utils/pipeline/engine/map_engine.h>
+#include <dftracer/utils/pipeline/engines/helpers.h>
+#include <dftracer/utils/pipeline/engines/map_engine.h>
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
 #include <dftracer/utils/pipeline/operators/map_operator.h>
 

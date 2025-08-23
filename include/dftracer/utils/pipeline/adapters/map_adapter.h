@@ -35,11 +35,11 @@ struct MapStateTransform {
 
 // Function pointer (kernel form): void(const In&, Out&)
 template <class In, class Out>
-inline OpHandle<operators::MapOperator> make_map_op(void (*fp)(const In&,
-                                                               Out&)) {
-  OpHandle<operators::MapOperator> h{
+inline OpHandler<operators::MapOperator> make_map_op(void (*fp)(const In&,
+                                                                Out&)) {
+  OpHandler<operators::MapOperator> h{
       operators::MapOperator(sizeof(In), sizeof(Out)), nullptr};
-  // Fast path: no cookie; use stateful slot to avoid extra templated trampoline
+  // Fast path: no state; use stateful slot to avoid extra templated trampoline
   // reuse
   using S = detail::MapStateKernel<decltype(fp), In, Out>;
   static_assert(std::is_same_v<decltype(fp), void (*)(const In&, Out&)>);
@@ -52,32 +52,32 @@ inline OpHandle<operators::MapOperator> make_map_op(void (*fp)(const In&,
   };
   // Store the function pointer in a small heap object so we pass a stable
   // pointer
-  auto cookie = std::make_shared<S>(S{fp});
-  h.op.state = cookie.get();
-  h.cookie = std::move(cookie);
+  auto state = std::make_shared<S>(S{fp});
+  h.op.state = state.get();
+  h.state = std::move(state);
   return h;
 }
 
 // Generic callable (capturing or not). Accepts either kernel or transform
 // forms.
 template <class In, class Out, class Fn>
-inline OpHandle<operators::MapOperator> make_map_op(Fn fn) {
-  OpHandle<operators::MapOperator> h{
+inline OpHandler<operators::MapOperator> make_map_op(Fn fn) {
+  OpHandler<operators::MapOperator> h{
       operators::MapOperator(sizeof(In), sizeof(Out)), nullptr};
 
   // Decide which trampoline to use based on invocability
   if constexpr (std::is_invocable_v<Fn, const In&, Out&>) {
     using S = detail::MapStateKernel<Fn, In, Out>;
-    auto cookie = std::make_shared<S>(S{std::move(fn)});
+    auto state = std::make_shared<S>(S{std::move(fn)});
     h.op.fn_with_state = &S::tramp;
-    h.op.state = cookie.get();
-    h.cookie = std::move(cookie);
+    h.op.state = state.get();
+    h.state = std::move(state);
   } else if constexpr (std::is_invocable_r_v<Out, Fn, const In&>) {
     using S = detail::MapStateTransform<Fn, In, Out>;
-    auto cookie = std::make_shared<S>(S{std::move(fn)});
+    auto state = std::make_shared<S>(S{std::move(fn)});
     h.op.fn_with_state = &S::tramp;
-    h.op.state = cookie.get();
-    h.cookie = std::move(cookie);
+    h.op.state = state.get();
+    h.state = std::move(state);
   } else {
     static_assert(
         sizeof(Fn) == 0,

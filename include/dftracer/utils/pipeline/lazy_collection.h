@@ -1,12 +1,11 @@
 #ifndef __DFTRACER_UTILS_PIPELINE_LAZY_COLLECTION_H
 #define __DFTRACER_UTILS_PIPELINE_LAZY_COLLECTION_H
 
-#include <dftracer/utils/pipeline/engine/map_engine.h>
+#include <dftracer/utils/pipeline/adapters/adapters.h>
+#include <dftracer/utils/pipeline/engines/engines.h>
 #include <dftracer/utils/pipeline/execution_context/execution_context.h>
 #include <dftracer/utils/pipeline/lazy_collections/planner.h>
-#include <dftracer/utils/pipeline/operators/map_operator.h>
-#include <dftracer/utils/pipeline/operators/operator.h>
-#include <dftracer/utils/pipeline/operators/source_operator.h>
+#include <dftracer/utils/pipeline/operators/operators.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -23,9 +22,6 @@ namespace pipeline {
 
 using namespace lazy_collections;
 
-// A lazy, typed façade that builds a tiny DAG and executes through the engine.
-// Supports: from_vector (source), map (stateless & capturing), collect_local.
-
 template <class T>
 class LazyCollection {
  public:
@@ -33,7 +29,6 @@ class LazyCollection {
 
   LazyCollection() : plan_(std::make_shared<Planner>()), node_{} {}
 
-  // Build a leaf from a materialized local shard (tightly packed elements).
   static LazyCollection from_vector(const std::vector<T>& local) {
     auto plan = std::make_shared<lazy_collections::Planner>();
     auto bytes = std::make_shared<std::vector<std::byte>>();
@@ -51,60 +46,30 @@ class LazyCollection {
     return c;
   }
 
-  // Stateless fast path: function pointer with signature void(const T&, U&)
   template <class U>
   LazyCollection<U> map(void (*fn)(const T& in, U& out)) const {
-    struct State {
-      void (*fp)(const T&, U&);
-    };
-    auto state = std::make_shared<State>(State{fn});
-
-    auto mop = std::make_unique<operators::MapOperator>(sizeof(T), sizeof(U));
-    mop->fn_with_state = +[](const void* in, void* out, void* st) {
-      auto* s = static_cast<State*>(st);
-      const T& ti = *static_cast<const T*>(in);
-      U& to = *static_cast<U*>(out);
-      s->fp(ti, to);
-    };
-    mop->state = state.get();
-
+    auto h = adapters::make_map_op<T, U>(fn);
+    auto mop = std::make_unique<operators::MapOperator>(h.op);
     OutputLayout out{sizeof(U), true};
-
     LazyCollection<U> res;
     res.plan_ = plan_;
-    res.node_ = plan_->add_node(std::move(mop), {node_}, out, state);
+    res.node_ = plan_->add_node(std::move(mop), {node_}, out, h.state);
     return res;
   }
 
-  // Capturing lambda / std::function<U(const T&)> ergonomic overload.
   template <class Fn, class U = std::decay_t<decltype(std::declval<Fn&>()(
                           std::declval<const T&>()))>>
   LazyCollection<U> map(Fn fn) const {
-    struct State {
-      Fn fn;
-    };
-    auto state = std::make_shared<State>(State{std::move(fn)});
-
-    auto mop = std::make_unique<operators::MapOperator>(sizeof(T), sizeof(U));
-    mop->fn_with_state = +[](const void* in, void* out, void* st) {
-      auto* s = static_cast<State*>(st);
-      const T& ti = *static_cast<const T*>(in);
-      U& to = *static_cast<U*>(out);
-      to = s->fn(ti);
-    };
-    mop->state = state.get();
-
+    auto h = adapters::make_map_op<T, U>(std::move(fn));
+    auto mop = std::make_unique<operators::MapOperator>(h.op);
     OutputLayout out{sizeof(U), true};
-
     LazyCollection<U> res;
     res.plan_ = plan_;
-    res.node_ = plan_->add_node(std::move(mop), {node_}, out, state);
+    res.node_ = plan_->add_node(std::move(mop), {node_}, out, h.state);
     return res;
   }
 
-  // Execute the DAG up to this node and return the materialized local shard.
   std::vector<T> collect_local(context::ExecutionContext& ctx) const {
-    // Follow single-parent chain back to a source
     std::vector<NodeId> chain;
     for (NodeId cur = node_;;) {
       chain.push_back(cur);
@@ -123,7 +88,7 @@ class LazyCollection {
         case operators::Op::SOURCE: {
           auto* src = static_cast<operators::SourceOperator*>(node.op.get());
           cur_bytes = src->bytes;
-          cur_elem = node.out.elem_size;  // authoritative layout
+          cur_elem = node.out.elem_size;
           break;
         }
         case operators::Op::MAP: {
@@ -156,7 +121,7 @@ class LazyCollection {
 
  private:
   std::shared_ptr<Planner> plan_ = std::make_shared<Planner>();
-  NodeId node_{};  // current node in plan
+  NodeId node_{};
 };
 
 }  // namespace pipeline
