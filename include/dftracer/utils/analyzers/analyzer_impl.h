@@ -11,6 +11,9 @@
 #include <algorithm>
 #include <map>
 #include <optional>
+#include <unordered_map>
+
+#include <arrow/status.h>
 
 namespace dftracer {
 namespace utils {
@@ -18,10 +21,56 @@ namespace analyzers {
 using namespace dftracer::utils::json;
 using namespace dftracer::utils::pipeline;
 
+struct TraceRecord {
+  std::string cat;
+  std::string io_cat;
+  std::string acc_pat;
+  std::string func_name;
+  double duration;
+  uint64_t count;
+  uint64_t time_range;
+  uint64_t time_start;
+  uint64_t time_end;
+  uint64_t epoch;
+  uint64_t pid;
+  uint64_t tid;
+  std::string fhash;
+  std::string hhash;
+  uint64_t image_id;
+  uint8_t event_type;  // 0=regular, 1=file_hash, 2=host_hash, 3=string_hash,
+                       // 4=other_metadata
+  std::optional<uint64_t> size;
+  std::optional<uint64_t> offset;
+  std::unordered_map<std::string, std::string> view_fields;
+  std::unordered_map<std::string, std::optional<uint32_t>> bin_fields;
+
+  template <class Archive>
+  void serialize(Archive& ar) {
+    ar(cat, io_cat, acc_pat, func_name, duration, count, size, time_range,
+       time_start, time_end, epoch, pid, tid, fhash, hhash, image_id, offset,
+       event_type, view_fields, bin_fields);
+  }
+};
+
+struct HashEntry {
+  std::string name;
+  std::string hash;
+  uint64_t pid;
+  uint64_t tid;
+  std::string hhash;
+
+  template <class Archive>
+  void serialize(Archive& ar) {
+    ar(name, hash, pid, tid, hhash);
+  }
+};
+
 namespace helpers {
 uint64_t calc_time_range(uint64_t time, double time_granularity);
 std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
                         bool header = true);
+arrow::Status hlms_to_parquet(const std::vector<HighLevelMetrics>& hlms,
+                              const std::string& output_path);
 std::optional<TraceRecord> parse_trace_record(
     const dftracer::utils::json::OwnedJsonDocument& doc);
 }  // namespace helpers
@@ -567,6 +616,18 @@ inline auto compute_high_level_metrics(
             return hlm;
           })
       .repartition(partition_size);
+}
+
+enum class ViewType {
+  HLM,
+};
+
+template <typename Context, typename T, typename FallbackFunc>
+T restore_view(Context& ctx, const std::string& checkpoint_name,
+               FallbackFunc fallback, bool force = false,
+               bool write_to_disk = true, bool read_from_disk = false,
+               const std::vector<std::string>& view_types = {}) {
+  return T{};
 }
 }  // namespace pipeline
 

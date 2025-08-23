@@ -10,6 +10,10 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <parquet/arrow/writer.h>
+
 using namespace dftracer::utils::json;
 
 namespace dftracer {
@@ -384,6 +388,141 @@ std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
     csv_stream << std::endl;
   }
   return csv_stream.str();
+}
+
+arrow::Status hlms_to_parquet(const std::vector<HighLevelMetrics>& hlms,
+                              const std::string& output_path) {
+  if (hlms.empty()) {
+    return arrow::Status::OK();
+  }
+
+  // Build column arrays
+  arrow::StringBuilder proc_name_builder, cat_builder, epoch_builder,
+      acc_pat_builder, func_name_builder, io_cat_builder, time_range_builder;
+  arrow::DoubleBuilder time_builder;
+  arrow::UInt64Builder count_builder;
+  arrow::UInt64Builder size_builder;
+
+  // Size bin builders
+  std::vector<arrow::UInt32Builder> size_bin_builders(
+      constants::SIZE_BIN_SUFFIXES.size());
+
+  for (const auto& hlm : hlms) {
+    // Basic fields
+    std::string proc_name = hlm.group_values.count("proc_name")
+                                ? hlm.group_values.at("proc_name")
+                                : "";
+    std::string cat =
+        hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "";
+    std::string epoch =
+        hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : "";
+    std::string acc_pat =
+        hlm.group_values.count("acc_pat") ? hlm.group_values.at("acc_pat") : "";
+    std::string func_name = hlm.group_values.count("func_name")
+                                ? hlm.group_values.at("func_name")
+                                : "";
+    std::string io_cat =
+        hlm.group_values.count("io_cat") ? hlm.group_values.at("io_cat") : "";
+    std::string time_range = hlm.group_values.count("time_range")
+                                 ? hlm.group_values.at("time_range")
+                                 : "";
+
+    ARROW_RETURN_NOT_OK(proc_name_builder.Append(proc_name));
+    ARROW_RETURN_NOT_OK(cat_builder.Append(cat));
+    ARROW_RETURN_NOT_OK(epoch_builder.Append(epoch));
+    ARROW_RETURN_NOT_OK(acc_pat_builder.Append(acc_pat));
+    ARROW_RETURN_NOT_OK(func_name_builder.Append(func_name));
+    ARROW_RETURN_NOT_OK(io_cat_builder.Append(io_cat));
+    ARROW_RETURN_NOT_OK(time_range_builder.Append(time_range));
+
+    ARROW_RETURN_NOT_OK(time_builder.Append(hlm.time_sum));
+    ARROW_RETURN_NOT_OK(count_builder.Append(hlm.count_sum));
+
+    // Handle optional size_sum
+    if (hlm.size_sum.has_value()) {
+      ARROW_RETURN_NOT_OK(size_builder.Append(hlm.size_sum.value()));
+    } else {
+      ARROW_RETURN_NOT_OK(size_builder.AppendNull());
+    }
+
+    // Handle size bins
+    auto size_bins = generate_size_bins_vec();
+    for (size_t i = 0; i < size_bins.size(); ++i) {
+      if (hlm.bin_sums.count(size_bins[i]) &&
+          hlm.bin_sums.at(size_bins[i]).has_value()) {
+        ARROW_RETURN_NOT_OK(
+            size_bin_builders[i].Append(hlm.bin_sums.at(size_bins[i]).value()));
+      } else {
+        ARROW_RETURN_NOT_OK(size_bin_builders[i].AppendNull());
+      }
+    }
+  }
+
+  // Build arrays
+  std::shared_ptr<arrow::Array> proc_name_array, cat_array, epoch_array,
+      acc_pat_array, func_name_array, io_cat_array, time_range_array,
+      time_array, count_array, size_array;
+
+  ARROW_RETURN_NOT_OK(proc_name_builder.Finish(&proc_name_array));
+  ARROW_RETURN_NOT_OK(cat_builder.Finish(&cat_array));
+  ARROW_RETURN_NOT_OK(epoch_builder.Finish(&epoch_array));
+  ARROW_RETURN_NOT_OK(acc_pat_builder.Finish(&acc_pat_array));
+  ARROW_RETURN_NOT_OK(func_name_builder.Finish(&func_name_array));
+  ARROW_RETURN_NOT_OK(io_cat_builder.Finish(&io_cat_array));
+  ARROW_RETURN_NOT_OK(time_range_builder.Finish(&time_range_array));
+  ARROW_RETURN_NOT_OK(time_builder.Finish(&time_array));
+  ARROW_RETURN_NOT_OK(count_builder.Finish(&count_array));
+  ARROW_RETURN_NOT_OK(size_builder.Finish(&size_array));
+
+  // Build size bin arrays
+  std::vector<std::shared_ptr<arrow::Array>> size_bin_arrays(
+      constants::SIZE_BIN_SUFFIXES.size());
+  for (size_t i = 0; i < size_bin_builders.size(); ++i) {
+    ARROW_RETURN_NOT_OK(size_bin_builders[i].Finish(&size_bin_arrays[i]));
+  }
+
+  // Create schema
+  std::vector<std::shared_ptr<arrow::Field>> fields = {
+      arrow::field("proc_name", arrow::utf8()),
+      arrow::field("cat", arrow::utf8()),
+      arrow::field("epoch", arrow::utf8()),
+      arrow::field("acc_pat", arrow::utf8()),
+      arrow::field("func_name", arrow::utf8()),
+      arrow::field("io_cat", arrow::utf8()),
+      arrow::field("time_range", arrow::utf8()),
+      arrow::field("time", arrow::float64()),
+      arrow::field("count", arrow::uint64()),
+      arrow::field("size", arrow::uint64())};
+
+  // Add size bin fields
+  for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
+    fields.push_back(arrow::field(constants::SIZE_BIN_PREFIX + suffix,
+                                  arrow::uint32()));
+  }
+
+  auto schema = arrow::schema(fields);
+
+  // Create arrays vector
+  std::vector<std::shared_ptr<arrow::Array>> arrays = {
+      proc_name_array, cat_array,       epoch_array,    acc_pat_array,
+      func_name_array, io_cat_array,    time_range_array, time_array,
+      count_array,     size_array};
+
+  // Add size bin arrays
+  arrays.insert(arrays.end(), size_bin_arrays.begin(), size_bin_arrays.end());
+
+  // Create table
+  auto table = arrow::Table::Make(schema, arrays);
+
+  // Write to parquet file
+  std::shared_ptr<arrow::io::FileOutputStream> outfile;
+  ARROW_ASSIGN_OR_RAISE(outfile,
+                        arrow::io::FileOutputStream::Open(output_path));
+
+  ARROW_RETURN_NOT_OK(parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
+                                                 outfile, /*chunk_size=*/1024));
+
+  return arrow::Status::OK();
 }
 }  // namespace helpers
 

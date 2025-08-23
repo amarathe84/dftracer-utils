@@ -18,53 +18,6 @@ namespace analyzers {
 
 using namespace dftracer::utils::pipeline;
 
-struct TraceRecord;
-struct HighLevelMetrics;
-
-struct TraceRecord {
-  std::string cat;
-  std::string io_cat;
-  std::string acc_pat;
-  std::string func_name;
-  double duration;
-  uint64_t count;
-  uint64_t time_range;
-  uint64_t time_start;
-  uint64_t time_end;
-  uint64_t epoch;
-  uint64_t pid;
-  uint64_t tid;
-  std::string fhash;
-  std::string hhash;
-  uint64_t image_id;
-  uint8_t event_type;  // 0=regular, 1=file_hash, 2=host_hash, 3=string_hash,
-                       // 4=other_metadata
-  std::optional<uint64_t> size;
-  std::optional<uint64_t> offset;
-  std::unordered_map<std::string, std::string> view_fields;
-  std::unordered_map<std::string, std::optional<uint32_t>> bin_fields;
-
-  template <class Archive>
-  void serialize(Archive& ar) {
-    ar(cat, io_cat, acc_pat, func_name, duration, count, size, time_range,
-       time_start, time_end, epoch, pid, tid, fhash, hhash, image_id, offset,
-       event_type, view_fields, bin_fields);
-  }
-};
-
-struct HashEntry {
-  std::string name;
-  std::string hash;
-  uint64_t pid;
-  uint64_t tid;
-  std::string hhash;
-
-  template <class Archive>
-  void serialize(Archive& ar) {
-    ar(name, hash, pid, tid, hhash);
-  }
-};
-
 struct HighLevelMetrics {
   double time_sum = 0.0;
   uint64_t count_sum = 0;
@@ -106,12 +59,6 @@ class Analyzer {
       const std::unordered_map<std::string, std::string>& extra_columns = {}
       // @TODO: add extra_columns_fn
   );
-
-  template <typename T, typename FallbackFunc>
-  T restore_view(const std::string& checkpoint_name, FallbackFunc fallback,
-                 bool force = false, bool write_to_disk = true,
-                 bool read_from_disk = false,
-                 const std::vector<std::string>& view_types = {});
 
  protected:
   std::string get_checkpoint_name(const std::vector<std::string>& args) const;
