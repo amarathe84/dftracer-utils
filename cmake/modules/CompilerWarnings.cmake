@@ -55,11 +55,11 @@ function(target_set_warnings TARGET_NAME)
             -Wmissing-include-dirs  # Warn about missing include directories
             -Wnon-virtual-dtor      # Warn about non-virtual destructors
             -Wnull-dereference      # Warn about null pointer dereferences
-            -Wold-style-cast        # Warn about old-style casts
+            -Wno-old-style-cast     # Suppress warnings about old-style casts
             -Woverloaded-virtual    # Warn about overloaded virtual functions
             -Wredundant-decls       # Warn about redundant declarations
             -Wshadow                # Warn about variable shadowing
-            -Wsign-conversion       # Warn about sign conversions
+            -Wno-sign-conversion    # Suppress warnings about sign conversions
             # -Wswitch-default        # Warn about switch statements without default case
             # -Wswitch-enum         # Disabled: causes issues with spdlog/fmt library
             # -Wundef                 # Warn about undefined macros

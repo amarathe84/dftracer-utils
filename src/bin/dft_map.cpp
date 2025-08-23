@@ -2,7 +2,6 @@
 #include <dftracer/utils/config.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/pipeline/execution_context/threaded.h>
-#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/utils/logger.h>

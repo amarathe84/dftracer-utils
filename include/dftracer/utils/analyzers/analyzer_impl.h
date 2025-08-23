@@ -3,7 +3,7 @@
 
 #include <dftracer/utils/analyzers/constants.h>
 #include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/bag.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
 #include <spdlog/spdlog.h>
@@ -85,9 +85,6 @@ inline auto load_traces(Context& ctx, const std::vector<std::string>& traces,
       .repartition("32MB")  // Repartition for better load balancing
       .map_partitions([](const auto& partition) -> OwnedJsonDocuments {
         OwnedJsonDocuments results;
-        results.reserve(partition.size() *
-                        100);  // Estimate ~100 records per chunk
-
         spdlog::debug("Processing partition with {} work items on thread: {}",
                       partition.size(),
                       std::hash<std::thread::id>{}(std::this_thread::get_id()));
@@ -503,7 +500,7 @@ inline auto compute_high_level_metrics(
 
           // Aggregation function
           [hlm_groupby_set, view_types_diff](
-              const std::string& key,
+              const std::string&,
               const std::vector<TraceRecord>& records) -> HighLevelMetrics {
             HighLevelMetrics hlm;
 
@@ -566,9 +563,8 @@ inline auto compute_high_level_metrics(
 template <typename Context>
 AnalyzerResult Analyzer::analyze_trace(
     Context& ctx, const std::vector<std::string>& traces,
-    const std::vector<std::string>& view_types,
-    const std::vector<std::string>& exclude_characteristics,
-    const std::unordered_map<std::string, std::string>& extra_columns) {
+    const std::vector<std::string>& view_types, const std::vector<std::string>&,
+    const std::unordered_map<std::string, std::string>&) {
   try {
     // Ensure proc_name is included in view_types
     std::vector<std::string> proc_view_types = view_types;

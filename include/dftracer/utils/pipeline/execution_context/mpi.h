@@ -31,8 +31,8 @@ class MPIContext : public ExecutionContext<MPIContext> {
 
   ExecutionStrategy strategy() const override { return ExecutionStrategy::MPI; }
 
-  virtual int rank() const override { return rank_; }
-  virtual int size() const override { return size_; }
+  virtual size_t rank() const override { return static_cast<size_t>(rank_); }
+  virtual size_t size() const override { return static_cast<size_t>(size_); }
   MPI_Comm comm() const { return comm_; }
 
   template <typename T>

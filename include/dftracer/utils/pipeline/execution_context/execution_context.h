@@ -19,9 +19,9 @@ class ExecutionContext {
   virtual ~ExecutionContext() = default;
   virtual ExecutionStrategy strategy() const = 0;
 
-  virtual int rank() const { return 0; }
+  virtual size_t rank() const { return 0; }
 
-  virtual int size() const { return 1; }
+  virtual size_t size() const { return 1; }
 
   template <typename T, typename MapFunc>
   auto execute_map(const std::vector<T>& input, MapFunc&& func) const

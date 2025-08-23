@@ -804,7 +804,6 @@ class Reader::Impl {
       : gz_path_(gz_path),
         idx_path_(idx_path),
         is_open_(false),
-        is_indexer_initialized_internally_(true),
         default_buffer_size_(constants::DEFAULT_READER_BUFFER_SIZE) {
     try {
       indexer_ = new dftracer::utils::indexer::Indexer(gz_path, idx_path,
@@ -827,9 +826,9 @@ class Reader::Impl {
   }
 
   Impl(dftracer::utils::indexer::Indexer *indexer)
-      : indexer_(indexer),
-        is_indexer_initialized_internally_(false),
-        default_buffer_size_(constants::DEFAULT_READER_BUFFER_SIZE) {
+      : default_buffer_size_(constants::DEFAULT_READER_BUFFER_SIZE),
+        indexer_(indexer),
+        is_indexer_initialized_internally_(false) {
     if (!indexer_->is_valid()) {
       throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
                           "Invalid indexer provided");
@@ -853,11 +852,11 @@ class Reader::Impl {
       : gz_path_(std::move(other.gz_path_)),
         idx_path_(std::move(other.idx_path_)),
         is_open_(other.is_open_),
+        default_buffer_size_(other.default_buffer_size_),
         indexer_(std::move(other.indexer_)),
         session_factory_(std::move(other.session_factory_)),
         line_byte_session_(std::move(other.line_byte_session_)),
-        byte_session_(std::move(other.byte_session_)),
-        default_buffer_size_(other.default_buffer_size_) {
+        byte_session_(std::move(other.byte_session_)) {
     other.is_open_ = false;
   }
 

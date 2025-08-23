@@ -107,6 +107,8 @@ std::string get_args_string_field_owned(const OwnedJsonDocument& doc,
 std::ostream& operator<<(std::ostream& os, const JsonDocument& doc);
 std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
 
+std::ostream& operator<<(std::ostream& os, const OwnedJsonDocument& doc);
+std::ostream& operator<<(std::ostream& os, const OwnedJsonDocuments& docs);
 }  // namespace json
 }  // namespace utils
 }  // namespace dftracer
