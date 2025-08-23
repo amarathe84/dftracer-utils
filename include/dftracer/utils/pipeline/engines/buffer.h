@@ -7,7 +7,7 @@
 namespace dftracer {
 namespace utils {
 namespace pipeline {
-namespace engine {
+namespace engines {
 struct ConstBuffer {
   const void* data = nullptr;  // base pointer to the first element
   std::size_t count = 0;       // number of elements
@@ -32,7 +32,7 @@ template <class T>
 inline MutBuffer to_mut_buffer(std::vector<T>& v) {
   return MutBuffer{static_cast<void*>(v.data()), v.size(), sizeof(T), 0};
 }
-}  // namespace engine
+}  // namespace engines
 }  // namespace pipeline
 }  // namespace utils
 }  // namespace dftracer

@@ -8,6 +8,7 @@
 #include <dftracer/utils/pipeline/operators/operators.h>
 
 #include <cstddef>
+#include <cstring>
 #include <functional>
 #include <type_traits>
 #include <utility>
@@ -43,22 +44,22 @@ class Collection {
   auto begin() const noexcept { return data_.begin(); }
   auto end() const noexcept { return data_.end(); }
 
-  template <class MapFunc>
-  auto map(MapFunc fn) const
+  template <class Func>
+  auto map(Func fn) const
       -> Collection<std::decay_t<decltype(fn(std::declval<const T&>()))>> {
     context::SequentialContext seq;
     return map(fn, seq);
   }
 
-  template <class MapFunc>
-  auto map(MapFunc fn, context::ExecutionContext& ctx) const
+  template <class Func>
+  auto map(Func fn, context::ExecutionContext& ctx) const
       -> Collection<std::decay_t<decltype(fn(std::declval<const T&>()))>> {
     using U = std::decay_t<decltype(fn(std::declval<const T&>()))>;
     std::vector<U> out(data_.size());
     auto h = adapters::make_map_op<T, U>(fn);
-    auto in_buf = engine::to_const_buffer(data_);
-    auto out_buf = engine::to_mut_buffer(out);
-    engine::run_map(ctx, h.op, in_buf, out_buf);
+    auto in_buf = engines::to_const_buffer(data_);
+    auto out_buf = engines::to_mut_buffer(out);
+    engines::run_map(ctx, h.op, in_buf, out_buf);
     return Collection<U>(std::move(out));
   }
 
@@ -76,11 +77,36 @@ class Collection {
                   "copyable; add serde to support complex types.");
     std::vector<T> out(data_.size());
     auto h = adapters::make_filter_op<T>(pred);
-    auto in_buf = engine::to_const_buffer(data_);
-    auto out_buf = engine::to_mut_buffer(out);
-    const std::size_t kept = engine::run_filter(ctx, h.op, in_buf, out_buf);
+    auto in_buf = engines::to_const_buffer(data_);
+    auto out_buf = engines::to_mut_buffer(out);
+    const std::size_t kept = engines::run_filter(ctx, h.op, in_buf, out_buf);
     out.resize(kept);
     return Collection<T>(std::move(out));
+  }
+
+  // ---- flatmap: each element can emit zero or more outputs ----
+  // Emitter or transform forms supported via adapters. Caller specifies U.
+  template <class U, class Fn>
+  auto flatmap(Fn fn) const -> Collection<U> {
+    context::SequentialContext seq;
+    return flatmap<U>(std::move(fn), seq);
+  }
+
+  template <class U, class Fn>
+  auto flatmap(Fn fn, context::ExecutionContext& ctx) const -> Collection<U> {
+    static_assert(std::is_trivially_copyable_v<U>,
+                  "Collection::flatmap currently requires U to be trivially "
+                  "copyable; add serde to support complex types.");
+    // Build operator descriptor via adapters
+    auto h = adapters::make_flatmap_op<T, U>(std::move(fn));
+    // Execute and materialize bytes
+    auto in_buf = engines::to_const_buffer(data_);
+    std::vector<std::byte> out_bytes =
+        engines::run_flatmap_alloc(ctx, h.op, in_buf);
+    const std::size_t n = out_bytes.size() / sizeof(U);
+    std::vector<U> out(n);
+    if (n) std::memcpy(out.data(), out_bytes.data(), n * sizeof(U));
+    return Collection<U>(std::move(out));
   }
 
  private:

@@ -16,14 +16,14 @@ class ExecutionContext;
 namespace operators {
 class MapOperator;
 }
-namespace engine {
+namespace engines {
 void run_map(context::ExecutionContext& ctx, const operators::MapOperator& op,
              ConstBuffer in, MutBuffer out);
 std::vector<std::byte> run_map_alloc(context::ExecutionContext& ctx,
                                      const operators::MapOperator& op,
                                      ConstBuffer in);
 
-}  // namespace engine
+}  // namespace engines
 }  // namespace pipeline
 }  // namespace utils
 }  // namespace dftracer

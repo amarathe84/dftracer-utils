@@ -16,7 +16,7 @@ class ExecutionContext;
 namespace operators {
 class FilterOperator;
 }
-namespace engine {
+namespace engines {
 
 std::size_t run_filter(context::ExecutionContext& ctx,
                        const operators::FilterOperator& op, ConstBuffer in,
@@ -25,7 +25,7 @@ std::vector<std::byte> run_filter_alloc(context::ExecutionContext& ctx,
                                         const operators::FilterOperator& op,
                                         ConstBuffer in);
 
-}  // namespace engine
+}  // namespace engines
 }  // namespace pipeline
 }  // namespace utils
 }  // namespace dftracer

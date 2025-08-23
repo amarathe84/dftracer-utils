@@ -53,5 +53,53 @@ int main(int argc, char** argv) {
     std::cout << "\n";
   }
 
+  {
+    std::cout << "=== FlatMap example ===\n";
+
+    auto fm0 = Collection<int>::from_sequence(input);
+    auto fm1 = fm0.flatmap<int>(
+        [](int x) {
+          if (x % 2 == 0) return std::vector<int>{x, x * 10};
+          return std::vector<int>{};
+        },
+        ctx);
+    std::cout << "Eager/Collection flatmap result: ";
+    for (auto v : fm1.data()) std::cout << v << ' ';
+    std::cout << "\n";
+
+    auto lfm0 = LazyCollection<int>::from_sequence(input);
+    auto lfm1 = lfm0.flatmap<int>([](int x, auto emit) {
+      if (x % 2 == 1) emit(x);
+      emit(x * 100);
+    });
+    auto lfmres = lfm1.collect_local(ctx);
+    std::cout << "Lazy/LazyCollection flatmap result: ";
+    for (auto v : lfmres) std::cout << v << ' ';
+    std::cout << "\n";
+    std::cout << "\n";
+
+    std::cout << "Collection flatmap (vector-of-vector): ";
+
+    // FlatMap from vector-of-vectors
+    std::vector<std::vector<int>> nested{{1, 2}, {3, 4, 5}, {}, {6}};
+    auto fmv0 = Collection<std::vector<int>>::from_sequence(nested);
+    auto fmv1 = fmv0.flatmap<int>(
+        [](const std::vector<int>& xs) {
+          return xs;  // returning vector<int> flattens
+        },
+        ctx);
+    std::cout << "Eager/Collection flatmap (vector-of-vector) result: ";
+    for (auto v : fmv1.data()) std::cout << v << ' ';
+    std::cout << "\n";
+
+    auto lfmv0 = LazyCollection<std::vector<int>>::from_sequence(nested);
+    auto lfmv1 =
+        lfmv0.flatmap<int>([](const std::vector<int>& xs) { return xs; });
+    auto lfmvres = lfmv1.collect_local(ctx);
+    std::cout << "Lazy/LazyCollection flatmap (vector-of-vector) result: ";
+    for (auto v : lfmvres) std::cout << v << ' ';
+    std::cout << "\n";
+    std::cout << "\n";
+  }
   return 0;
 }

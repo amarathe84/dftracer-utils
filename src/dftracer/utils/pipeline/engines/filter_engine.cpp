@@ -15,7 +15,7 @@
 namespace dftracer {
 namespace utils {
 namespace pipeline {
-namespace engine {
+namespace engines {
 
 using operators::FilterOperator;
 
@@ -104,7 +104,7 @@ std::vector<std::byte> run_filter_alloc(context::ExecutionContext& ctx,
   return out_bytes;
 }
 
-}  // namespace engine
+}  // namespace engines
 }  // namespace pipeline
 }  // namespace utils
 }  // namespace dftracer

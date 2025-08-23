@@ -14,7 +14,7 @@
 namespace dftracer {
 namespace utils {
 namespace pipeline {
-namespace engine {
+namespace engines {
 
 using context::ExecutionContext;
 using operators::MapOperator;
@@ -80,7 +80,7 @@ std::vector<std::byte> run_map_alloc(ExecutionContext& ctx,
   return out_bytes;
 }
 
-}  // namespace engine
+}  // namespace engines
 }  // namespace pipeline
 }  // namespace utils
 }  // namespace dftracer

@@ -29,8 +29,8 @@ void run_unary(std::shared_ptr<std::vector<std::byte>>& cur_bytes,
   if (!cur_bytes) throw std::logic_error("unary op has no input bytes");
   const std::size_t count = cur_elem ? (cur_bytes->size() / cur_elem) : 0;
   std::vector<std::byte> out_bytes(count * out_elem_size);  // max capacity
-  engine::ConstBuffer in{cur_bytes->data(), count, cur_elem, 0};
-  engine::MutBuffer out{out_bytes.data(), count, out_elem_size, 0};
+  engines::ConstBuffer in{cur_bytes->data(), count, cur_elem, 0};
+  engines::MutBuffer out{out_bytes.data(), count, out_elem_size, 0};
 
   const std::size_t produced = produce_fn(in, out, count);
   const std::size_t max_cap =
@@ -51,6 +51,12 @@ template <class T>
 class LazyCollection {
  public:
   using value_type = T;
+
+  // Allow LazyCollection<U> methods to access private members of
+  // LazyCollection<T> so member functions that construct a LazyCollection<U>
+  // can assign to `res.plan_` and `res.node_`.
+  template <class>
+  friend class LazyCollection;
 
   LazyCollection() : plan_(std::make_shared<Planner>()), node_{} {}
 
@@ -115,6 +121,17 @@ class LazyCollection {
     return res;
   }
 
+  template <class U, class Fn>
+  LazyCollection<U> flatmap(Fn fn, double expansion_hint = -1.0) const {
+    auto h = adapters::make_flatmap_op<T, U>(std::move(fn), expansion_hint);
+    auto fop = std::make_unique<operators::FlatMapOperator>(h.op);
+    OutputLayout out{sizeof(U), true};
+    LazyCollection<U> res;
+    res.plan_ = plan_;
+    res.node_ = plan_->add_node(std::move(fop), {node_}, out, h.state);
+    return res;
+  }
+
   std::vector<T> collect_local(context::ExecutionContext& ctx) const {
     std::vector<NodeId> chain;
     for (NodeId cur = node_;;) {
@@ -140,9 +157,9 @@ class LazyCollection {
         case operators::Op::MAP: {
           auto* mop = static_cast<operators::MapOperator*>(node.op.get());
           run_unary(cur_bytes, cur_elem, node.out.elem_size,
-                    [&](const engine::ConstBuffer& in, engine::MutBuffer& out,
+                    [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
                         std::size_t /*count*/) -> std::size_t {
-                      engine::run_map(ctx, *mop, in, out);
+                      engines::run_map(ctx, *mop, in, out);
                       return in.count;  // map preserves cardinality
                     });
           break;
@@ -150,9 +167,18 @@ class LazyCollection {
         case operators::Op::FILTER: {
           auto* fop = static_cast<operators::FilterOperator*>(node.op.get());
           run_unary(cur_bytes, cur_elem, node.out.elem_size,
-                    [&](const engine::ConstBuffer& in, engine::MutBuffer& out,
+                    [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
                         std::size_t /*count*/) -> std::size_t {
-                      return engine::run_filter(ctx, *fop, in, out);
+                      return engines::run_filter(ctx, *fop, in, out);
+                    });
+          break;
+        }
+        case operators::Op::FLATMAP: {
+          auto* fop = static_cast<operators::FlatMapOperator*>(node.op.get());
+          run_unary(cur_bytes, cur_elem, node.out.elem_size,
+                    [&](const engines::ConstBuffer& in, engines::MutBuffer& out,
+                        std::size_t /*count*/) -> std::size_t {
+                      return engines::run_flatmap(ctx, *fop, in, out);
                     });
           break;
         }
