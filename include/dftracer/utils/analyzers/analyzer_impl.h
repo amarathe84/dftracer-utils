@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <map>
+#include <optional>
 
 namespace dftracer {
 namespace utils {
@@ -18,6 +19,15 @@ using namespace dftracer::utils::json;
 using namespace dftracer::utils::pipeline;
 
 namespace helpers {
+uint64_t calc_time_range(uint64_t time, double time_granularity);
+std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
+                        bool header = true);
+std::optional<TraceRecord> parse_trace_record(
+    const dftracer::utils::json::OwnedJsonDocument& doc);
+}  // namespace helpers
+
+namespace pipeline {
+namespace trace_reader {
 
 struct WorkInfo {
   std::string path;
@@ -40,9 +50,7 @@ struct FileMetadata {
   }
 };
 
-namespace trace_reader {
-
-// Pipeline stage 1: Get file metadata
+// Pipeline: Get file metadata
 template <typename Context>
 inline auto get_traces_metadata(Context& ctx,
                                 const std::vector<std::string>& traces) {
@@ -56,7 +64,7 @@ inline auto get_traces_metadata(Context& ctx,
       });
 }
 
-// Pipeline stage 2: Generate work chunks
+// Pipeline: Generate work chunks
 template <typename Context>
 inline auto generate_chunks(Context& ctx,
                             const std::vector<std::string>& traces,
@@ -77,7 +85,7 @@ inline auto generate_chunks(Context& ctx,
       });
 }
 
-// Pipeline stage 3: Read and parse JSON from chunks
+// Pipeline: Read and parse JSON from chunks
 template <typename Context>
 inline auto load_traces(Context& ctx, const std::vector<std::string>& traces,
                         size_t batch_size) {
@@ -112,7 +120,7 @@ inline auto load_traces(Context& ctx, const std::vector<std::string>& traces,
       });
 }
 
-// Pipeline stage 4: Parse JSON to TraceRecords with filtering
+// Pipeline: Parse JSON to TraceRecords with filtering
 template <typename Context>
 inline auto parse_and_filter_traces(Context& ctx,
                                     const std::vector<std::string>& traces,
@@ -131,7 +139,7 @@ inline auto parse_and_filter_traces(Context& ctx,
 
         for (const auto& doc : partition) {
           try {
-            auto record = parse_trace_record(doc);
+            auto record = helpers::parse_trace_record(doc);
 
             // check if optional
             if (!record) {
@@ -161,7 +169,7 @@ inline auto parse_and_filter_traces(Context& ctx,
       });
 }
 
-// Pass 1: Collect all hash mappings globally
+// Pipeline: Collect all hash mappings globally
 template <typename Context, typename BagType>
 inline auto collect_global_hash_mappings(Context& ctx,
                                          BagType&& trace_records) {
@@ -195,7 +203,7 @@ inline auto collect_global_hash_mappings(Context& ctx,
   return std::make_pair(std::move(file_hash_map), std::move(host_hash_map));
 }
 
-// Apply global hash mappings and filter events
+// Pipeline: Apply global hash mappings and filter events
 template <typename BagType>
 inline auto separate_events_and_hashes(
     BagType&& trace_records,
@@ -294,7 +302,7 @@ inline auto read_traces(Context& ctx, const std::vector<std::string>& traces,
                                                   host_hash_map);
 }
 
-// Timestamp normalization stage - find global minimum and normalize
+// Pipeline: Timestamp normalization stage - find global minimum and normalize
 template <typename Context, typename BagType>
 inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
                                           double time_resolution,
@@ -342,6 +350,7 @@ struct EpochSpanEntry {
   }
 };
 
+// Pipeline: Postread -- add epoch if needed
 template <typename Context, typename BagType>
 inline auto postread_trace(Context& ctx, BagType&& events,
                            const std::vector<std::string>& view_types,
@@ -359,7 +368,7 @@ inline auto postread_trace(Context& ctx, BagType&& events,
           .collect()
           .compute(ctx);
 
-  // Compute epoch spans from all collected events (same logic for all contexts)
+  // Compute epoch spans from all collected events
   std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans;
   std::map<uint64_t, std::vector<EpochSpanEntry>> epoch_groups;
 
@@ -434,6 +443,7 @@ inline auto postread_trace(Context& ctx, BagType&& events,
       });
 }
 
+// Pipeline: Compute high-level metrics
 template <typename BagType>
 inline auto compute_high_level_metrics(
     BagType&& trace_records, const std::vector<std::string>& view_types,
@@ -558,7 +568,7 @@ inline auto compute_high_level_metrics(
           })
       .repartition(partition_size);
 }
-}  // namespace helpers
+}  // namespace pipeline
 
 template <typename Context>
 AnalyzerResult Analyzer::analyze_trace(
@@ -575,20 +585,20 @@ AnalyzerResult Analyzer::analyze_trace(
     std::sort(proc_view_types.begin(), proc_view_types.end());
 
     // Step 1: Get trace events
-    auto events = helpers::read_traces(ctx, traces, checkpoint_size_,
-                                       proc_view_types, time_granularity_);
+    auto events = pipeline::read_traces(ctx, traces, checkpoint_size_,
+                                        proc_view_types, time_granularity_);
 
     // Step 2: Apply global timestamp normalization
-    auto normalized_events = helpers::normalize_timestamps_globally(
+    auto normalized_events = pipeline::normalize_timestamps_globally(
         ctx, events, constants::DEFAULT_TIME_RESOLUTION, time_granularity_);
 
     // Step 3: Post-process events
-    auto post_processed_events = helpers::postread_trace(
+    auto post_processed_events = pipeline::postread_trace(
         ctx, normalized_events, proc_view_types, time_granularity_);
 
     // Step 4: Compute high-level metrics on epoch-processed events
-    auto hlms = helpers::compute_high_level_metrics(post_processed_events,
-                                                    proc_view_types, "128MB")
+    auto hlms = pipeline::compute_high_level_metrics(post_processed_events,
+                                                     proc_view_types, "128MB")
                     .flatmap([&](const auto& container) { return container; })
                     .compute(ctx);
 

@@ -21,14 +21,6 @@ using namespace dftracer::utils::pipeline;
 struct TraceRecord;
 struct HighLevelMetrics;
 
-namespace helpers {
-std::optional<TraceRecord> parse_trace_record(
-    const dftracer::utils::json::OwnedJsonDocument& doc);
-uint64_t calc_time_range(uint64_t time, double time_granularity);
-std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
-                        bool header = true);
-}  // namespace helpers
-
 struct TraceRecord {
   std::string cat;
   std::string io_cat;
