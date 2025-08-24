@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_ANALYZERS_CONSTANTS_H
 
 #include <limits>
+#include <ostream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
