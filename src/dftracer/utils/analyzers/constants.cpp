@@ -1,6 +1,7 @@
 #include "dftracer/utils/analyzers/constants.h"
 
 #include <limits>
+#include <string>
 
 namespace dftracer::utils::analyzers::constants {
 std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat) {
