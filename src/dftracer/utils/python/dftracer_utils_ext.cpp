@@ -1,7 +1,5 @@
 #include <nanobind/nanobind.h>
 
-#include "json_ext.h"
-
 namespace nb = nanobind;
 using namespace nb::literals;
 
@@ -13,8 +11,6 @@ void register_json(nb::module_& m);
 
 NB_MODULE(dftracer_utils_ext, m) {
   m.doc() = "DFTracer utilities extension";
-
-  // Register all functionality
   register_json(m);
   register_indexer(m);
   register_reader(m);

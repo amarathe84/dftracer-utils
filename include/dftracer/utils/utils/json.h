@@ -2,10 +2,10 @@
 #define DFTRACER_UTILS_UTILS_JSON_H
 
 #include <simdjson.h>
-#include <cstdio>
-#include <iostream>
 
+#include <cstdio>
 #include <iosfwd>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>

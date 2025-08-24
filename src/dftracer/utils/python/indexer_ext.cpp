@@ -8,7 +8,6 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-// DFTracerIndexer class implementation
 DFTracerIndexer::DFTracerIndexer(const std::string &gz_path,
                                  const std::optional<std::string> &idx_path,
                                  size_t checkpoint_size, bool force_rebuild)
@@ -125,9 +124,7 @@ dftracer::utils::indexer::Indexer *DFTracerIndexer::get_indexer_ptr() const {
 
 DFTracerIndexer &DFTracerIndexer::__enter__() { return *this; }
 
-bool DFTracerIndexer::__exit__(nanobind::args args) {
-  return false;  // Don't suppress exceptions
-}
+bool DFTracerIndexer::__exit__(nanobind::args args) { return false; }
 
 void register_indexer(nb::module_ &m) {
   nb::class_<dftracer::utils::indexer::CheckpointInfo>(m, "CheckpointInfo")
@@ -188,7 +185,4 @@ void register_indexer(nb::module_ &m) {
       .def("__enter__", &DFTracerIndexer::__enter__,
            nb::rv_policy::reference_internal, "Enter context manager")
       .def("__exit__", &DFTracerIndexer::__exit__, "Exit context manager");
-
-  // Alias DFTracerIndexer as DFTracerIndexer for common use
-  m.attr("DFTracerIndexer") = m.attr("DFTracerIndexer");
 }

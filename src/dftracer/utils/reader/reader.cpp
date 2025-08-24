@@ -1,7 +1,7 @@
+#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/platform_compat.h>
-#include <dftracer/utils/common/logging.h>
 #include <zlib.h>
 
 #include <algorithm>
@@ -124,7 +124,8 @@ class CompressionManager {
     }
 
     if (fseeko(f, static_cast<off_t>(c_off), SEEK_SET) != 0) {
-      DFTRACER_UTILS_LOG_ERROR("Failed to seek to compressed offset: %zu", c_off);
+      DFTRACER_UTILS_LOG_ERROR("Failed to seek to compressed offset: %zu",
+                               c_off);
       inflateEnd(&state->zs);
       return -1;
     }
@@ -145,7 +146,8 @@ class CompressionManager {
         size_t n = fread(state->in, 1, sizeof(state->in), state->file);
         if (n == 0) {
           if (ferror(state->file)) {
-            DFTRACER_UTILS_LOG_ERROR("Error reading from file during inflate_read");
+            DFTRACER_UTILS_LOG_ERROR(
+                "Error reading from file during inflate_read");
             return -1;
           }
           break;  // EOF
@@ -160,7 +162,7 @@ class CompressionManager {
       }
       if (ret != Z_OK) {
         DFTRACER_UTILS_LOG_DEBUG("inflate() failed with error: %d (%s)", ret,
-                      state->zs.msg ? state->zs.msg : "no message");
+                                 state->zs.msg ? state->zs.msg : "no message");
         return -1;
       }
     }
@@ -335,13 +337,14 @@ class BaseStreamingSession {
     state->c_off = checkpoint->c_offset;
     state->bits = checkpoint->bits;
 
-    DFTRACER_UTILS_LOG_DEBUG("Checkpoint c_offset: %zu, bits: %d", checkpoint->c_offset,
-                  checkpoint->bits);
+    DFTRACER_UTILS_LOG_DEBUG("Checkpoint c_offset: %zu, bits: %d",
+                             checkpoint->c_offset, checkpoint->bits);
 
     off_t seek_pos =
         static_cast<off_t>(checkpoint->c_offset) - (checkpoint->bits ? 1 : 0);
     if (fseeko(f, seek_pos, SEEK_SET) != 0) {
-      DFTRACER_UTILS_LOG_ERROR("Failed to seek to checkpoint position: %lld", (long long)seek_pos);
+      DFTRACER_UTILS_LOG_ERROR("Failed to seek to checkpoint position: %lld",
+                               (long long)seek_pos);
       return -1;
     }
 
@@ -367,10 +370,10 @@ class BaseStreamingSession {
     if (checkpoint->bits != 0) {
       int prime_value = ch >> (8 - checkpoint->bits);
       DFTRACER_UTILS_LOG_DEBUG("Applying inflatePrime with %d bits, value: %d",
-                    checkpoint->bits, prime_value);
+                               checkpoint->bits, prime_value);
       if (inflatePrime(&state->zs, checkpoint->bits, prime_value) != Z_OK) {
         DFTRACER_UTILS_LOG_ERROR("inflatePrime failed with %d bits, value: %d",
-                      checkpoint->bits, prime_value);
+                                 checkpoint->bits, prime_value);
         inflateEnd(&state->zs);
         return -1;
       }
@@ -397,7 +400,8 @@ class BaseStreamingSession {
       state->zs.next_in = state->in;
       state->zs.avail_in = static_cast<uInt>(n);
     } else if (ferror(state->file)) {
-      DFTRACER_UTILS_LOG_ERROR("Error reading from file during checkpoint initialization");
+      DFTRACER_UTILS_LOG_ERROR(
+          "Error reading from file during checkpoint initialization");
       return -1;
     }
 
@@ -410,7 +414,8 @@ class BaseStreamingSession {
     memset(&zs, 0, sizeof(zs));
 
     if (inflateInit(&zs) != Z_OK) {
-      DFTRACER_UTILS_LOG_ERROR("Failed to initialize inflate for window decompression");
+      DFTRACER_UTILS_LOG_ERROR(
+          "Failed to initialize inflate for window decompression");
       return -1;
     }
 
@@ -644,8 +649,9 @@ class LineByteStreamingSession : public BaseStreamingSession {
         for (int64_t i = static_cast<int64_t>(relative_target); i >= 0; i--) {
           if (i == 0 || search_buffer[i - 1] == '\n') {
             actual_start = current_pos + static_cast<size_t>(i);
-            DFTRACER_UTILS_LOG_DEBUG("Found JSON line start at position %zu (requested %zu)",
-                          actual_start, target_start);
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Found JSON line start at position %zu (requested %zu)",
+                actual_start, target_start);
             break;
           }
         }
@@ -715,8 +721,9 @@ class ByteStreamingSession : public BaseStreamingSession {
       skip_to_position(start_bytes);
     }
 
-    DFTRACER_UTILS_LOG_DEBUG("Raw streaming session initialized: start=%zu, target_end=%zu",
-                  start_bytes, end_bytes);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Raw streaming session initialized: start=%zu, target_end=%zu",
+        start_bytes, end_bytes);
   }
 
   size_t stream_chunk(char *buffer, size_t buffer_size) override {
@@ -749,8 +756,8 @@ class ByteStreamingSession : public BaseStreamingSession {
 
     current_position_ += bytes_read;
 
-    DFTRACER_UTILS_LOG_DEBUG("Raw streamed %zu bytes (position: %zu / %zu)", bytes_read,
-                  current_position_, target_end_bytes_);
+    DFTRACER_UTILS_LOG_DEBUG("Raw streamed %zu bytes (position: %zu / %zu)",
+                             bytes_read, current_position_, target_end_bytes_);
 
     return bytes_read;
   }
@@ -814,8 +821,9 @@ class Reader::Impl {
 
       session_factory_ = std::make_unique<StreamingSessionFactory>(*indexer_);
 
-      DFTRACER_UTILS_LOG_DEBUG("Successfully created DFT reader for gz: %s and index: %s",
-                    gz_path.c_str(), idx_path.c_str());
+      DFTRACER_UTILS_LOG_DEBUG(
+          "Successfully created DFT reader for gz: %s and index: %s",
+          gz_path.c_str(), idx_path.c_str());
     } catch (const std::exception &e) {
       throw Reader::Error(
           Reader::Error::INITIALIZATION_ERROR,
@@ -1037,8 +1045,9 @@ class Reader::Impl {
  private:
   std::string read_lines_from_beginning(size_t start_line, size_t end_line) {
     size_t max_bytes = indexer_->get_max_bytes();
-    DFTRACER_UTILS_LOG_DEBUG("Reading lines [%zu, %zu] from file beginning (max bytes: %zu)",
-                  start_line, end_line, max_bytes);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Reading lines [%zu, %zu] from file beginning (max bytes: %zu)",
+        start_line, end_line, max_bytes);
 
     // Always create a fresh session for line reading
     line_byte_session_ =
@@ -1239,7 +1248,8 @@ dft_reader_handle_t dft_reader_create_with_indexer(
         static_cast<dftracer::utils::indexer::Indexer *>(indexer));
     return static_cast<dft_reader_handle_t>(reader);
   } catch (const std::exception &e) {
-    DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader with indexer: %s", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader with indexer: %s",
+                             e.what());
     return nullptr;
   }
 }

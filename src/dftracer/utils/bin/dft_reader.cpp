@@ -1,10 +1,9 @@
 #include <dftracer/utils/common/config.h>
+#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
-#include <dftracer/utils/utils/logger.h>
 #include <dftracer/utils/utils/platform_compat.h>
-#include <dftracer/utils/common/logging.h>
 
 #include <algorithm>
 #include <argparse/argparse.hpp>
@@ -79,8 +78,9 @@ int main(int argc, char **argv) {
   DFTRACER_UTILS_LOG_DEBUG("End position: %lld", (long long)end);
   DFTRACER_UTILS_LOG_DEBUG("Mode: %s", read_mode.c_str());
   DFTRACER_UTILS_LOG_DEBUG("Checkpoint size: %zu B (%zu MB)", checkpoint_size,
-                checkpoint_size / (1024 * 1024));
-  DFTRACER_UTILS_LOG_DEBUG("Force rebuild: %s", force_rebuild ? "true" : "false");
+                           checkpoint_size / (1024 * 1024));
+  DFTRACER_UTILS_LOG_DEBUG("Force rebuild: %s",
+                           force_rebuild ? "true" : "false");
 
   if (checkpoint_size <= 0) {
     DFTRACER_UTILS_LOG_ERROR(
@@ -90,7 +90,8 @@ int main(int argc, char **argv) {
 
   FILE *test_file = fopen(gz_path.c_str(), "rb");
   if (!test_file) {
-    DFTRACER_UTILS_LOG_ERROR("File '%s' does not exist or cannot be opened", gz_path.c_str());
+    DFTRACER_UTILS_LOG_ERROR("File '%s' does not exist or cannot be opened",
+                             gz_path.c_str());
     return 1;
   }
   fclose(test_file);
@@ -129,14 +130,15 @@ int main(int argc, char **argv) {
           end_line = reader.get_num_lines();
         }
 
-        DFTRACER_UTILS_LOG_DEBUG("Reading lines from %lld to %zu", (long long)start, end_line);
+        DFTRACER_UTILS_LOG_DEBUG("Reading lines from %lld to %zu",
+                                 (long long)start, end_line);
 
         auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
         fwrite(lines.data(), 1, lines.size(), stdout);
         size_t line_count =
-            static_cast<size_t>(std::count(lines.begin(), lines.end(),
-            '\n'));
-        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu lines from range", line_count);
+            static_cast<size_t>(std::count(lines.begin(), lines.end(), '\n'));
+        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu lines from range",
+                                 line_count);
       } else {
         size_t start_bytes_ = static_cast<size_t>(start);
         size_t end_bytes_ = end == -1 ? std::numeric_limits<size_t>::max()
@@ -147,7 +149,8 @@ int main(int argc, char **argv) {
           end_bytes_ = max_bytes;
         }
         DFTRACER_UTILS_LOG_DEBUG("Performing byte range read operation");
-        DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes", read_buffer_size);
+        DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes",
+                                 read_buffer_size);
         auto buffer = std::make_unique<char[]>(read_buffer_size);
         size_t bytes_written;
         size_t total_bytes = 0;
@@ -163,7 +166,8 @@ int main(int argc, char **argv) {
           total_bytes += bytes_written;
         }
 
-        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu bytes from range", total_bytes);
+        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu bytes from range",
+                                 total_bytes);
       }
       fflush(stdout);
     } catch (const std::runtime_error &e) {

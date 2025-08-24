@@ -24,7 +24,6 @@ class TestDFTracerBytesReader:
         assert hasattr(dft_utils, 'DFTracerBytesRangeIterator')
         assert hasattr(dft_utils, 'DFTracerLinesRangeIterator')
         assert hasattr(dft_utils, 'dft_reader_range')
-        assert hasattr(dft_utils, 'set_log_level')
     
     def test_bytes_reader_creation_nonexistent_file(self):
         """Test bytes reader creation with non-existent file"""
@@ -215,32 +214,6 @@ class TestDFTracerBytesReader:
                 assert max_bytes > 0
             
             # Reader should be cleaned up after exiting with block
-    
-    def test_log_level_functions(self):
-        """Test log level functions"""
-        # Test string-based log level
-        dft_utils.set_log_level("info")
-        
-        # Test integer-based log level  
-        dft_utils.set_log_level_int(2)  # info level
-        
-        # Test getting log levels
-        level_str = dft_utils.get_log_level_string()
-        level_int = dft_utils.get_log_level_int()
-        
-        assert isinstance(level_str, str)
-        assert isinstance(level_int, int)
-        assert level_int >= 0
-        
-        # Test various log levels
-        assert dft_utils.set_log_level_int(0) == 0  # trace
-        assert dft_utils.get_log_level_string() == "trace"
-        
-        assert dft_utils.set_log_level_int(1) == 0  # debug
-        assert dft_utils.get_log_level_string() == "debug"
-        
-        assert dft_utils.set_log_level_int(2) == 0  # info
-        assert dft_utils.get_log_level_string() == "info"
 
     def test_bytes_vs_line_read_functionality(self):
         """Test bytes vs line read functionality"""

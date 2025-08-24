@@ -29,7 +29,6 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/file.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/logger.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
 
   # pipeline
@@ -54,8 +53,8 @@ set_target_properties(dftracer_utils PROPERTIES
     OUTPUT_NAME dftracer_utils
 )
 target_link_libraries(dftracer_utils 
-    PRIVATE picosha2 cpp-logger
-    PUBLIC ghc_filesystem simdjson::simdjson_static
+    PRIVATE picosha2
+    PUBLIC ghc_filesystem simdjson::simdjson_static cpp-logger
 )
 # add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
@@ -93,8 +92,8 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dftracer_utils_shared 
-    PRIVATE picosha2 cpp-logger
-    PUBLIC ghc_filesystem simdjson::simdjson
+    PRIVATE picosha2
+    PUBLIC ghc_filesystem simdjson::simdjson cpp-logger
 )
 # add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
@@ -332,13 +331,28 @@ if (SKBUILD)
   endif()
 
   set(PYTHON_BINDINGS_SOURCES
-    python/dftracer_utils_ext.cpp
-    python/indexer_ext.h 
-    python/indexer_ext.cpp
-    python/reader_ext.cpp
-    python/utils_ext.cpp
-    python/json_ext.h
-    python/json_ext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/dftracer_utils_ext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer_ext.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer_ext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/reader_ext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/utils_ext.cpp
+
+    # json
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array_iterator.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array_iterator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/document.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/document.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/helpers.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/helpers.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/items_iterator.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/items_iterator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/keys_iterator.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/keys_iterator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/values_iterator.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/values_iterator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json_ext.cpp
   )
 
   if (APPLE)

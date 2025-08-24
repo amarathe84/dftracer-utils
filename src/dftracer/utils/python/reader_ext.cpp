@@ -1,4 +1,6 @@
 #include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/python/indexer_ext.h>
+#include <dftracer/utils/python/json/helpers.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <dftracer/utils/utils/json.h>
@@ -14,9 +16,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-#include "indexer_ext.h"
-#include "json_ext.h"
 
 namespace nb = nanobind;
 
@@ -847,6 +846,5 @@ void register_reader(nb::module_ &m) {
         "Create a range iterator with specified mode ('line_bytes', 'bytes', "
         "or 'lines')");
 
-  // Alias DFTracerLineBytesReader as DFTracerReader for common use
   m.attr("DFTracerReader") = m.attr("DFTracerLineBytesReader");
 }
