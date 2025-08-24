@@ -13,7 +13,6 @@ struct OpHandler {
   std::shared_ptr<void> state;
 };
 
-
 namespace detail {
 template <class Out>
 struct EmitProbe {

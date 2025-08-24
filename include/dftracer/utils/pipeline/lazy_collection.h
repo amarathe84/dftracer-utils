@@ -160,7 +160,8 @@ class LazyCollection {
   //   - void(const PartitionInfo&, const T* data, size_t n, auto emit)
   //   - std::vector<U>(const PartitionInfo&, const T* data, size_t n)
   //   - std::initializer_list<U>(const PartitionInfo&, const T* data, size_t n)
-  //   - std::pair<const U*, size_t>(const PartitionInfo&, const T* data, size_t n)
+  //   - std::pair<const U*, size_t>(const PartitionInfo&, const T* data, size_t
+  //   n)
   template <class U, class Fn>
   LazyCollection<U> map_partitions(Fn fn) const {
     auto h = adapters::make_map_partitions_op<T, U>(std::move(fn));
@@ -206,7 +207,8 @@ class LazyCollection {
           break;
         }
         case operators::Op::MAP_PARTITIONS: {
-          auto* mpop = static_cast<operators::MapPartitionsOperator*>(node.op.get());
+          auto* mpop =
+              static_cast<operators::MapPartitionsOperator*>(node.op.get());
           run_unary_unbounded(
               cur_bytes, cur_elem, node.out.elem_size,
               [&](const engines::ConstBuffer& in) -> std::vector<std::byte> {

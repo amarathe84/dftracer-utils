@@ -92,7 +92,8 @@ int main(int argc, char** argv) {
     for (auto v : fmv1.data()) std::cout << v << ' ';
     std::cout << "\n";
 
-    LazyCollection<std::vector<int>> lfmv0 = LazyCollection<std::vector<int>>::from_sequence(nested);
+    LazyCollection<std::vector<int>> lfmv0 =
+        LazyCollection<std::vector<int>>::from_sequence(nested);
     LazyCollection<int> lfmv1 =
         lfmv0.flatmap<int>([](const std::vector<int>& xs) { return xs; });
     std::vector<int> lfmvres = lfmv1.collect_local(ctx);
@@ -102,7 +103,6 @@ int main(int argc, char** argv) {
     std::cout << "\n";
   }
 
-  
   {
     std::cout << "=== MapPartitions example ===\n";
 

@@ -112,7 +112,8 @@ class Collection {
   //   - void(const PartitionInfo&, const T* data, size_t n, auto emit)
   //   - std::vector<U>(const PartitionInfo&, const T* data, size_t n)
   //   - std::initializer_list<U>(const PartitionInfo&, const T* data, size_t n)
-  //   - std::pair<const U*, size_t>(const PartitionInfo&, const T* data, size_t n)
+  //   - std::pair<const U*, size_t>(const PartitionInfo&, const T* data, size_t
+  //   n)
   template <class U, class Fn>
   auto map_partitions(Fn fn) const -> Collection<U> {
     context::SequentialContext seq;
@@ -120,9 +121,11 @@ class Collection {
   }
 
   template <class U, class Fn>
-  auto map_partitions(Fn fn, context::ExecutionContext& ctx) const -> Collection<U> {
+  auto map_partitions(Fn fn, context::ExecutionContext& ctx) const
+      -> Collection<U> {
     static_assert(std::is_trivially_copyable_v<U>,
-                  "Collection::map_partitions currently requires U to be trivially copyable.");
+                  "Collection::map_partitions currently requires U to be "
+                  "trivially copyable.");
     auto h = adapters::make_map_partitions_op<T, U>(std::move(fn));
     engines::ConstBuffer in_buf{static_cast<const void*>(data_.data()),
                                 data_.size(), sizeof(T), 0};
