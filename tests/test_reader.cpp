@@ -30,7 +30,7 @@ TEST_CASE("C++ Indexer - Basic functionality") {
       dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
                                                 mb_to_b(1.0));
       CHECK(indexer.is_valid());
-    }  // indexer automatically destroyed here
+    }
 
     // Should be able to create another one
     dftracer::utils::indexer::Indexer indexer2(gz_file, idx_file, mb_to_b(1.0));
@@ -99,7 +99,7 @@ TEST_CASE("C++ Reader - Basic functionality") {
       dftracer::utils::reader::Reader reader(gz_file, idx_file);
       CHECK(reader.is_valid());
       CHECK(reader.get_gz_path() == gz_file);
-    }  // reader automatically destroyed here
+    }
 
     // Should be able to create another one
     dftracer::utils::reader::Reader reader2(gz_file, idx_file);

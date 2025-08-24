@@ -69,7 +69,7 @@ if (MPI_FOUND)
 endif()
 
 if (DFTRACER_UTILS_DEBUG)
-  configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_confi.dbg.h.in"
+  configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.dbg.h.in"
                  "${CMAKE_BINARY_DIR}/include/dftracer/utils/common/config.h" @ONLY)
 else()
   configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.h.in"

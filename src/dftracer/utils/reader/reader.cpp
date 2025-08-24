@@ -124,7 +124,7 @@ class CompressionManager {
     }
 
     if (fseeko(f, static_cast<off_t>(c_off), SEEK_SET) != 0) {
-      spdlog::error("Failed to seek to compressed offset: {}", c_off);
+      DFTRACER_UTILS_LOG_ERROR("Failed to seek to compressed offset: %zu", c_off);
       inflateEnd(&state->zs);
       return -1;
     }
@@ -145,7 +145,7 @@ class CompressionManager {
         size_t n = fread(state->in, 1, sizeof(state->in), state->file);
         if (n == 0) {
           if (ferror(state->file)) {
-            spdlog::error("Error reading from file during inflate_read");
+            DFTRACER_UTILS_LOG_ERROR("Error reading from file during inflate_read");
             return -1;
           }
           break;  // EOF
@@ -159,7 +159,7 @@ class CompressionManager {
         break;
       }
       if (ret != Z_OK) {
-        spdlog::debug("inflate() failed with error: {} ({})", ret,
+        DFTRACER_UTILS_LOG_DEBUG("inflate() failed with error: %d (%s)", ret,
                       state->zs.msg ? state->zs.msg : "no message");
         return -1;
       }
@@ -297,9 +297,9 @@ class BaseStreamingSession {
       if (indexer.find_checkpoint(0, *checkpoint_)) {
         if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
                                          checkpoint_.get()) == 0) {
-          spdlog::debug(
-              "Using first checkpoint at uncompressed offset {} for early "
-              "target {}",
+          DFTRACER_UTILS_LOG_DEBUG(
+              "Using first checkpoint at uncompressed offset %zu for early "
+              "target %zu",
               checkpoint_->uc_offset, start_bytes);
           return true;
         }
@@ -308,8 +308,8 @@ class BaseStreamingSession {
       if (indexer.find_checkpoint(start_bytes, *checkpoint_)) {
         if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
                                          checkpoint_.get()) == 0) {
-          spdlog::debug(
-              "Using checkpoint at uncompressed offset {} for target {}",
+          DFTRACER_UTILS_LOG_DEBUG(
+              "Using checkpoint at uncompressed offset %zu for target %zu",
               checkpoint_->uc_offset, start_bytes);
           return true;
         }
@@ -335,13 +335,13 @@ class BaseStreamingSession {
     state->c_off = checkpoint->c_offset;
     state->bits = checkpoint->bits;
 
-    spdlog::debug("Checkpoint c_offset: {}, bits: {}", checkpoint->c_offset,
+    DFTRACER_UTILS_LOG_DEBUG("Checkpoint c_offset: %zu, bits: %d", checkpoint->c_offset,
                   checkpoint->bits);
 
     off_t seek_pos =
         static_cast<off_t>(checkpoint->c_offset) - (checkpoint->bits ? 1 : 0);
     if (fseeko(f, seek_pos, SEEK_SET) != 0) {
-      spdlog::error("Failed to seek to checkpoint position: {}", seek_pos);
+      DFTRACER_UTILS_LOG_ERROR("Failed to seek to checkpoint position: %lld", (long long)seek_pos);
       return -1;
     }
 
@@ -349,7 +349,7 @@ class BaseStreamingSession {
     if (checkpoint->bits != 0) {
       ch = fgetc(f);
       if (ch == EOF) {
-        spdlog::error("Failed to read byte at checkpoint position");
+        DFTRACER_UTILS_LOG_ERROR("Failed to read byte at checkpoint position");
         return -1;
       }
     }
@@ -366,10 +366,10 @@ class BaseStreamingSession {
 
     if (checkpoint->bits != 0) {
       int prime_value = ch >> (8 - checkpoint->bits);
-      spdlog::debug("Applying inflatePrime with {} bits, value: {}",
+      DFTRACER_UTILS_LOG_DEBUG("Applying inflatePrime with %d bits, value: %d",
                     checkpoint->bits, prime_value);
       if (inflatePrime(&state->zs, checkpoint->bits, prime_value) != Z_OK) {
-        spdlog::error("inflatePrime failed with {} bits, value: {}",
+        DFTRACER_UTILS_LOG_ERROR("inflatePrime failed with %d bits, value: %d",
                       checkpoint->bits, prime_value);
         inflateEnd(&state->zs);
         return -1;
@@ -387,7 +387,7 @@ class BaseStreamingSession {
 
     if (inflateSetDictionary(&state->zs, window,
                              static_cast<uInt>(window_size)) != Z_OK) {
-      spdlog::error("inflateSetDictionary failed");
+      DFTRACER_UTILS_LOG_ERROR("inflateSetDictionary failed");
       inflateEnd(&state->zs);
       return -1;
     }
@@ -397,7 +397,7 @@ class BaseStreamingSession {
       state->zs.next_in = state->in;
       state->zs.avail_in = static_cast<uInt>(n);
     } else if (ferror(state->file)) {
-      spdlog::error("Error reading from file during checkpoint initialization");
+      DFTRACER_UTILS_LOG_ERROR("Error reading from file during checkpoint initialization");
       return -1;
     }
 
@@ -410,7 +410,7 @@ class BaseStreamingSession {
     memset(&zs, 0, sizeof(zs));
 
     if (inflateInit(&zs) != Z_OK) {
-      spdlog::error("Failed to initialize inflate for window decompression");
+      DFTRACER_UTILS_LOG_ERROR("Failed to initialize inflate for window decompression");
       return -1;
     }
 
@@ -421,8 +421,8 @@ class BaseStreamingSession {
 
     int ret = inflate(&zs, Z_FINISH);
     if (ret != Z_STREAM_END) {
-      spdlog::error(
-          "inflate failed during window decompression with error: {} ({})", ret,
+      DFTRACER_UTILS_LOG_ERROR(
+          "inflate failed during window decompression with error: %d (%s)", ret,
           zs.msg ? zs.msg : "no message");
       inflateEnd(&zs);
       return -1;
@@ -453,9 +453,9 @@ class LineByteStreamingSession : public BaseStreamingSession {
   void initialize(const std::string &gz_path, size_t start_bytes,
                   size_t end_bytes,
                   dftracer::utils::indexer::Indexer &indexer) override {
-    spdlog::debug(
-        "Initializing JSON streaming session for range [{}, {}] from {}",
-        start_bytes, end_bytes, gz_path);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Initializing JSON streaming session for range [%zu, %zu] from %s",
+        start_bytes, end_bytes, gz_path.c_str());
 
     initialize_base(gz_path, start_bytes, end_bytes);
     current_position_ = start_bytes;
@@ -465,8 +465,8 @@ class LineByteStreamingSession : public BaseStreamingSession {
     actual_start_bytes_ = find_line_start(start_bytes);
     current_position_ = actual_start_bytes_;
 
-    spdlog::debug(
-        "JSON streaming session initialized: actual_start={}, target_end={}",
+    DFTRACER_UTILS_LOG_DEBUG(
+        "JSON streaming session initialized: actual_start=%zu, target_end=%zu",
         actual_start_bytes_, end_bytes);
   }
 
@@ -519,9 +519,9 @@ class LineByteStreamingSession : public BaseStreamingSession {
       }
     }
 
-    spdlog::trace(
-        "Read {} bytes from compressed stream, partial_buffer_size={}, "
-        "current_position={}, target_end={}",
+    DFTRACER_UTILS_LOG_TRACE_FORMAT(
+        "Read %zu bytes from compressed stream, partial_buffer_size=%zu, "
+        "current_position=%zu, target_end=%zu",
         bytes_read, partial_line_buffer_.size(), current_position_,
         target_end_bytes_);
 
@@ -532,7 +532,7 @@ class LineByteStreamingSession : public BaseStreamingSession {
     current_position_ += bytes_read;
 
     if (adjusted_size == 0) {
-      spdlog::error(
+      DFTRACER_UTILS_LOG_ERROR(
           "No complete line found, need to read more data, try increasing the "
           "end bytes");
       is_finished_ = true;
@@ -545,9 +545,9 @@ class LineByteStreamingSession : public BaseStreamingSession {
 
     if ((target_end_bytes_ - start_bytes_) >
         constants::LARGE_RANGE_LOG_THRESHOLD) {
-      spdlog::trace(
-          "Large range read: returning {} bytes, current_pos={}, "
-          "target_end={}, range_size={}",
+      DFTRACER_UTILS_LOG_TRACE_FORMAT(
+          "Large range read: returning %zu bytes, current_pos=%zu, "
+          "target_end=%zu, range_size=%zu",
           adjusted_size, current_position_, target_end_bytes_,
           target_end_bytes_ - start_bytes_);
     }
@@ -578,8 +578,8 @@ class LineByteStreamingSession : public BaseStreamingSession {
     if (original_range_size < constants::SMALL_RANGE_THRESHOLD) {
       // Small range read - apply cumulative range limiting
       if (current_position_ < actual_start_bytes_) {
-        spdlog::error(
-            "Invalid state: current_position_ {} < actual_start_bytes_ {}",
+        DFTRACER_UTILS_LOG_ERROR(
+            "Invalid state: current_position_ %zu < actual_start_bytes_ %zu",
             current_position_, actual_start_bytes_);
         throw Reader::Error(Reader::Error::READ_ERROR,
                             "Invalid internal position state detected");
@@ -597,9 +597,9 @@ class LineByteStreamingSession : public BaseStreamingSession {
       adjusted_size = adjust_to_boundary(buffer, total_data_size);
     }
 
-    spdlog::trace(
-        "After boundary adjustment: total_data_size={}, "
-        "original_range_size={}, final_adjusted_size={}",
+    DFTRACER_UTILS_LOG_TRACE_FORMAT(
+        "After boundary adjustment: total_data_size=%zu, "
+        "original_range_size=%zu, final_adjusted_size=%zu",
         total_data_size, original_range_size, adjusted_size);
 
     return adjusted_size;
@@ -644,7 +644,7 @@ class LineByteStreamingSession : public BaseStreamingSession {
         for (int64_t i = static_cast<int64_t>(relative_target); i >= 0; i--) {
           if (i == 0 || search_buffer[i - 1] == '\n') {
             actual_start = current_pos + static_cast<size_t>(i);
-            spdlog::debug("Found JSON line start at position {} (requested {})",
+            DFTRACER_UTILS_LOG_DEBUG("Found JSON line start at position %zu (requested %zu)",
                           actual_start, target_start);
             break;
           }
@@ -701,9 +701,9 @@ class ByteStreamingSession : public BaseStreamingSession {
   void initialize(const std::string &gz_path, size_t start_bytes,
                   size_t end_bytes,
                   dftracer::utils::indexer::Indexer &indexer) override {
-    spdlog::debug(
-        "Initializing raw streaming session for range [{}, {}] from {}",
-        start_bytes, end_bytes, gz_path);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Initializing raw streaming session for range [%zu, %zu] from %s",
+        start_bytes, end_bytes, gz_path.c_str());
 
     initialize_base(gz_path, start_bytes, end_bytes);
     current_position_ = start_bytes;
@@ -715,7 +715,7 @@ class ByteStreamingSession : public BaseStreamingSession {
       skip_to_position(start_bytes);
     }
 
-    spdlog::debug("Raw streaming session initialized: start={}, target_end={}",
+    DFTRACER_UTILS_LOG_DEBUG("Raw streaming session initialized: start=%zu, target_end=%zu",
                   start_bytes, end_bytes);
   }
 
@@ -749,7 +749,7 @@ class ByteStreamingSession : public BaseStreamingSession {
 
     current_position_ += bytes_read;
 
-    spdlog::debug("Raw streamed {} bytes (position: {} / {})", bytes_read,
+    DFTRACER_UTILS_LOG_DEBUG("Raw streamed %zu bytes (position: %zu / %zu)", bytes_read,
                   current_position_, target_end_bytes_);
 
     return bytes_read;
@@ -814,8 +814,8 @@ class Reader::Impl {
 
       session_factory_ = std::make_unique<StreamingSessionFactory>(*indexer_);
 
-      spdlog::debug("Successfully created DFT reader for gz: {} and index: {}",
-                    gz_path, idx_path);
+      DFTRACER_UTILS_LOG_DEBUG("Successfully created DFT reader for gz: %s and index: %s",
+                    gz_path.c_str(), idx_path.c_str());
     } catch (const std::exception &e) {
       throw Reader::Error(
           Reader::Error::INITIALIZATION_ERROR,
@@ -876,14 +876,14 @@ class Reader::Impl {
   size_t get_max_bytes() const {
     ErrorHandler::check_reader_state(is_open_, indexer_);
     size_t max_bytes = static_cast<size_t>(indexer_->get_max_bytes());
-    spdlog::debug("Maximum bytes available: {}", max_bytes);
+    DFTRACER_UTILS_LOG_DEBUG("Maximum bytes available: %zu", max_bytes);
     return max_bytes;
   }
 
   size_t get_num_lines() const {
     ErrorHandler::check_reader_state(is_open_, indexer_);
     size_t num_lines = static_cast<size_t>(indexer_->get_num_lines());
-    spdlog::debug("Total lines available: {}", num_lines);
+    DFTRACER_UTILS_LOG_DEBUG("Total lines available: %zu", num_lines);
     return num_lines;
   }
 
@@ -1037,7 +1037,7 @@ class Reader::Impl {
  private:
   std::string read_lines_from_beginning(size_t start_line, size_t end_line) {
     size_t max_bytes = indexer_->get_max_bytes();
-    spdlog::debug("Reading lines [{}, {}] from file beginning (max bytes: {})",
+    DFTRACER_UTILS_LOG_DEBUG("Reading lines [%zu, %zu] from file beginning (max bytes: %zu)",
                   start_line, end_line, max_bytes);
 
     // Always create a fresh session for line reading
@@ -1211,7 +1211,7 @@ static dftracer::utils::reader::Reader *cast_reader(
 dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
                                       size_t index_ckpt_size) {
   if (!gz_path || !idx_path) {
-    spdlog::error("Both gz_path and idx_path cannot be null");
+    DFTRACER_UTILS_LOG_ERROR("Both gz_path and idx_path cannot be null");
     return nullptr;
   }
 
@@ -1220,7 +1220,7 @@ dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
         new dftracer::utils::reader::Reader(gz_path, idx_path, index_ckpt_size);
     return static_cast<dft_reader_handle_t>(reader);
   } catch (const std::exception &e) {
-    spdlog::error("Failed to create DFT reader: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader: %s", e.what());
     return nullptr;
   }
 }
@@ -1228,18 +1228,18 @@ dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
 dft_reader_handle_t dft_reader_create_with_indexer(
     dft_indexer_handle_t indexer) {
   if (!indexer) {
-    spdlog::error("Indexer cannot be null");
+    DFTRACER_UTILS_LOG_ERROR("Indexer cannot be null");
     return nullptr;
   }
 
-  spdlog::info("Creating DFT reader with provided indexer");
+  DFTRACER_UTILS_LOG_INFO("Creating DFT reader with provided indexer");
 
   try {
     auto *reader = new dftracer::utils::reader::Reader(
         static_cast<dftracer::utils::indexer::Indexer *>(indexer));
     return static_cast<dft_reader_handle_t>(reader);
   } catch (const std::exception &e) {
-    spdlog::error("Failed to create DFT reader with indexer: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader with indexer: %s", e.what());
     return nullptr;
   }
 }
@@ -1259,7 +1259,7 @@ int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes) {
     *max_bytes = cast_reader(reader)->get_max_bytes();
     return 0;
   } catch (const std::exception &e) {
-    spdlog::error("Failed to get max bytes: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to get max bytes: %s", e.what());
     return -1;
   }
 }
@@ -1273,7 +1273,7 @@ int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines) {
     *num_lines = cast_reader(reader)->get_num_lines();
     return 0;
   } catch (const std::exception &e) {
-    spdlog::error("Failed to get number of lines: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to get number of lines: %s", e.what());
     return -1;
   }
 }
@@ -1289,7 +1289,7 @@ int dft_reader_read(dft_reader_handle_t reader, size_t start_bytes,
         cast_reader(reader)->read(start_bytes, end_bytes, buffer, buffer_size);
     return static_cast<int>(bytes_read);
   } catch (const std::exception &e) {
-    spdlog::error("Failed to read: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to read: %s", e.what());
     return -1;
   }
 }
@@ -1306,7 +1306,7 @@ int dft_reader_read_line_bytes(dft_reader_handle_t reader, size_t start_bytes,
         start_bytes, end_bytes, buffer, buffer_size);
     return static_cast<int>(bytes_read);
   } catch (const std::exception &e) {
-    spdlog::error("Failed to read line bytes: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to read line bytes: %s", e.what());
     return -1;
   }
 }
@@ -1334,7 +1334,7 @@ int dft_reader_read_lines(dft_reader_handle_t reader, size_t start_line,
 
     return 0;
   } catch (const std::exception &e) {
-    spdlog::error("Failed to read lines: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to read lines: %s", e.what());
     *bytes_written = 0;
     return -1;
   }

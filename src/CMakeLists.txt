@@ -54,7 +54,7 @@ set_target_properties(dftracer_utils PROPERTIES
     OUTPUT_NAME dftracer_utils
 )
 target_link_libraries(dftracer_utils 
-    PRIVATE picosha2
+    PRIVATE picosha2 cpp-logger
     PUBLIC ghc_filesystem simdjson::simdjson_static
 )
 # add_mpi_deps_if_needed(dftracer_utils)
@@ -66,7 +66,7 @@ link_zlib(dftracer_utils STATIC)
 # link_arrow(dftracer_utils STATIC)
 
 target_include_directories(dftracer_utils 
-    PUBLIC 
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
@@ -93,7 +93,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dftracer_utils_shared 
-    PRIVATE picosha2
+    PRIVATE picosha2 cpp-logger
     PUBLIC ghc_filesystem simdjson::simdjson
 )
 # add_mpi_deps_if_needed(dftracer_utils_shared)
@@ -390,6 +390,9 @@ if (TARGET dftracer_zlib)
 endif()
 if (TARGET dftracer_zlibstatic)
   list(APPEND INSTALLABLE_TARGETS dftracer_zlibstatic)
+endif()
+if (TARGET cpp-logger)
+  list(APPEND INSTALLABLE_TARGETS cpp-logger)
 endif()
 # if (TARGET cereal)
 #   list(APPEND INSTALLABLE_TARGETS cereal)

@@ -1,11 +1,10 @@
-#include <dftracer/utils/config.h>
+#include <dftracer/utils/common/config.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <dftracer/utils/utils/logger.h>
 #include <dftracer/utils/utils/platform_compat.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/spdlog.h>
+#include <dftracer/utils/common/logging.h>
 
 #include <algorithm>
 #include <argparse/argparse.hpp>
@@ -15,6 +14,7 @@
 #include <cstring>
 
 int main(int argc, char **argv) {
+  DFTRACER_UTILS_LOGGER_INIT();
   size_t default_checkpoint_size =
       dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
   auto default_checkpoint_size_str =
@@ -44,10 +44,6 @@ int main(int argc, char **argv) {
   program.add_argument("-f", "--force-rebuild")
       .help("Force rebuild index")
       .flag();
-  program.add_argument("--log-level")
-      .help(
-          "Set logging level (trace, debug, info, warn, error, critical, off)")
-      .default_value<std::string>("info");
   program.add_argument("--check").help("Check if index is valid").flag();
   program.add_argument("--read-buffer-size")
       .help("Size of the read buffer in bytes (default: 1MB)")
@@ -58,10 +54,12 @@ int main(int argc, char **argv) {
       .default_value<std::string>("bytes")
       .choices("bytes", "line_bytes", "lines");
 
+  DFTRACER_UTILS_LOG_DEBUG("Parsed arguments:");
+
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception &err) {
-    spdlog::error("Error occurred: {}", err.what());
+    DFTRACER_UTILS_LOG_ERROR("Error occurred: %s", err.what());
     std::cerr << program;
     return 1;
   }
@@ -74,32 +72,25 @@ int main(int argc, char **argv) {
   bool force_rebuild = program.get<bool>("--force-rebuild");
   bool check_rebuild = program.get<bool>("--check");
   std::string read_mode = program.get<std::string>("--mode");
-  std::string log_level_str = program.get<std::string>("--log-level");
   size_t read_buffer_size = program.get<size_t>("--read-buffer-size");
 
-  // stderr-based logger to ensure logs don't interfere with data output
-  auto logger = spdlog::stderr_color_mt("stderr");
-  spdlog::set_default_logger(logger);
-  dftracer::utils::logger::set_log_level(log_level_str);
-
-  spdlog::debug("Log level set to: {}", log_level_str);
-  spdlog::debug("Processing file: {}", gz_path);
-  spdlog::debug("Start position: {}", start);
-  spdlog::debug("End position: {}", end);
-  spdlog::debug("Mode: {}", read_mode);
-  spdlog::debug("Checkpoint size: {} B ({} MB)", checkpoint_size,
+  DFTRACER_UTILS_LOG_DEBUG("Processing file: %s", gz_path.c_str());
+  DFTRACER_UTILS_LOG_DEBUG("Start position: %lld", (long long)start);
+  DFTRACER_UTILS_LOG_DEBUG("End position: %lld", (long long)end);
+  DFTRACER_UTILS_LOG_DEBUG("Mode: %s", read_mode.c_str());
+  DFTRACER_UTILS_LOG_DEBUG("Checkpoint size: %zu B (%zu MB)", checkpoint_size,
                 checkpoint_size / (1024 * 1024));
-  spdlog::debug("Force rebuild: {}", force_rebuild);
+  DFTRACER_UTILS_LOG_DEBUG("Force rebuild: %s", force_rebuild ? "true" : "false");
 
   if (checkpoint_size <= 0) {
-    spdlog::error(
+    DFTRACER_UTILS_LOG_ERROR(
         "Checkpoint size must be positive (greater than 0 and in MB)");
     return 1;
   }
 
   FILE *test_file = fopen(gz_path.c_str(), "rb");
   if (!test_file) {
-    spdlog::error("File '{}' does not exist or cannot be opened", gz_path);
+    DFTRACER_UTILS_LOG_ERROR("File '%s' does not exist or cannot be opened", gz_path.c_str());
     return 1;
   }
   fclose(test_file);
@@ -112,17 +103,17 @@ int main(int argc, char **argv) {
 
     if (check_rebuild) {
       if (!indexer.need_rebuild()) {
-        spdlog::debug("Index is up to date, no rebuild needed");
+        DFTRACER_UTILS_LOG_DEBUG("Index is up to date, no rebuild needed");
         return 0;
       }
     }
 
     if (force_rebuild || !fs::exists(idx_path)) {
-      spdlog::info("Building index for file: {}", gz_path);
+      DFTRACER_UTILS_LOG_INFO("Building index for file: %s", gz_path.c_str());
       indexer.build();
     }
   } catch (const std::runtime_error &e) {
-    spdlog::error("Indexer error: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Indexer error: %s", e.what());
     return 1;
   }
 
@@ -130,6 +121,7 @@ int main(int argc, char **argv) {
   if (start != -1) {
     try {
       dftracer::utils::reader::Reader reader(gz_path, idx_path);
+      DFTRACER_UTILS_LOG_DEBUG("Here");
 
       if (read_mode.find("bytes") == std::string::npos) {
         size_t end_line = static_cast<size_t>(end);
@@ -137,17 +129,14 @@ int main(int argc, char **argv) {
           end_line = reader.get_num_lines();
         }
 
-        spdlog::debug("Reading lines from {} to {}", start, end_line);
+        DFTRACER_UTILS_LOG_DEBUG("Reading lines from %lld to %zu", (long long)start, end_line);
 
-        // auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
-        auto lines =
-            reader.read_json_lines(static_cast<size_t>(start), end_line);
-        // fwrite(lines, 1, lines.size(), stdout);
-        // size_t line_count =
-        //     static_cast<size_t>(std::count(lines.begin(), lines.end(),
-        //     '\n'));
-        size_t line_count = lines.size();
-        spdlog::debug("Successfully read {} lines from range", line_count);
+        auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
+        fwrite(lines.data(), 1, lines.size(), stdout);
+        size_t line_count =
+            static_cast<size_t>(std::count(lines.begin(), lines.end(),
+            '\n'));
+        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu lines from range", line_count);
       } else {
         size_t start_bytes_ = static_cast<size_t>(start);
         size_t end_bytes_ = end == -1 ? std::numeric_limits<size_t>::max()
@@ -157,8 +146,8 @@ int main(int argc, char **argv) {
         if (end_bytes_ > max_bytes) {
           end_bytes_ = max_bytes;
         }
-        spdlog::debug("Performing byte range read operation");
-        spdlog::debug("Using read buffer size: {} bytes", read_buffer_size);
+        DFTRACER_UTILS_LOG_DEBUG("Performing byte range read operation");
+        DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes", read_buffer_size);
         auto buffer = std::make_unique<char[]>(read_buffer_size);
         size_t bytes_written;
         size_t total_bytes = 0;
@@ -174,11 +163,11 @@ int main(int argc, char **argv) {
           total_bytes += bytes_written;
         }
 
-        spdlog::debug("Successfully read {} bytes from range", total_bytes);
+        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu bytes from range", total_bytes);
       }
       fflush(stdout);
     } catch (const std::runtime_error &e) {
-      spdlog::error("Reader error: {}", e.what());
+      DFTRACER_UTILS_LOG_ERROR("Reader error: %s", e.what());
       return 1;
     }
   }

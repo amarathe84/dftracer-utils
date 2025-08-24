@@ -80,7 +80,7 @@ build:
 build-debug:
 	@echo "Building project in debug mode..."
 	@mkdir -p build_debug
-	@cd build_debug && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	@cd build_debug && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DDFTRACER_UTILS_DEBUG=ON .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 build-release:
 	@echo "Building project in release mode..."

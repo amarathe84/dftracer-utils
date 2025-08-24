@@ -169,7 +169,6 @@ class Indexer::Impl {
     if (db_opened_ && db_) {
       sqlite3_close(db_);
     }
-    DFTRACER_UTILS_LOG_DEBUG("Successfully destroyed DFT indexer");
   }
 
   // Disable copy

@@ -55,14 +55,10 @@ function(need_cpplogger)
       GIT_TAG v0.0.4
       DOWNLOAD_ONLY YES
     )
-
-    # Patch after download
     set(_cmakelists "${cpplogger_SOURCE_DIR}/CMakeLists.txt")
     file(READ "${_cmakelists}" _contents)
     string(REPLACE "CMAKE_SOURCE_DIR" "CMAKE_CURRENT_SOURCE_DIR" _contents "${_contents}")
     file(WRITE "${_cmakelists}" "${_contents}")
-
-    # Now add the package for real
     add_subdirectory("${cpplogger_SOURCE_DIR}" "${cpplogger_BINARY_DIR}")
   endif()
 endfunction()
