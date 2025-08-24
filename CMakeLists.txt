@@ -21,13 +21,19 @@ set(DFTRACER_UTILS_PACKAGE_TARNAME "${DFTRACER_UTILS_PACKAGE}")
 
 option(DFTRACER_UTILS_TESTS "Build tests" OFF)
 option(DFTRACER_UTILS_COVERAGE "Enable coverage reporting" OFF)
+option(DFTRACER_UTILS_DEBUG "Enable debug mode including verbose logging" OFF)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 # Enable optimization
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Release flags" FORCE)
+
+if (DFTRACER_UTILS_DEBUG)
+  set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -DDEBUG" CACHE STRING "Debug flags" FORCE)
+else()
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Release flags" FORCE)
+endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ####################################################################################
@@ -62,8 +68,13 @@ if (MPI_FOUND)
   set(DFTRACER_UTILS_MPI_ENABLE 1)
 endif()
 
-configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.h.in"
-               "${CMAKE_BINARY_DIR}/include/dftracer/utils/config.h" @ONLY)
+if (DFTRACER_UTILS_DEBUG)
+  configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_confi.dbg.h.in"
+                 "${CMAKE_BINARY_DIR}/include/dftracer/utils/common/config.h" @ONLY)
+else()
+  configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.h.in"
+                 "${CMAKE_BINARY_DIR}/include/dftracer/utils/common/config.h" @ONLY)
+endif()
 
 set_coverage_compiler_flags(DFTRACER_UTILS_TESTS AND DFTRACER_UTILS_COVERAGE)
 

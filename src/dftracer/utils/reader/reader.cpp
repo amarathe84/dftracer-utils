@@ -1,7 +1,7 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/platform_compat.h>
-#include <spdlog/spdlog.h>
+#include <dftracer/utils/common/logging.h>
 #include <zlib.h>
 
 #include <algorithm>

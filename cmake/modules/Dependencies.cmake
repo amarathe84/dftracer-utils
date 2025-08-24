@@ -1,37 +1,71 @@
 set(CPM_USE_LOCAL_PACKAGES ON)
 set(CPM_SOURCE_CACHE "${CMAKE_SOURCE_DIR}/.cpmsource")
 
-function(need_spdlog)
-  # Force CPM build for spdlog to avoid system package compatibility issues
-  if(NOT spdlog_ADDED)
+# function(need_spdlog)
+#   # Force CPM build for spdlog to avoid system package compatibility issues
+#   if(NOT spdlog_ADDED)
+#     CPMAddPackage(
+#       NAME spdlog
+#       GITHUB_REPOSITORY gabime/spdlog
+#       VERSION 1.12.0
+#       OPTIONS
+#         "SPDLOG_COMPILED_LIB ON"
+#         "SPDLOG_BUILD_SHARED OFF"
+#         "SPDLOG_INSTALL ON"
+#       FORCE YES
+#     )
+#   endif()
+# endfunction()
+
+# function(need_cereal)
+#   if(NOT cereal_ADDED)
+#     CPMAddPackage(
+#       NAME cereal
+#       VERSION 1.3.2
+#       GITHUB_REPOSITORY USCiLab/cereal
+#       GIT_TAG a56bad8bbb770ee266e930c95d37fff2a5be7fea
+#       OPTIONS
+#         "SKIP_PORTABILITY_TEST ON"
+#         "JUST_INSTALL_CEREAL ON"
+#     )
+#   endif()
+# endfunction()
+
+
+# function(need_cpplogger)
+#   if(NOT cpplogger_ADDED)
+#     CPMAddPackage(
+#       NAME cpplogger
+#       GITHUB_REPOSITORY hariharan-devarajan/cpp-logger
+#       VERSION 0.0.4
+#       GIT_TAG v0.0.4
+#       OPTIONS
+#         "CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX}"
+#         "CMAKE_SOURCE_DIR ${cpplogger_SOURCE_DIR}"
+#     )
+#   endif()
+# endfunction()
+
+function(need_cpplogger)
+  if(NOT cpplogger_ADDED)
     CPMAddPackage(
-      NAME spdlog
-      GITHUB_REPOSITORY gabime/spdlog
-      VERSION 1.12.0
-      OPTIONS
-        "SPDLOG_COMPILED_LIB ON"
-        "SPDLOG_BUILD_SHARED OFF"
-        "SPDLOG_INSTALL ON"
-      FORCE YES
+      NAME cpplogger
+      GITHUB_REPOSITORY hariharan-devarajan/cpp-logger
+      VERSION 0.0.4
+      GIT_TAG v0.0.4
+      DOWNLOAD_ONLY YES
     )
+
+    # Patch after download
+    set(_cmakelists "${cpplogger_SOURCE_DIR}/CMakeLists.txt")
+    file(READ "${_cmakelists}" _contents)
+    string(REPLACE "CMAKE_SOURCE_DIR" "CMAKE_CURRENT_SOURCE_DIR" _contents "${_contents}")
+    file(WRITE "${_cmakelists}" "${_contents}")
+
+    # Now add the package for real
+    add_subdirectory("${cpplogger_SOURCE_DIR}" "${cpplogger_BINARY_DIR}")
   endif()
 endfunction()
-
-function(need_cereal)
-  if(NOT cereal_ADDED)
-    CPMAddPackage(
-      NAME cereal
-      VERSION 1.3.2
-      GITHUB_REPOSITORY USCiLab/cereal
-      GIT_TAG a56bad8bbb770ee266e930c95d37fff2a5be7fea
-      OPTIONS
-        "SKIP_PORTABILITY_TEST ON"
-        "JUST_INSTALL_CEREAL ON"
-    )
-  endif()
-endfunction()
-
-
 
 function(need_argparse)
   if(NOT argparse_ADDED)

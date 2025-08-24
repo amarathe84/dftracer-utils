@@ -2,8 +2,8 @@
 #define DFTRACER_UTILS_UTILS_JSON_H
 
 #include <simdjson.h>
-#include <spdlog/fmt/fmt.h>
-#include <spdlog/fmt/ranges.h>
+#include <cstdio>
+#include <iostream>
 
 #include <iosfwd>
 #include <string>
@@ -108,53 +108,5 @@ std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
 std::ostream& operator<<(std::ostream& os, const OwnedJsonDocument& doc);
 std::ostream& operator<<(std::ostream& os, const OwnedJsonDocuments& docs);
 }  // namespace dftracer::utils::json
-
-template <>
-struct fmt::formatter<dftracer::utils::json::JsonDocument>
-    : fmt::formatter<std::string> {
-  auto format(const dftracer::utils::json::JsonDocument& doc,
-              fmt::format_context& ctx) {
-    std::string s = simdjson::minify(doc);
-    return fmt::formatter<std::string>::format(s, ctx);
-  }
-};
-
-template <>
-struct fmt::formatter<dftracer::utils::json::JsonDocuments>
-    : fmt::formatter<std::string> {
-  auto format(const dftracer::utils::json::JsonDocuments& docs,
-              fmt::format_context& ctx) {
-    std::string s;
-    for (size_t i = 0; i < docs.size(); ++i) {
-      if (i > 0) s += "\n";
-      s += simdjson::minify(docs[i]);
-    }
-    return fmt::formatter<std::string>::format(s, ctx);
-  }
-};
-
-template <>
-struct fmt::formatter<dftracer::utils::json::OwnedJsonDocument>
-    : fmt::formatter<std::string> {
-  auto format(const dftracer::utils::json::OwnedJsonDocument& doc,
-              fmt::format_context& ctx) {
-    std::string s = doc.minify();
-    return fmt::formatter<std::string>::format(s, ctx);
-  }
-};
-
-template <>
-struct fmt::formatter<dftracer::utils::json::OwnedJsonDocuments>
-    : fmt::formatter<std::string> {
-  auto format(const dftracer::utils::json::OwnedJsonDocuments& docs,
-              fmt::format_context& ctx) {
-    std::string s;
-    for (size_t i = 0; i < docs.size(); ++i) {
-      if (i > 0) s += "\n";
-      s += docs[i].minify();
-    }
-    return fmt::formatter<std::string>::format(s, ctx);
-  }
-};
 
 #endif

@@ -9,13 +9,12 @@
 
 need_zlib()
 need_sqlite3()
-need_spdlog()
+# need_spdlog()
 need_argparse()
 need_ghc_filesystem()
 need_picosha2()
 need_simdjson()
-# need_arrow()
-# need_cereal()
+need_cpplogger()
 
 
 ##########################################
@@ -56,7 +55,7 @@ set_target_properties(dftracer_utils PROPERTIES
 )
 target_link_libraries(dftracer_utils 
     PRIVATE picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson_static spdlog::spdlog_header_only
+    PUBLIC ghc_filesystem simdjson::simdjson_static
 )
 # add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
@@ -95,7 +94,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
 )
 target_link_libraries(dftracer_utils_shared 
     PRIVATE picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson spdlog::spdlog_header_only
+    PUBLIC ghc_filesystem simdjson::simdjson
 )
 # add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
@@ -173,7 +172,7 @@ endif()
 
 add_executable(dft_reader ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader PRIVATE dftracer_utils spdlog::spdlog_header_only argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
+target_link_libraries(dft_reader PRIVATE dftracer_utils argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
 
 # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_reader STATIC)
@@ -194,14 +193,6 @@ if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_link_libraries(dft_reader PRIVATE --coverage)
 endif()
 
-# Make sure spdlog include directories are available for all targets
-get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
-if(SPDLOG_INCLUDE_DIRS)
-    target_include_directories(dftracer_utils PRIVATE ${SPDLOG_INCLUDE_DIRS})
-    target_include_directories(dftracer_utils_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
-    target_include_directories(dft_reader PRIVATE ${SPDLOG_INCLUDE_DIRS})
-endif()
-
 # Install executable
 install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
@@ -213,7 +204,6 @@ add_executable(dft_pipeline ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_p
 set_target_properties(dft_pipeline PROPERTIES OUTPUT_NAME "dft_pipeline")
 target_link_libraries(dft_pipeline PRIVATE 
   dftracer_utils
-  spdlog::spdlog_header_only 
   argparse::argparse
   ghc_filesystem
   picosha2
@@ -240,14 +230,6 @@ if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_link_libraries(dft_pipeline PRIVATE --coverage)
 endif()
 
-# Make sure spdlog include directories are available for all targets
-get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
-if(SPDLOG_INCLUDE_DIRS)
-    target_include_directories(dftracer_utils PRIVATE ${SPDLOG_INCLUDE_DIRS})
-    target_include_directories(dftracer_utils_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
-    target_include_directories(dft_pipeline PRIVATE ${SPDLOG_INCLUDE_DIRS})
-endif()
-
 # Install executable
 install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
@@ -259,7 +241,6 @@ install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # set_target_properties(dft_map PROPERTIES OUTPUT_NAME "dft_map")
 # target_link_libraries(dft_map PRIVATE 
 #   dftracer_utils
-#   spdlog::spdlog_header_only 
 #   argparse::argparse
 #   ghc_filesystem
 #   picosha2
@@ -284,14 +265,6 @@ install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 #     target_link_libraries(dft_map PRIVATE --coverage)
 # endif()
 
-# # Make sure spdlog include directories are available for all targets
-# get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
-# if(SPDLOG_INCLUDE_DIRS)
-#     target_include_directories(dftracer_utils PRIVATE ${SPDLOG_INCLUDE_DIRS})
-#     target_include_directories(dftracer_utils_shared PRIVATE ${SPDLOG_INCLUDE_DIRS})
-#     target_include_directories(dft_map PRIVATE ${SPDLOG_INCLUDE_DIRS})
-# endif()
-
 # # Install executable
 # install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
@@ -304,7 +277,6 @@ install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 #   set_target_properties(dft_map_mpi PROPERTIES OUTPUT_NAME "dft_map_mpi")
 #   target_link_libraries(dft_map_mpi PRIVATE 
 #     dftracer_utils
-#     spdlog::spdlog_header_only 
 #     argparse::argparse
 #     ghc_filesystem
 #     picosha2
@@ -328,12 +300,6 @@ install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 #   if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 #       target_compile_options(dft_map_mpi PRIVATE --coverage -fprofile-arcs -ftest-coverage)
 #       target_link_libraries(dft_map_mpi PRIVATE --coverage)
-#   endif()
-
-#   # Make sure spdlog include directories are available
-#   get_target_property(SPDLOG_INCLUDE_DIRS spdlog INTERFACE_INCLUDE_DIRECTORIES)
-#   if(SPDLOG_INCLUDE_DIRS)
-#       target_include_directories(dft_map_mpi PRIVATE ${SPDLOG_INCLUDE_DIRS})
 #   endif()
 
 #   # Install executable
@@ -389,7 +355,7 @@ if (SKBUILD)
     )
   endif()
 
-  target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared spdlog::spdlog_header_only)
+  target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared)
   target_add_rpath(dftracer_utils_ext)
   install(TARGETS dftracer_utils_ext LIBRARY DESTINATION dftracer/utils)
 endif()
@@ -412,9 +378,6 @@ if(TARGET ghc_filesystem)
 endif()
 if(TARGET picosha2)
     list(APPEND INSTALLABLE_TARGETS picosha2)
-endif()
-if (TARGET spdlog_header_only)
-    list(APPEND INSTALLABLE_TARGETS spdlog_header_only)
 endif()
 if (TARGET simdjson)
     list(APPEND INSTALLABLE_TARGETS simdjson)
@@ -491,8 +454,8 @@ set(PKG_CONFIG_REQUIRES "")
 set(PKG_CONFIG_LIBS_PRIVATE "")
 
 # Add spdlog to requirements (always needed)
-set(PKG_CONFIG_REQUIRES "spdlog")
-set(PKG_CONFIG_LIBS_PRIVATE "-lspdlog")
+# set(PKG_CONFIG_REQUIRES "spdlog")
+# set(PKG_CONFIG_LIBS_PRIVATE "-lspdlog")
 
 # Only add sqlite3 to pkg-config requirements if it was found on system
 if(SQLite3_FOUND AND NOT SQLite3_CPM)

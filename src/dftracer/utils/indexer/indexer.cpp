@@ -1,9 +1,9 @@
+#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/utils/file.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <dftracer/utils/utils/platform_compat.h>
 #include <picosha2.h>
-#include <spdlog/spdlog.h>
 #include <sqlite3.h>
 #include <zlib.h>
 
@@ -161,15 +161,15 @@ class Indexer::Impl {
         db_opened_(false),
         cached_file_id_(-1) {
     ErrorHandler::validate_parameters(ckpt_size_);
-    spdlog::debug("Created DFT indexer for gz: {} and index: {}", gz_path,
-                  idx_path);
+    DFTRACER_UTILS_LOG_DEBUG("Created DFT indexer for gz: %s and index: %s",
+                             gz_path.c_str(), idx_path.c_str());
   }
 
   ~Impl() {
     if (db_opened_ && db_) {
       sqlite3_close(db_);
     }
-    spdlog::debug("Successfully destroyed DFT indexer");
+    DFTRACER_UTILS_LOG_DEBUG("Successfully destroyed DFT indexer");
   }
 
   // Disable copy
@@ -291,7 +291,7 @@ std::string Indexer::Impl::calculate_file_sha256(
     const std::string &file_path) const {
   std::ifstream file(file_path, std::ios::binary);
   if (!file.is_open()) {
-    spdlog::error("Cannot open file for SHA256 calculation: {}", file_path);
+    DFTRACER_UTILS_LOG_ERROR("Cannot open file for SHA256 calculation: %s", file_path.c_str());
     return "";
   }
 
@@ -371,22 +371,22 @@ int Indexer::Impl::cleanup_existing_data(sqlite3 *db, int file_id) const {
   for (const char *query : cleanup_queries) {
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
-      spdlog::error("Failed to prepare cleanup statement '{}': {}", query,
+      DFTRACER_UTILS_LOG_ERROR("Failed to prepare cleanup statement '%s': %s", query,
                     sqlite3_errmsg(db));
       return -1;
     }
     sqlite3_bind_int(stmt, 1, file_id);
     int result = sqlite3_step(stmt);
     if (result != SQLITE_DONE) {
-      spdlog::error(
-          "Failed to execute cleanup statement '{}' for file_id {}: {} - {}",
+      DFTRACER_UTILS_LOG_ERROR(
+          "Failed to execute cleanup statement '%s' for file_id %d: %d - %s",
           query, file_id, result, sqlite3_errmsg(db));
       sqlite3_finalize(stmt);
       return -1;
     }
     sqlite3_finalize(stmt);
   }
-  spdlog::debug("Successfully cleaned up existing data for file_id {}",
+  DFTRACER_UTILS_LOG_DEBUG("Successfully cleaned up existing data for file_id %d",
                 file_id);
   return 0;
 }
@@ -399,7 +399,7 @@ int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t ckpt_size,
                          "INSERT INTO metadata(file_id, checkpoint_size, "
                          "total_lines, total_uc_size) VALUES(?, ?, ?, ?);",
                          -1, &stmt, nullptr) != SQLITE_OK) {
-    spdlog::error("Failed to prepare metadata insert statement: {}",
+    DFTRACER_UTILS_LOG_ERROR("Failed to prepare metadata insert statement: %s",
                   sqlite3_errmsg(db));
     return -1;
   }
@@ -411,12 +411,12 @@ int Indexer::Impl::insert_metadata(sqlite3 *db, int file_id, size_t ckpt_size,
 
   int result = sqlite3_step(stmt);
   if (result != SQLITE_DONE) {
-    spdlog::error("Failed to insert metadata for file_id {}: {} - {}", file_id,
+    DFTRACER_UTILS_LOG_ERROR("Failed to insert metadata for file_id %d: %d - %s", file_id,
                   result, sqlite3_errmsg(db));
   } else {
-    spdlog::debug(
-        "Successfully inserted metadata for file_id {}: checkpoint_size={}, "
-        "total_lines={}, total_uc_size={}",
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Successfully inserted metadata for file_id %d: checkpoint_size=%zu, "
+        "total_lines=%llu, total_uc_size=%llu",
         file_id, ckpt_size, total_lines, total_uc_size);
   }
   sqlite3_finalize(stmt);
@@ -459,8 +459,8 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
       return -4;
     }
 
-    spdlog::debug(
-        "Starting sequential checkpoint creation with checkpoint_size={} bytes",
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Starting sequential checkpoint creation with checkpoint_size=%zu bytes",
         checkpoint_size);
 
     size_t checkpoint_idx = 0;
@@ -542,7 +542,7 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
             sqlite3_step(st_checkpoint);
             sqlite3_reset(st_checkpoint);
 
-            spdlog::debug("Created checkpoint {}: uc_offset={}, size={} bytes",
+            DFTRACER_UTILS_LOG_DEBUG("Created checkpoint %zu: uc_offset=%zu, size=%zu bytes",
                           checkpoint_idx, checkpoint_start_uc_offset,
                           checkpoint_uc_size);
 
@@ -586,8 +586,8 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
         sqlite3_step(st_checkpoint);
         sqlite3_reset(st_checkpoint);
 
-        spdlog::debug(
-            "Created start checkpoint {}: uc_offset={}, size={} bytes (no "
+        DFTRACER_UTILS_LOG_DEBUG(
+            "Created start checkpoint %zu: uc_offset=%zu, size=%zu bytes (no "
             "dictionary)",
             checkpoint_idx, checkpoint_start_uc_offset, checkpoint_uc_size);
       } else {
@@ -623,8 +623,8 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
             sqlite3_step(st_checkpoint);
             sqlite3_reset(st_checkpoint);
 
-            spdlog::debug(
-                "Created final checkpoint {}: uc_offset={}, size={} bytes",
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Created final checkpoint %zu: uc_offset=%zu, size=%zu bytes",
                 checkpoint_idx, checkpoint_start_uc_offset, checkpoint_uc_size);
 
             free(compressed_dict);
@@ -637,13 +637,13 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
     inflate_cleanup_simple(&inflate_state);
     total_lines_out = total_lines;
     total_uc_size_out = current_uc_offset;
-    spdlog::debug(
-        "Indexing complete: created {} checkpoints, {} total lines, {} total "
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Indexing complete: created %zu checkpoints, %llu total lines, %zu total "
         "UC bytes",
         checkpoint_idx, total_lines, current_uc_offset);
     return 0;
   } catch (const std::exception &e) {
-    spdlog::error("Error during checkpoint processing: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Error during checkpoint processing: %s", e.what());
     return -3;
   }
 }
@@ -692,9 +692,9 @@ uint64_t Indexer::Impl::file_size_bytes(const std::string &path) const {
 bool Indexer::Impl::need_rebuild() const {
   // Check if index exists and is valid
   if (!index_exists_and_valid(idx_path_)) {
-    spdlog::info(
-        "Index rebuild needed: index does not exist or is invalid in {}",
-        idx_path_);
+    DFTRACER_UTILS_LOG_INFO(
+        "Index rebuild needed: index does not exist or is invalid in %s",
+        idx_path_.c_str());
     return true;
   }
 
@@ -706,8 +706,8 @@ bool Indexer::Impl::need_rebuild() const {
   //     if (diff > 0.1)
   //     {
   //         // Allow small floating point differences
-  //         spdlog::debug("Index rebuild needed: checkpoint size differs ({}
-  //         bytes vs {} bytes)",
+  //         DFTRACER_UTILS_LOG_DEBUG("Index rebuild needed: checkpoint size differs (%zu
+  //         bytes vs %zu bytes)",
   //                       existing_ckpt_size, ckpt_size_);
   //         return true;
   //     }
@@ -723,7 +723,7 @@ bool Indexer::Impl::need_rebuild() const {
     // if (current_mtime != stored_mtime && current_mtime > 0 && stored_mtime >
     // 0)
     // {
-    //     spdlog::debug("Index rebuild needed: file modification time
+    //     DFTRACER_UTILS_LOG_DEBUG("Index rebuild needed: file modification time
     //     changed"); return 1;
     // }
 
@@ -736,27 +736,27 @@ bool Indexer::Impl::need_rebuild() const {
       }
 
       if (current_sha256 != stored_sha256) {
-        spdlog::info("Index rebuild needed: file SHA256 changed ({} vs {})",
-                     current_sha256.substr(0, 16) + "...",
-                     stored_sha256.substr(0, 16) + "...");
+        DFTRACER_UTILS_LOG_INFO("Index rebuild needed: file SHA256 changed (%s vs %s)",
+                     (current_sha256.substr(0, 16) + "...").c_str(),
+                     (stored_sha256.substr(0, 16) + "...").c_str());
         return true;
       }
     } else {
       // No stored SHA256, this might be an old index format
-      spdlog::info(
+      DFTRACER_UTILS_LOG_INFO(
           "Index rebuild needed: no SHA256 stored in index (old format)");
       return true;
     }
   } else {
     // Could not get stored file info, assume rebuild needed
-    spdlog::info(
+    DFTRACER_UTILS_LOG_INFO(
         "Index rebuild needed: could not retrieve stored file information from "
-        "{}",
-        idx_path_);
+        "%s",
+        idx_path_.c_str());
     return true;
   }
 
-  spdlog::debug("Index rebuild not needed: file content unchanged");
+  DFTRACER_UTILS_LOG_DEBUG("Index rebuild not needed: file content unchanged");
   return false;
 }
 
@@ -769,7 +769,7 @@ int Indexer::Impl::init_schema(sqlite3 *db) const {
     sqlite3_free(errmsg);
     throw Indexer::Error(Indexer::Error::DATABASE_ERROR, error);
   }
-  spdlog::debug("Schema init succeeded");
+  DFTRACER_UTILS_LOG_DEBUG("Schema init succeeded");
   return rc;
 }
 
@@ -862,14 +862,14 @@ int Indexer::Impl::create_checkpoint(InflateState *state,
       memset(checkpoint->window, 0, constants::ZLIB_WINDOW_SIZE - have);
     }
 
-    spdlog::debug(
-        "Created checkpoint: uc_offset={}, c_offset={}, bits={}, dict_size={}",
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Created checkpoint: uc_offset=%zu, c_offset=%zu, bits=%d, dict_size=%u",
         uc_offset, checkpoint->c_offset, checkpoint->bits, have);
     return 0;
   }
 
   // If we can't get dictionary from zlib, this checkpoint won't work
-  spdlog::debug("Could not get dictionary for checkpoint at offset {}",
+  DFTRACER_UTILS_LOG_DEBUG("Could not get dictionary for checkpoint at offset %zu",
                 uc_offset);
   return -1;
 }
@@ -916,7 +916,7 @@ int Indexer::Impl::save_checkpoint(sqlite3 *db, int file_id,
 
   if (compress_window(checkpoint->window, 32768, &compressed_window,
                       &compressed_size) != 0) {
-    spdlog::debug("Failed to compress window for checkpoint");
+    DFTRACER_UTILS_LOG_DEBUG("Failed to compress window for checkpoint");
     return -1;
   }
 
@@ -926,7 +926,7 @@ int Indexer::Impl::save_checkpoint(sqlite3 *db, int file_id,
       "dict_compressed) VALUES(?, ?, ?, ?, ?)";
 
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-    spdlog::debug("Failed to prepare checkpoint insert: {}",
+    DFTRACER_UTILS_LOG_DEBUG("Failed to prepare checkpoint insert: %s",
                   sqlite3_errmsg(db));
     free(compressed_window);
     return -1;
@@ -942,11 +942,11 @@ int Indexer::Impl::save_checkpoint(sqlite3 *db, int file_id,
 
   int ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    spdlog::debug("Failed to insert checkpoint: {} - {}", ret,
+    DFTRACER_UTILS_LOG_DEBUG("Failed to insert checkpoint: %d - %s", ret,
                   sqlite3_errmsg(db));
   } else {
-    spdlog::debug(
-        "Successfully inserted checkpoint into database: uc_offset={}",
+    DFTRACER_UTILS_LOG_DEBUG(
+        "Successfully inserted checkpoint into database: uc_offset=%zu",
         checkpoint->uc_offset);
   }
 
@@ -1031,7 +1031,7 @@ uint64_t Indexer::Impl::get_max_bytes() const {
                         SQLITE_STATIC);
       if (sqlite3_step(stmt) == SQLITE_ROW) {
         max_bytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
-        spdlog::debug("No checkpoints found, using metadata total_uc_size: {}",
+        DFTRACER_UTILS_LOG_DEBUG("No checkpoints found, using metadata total_uc_size: %llu",
                       max_bytes);
       }
       sqlite3_finalize(stmt);
@@ -1263,17 +1263,17 @@ std::vector<CheckpointInfo> Indexer::Impl::find_checkpoints_by_line_range(
 }
 
 void Indexer::Impl::build() {
-  spdlog::debug("Building index for {} with {} bytes ({:.1f} MB) chunks...",
-                gz_path_, ckpt_size_,
+  DFTRACER_UTILS_LOG_DEBUG("Building index for %s with %zu bytes (%.1f MB) chunks...",
+                gz_path_.c_str(), ckpt_size_,
                 static_cast<double>(ckpt_size_) / (1024 * 1024));
 
   // If force rebuild is enabled, delete the existing database file to ensure
   // clean schema
   if (force_rebuild_ && fs::exists(idx_path_)) {
-    spdlog::debug("Force rebuild enabled, removing existing index file: {}",
-                  idx_path_);
+    DFTRACER_UTILS_LOG_DEBUG("Force rebuild enabled, removing existing index file: %s",
+                  idx_path_.c_str());
     if (!fs::remove(idx_path_)) {
-      spdlog::warn("Failed to remove existing index file: {}", idx_path_);
+      DFTRACER_UTILS_LOG_WARN("Failed to remove existing index file: %s", idx_path_.c_str());
     }
   }
 
@@ -1306,8 +1306,8 @@ void Indexer::Impl::build() {
 
   time_t file_mtime = get_file_mtime(gz_path_);
 
-  spdlog::debug("File info: size={} bytes, mtime={}, sha256={}...", bytes,
-                file_mtime, file_sha256.substr(0, 16));
+  DFTRACER_UTILS_LOG_DEBUG("File info: size=%llu bytes, mtime=%ld, sha256=%s...", bytes,
+                file_mtime, file_sha256.substr(0, 16).c_str());
 
   // insert/update file record
   sqlite3_stmt *st;
@@ -1340,7 +1340,7 @@ void Indexer::Impl::build() {
   int db_file_id = sqlite3_column_int(st, 0);
   sqlite3_finalize(st);
 
-  spdlog::debug("Building index with stride: {} bytes ({:.1f} MB)", ckpt_size_,
+  DFTRACER_UTILS_LOG_DEBUG("Building index with stride: %zu bytes (%.1f MB)", ckpt_size_,
                 static_cast<double>(ckpt_size_) / (1024 * 1024));
 
   int ret = build_index_internal(db_, db_file_id, gz_path_, ckpt_size_);
@@ -1350,7 +1350,7 @@ void Indexer::Impl::build() {
         "Index build failed with error code: " + std::to_string(ret));
   }
 
-  spdlog::debug("Index built successfully for {}", gz_path_);
+  DFTRACER_UTILS_LOG_DEBUG("Index built successfully for %s", gz_path_.c_str());
 }
 
 }  // namespace dftracer::utils::indexer
@@ -1469,7 +1469,7 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
                                         size_t checkpoint_size,
                                         int force_rebuild) {
   if (!gz_path || !idx_path || checkpoint_size == 0) {
-    spdlog::error("Invalid parameters for indexer creation");
+    DFTRACER_UTILS_LOG_ERROR("Invalid parameters for indexer creation");
     return nullptr;
   }
 
@@ -1478,7 +1478,7 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
         gz_path, idx_path, checkpoint_size, force_rebuild != 0);
     return static_cast<dft_indexer_handle_t>(indexer);
   } catch (const std::exception &e) {
-    spdlog::error("Failed to create DFT indexer: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to create DFT indexer: %s", e.what());
     return nullptr;
   }
 }
@@ -1492,7 +1492,7 @@ int dft_indexer_build(dft_indexer_handle_t indexer) {
     cast_indexer(indexer)->build();
     return 0;
   } catch (const std::exception &e) {
-    spdlog::error("Failed to build index: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to build index: %s", e.what());
     return -1;
   }
 }
@@ -1505,7 +1505,7 @@ int dft_indexer_need_rebuild(dft_indexer_handle_t indexer) {
   try {
     return cast_indexer(indexer)->need_rebuild() ? 1 : 0;
   } catch (const std::exception &e) {
-    spdlog::error("Failed to check if rebuild is needed: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to check if rebuild is needed: %s", e.what());
     return -1;
   }
 }
@@ -1518,7 +1518,7 @@ uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer) {
   try {
     return cast_indexer(indexer)->get_max_bytes();
   } catch (const std::exception &e) {
-    spdlog::error("Failed to get max bytes: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to get max bytes: %s", e.what());
     return 0;
   }
 }
@@ -1531,7 +1531,7 @@ uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
   try {
     return cast_indexer(indexer)->get_num_lines();
   } catch (const std::exception &e) {
-    spdlog::error("Failed to get number of lines: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to get number of lines: %s", e.what());
     return 0;
   }
 }
@@ -1545,7 +1545,7 @@ int dft_indexer_find_file_id(dft_indexer_handle_t indexer,
   try {
     return cast_indexer(indexer)->find_file_id(gz_path);
   } catch (const std::exception &e) {
-    spdlog::error("Failed to find file ID: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to find file ID: %s", e.what());
     return -1;
   }
 }
@@ -1578,7 +1578,7 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
     }
     return 0;
   } catch (const std::exception &e) {
-    spdlog::error("Failed to find checkpoint: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to find checkpoint: %s", e.what());
     return -1;
   }
 }
@@ -1632,7 +1632,7 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
           free(temp_ckpts[j].dict_compressed);
         }
         free(temp_ckpts);
-        spdlog::error(
+        DFTRACER_UTILS_LOG_ERROR(
             "Failed to allocate memory for checkpoint dictionary data");
         *checkpoints = nullptr;
         return -1;
@@ -1643,7 +1643,7 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
     *checkpoints = temp_ckpts;
     return 0;
   } catch (const std::exception &e) {
-    spdlog::error("Failed to get checkpoints: {}", e.what());
+    DFTRACER_UTILS_LOG_ERROR("Failed to get checkpoints: %s", e.what());
     return -1;
   }
 }

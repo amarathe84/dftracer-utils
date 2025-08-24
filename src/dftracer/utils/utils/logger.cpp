@@ -1,5 +1,5 @@
 #include <dftracer/utils/utils/logger.h>
-#include <spdlog/spdlog.h>
+#include <dftracer/utils/common/logging.h>
 
 #include <algorithm>
 #include <string>
@@ -9,23 +9,23 @@ namespace dftracer::utils::logger {
 /**
  * Convert string log level to spdlog level enum
  */
-static spdlog::level::level_enum string_to_log_level_internal(
-    const char *level_str) {
+static int current_log_level = 2; // Default to info
+
+static int string_to_log_level_internal(const char *level_str) {
   std::string lower_level = level_str;
   std::transform(lower_level.begin(), lower_level.end(), lower_level.begin(),
                  ::tolower);
 
-  if (lower_level == "trace") return spdlog::level::trace;
-  if (lower_level == "debug") return spdlog::level::debug;
-  if (lower_level == "info") return spdlog::level::info;
-  if (lower_level == "warn" || lower_level == "warning")
-    return spdlog::level::warn;
-  if (lower_level == "err" || lower_level == "error") return spdlog::level::err;
-  if (lower_level == "critical") return spdlog::level::critical;
-  if (lower_level == "off") return spdlog::level::off;
+  if (lower_level == "trace") return 0;
+  if (lower_level == "debug") return 1;
+  if (lower_level == "info") return 2;
+  if (lower_level == "warn" || lower_level == "warning") return 3;
+  if (lower_level == "err" || lower_level == "error") return 4;
+  if (lower_level == "critical") return 5;
+  if (lower_level == "off") return 6;
 
   // Default to info if unrecognized
-  return spdlog::level::info;
+  return 2;
 }
 
 int set_log_level(const std::string &level_str) {
@@ -33,9 +33,7 @@ int set_log_level(const std::string &level_str) {
     return -1;
   }
 
-  spdlog::level::level_enum level =
-      string_to_log_level_internal(level_str.c_str());
-  spdlog::set_level(level);
+  current_log_level = string_to_log_level_internal(level_str.c_str());
   return 0;
 }
 
@@ -44,36 +42,32 @@ int set_log_level_int(int level) {
     return -1;
   }
 
-  spdlog::level::level_enum spdlog_level =
-      static_cast<spdlog::level::level_enum>(level);
-  spdlog::set_level(spdlog_level);
+  current_log_level = level;
   return 0;
 }
 
 std::string get_log_level_string() {
-  spdlog::level::level_enum current_level = spdlog::get_level();
-
-  switch (current_level) {
-    case spdlog::level::trace:
+  switch (current_log_level) {
+    case 0:
       return "trace";
-    case spdlog::level::debug:
+    case 1:
       return "debug";
-    case spdlog::level::info:
+    case 2:
       return "info";
-    case spdlog::level::warn:
+    case 3:
       return "warn";
-    case spdlog::level::err:
+    case 4:
       return "error";
-    case spdlog::level::critical:
+    case 5:
       return "critical";
-    case spdlog::level::off:
+    case 6:
       return "off";
     default:
       return "info";
   }
 }
 
-int get_log_level_int() { return static_cast<int>(spdlog::get_level()); }
+int get_log_level_int() { return current_log_level; }
 
 }  // namespace dftracer::utils::logger
 
