@@ -23,6 +23,7 @@ class JsonDocument {
   JsonItemsIterator items();
   bool __contains__(const std::string& key);
   size_t __len__();
+  bool __bool__();
   std::string __str__();
   std::string __repr__();
   JsonKeysIterator __iter__();

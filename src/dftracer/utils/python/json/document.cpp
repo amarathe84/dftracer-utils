@@ -55,6 +55,11 @@ size_t JsonDocument::__len__() {
   return count;
 }
 
+bool JsonDocument::__bool__() {
+  if (!doc.is_object()) return false;
+  return __len__() > 0;
+}
+
 std::string JsonDocument::__str__() { return simdjson::minify(doc); }
 
 std::string JsonDocument::__repr__() {
