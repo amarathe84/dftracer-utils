@@ -28,6 +28,10 @@ class JsonDocument:
         """Get number of keys."""
         ...
     
+    def __bool__(self) -> bool:
+        """Check if document is non-empty."""
+        ...
+    
     def __str__(self) -> str:
         """String representation."""
         ...
@@ -114,21 +118,58 @@ class DFTracerIndexer:
         self, 
         gz_path: str, 
         idx_path: Optional[str] = None,
-        checkpoint_size: int = 1048576
+        checkpoint_size: int = 1048576,
+        force_rebuild: bool = False
     ) -> None:
         """Create a DFTracer indexer for a gzip file."""
         ...
     
-    def index(self) -> None:
-        """Index the gzip file."""
+    def build(self) -> None:
+        """Build the index."""
         ...
     
-    def open(self) -> None:
-        """Open the index database."""
+    def need_rebuild(self) -> bool:
+        """Check if index needs rebuilding."""
         ...
     
-    def close(self) -> None:
-        """Close the index database."""
+    def is_valid(self) -> bool:
+        """Check if index is valid."""
+        ...
+    
+    def get_max_bytes(self) -> int:
+        """Get maximum byte position."""
+        ...
+    
+    def get_num_lines(self) -> int:
+        """Get number of lines."""
+        ...
+    
+    def find_file_id(self, gz_path: str) -> int:
+        """Find file ID for given path."""
+        ...
+    
+    def get_checkpoints(self) -> List[CheckpointInfo]:
+        """Get all checkpoints."""
+        ...
+    
+    def find_checkpoints_by_line_range(self, start_line: int, end_line: int) -> List[CheckpointInfo]:
+        """Find checkpoints in line range."""
+        ...
+    
+    def find_checkpoint(self, target_offset: int) -> Optional[CheckpointInfo]:
+        """Find checkpoint for target offset."""
+        ...
+    
+    def gz_path(self) -> str:
+        """Get gzip path."""
+        ...
+    
+    def idx_path(self) -> str:
+        """Get index path."""
+        ...
+    
+    def checkpoint_size(self) -> int:
+        """Get checkpoint size."""
         ...
     
     def __enter__(self) -> Self:
@@ -137,26 +178,6 @@ class DFTracerIndexer:
     
     def __exit__(self, *args: Any) -> bool:
         """Exit context manager."""
-        ...
-    
-    @property
-    def gz_path(self) -> str:
-        """Path to the gzip file."""
-        ...
-    
-    @property
-    def idx_path(self) -> str:
-        """Path to the index file."""
-        ...
-    
-    @property
-    def checkpoint_size(self) -> int:
-        """Checkpoint size in bytes."""
-        ...
-    
-    @property
-    def is_open(self) -> bool:
-        """Whether the database is open."""
         ...
 
 # ========== READER FUNCTIONALITY ==========
