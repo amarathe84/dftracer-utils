@@ -718,4 +718,4 @@ bool Analyzer::has_checkpoint(const std::string& name) const {
   return fs::exists(metadata_path);
 }
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::analyzers

@@ -107,7 +107,7 @@ std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
 
 std::ostream& operator<<(std::ostream& os, const OwnedJsonDocument& doc);
 std::ostream& operator<<(std::ostream& os, const OwnedJsonDocuments& docs);
-}  // namespace dftracer
+}  // namespace dftracer::utils::json
 
 template <>
 struct fmt::formatter<dftracer::utils::json::JsonDocument>

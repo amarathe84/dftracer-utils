@@ -73,4 +73,4 @@ namespace fs = std::experimental::filesystem;
 namespace fs = ghc::filesystem;
 
 #endif  // DFT_USE_STD_FS
-#endif // DFTRACER_UTILS_UTILS_FILESYSTEM_H
+#endif  // DFTRACER_UTILS_UTILS_FILESYSTEM_H

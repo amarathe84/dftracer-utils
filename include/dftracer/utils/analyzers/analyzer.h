@@ -118,8 +118,8 @@ class Analyzer {
   AnalyzerConfig config_;
 };
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::analyzers
 
 #include <dftracer/utils/analyzers/analyzer_impl.h>
 
-#endif // DFTRACER_UTILS_ANALYZERS_ANALYZER_H
+#endif  // DFTRACER_UTILS_ANALYZERS_ANALYZER_H

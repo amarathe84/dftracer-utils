@@ -14,6 +14,6 @@ namespace dftracer::utils::utils {
  */
 time_t get_file_modification_time(const std::string &file_path);
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::utils
 
-#endif // DFTRACER_UTILS_UTILS_FILE_H
+#endif  // DFTRACER_UTILS_UTILS_FILE_H

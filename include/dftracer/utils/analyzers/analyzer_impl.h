@@ -757,6 +757,6 @@ AnalyzerResult Analyzer::analyze_trace(
   }
 }
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::analyzers
 
-#endif // DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H
+#endif  // DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H

@@ -188,6 +188,6 @@ inline bool is_epoch_event(const std::string& cat,
                                       func_name == PIPELINE_EPOCH);
 }
 }  // namespace ai_dftracer
-}  // namespace dftracer
+}  // namespace dftracer::utils::analyzers::constants
 
-#endif // DFTRACER_UTILS_ANALYZERS_CONSTANTS_H
+#endif  // DFTRACER_UTILS_ANALYZERS_CONSTANTS_H

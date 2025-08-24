@@ -97,4 +97,4 @@ class Result {
   bool operator!=(const Result& other) const { return !(*this == other); }
 };
 
-#endif // DFTRACER_UTILS_UTILS_RESULT_H
+#endif  // DFTRACER_UTILS_UTILS_RESULT_H

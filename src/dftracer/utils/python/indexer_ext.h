@@ -3,6 +3,7 @@
 
 #include <dftracer/utils/indexer/indexer.h>
 #include <nanobind/nanobind.h>
+
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -18,10 +19,12 @@ class DFTracerIndexer {
 
  public:
   // Constructor
-  DFTracerIndexer(const std::string &gz_path,
-                  const std::optional<std::string> &idx_path = std::nullopt,
-                  size_t checkpoint_size = dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE,
-                  bool force_rebuild = false);
+  DFTracerIndexer(
+      const std::string &gz_path,
+      const std::optional<std::string> &idx_path = std::nullopt,
+      size_t checkpoint_size =
+          dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE,
+      bool force_rebuild = false);
 
   // Build index
   void build();
@@ -49,16 +52,17 @@ class DFTracerIndexer {
   find_checkpoints_by_line_range(size_t start_line, size_t end_line) const;
 
   // Find checkpoint for target offset
-  std::optional<dftracer::utils::indexer::CheckpointInfo> find_checkpoint(size_t target_offset) const;
-  
+  std::optional<dftracer::utils::indexer::CheckpointInfo> find_checkpoint(
+      size_t target_offset) const;
+
   // Getters
   std::string gz_path() const;
   std::string idx_path() const;
   size_t checkpoint_size() const;
-  dftracer::utils::indexer::Indexer* get_indexer_ptr() const;
+  dftracer::utils::indexer::Indexer *get_indexer_ptr() const;
 
   // Context manager methods
-  DFTracerIndexer& __enter__();
+  DFTracerIndexer &__enter__();
   bool __exit__(nanobind::args args);
 };
 

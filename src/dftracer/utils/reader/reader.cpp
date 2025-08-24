@@ -1190,7 +1190,7 @@ std::string Reader::Error::format_message(Type type,
   return std::string(prefix) + ": " + message;
 }
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::reader
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)

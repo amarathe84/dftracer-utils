@@ -120,7 +120,7 @@ void dft_reader_reset(dft_reader_handle_t reader);
 namespace dftracer::utils::indexer {
 class Indexer;
 struct CheckpointInfo;
-}  // namespace dftracer
+}  // namespace dftracer::utils::indexer
 
 namespace dftracer::utils::reader {
 
@@ -329,7 +329,7 @@ class Reader {
   std::unique_ptr<Impl> pImpl_;
 };
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::reader
 #endif
 
-#endif // DFTRACER_UTILS_READER_READER_H
+#endif  // DFTRACER_UTILS_READER_READER_H

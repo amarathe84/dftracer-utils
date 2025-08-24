@@ -63,11 +63,13 @@ test-py:
 	@echo "Python tests completed successfully!"
 
 format:
-  @echo "Formatting code..."
-  find ./include ./src ./tests -type f \( -name "*.h" -o -name "*.cpp" \) -exec clang-format -i -style=file {} +
-  @if command -v clang-tidy &> /dev/null; then \
-      clang-tidy src/**/*.cpp include/**/*.h --config-file=.clang-tidy; \
-  fi
+	@echo "Formatting code..."
+	@mkdir -p build_format
+	@cd build_format && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Release ..
+	find ./include ./src ./tests -type f \( -name "*.h" -o -name "*.cpp" \) -exec clang-format -i -style=file {} +
+	@if command -v clang-tidy &> /dev/null; then \
+		find src include -type f \( -name "*.cpp" -o -name "*.h" \) -exec clang-tidy -p build {} --config-file=.clang-tidy --fix-errors --fix-notes --fix \; ; \
+	fi
 
 # Normal build
 build:
@@ -97,4 +99,4 @@ install-debug: build
 # Clean all builds
 clean:
 	@echo "Cleaning all build directories..."
-	@rm -rf build build_debug build_test build_coverage install .venv_test_py
+	@rm -rf build build_debug build_test build_coverage install .venv_test_py build_format

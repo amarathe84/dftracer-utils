@@ -1353,7 +1353,7 @@ void Indexer::Impl::build() {
   spdlog::debug("Index built successfully for {}", gz_path_);
 }
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::indexer
 
 // ==============================================================================
 // C++ Public Interface Implementation
@@ -1446,7 +1446,7 @@ std::string Indexer::Error::format_message(Type type,
   return std::string(prefix) + ": " + message;
 }
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::indexer
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)

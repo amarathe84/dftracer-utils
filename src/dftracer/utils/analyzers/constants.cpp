@@ -172,4 +172,4 @@ const std::unordered_map<std::string, std::string> HUMANIZED_VIEW_TYPES = {
 const std::vector<std::string> HLM_EXTRA_COLS = {"cat", "io_cat", "acc_pat",
                                                  "func_name"};
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::analyzers::constants

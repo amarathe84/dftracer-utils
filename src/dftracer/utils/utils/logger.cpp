@@ -75,7 +75,7 @@ std::string get_log_level_string() {
 
 int get_log_level_int() { return static_cast<int>(spdlog::get_level()); }
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::logger
 
 // ==============================================================================
 // C API Implementation (wraps C++ implementation)

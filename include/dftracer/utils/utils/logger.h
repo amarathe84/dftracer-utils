@@ -64,7 +64,7 @@ std::string get_log_level_string();
  * @return Integer representation of log level
  */
 int get_log_level_int();
-}  // namespace dftracer
+}  // namespace dftracer::utils::logger
 #endif
 
-#endif // DFTRACER_UTILS_UTILS_LOGGER_H
+#endif  // DFTRACER_UTILS_UTILS_LOGGER_H

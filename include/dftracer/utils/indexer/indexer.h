@@ -326,7 +326,7 @@ class Indexer {
   std::unique_ptr<Impl> pImpl_;
 };
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::indexer
 #endif
 
-#endif // DFTRACER_UTILS_INDEXER_INDEXER_H
+#endif  // DFTRACER_UTILS_INDEXER_INDEXER_H

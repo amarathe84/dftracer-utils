@@ -436,4 +436,4 @@ std::string get_args_string_field_owned(const OwnedJsonDocument& doc,
   return _get_args_string_field_impl(doc, key);
 }
 
-}  // namespace dftracer
+}  // namespace dftracer::utils::json
