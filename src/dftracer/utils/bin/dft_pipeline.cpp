@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
   context::SequentialContext ctx;
   {
     std::cout << "=== Map example ===\n";
-    auto c0 = Collection<int>::from_sequence(input);
+    Collection<int> c0 = Collection<int>::from_sequence(input);
     Collection<int> c1 =
         c0.map([](const int& x) { return x * x; }, ctx);  // square
 
@@ -24,10 +24,10 @@ int main(int argc, char** argv) {
     for (auto v : c1.data()) std::cout << v << ' ';
     std::cout << "\n";
 
-    auto l0 = LazyCollection<int>::from_sequence(input);
-    auto l1 =
+    LazyCollection<int> l0 = LazyCollection<int>::from_sequence(input);
+    LazyCollection<int> l1 =
         l0.map<int>([](const int& in, int& out) { out = in * 2; });  // times 2
-    auto lres = l1.collect_local(ctx);
+    std::vector<int> lres = l1.collect_local(ctx);
 
     std::cout << "Lazy/LazyCollection result: ";
     for (auto v : lres) std::cout << v << ' ';
@@ -38,15 +38,15 @@ int main(int argc, char** argv) {
   {
     std::cout << "=== Filter example ===\n";
 
-    auto f0 = Collection<int>::from_sequence(input);
-    auto f1 = f0.filter([](int x) { return x % 2 == 1; }, ctx);
+    Collection<int> f0 = Collection<int>::from_sequence(input);
+    Collection<int> f1 = f0.filter([](int x) { return x % 2 == 1; }, ctx);
     std::cout << "Eager/Collection filter result: ";
     for (auto v : f1.data()) std::cout << v << ' ';
     std::cout << "\n";
 
-    auto lf0 = LazyCollection<int>::from_sequence(input);
-    auto lf1 = lf0.filter([](int x) { return x % 2 == 0; });
-    auto lfres = lf1.collect_local(ctx);
+    LazyCollection<int> lf0 = LazyCollection<int>::from_sequence(input);
+    LazyCollection<int> lf1 = lf0.filter([](int x) { return x % 2 == 0; });
+    std::vector<int> lfres = lf1.collect_local(ctx);
     std::cout << "Lazy/LazyCollection filter result: ";
     for (auto v : lfres) std::cout << v << ' ';
     std::cout << "\n";
@@ -56,8 +56,8 @@ int main(int argc, char** argv) {
   {
     std::cout << "=== FlatMap example ===\n";
 
-    auto fm0 = Collection<int>::from_sequence(input);
-    auto fm1 = fm0.flatmap<int>(
+    Collection<int> fm0 = Collection<int>::from_sequence(input);
+    Collection<int> fm1 = fm0.flatmap<int>(
         [](int x) {
           if (x % 2 == 0) return std::vector<int>{x, x * 10};
           return std::vector<int>{};
@@ -67,8 +67,8 @@ int main(int argc, char** argv) {
     for (auto v : fm1.data()) std::cout << v << ' ';
     std::cout << "\n";
 
-    auto lfm0 = LazyCollection<int>::from_sequence(input);
-    auto lfm1 = lfm0.flatmap<int>([](int x, auto emit) {
+    LazyCollection<int> lfm0 = LazyCollection<int>::from_sequence(input);
+    LazyCollection<int> lfm1 = lfm0.flatmap<int>([](int x, auto emit) {
       if (x % 2 == 1) emit(x);
       emit(x * 100);
     });
@@ -92,14 +92,48 @@ int main(int argc, char** argv) {
     for (auto v : fmv1.data()) std::cout << v << ' ';
     std::cout << "\n";
 
-    auto lfmv0 = LazyCollection<std::vector<int>>::from_sequence(nested);
-    auto lfmv1 =
+    LazyCollection<std::vector<int>> lfmv0 = LazyCollection<std::vector<int>>::from_sequence(nested);
+    LazyCollection<int> lfmv1 =
         lfmv0.flatmap<int>([](const std::vector<int>& xs) { return xs; });
-    auto lfmvres = lfmv1.collect_local(ctx);
+    std::vector<int> lfmvres = lfmv1.collect_local(ctx);
     std::cout << "Lazy/LazyCollection flatmap (vector-of-vector) result: ";
     for (auto v : lfmvres) std::cout << v << ' ';
     std::cout << "\n";
     std::cout << "\n";
   }
+
+  
+  {
+    std::cout << "=== MapPartitions example ===\n";
+
+    Collection<int> mp0 = Collection<int>::from_sequence(input);
+    Collection<int> mp1 = mp0.map_partitions<int>(
+        [](const operators::MapPartitionsOperator::PartitionInfo& part,
+           const int* data, std::size_t n, auto emit) {
+          // Emit each element tagged with partition index offset
+          for (std::size_t i = 0; i < n; ++i) {
+            emit(data[i] + static_cast<int>(part.partition_index));
+          }
+        },
+        ctx);
+    std::cout << "Eager/Collection map_partitions result: ";
+    for (auto v : mp1.data()) std::cout << v << ' ';
+    std::cout << "\n";
+
+    LazyCollection<int> lmp0 = LazyCollection<int>::from_sequence(input);
+    LazyCollection<int> lmp1 = lmp0.map_partitions<int>(
+        [](const operators::MapPartitionsOperator::PartitionInfo& part,
+           const int* data, std::size_t n, auto emit) {
+          for (std::size_t i = 0; i < n; ++i) {
+            emit(data[i] * (1 + static_cast<int>(part.partition_index)));
+          }
+        });
+    std::vector<int> lmpres = lmp1.collect_local(ctx);
+    std::cout << "Lazy/LazyCollection map_partitions result: ";
+    for (auto v : lmpres) std::cout << v << ' ';
+    std::cout << "\n";
+    std::cout << "\n";
+  }
+
   return 0;
 }

@@ -106,6 +106,34 @@ class Collection {
     return Collection<U>(std::move(out));
   }
 
+  // ---- map_partitions ----
+  // Apply a partition-aware function to each partition and concatenate results.
+  // Fn signatures supported via adapters::make_map_partitions_op:
+  //   - void(const PartitionInfo&, const T* data, size_t n, auto emit)
+  //   - std::vector<U>(const PartitionInfo&, const T* data, size_t n)
+  //   - std::initializer_list<U>(const PartitionInfo&, const T* data, size_t n)
+  //   - std::pair<const U*, size_t>(const PartitionInfo&, const T* data, size_t n)
+  template <class U, class Fn>
+  auto map_partitions(Fn fn) const -> Collection<U> {
+    context::SequentialContext seq;
+    return map_partitions<U>(std::move(fn), seq);
+  }
+
+  template <class U, class Fn>
+  auto map_partitions(Fn fn, context::ExecutionContext& ctx) const -> Collection<U> {
+    static_assert(std::is_trivially_copyable_v<U>,
+                  "Collection::map_partitions currently requires U to be trivially copyable.");
+    auto h = adapters::make_map_partitions_op<T, U>(std::move(fn));
+    engines::ConstBuffer in_buf{static_cast<const void*>(data_.data()),
+                                data_.size(), sizeof(T), 0};
+    std::vector<std::byte> out_bytes =
+        engines::run_map_partitions_alloc(ctx, h.op, in_buf);
+    const std::size_t n = out_bytes.size() / sizeof(U);
+    std::vector<U> out(n);
+    if (n) std::memcpy(out.data(), out_bytes.data(), n * sizeof(U));
+    return Collection<U>(std::move(out));
+  }
+
  private:
   std::vector<T> data_;
 };

@@ -155,6 +155,23 @@ class LazyCollection {
     return res;
   }
 
+  // map_partitions: apply a partition-aware Fn to each partition
+  // Supported Fn forms (all partition-aware), wrapped by adapters:
+  //   - void(const PartitionInfo&, const T* data, size_t n, auto emit)
+  //   - std::vector<U>(const PartitionInfo&, const T* data, size_t n)
+  //   - std::initializer_list<U>(const PartitionInfo&, const T* data, size_t n)
+  //   - std::pair<const U*, size_t>(const PartitionInfo&, const T* data, size_t n)
+  template <class U, class Fn>
+  LazyCollection<U> map_partitions(Fn fn) const {
+    auto h = adapters::make_map_partitions_op<T, U>(std::move(fn));
+    auto mop = std::make_unique<operators::MapPartitionsOperator>(h.op);
+    OutputLayout out{sizeof(U), true};
+    LazyCollection<U> res;
+    res.plan_ = plan_;
+    res.node_ = plan_->add_node(std::move(mop), {node_}, out, h.state);
+    return res;
+  }
+
   std::vector<T> collect_local(context::ExecutionContext& ctx) const {
     std::vector<NodeId> chain;
     for (NodeId cur = node_;;) {
@@ -185,6 +202,15 @@ class LazyCollection {
                   std::size_t /*count*/) -> std::size_t {
                 engines::run_map(ctx, *mop, in, out);
                 return in.count;  // map preserves cardinality
+              });
+          break;
+        }
+        case operators::Op::MAP_PARTITIONS: {
+          auto* mpop = static_cast<operators::MapPartitionsOperator*>(node.op.get());
+          run_unary_unbounded(
+              cur_bytes, cur_elem, node.out.elem_size,
+              [&](const engines::ConstBuffer& in) -> std::vector<std::byte> {
+                return engines::run_map_partitions_alloc(ctx, *mpop, in);
               });
           break;
         }

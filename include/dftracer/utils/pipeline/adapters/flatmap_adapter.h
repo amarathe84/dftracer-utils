@@ -14,16 +14,6 @@ namespace dftracer {
 namespace utils {
 namespace pipeline {
 namespace adapters {
-namespace detail {
-template <class Out>
-struct EmitProbe {
-  void operator()(const Out&) const noexcept;
-};
-
-template <class Fn, class In, class Out>
-constexpr bool supports_emitter_v =
-    std::is_invocable_v<Fn, const In&, EmitProbe<Out>>;
-}  // namespace detail
 
 // form: fn(const In&) -> std::vector<Out>
 template <class Fn, class In, class Out>
