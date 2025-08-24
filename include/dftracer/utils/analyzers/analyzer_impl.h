@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H__
-#define __DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H__
+#ifndef DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H
+#define DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H
 
 #include <arrow/result.h>
 #include <arrow/status.h>
@@ -16,9 +16,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace dftracer {
-namespace utils {
-namespace analyzers {
+namespace dftracer::utils::analyzers {
 using namespace dftracer::utils::json;
 using namespace dftracer::utils::pipeline;
 
@@ -759,8 +757,6 @@ AnalyzerResult Analyzer::analyze_trace(
   }
 }
 
-}  // namespace analyzers
-}  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H__
+#endif // DFTRACER_UTILS_ANALYZERS_ANALYZER_IMPL_H

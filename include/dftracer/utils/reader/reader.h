@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_READER_READER_H
-#define __DFTRACER_UTILS_READER_READER_H
+#ifndef DFTRACER_UTILS_READER_READER_H
+#define DFTRACER_UTILS_READER_READER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -117,18 +117,12 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <vector>
 
 // Forward declaration for indexer
-namespace dftracer {
-namespace utils {
-namespace indexer {
+namespace dftracer::utils::indexer {
 class Indexer;
 struct CheckpointInfo;
-}  // namespace indexer
-}  // namespace utils
 }  // namespace dftracer
 
-namespace dftracer {
-namespace utils {
-namespace reader {
+namespace dftracer::utils::reader {
 
 /**
  * DFT reader
@@ -335,9 +329,7 @@ class Reader {
   std::unique_ptr<Impl> pImpl_;
 };
 
-}  // namespace reader
-}  // namespace utils
 }  // namespace dftracer
 #endif
 
-#endif  // __DFTRACER_UTILS_READER_READER_H
+#endif // DFTRACER_UTILS_READER_READER_H

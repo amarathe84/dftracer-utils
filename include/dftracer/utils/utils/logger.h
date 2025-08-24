@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_UTILS_LOGGER_H
-#define __DFTRACER_UTILS_UTILS_LOGGER_H
+#ifndef DFTRACER_UTILS_UTILS_LOGGER_H
+#define DFTRACER_UTILS_UTILS_LOGGER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,9 +38,7 @@ int dft_utils_get_log_level_int(void);
 
 #include <string>
 
-namespace dftracer {
-namespace utils {
-namespace logger {
+namespace dftracer::utils::logger {
 /**
  * Set the log level for the utils module
  * @param level_str String representation of log level
@@ -66,9 +64,7 @@ std::string get_log_level_string();
  * @return Integer representation of log level
  */
 int get_log_level_int();
-}  // namespace logger
-}  // namespace utils
 }  // namespace dftracer
 #endif
 
-#endif  // __DFTRACER_UTILS_UTILS_LOGGER_H
+#endif // DFTRACER_UTILS_UTILS_LOGGER_H

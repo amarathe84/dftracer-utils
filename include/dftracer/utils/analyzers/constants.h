@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_ANALYZERS_CONSTANTS_H__
-#define __DFTRACER_UTILS_ANALYZERS_CONSTANTS_H__
+#ifndef DFTRACER_UTILS_ANALYZERS_CONSTANTS_H
+#define DFTRACER_UTILS_ANALYZERS_CONSTANTS_H
 
 #include <limits>
 #include <string>
@@ -7,10 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace dftracer {
-namespace utils {
-namespace analyzers {
-namespace constants {
+namespace dftracer::utils::analyzers::constants {
 
 // Enums
 enum class AccessPattern { SEQUENTIAL = 0, RANDOM = 1 };
@@ -191,9 +188,6 @@ inline bool is_epoch_event(const std::string& cat,
                                       func_name == PIPELINE_EPOCH);
 }
 }  // namespace ai_dftracer
-}  // namespace constants
-}  // namespace analyzers
-}  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_ANALYZERS_CONSTANTS_H__
+#endif // DFTRACER_UTILS_ANALYZERS_CONSTANTS_H

@@ -16,9 +16,7 @@
 
 using namespace dftracer::utils::json;
 
-namespace dftracer {
-namespace utils {
-namespace analyzers {
+namespace dftracer::utils::analyzers {
 
 namespace constants {
 const std::unordered_map<std::string, uint8_t> IO_CAT_TO_CODE = {
@@ -720,6 +718,4 @@ bool Analyzer::has_checkpoint(const std::string& name) const {
   return fs::exists(metadata_path);
 }
 
-}  // namespace analyzers
-}  // namespace utils
 }  // namespace dftracer

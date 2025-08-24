@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_UTILS_RESULT_H
-#define __DFTRACER_UTILS_UTILS_RESULT_H
+#ifndef DFTRACER_UTILS_UTILS_RESULT_H
+#define DFTRACER_UTILS_UTILS_RESULT_H
 
 #include <functional>
 #include <stdexcept>
@@ -97,4 +97,4 @@ class Result {
   bool operator!=(const Result& other) const { return !(*this == other); }
 };
 
-#endif  // __DFTRACER_UTILS_UTILS_RESULT_H
+#endif // DFTRACER_UTILS_UTILS_RESULT_H

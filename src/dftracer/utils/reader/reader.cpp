@@ -13,9 +13,7 @@
 #include <fcntl.h>
 #endif
 
-namespace dftracer {
-namespace utils {
-namespace reader {
+namespace dftracer::utils::reader {
 
 // Constants for better maintainability
 namespace constants {
@@ -1192,8 +1190,6 @@ std::string Reader::Error::format_message(Type type,
   return std::string(prefix) + ": " + message;
 }
 
-}  // namespace reader
-}  // namespace utils
 }  // namespace dftracer
 
 // ==============================================================================

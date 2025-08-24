@@ -63,11 +63,11 @@ test-py:
 	@echo "Python tests completed successfully!"
 
 format:
-	@echo "Formatting code..."
-	find ./include -name "*.h" -exec clang-format -i -style=file {} +
-	find ./src -name "*.cpp" -exec clang-format -i -style=file {} +
-	find ./tests -name "*.cpp" -exec clang-format -i -style=file {} +
-	find ./tests -name "*.h" -exec clang-format -i -style=file {} +
+  @echo "Formatting code..."
+  find ./include ./src ./tests -type f \( -name "*.h" -o -name "*.cpp" \) -exec clang-format -i -style=file {} +
+  @if command -v clang-tidy &> /dev/null; then \
+      clang-tidy src/**/*.cpp include/**/*.h --config-file=.clang-tidy; \
+  fi
 
 # Normal build
 build:

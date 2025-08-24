@@ -1,12 +1,10 @@
-#ifndef __DFTRACER_UTILS_UTILS_FILE_H
-#define __DFTRACER_UTILS_UTILS_FILE_H
+#ifndef DFTRACER_UTILS_UTILS_FILE_H
+#define DFTRACER_UTILS_UTILS_FILE_H
 
 #include <ctime>
 #include <string>
 
-namespace dftracer {
-namespace utils {
-namespace utils {
+namespace dftracer::utils::utils {
 
 /**
  * Get the modification time of a file
@@ -16,8 +14,6 @@ namespace utils {
  */
 time_t get_file_modification_time(const std::string &file_path);
 
-}  // namespace utils
-}  // namespace utils
 }  // namespace dftracer
 
-#endif  // __DFTRACER_UTILS_UTILS_FILE_H
+#endif // DFTRACER_UTILS_UTILS_FILE_H

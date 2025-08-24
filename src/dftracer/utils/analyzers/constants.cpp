@@ -2,10 +2,7 @@
 
 #include <limits>
 
-namespace dftracer {
-namespace utils {
-namespace analyzers {
-namespace constants {
+namespace dftracer::utils::analyzers::constants {
 std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat) {
   os << std::to_string(static_cast<uint64_t>(io_cat));
   return os;
@@ -175,7 +172,4 @@ const std::unordered_map<std::string, std::string> HUMANIZED_VIEW_TYPES = {
 const std::vector<std::string> HLM_EXTRA_COLS = {"cat", "io_cat", "acc_pat",
                                                  "func_name"};
 
-}  // namespace constants
-}  // namespace analyzers
-}  // namespace utils
 }  // namespace dftracer

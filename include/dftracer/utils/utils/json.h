@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_UTILS_DFT_EVENTS_H
-#define __DFTRACER_UTILS_UTILS_DFT_EVENTS_H
+#ifndef DFTRACER_UTILS_UTILS_JSON_H
+#define DFTRACER_UTILS_UTILS_JSON_H
 
 #include <simdjson.h>
 #include <spdlog/fmt/fmt.h>
@@ -10,9 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace dftracer {
-namespace utils {
-namespace json {
+namespace dftracer::utils::json {
 
 class OwnedJsonDocument {
  private:
@@ -109,8 +107,6 @@ std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs);
 
 std::ostream& operator<<(std::ostream& os, const OwnedJsonDocument& doc);
 std::ostream& operator<<(std::ostream& os, const OwnedJsonDocuments& docs);
-}  // namespace json
-}  // namespace utils
 }  // namespace dftracer
 
 template <>

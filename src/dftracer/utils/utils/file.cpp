@@ -11,9 +11,7 @@
 
 #include <chrono>
 
-namespace dftracer {
-namespace utils {
-namespace utils {
+namespace dftracer::utils::utils {
 
 time_t get_file_modification_time(const std::string &file_path) {
 #if defined(DFT_USE_STD_FS)
@@ -40,6 +38,4 @@ time_t get_file_modification_time(const std::string &file_path) {
 #endif
 }
 
-}  // namespace utils
-}  // namespace utils
 }  // namespace dftracer

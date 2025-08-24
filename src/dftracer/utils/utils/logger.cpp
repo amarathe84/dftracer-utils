@@ -4,9 +4,7 @@
 #include <algorithm>
 #include <string>
 
-namespace dftracer {
-namespace utils {
-namespace logger {
+namespace dftracer::utils::logger {
 
 /**
  * Convert string log level to spdlog level enum
@@ -77,8 +75,6 @@ std::string get_log_level_string() {
 
 int get_log_level_int() { return static_cast<int>(spdlog::get_level()); }
 
-}  // namespace logger
-}  // namespace utils
 }  // namespace dftracer
 
 // ==============================================================================

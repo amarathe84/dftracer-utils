@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_ANALYZERS_ANALYZER_H__
-#define __DFTRACER_UTILS_ANALYZERS_ANALYZER_H__
+#ifndef DFTRACER_UTILS_ANALYZERS_ANALYZER_H
+#define DFTRACER_UTILS_ANALYZERS_ANALYZER_H
 
 #include <dftracer/utils/analyzers/constants.h>
 #include <dftracer/utils/indexer/indexer.h>
@@ -12,9 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace dftracer {
-namespace utils {
-namespace analyzers {
+namespace dftracer::utils::analyzers {
 
 using namespace dftracer::utils::pipeline;
 
@@ -120,10 +118,8 @@ class Analyzer {
   AnalyzerConfig config_;
 };
 
-}  // namespace analyzers
-}  // namespace utils
 }  // namespace dftracer
 
 #include <dftracer/utils/analyzers/analyzer_impl.h>
 
-#endif  // __DFTRACER_UTILS_ANALYZERS_ANALYZER_H__
+#endif // DFTRACER_UTILS_ANALYZERS_ANALYZER_H

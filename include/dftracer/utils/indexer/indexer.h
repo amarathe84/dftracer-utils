@@ -1,5 +1,5 @@
-#ifndef __DFTRACER_UTILS_INDEXER_INDEXER_H
-#define __DFTRACER_UTILS_INDEXER_INDEXER_H
+#ifndef DFTRACER_UTILS_INDEXER_INDEXER_H
+#define DFTRACER_UTILS_INDEXER_INDEXER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -126,9 +126,7 @@ void dft_indexer_destroy(dft_indexer_handle_t indexer);
 #include <string>
 #include <vector>
 
-namespace dftracer {
-namespace utils {
-namespace indexer {
+namespace dftracer::utils::indexer {
 
 /**
  * Constants for zlib decompression and checkpoint management
@@ -328,9 +326,7 @@ class Indexer {
   std::unique_ptr<Impl> pImpl_;
 };
 
-}  // namespace indexer
-}  // namespace utils
 }  // namespace dftracer
 #endif
 
-#endif  // __DFTRACER_UTILS_READER_INDEXER_H
+#endif // DFTRACER_UTILS_INDEXER_INDEXER_H

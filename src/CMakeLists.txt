@@ -34,10 +34,10 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
 
   # pipeline
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/map_engine.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/filter_engine.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/flatmap_engine.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/map_partitions_engine.cpp
+  # ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/map_engine.cpp
+  # ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/filter_engine.cpp
+  # ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/flatmap_engine.cpp
+  # ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/engines/map_partitions_engine.cpp
 
   # analyzer
   # analyzers/analyzer.cpp

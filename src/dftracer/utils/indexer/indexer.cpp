@@ -15,9 +15,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace dftracer {
-namespace utils {
-namespace indexer {
+namespace dftracer::utils::indexer {
 
 // ==============================================================================
 // Constants and Configuration
@@ -1355,17 +1353,13 @@ void Indexer::Impl::build() {
   spdlog::debug("Index built successfully for {}", gz_path_);
 }
 
-}  // namespace indexer
-}  // namespace utils
 }  // namespace dftracer
 
 // ==============================================================================
 // C++ Public Interface Implementation
 // ==============================================================================
 
-namespace dftracer {
-namespace utils {
-namespace indexer {
+namespace dftracer::utils::indexer {
 
 Indexer::Indexer(const std::string &gz_path, const std::string &idx_path,
                  size_t ckpt_size, bool force_rebuild)
@@ -1452,8 +1446,6 @@ std::string Indexer::Error::format_message(Type type,
   return std::string(prefix) + ": " + message;
 }
 
-}  // namespace indexer
-}  // namespace utils
 }  // namespace dftracer
 
 // ==============================================================================
