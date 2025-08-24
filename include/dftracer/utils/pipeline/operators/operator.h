@@ -45,6 +45,8 @@ class Operator {
   inline Op op() const { return op_; }
   inline const char* name() const { return name_; }
   inline std::uint64_t id() const { return id_; }
+
+  
 };
 }  // namespace operators
 }  // namespace pipeline

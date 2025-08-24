@@ -70,6 +70,14 @@ void run_unary_unbounded(std::shared_ptr<std::vector<std::byte>>& cur_bytes,
 using lazy_collections::detail::run_unary_bounded;
 using lazy_collections::detail::run_unary_unbounded;
 using namespace lazy_collections;
+
+class Factory {
+ public:
+  static std::shared_ptr<operators::MapOperator> create_map_operator() {
+    return std::make_shared<operators::MapOperator>();
+  }
+};
+
 template <class T>
 class LazyCollection {
  public:
