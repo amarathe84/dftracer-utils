@@ -1,5 +1,4 @@
 from typing import Optional, Literal, Union
-from .types import JsonValue, JsonArrayLike, is_json_document, is_json_array, is_json_value
 
 from .dftracer_utils_ext import (
     # Reader classes and iterators
@@ -23,19 +22,11 @@ from .dftracer_utils_ext import (
     # Indexer classes
     DFTracerIndexer,  # noqa: F401
     CheckpointInfo,  # noqa: F401
-    # JSON classes
-    JsonDocument,  # noqa: F401
-    JsonArray,  # noqa: F401
     # Utility functions
-    _register_json_array_as_sequence,  # noqa: F401,
     _register_logging,  # noqa: F401
 )
 
 _register_logging()
-try:
-    _register_json_array_as_sequence()
-except ImportError:
-    pass
 
 def dft_reader(
     gzip_path_or_indexer: Union[str, DFTracerIndexer], 
@@ -107,10 +98,4 @@ __all__ = [
     "JsonArray",
     "dft_reader",
     "dft_reader_range",
-    # Type aliases and utilities
-    "JsonValue",
-    "JsonArrayLike",
-    "is_json_document", 
-    "is_json_array",
-    "is_json_value"
 ]

@@ -338,21 +338,8 @@ if (SKBUILD)
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/utils_ext.cpp
 
     # json
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array_iterator.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array_iterator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/array.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/document.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/document.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/helpers.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/helpers.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/items_iterator.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/items_iterator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/keys_iterator.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/keys_iterator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/values_iterator.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/values_iterator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json_ext.cpp
   )
 
   if (APPLE)

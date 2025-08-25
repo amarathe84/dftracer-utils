@@ -1,103 +1,12 @@
 """Type stubs for dftracer_utils_ext module."""
 
-from typing import Optional, Union, List, overload, Any, Iterator, Tuple
+from typing import Optional, List, overload, Any, Dict
 from typing_extensions import Self, Literal
 
 # Type aliases for better typing support
-JsonValue = Union['JsonDocument', 'JsonArray', str, int, float, bool, None]
-JsonArrayLike = Union['JsonArray', List[Any]]
-
-# ========== JSON FUNCTIONALITY ==========
-
-class JsonDocument:
-    """Lazy JSON document wrapper for high-performance dict-like access."""
-    
-    def __init__(self, json_str: str) -> None:
-        """Create JsonDocument from JSON string."""
-        ...
-    
-    def __getitem__(self, key: str) -> JsonValue:
-        """Get item by key."""
-        ...
-    
-    def __contains__(self, key: str) -> bool:
-        """Check if key exists."""
-        ...
-    
-    def __len__(self) -> int:
-        """Get number of keys."""
-        ...
-    
-    def __bool__(self) -> bool:
-        """Check if document is non-empty."""
-        ...
-    
-    def __str__(self) -> str:
-        """String representation."""
-        ...
-    
-    def __repr__(self) -> str:
-        """String representation."""
-        ...
-    
-    def __iter__(self) -> Iterator[str]:
-        """Iterator over keys."""
-        ...
-    
-    def keys(self) -> Iterator[str]:
-        """Get lazy iterator over keys."""
-        ...
-    
-    def values(self) -> Iterator[JsonValue]:
-        """Get lazy iterator over values."""
-        ...
-    
-    def items(self) -> Iterator[Tuple[str, JsonValue]]:
-        """Get lazy iterator over (key, value) pairs."""
-        ...
-    
-    def get(self, key: str, default: Any = None) -> JsonValue:
-        """Get value with optional default."""
-        ...
-
-class JsonArray:
-    """Lazy JSON array wrapper for high-performance list-like access."""
-    
-    def __getitem__(self, index: int) -> JsonValue:
-        """Get item by index."""
-        ...
-    
-    def __len__(self) -> int:
-        """Get number of items."""
-        ...
-    
-    def __str__(self) -> str:
-        """String representation."""
-        ...
-    
-    def __repr__(self) -> str:
-        """String representation."""
-        ...
-    
-    def __iter__(self) -> Iterator[JsonValue]:
-        """Iterator over items."""
-        ...
-    
-    def __contains__(self, item: Any) -> bool:
-        """Check if item exists in array."""
-        ...
-    
-    def index(self, item: Any) -> int:
-        """Find index of item in array."""
-        ...
-    
-    def count(self, item: Any) -> int:
-        """Count occurrences of item in array."""
-        ...
-    
-    def to_list(self) -> List[JsonValue]:
-        """Convert to Python list."""
-        ...
+JsonValue = Any
+JsonArrayLike = List[JsonValue]
+JsonDict = Dict[str, JsonValue]
 
 # ========== INDEXER FUNCTIONALITY ==========
 
@@ -204,13 +113,13 @@ class DFTracerJsonLinesIterator:
     """Iterator for reading JSON lines chunks from DFTracer traces."""
     
     def __iter__(self) -> Self: ...
-    def __next__(self) -> List[JsonDocument]: ...
+    def __next__(self) -> List[JsonDict]: ...
 
 class DFTracerJsonLinesBytesIterator:
     """Iterator for reading JSON lines bytes chunks from DFTracer traces."""
     
     def __iter__(self) -> Self: ...
-    def __next__(self) -> List[JsonDocument]: ...
+    def __next__(self) -> List[JsonDict]: ...
 
 class DFTracerBytesRangeIterator:
     """Range iterator for reading bytes chunks from DFTracer traces."""
@@ -261,7 +170,7 @@ class DFTracerJsonLinesRangeIterator:
     """Range iterator for reading JSON lines chunks from DFTracer traces."""
     
     def __iter__(self) -> Self: ...
-    def __next__(self) -> List[JsonDocument]: ...
+    def __next__(self) -> List[JsonDict]: ...
     
     @property
     def start(self) -> int: ...
@@ -276,7 +185,7 @@ class DFTracerJsonLinesBytesRangeIterator:
     """Range iterator for reading JSON lines bytes chunks from DFTracer traces."""
     
     def __iter__(self) -> Self: ...
-    def __next__(self) -> List[JsonDocument]: ...
+    def __next__(self) -> List[JsonDict]: ...
     
     @property
     def start(self) -> int: ...
@@ -496,11 +405,11 @@ class DFTracerJsonLinesReader:
         """Get iterator for the reader."""
         ...
     
-    def __next__(self) -> List[JsonDocument]:
+    def __next__(self) -> List[JsonDict]:
         """Get next chunk with default step."""
         ...
     
-    def read(self, start: int, end: int) -> List[JsonDocument]:
+    def read(self, start: int, end: int) -> List[JsonDict]:
         """Read a range from the gzip file and return as Python list of dictionaries."""
         ...
     
@@ -556,11 +465,11 @@ class DFTracerJsonLinesBytesReader:
         """Get iterator for the reader."""
         ...
     
-    def __next__(self) -> List[JsonDocument]:
+    def __next__(self) -> List[JsonDict]:
         """Get next chunk with default step."""
         ...
     
-    def read(self, start: int, end: int) -> List[JsonDocument]:
+    def read(self, start: int, end: int) -> List[JsonDict]:
         """Read a range from the gzip file and return as Python list of dictionaries."""
         ...
     
@@ -616,25 +525,3 @@ def dft_reader_range(
     mode: Literal["lines"] = "lines",
     step: int = 1
 ) -> DFTracerLinesRangeIterator: ...
-
-# ========== UTILITY FUNCTIONS ==========
-
-def set_log_level(level: str) -> None:
-    """Set the global log level using a string (trace, debug, info, warn, error, critical, off)."""
-    ...
-
-def set_log_level_int(level: int) -> None:
-    """Set the global log level using an integer (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off)."""
-    ...
-
-def get_log_level_string() -> str:
-    """Get the current global log level as a string."""
-    ...
-
-def get_log_level_int() -> int:
-    """Get the current global log level as an integer."""
-    ...
-
-def _register_json_array_as_sequence() -> None:
-    """Register JsonArray with collections.abc.Sequence for better isinstance() support."""
-    ...

@@ -6,14 +6,6 @@
 
 namespace nb = nanobind;
 
-// @todo: deprecate
-nb::object convert_lazy(const dftracer::utils::json::JsonDocument& elem);
-// @todo: deprecate
-nb::list jsondocs_to_python(
-    const dftracer::utils::json::JsonDocument& docs);
-// @todo: deprecate
-nb::object old_convert_primitive(const dftracer::utils::json::JsonDocument& elem);
-
 nb::object convert_primitive(const dftracer::utils::json::OwnedJsonDocument& elem);
 nb::object convert_jsondoc(const dftracer::utils::json::OwnedJsonDocument& elem);
 nb::list convert_jsondocs(
