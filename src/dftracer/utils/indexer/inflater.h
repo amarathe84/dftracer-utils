@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <cstdio>
 
-namespace dftracer::utils::indexer {
 class Inflater {
    public:
     FILE *file;
@@ -81,7 +80,5 @@ class Inflater {
    private:
     unsigned char internal_buffer_[constants::INFLATE_BUFFER_SIZE];
 };
-
-}  // namespace dftracer::utils::indexer
 
 #endif  // DFTRACER_UTILS_INDEXER_INFLATE_H

@@ -76,3 +76,7 @@ std::size_t file_size_bytes(const std::string &path) {
     fclose(fp);
     return sz;
 }
+
+bool index_exists_and_valid(const std::string &idx_path) {
+    return fs::exists(idx_path) && fs::is_regular_file(idx_path);
+}

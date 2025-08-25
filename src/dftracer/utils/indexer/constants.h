@@ -6,7 +6,7 @@
 #include <memory>
 #include <stdexcept>
 
-namespace dftracer::utils::indexer::constants {
+namespace constants {
 static constexpr size_t INFLATE_BUFFER_SIZE = 16384;
 static constexpr size_t PROCESS_BUFFER_SIZE = 65536;
 static constexpr size_t ZLIB_WINDOW_SIZE = 32768;
@@ -44,6 +44,6 @@ static const char *SQL_SCHEMA = R"(
       PRIMARY KEY(file_id)
     );
   )";
-}  // namespace dftracer::utils::indexer::constants
+}  // namespace constants
 
 #endif  // DFTRACER_UTILS_INDEXER_CONSTANTS_H

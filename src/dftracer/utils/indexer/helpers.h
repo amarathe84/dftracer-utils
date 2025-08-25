@@ -12,4 +12,6 @@ std::string calculate_file_sha256(const std::string &file_path);
 
 std::size_t file_size_bytes(const std::string &path);
 
+bool index_exists_and_valid(const std::string &idx_path);
+
 #endif  // DFTRACER_UTILS_INDEXER_HELPERS_H

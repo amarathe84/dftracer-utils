@@ -3,6 +3,7 @@
 #include <dftracer/utils/indexer/constants.h>
 #include <dftracer/utils/indexer/error.h>
 #include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/indexer/indexer_impl.h>
 #include <dftracer/utils/indexer/inflater.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <dftracer/utils/utils/platform_compat.h>
@@ -97,9 +98,10 @@ class Indexer::Impl {
     uint64_t get_max_bytes() const;
     uint64_t get_num_lines() const;
     int find_file_id(const std::string &gz_path) const;
-    bool find_checkpoint(size_t target_offset, Checkpoint &checkpoint) const;
-    std::vector<Checkpoint> get_checkpoints() const;
-    std::vector<Checkpoint> find_checkpoints_by_line_range(
+    bool find_checkpoint(size_t target_offset,
+                         IndexCheckpoint &checkpoint) const;
+    std::vector<IndexCheckpoint> get_checkpoints() const;
+    std::vector<IndexCheckpoint> find_checkpoints_by_line_range(
         size_t start_line, size_t end_line) const;
     int get_file_id() const;
 
@@ -112,9 +114,6 @@ class Indexer::Impl {
                              size_t ckpt_size) const;
 
     // Database cleanup helpers
-    int cleanup_existing_data(sqlite3 *db, int file_id) const;
-    int insert_metadata(sqlite3 *db, int file_id, size_t ckpt_size,
-                        uint64_t total_lines, uint64_t total_uc_size) const;
     int process_chunks(FILE *fp, sqlite3 *db, int file_id, size_t ckpt_size,
                        uint64_t &total_lines_out,
                        uint64_t &total_uc_size_out) const;
@@ -148,51 +147,22 @@ bool Indexer::Impl::index_exists_and_valid(const std::string &idx_path) const {
         return false;
     }
 
-    sqlite3_stmt *stmt;
-    const char *sql =
-        "SELECT name FROM sqlite_master WHERE type='table' AND "
-        "name IN ('checkpoints', 'metadata', 'files')";
-    int table_count = 0;
+    // @todo replace this with is_index_schema_valid
+    // sqlite3_stmt *stmt;
+    // const char *sql =
+    //     "SELECT name FROM sqlite_master WHERE type='table' AND "
+    //     "name IN ('checkpoints', 'metadata', 'files')";
+    // int table_count = 0;
 
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            table_count++;
-        }
-        sqlite3_finalize(stmt);
-    }
+    // if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+    //     while (sqlite3_step(stmt) == SQLITE_ROW) {
+    //         table_count++;
+    //     }
+    //     sqlite3_finalize(stmt);
+    // }
 
-    sqlite3_close(db);
-    return table_count >= 3;
-}
-
-int Indexer::Impl::cleanup_existing_data(sqlite3 *db, int file_id) const {
-    const char *cleanup_queries[] = {
-        "DELETE FROM checkpoints WHERE file_id = ?;",
-        "DELETE FROM metadata WHERE file_id = ?;"};
-
-    for (const char *query : cleanup_queries) {
-        sqlite3_stmt *stmt = nullptr;
-        if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
-            DFTRACER_UTILS_LOG_ERROR(
-                "Failed to prepare cleanup statement '%s': %s", query,
-                sqlite3_errmsg(db));
-            return -1;
-        }
-        sqlite3_bind_int(stmt, 1, file_id);
-        int result = sqlite3_step(stmt);
-        if (result != SQLITE_DONE) {
-            DFTRACER_UTILS_LOG_ERROR(
-                "Failed to execute cleanup statement '%s' for file_id %d: %d - "
-                "%s",
-                query, file_id, result, sqlite3_errmsg(db));
-            sqlite3_finalize(stmt);
-            return -1;
-        }
-        sqlite3_finalize(stmt);
-    }
-    DFTRACER_UTILS_LOG_DEBUG(
-        "Successfully cleaned up existing data for file_id %d", file_id);
-    return 0;
+    // sqlite3_close(db);
+    // return table_count >= 3;
 }
 
 int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
@@ -205,12 +175,13 @@ int Indexer::Impl::process_chunks(FILE *fp, sqlite3 *db, int file_id,
     }
 
     try {
-        SqliteStmt st_checkpoint(
-            db,
-            "INSERT INTO checkpoints(file_id, checkpoint_idx, uc_offset, "
-            "uc_size, "
-            "c_offset, c_size, bits, dict_compressed, num_lines) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        // @todo: change this to insert_checkpoint
+        // SqliteStmt st_checkpoint(
+        //     db,
+        //     "INSERT INTO checkpoints(file_id, checkpoint_idx, uc_offset, "
+        //     "uc_size, "
+        //     "c_offset, c_size, bits, dict_compressed, num_lines) "
+        //     "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
         Inflater inflater(fp);
 
@@ -674,6 +645,7 @@ int Indexer::Impl::build_index_internal(sqlite3 *db, int file_id,
     }
 
     // Insert metadata with total_lines and total_uc_size
+    // @todo replace with insert_file_metadata_record
     if (insert_metadata(db, file_id, ckpt_size, total_lines, total_uc_size) !=
         0) {
         sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
@@ -1079,57 +1051,49 @@ namespace dftracer::utils::indexer {
 
 Indexer::Indexer(const std::string &gz_path, const std::string &idx_path,
                  size_t ckpt_size, bool force_rebuild)
-    : pImpl_(new Impl(gz_path, idx_path, ckpt_size, force_rebuild)) {}
+    : p_impl_(new IndexerImplementor(gz_path, idx_path, ckpt_size,
+                                     force_rebuild)) {}
 
 Indexer::~Indexer() = default;
 
-Indexer::Indexer(Indexer &&other) noexcept : pImpl_(other.pImpl_.release()) {}
+Indexer::Indexer(Indexer &&other) noexcept : p_impl_(other.p_impl_.release()) {}
 
 Indexer &Indexer::operator=(Indexer &&other) noexcept {
     if (this != &other) {
-        pImpl_.reset(other.pImpl_.release());
+        p_impl_.reset(other.p_impl_.release());
     }
     return *this;
 }
 
-void Indexer::build() { pImpl_->build(); }
+void Indexer::build() { p_impl_->build(); }
 
-bool Indexer::need_rebuild() const { return pImpl_->need_rebuild(); }
+bool Indexer::need_rebuild() const { return p_impl_->need_rebuild(); }
 
-bool Indexer::is_valid() const { return pImpl_ && pImpl_->is_valid(); }
+bool Indexer::is_valid() const { return p_impl_ && p_impl_->is_valid(); }
 
-const std::string &Indexer::get_gz_path() const {
-    return pImpl_->get_gz_path();
-}
+const std::string &Indexer::get_gz_path() const { return p_impl_->gz_path; }
 
-const std::string &Indexer::get_idx_path() const {
-    return pImpl_->get_idx_path();
-}
+const std::string &Indexer::get_idx_path() const { return p_impl_->idx_path; }
 
 size_t Indexer::get_checkpoint_size() const {
-    return pImpl_->get_checkpoint_size();
+    return p_impl_->get_checkpoint_size();
 }
 
-uint64_t Indexer::get_max_bytes() const { return pImpl_->get_max_bytes(); }
+uint64_t Indexer::get_max_bytes() const { return p_impl_->get_max_bytes(); }
 
-uint64_t Indexer::get_num_lines() const { return pImpl_->get_num_lines(); }
+uint64_t Indexer::get_num_lines() const { return p_impl_->get_num_lines(); }
 
 int Indexer::find_file_id(const std::string &gz_path) const {
-    return pImpl_->find_file_id(gz_path);
+    return p_impl_->find_file_id(gz_path);
 }
 
 bool Indexer::find_checkpoint(size_t target_offset,
                               IndexCheckpoint &checkpoint) const {
-    return pImpl_->find_checkpoint(target_offset, checkpoint);
+    return p_impl_->find_checkpoint(target_offset, checkpoint);
 }
 
 std::vector<IndexCheckpoint> Indexer::get_checkpoints() const {
-    return pImpl_->get_checkpoints();
-}
-
-std::vector<IndexCheckpoint> Indexer::find_checkpoints_by_line_range(
-    size_t start_line, size_t end_line) const {
-    return pImpl_->find_checkpoints_by_line_range(start_line, end_line);
+    return p_impl_->get_checkpoints();
 }
 
 // ==============================================================================

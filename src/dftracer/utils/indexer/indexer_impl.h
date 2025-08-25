@@ -2,12 +2,14 @@
 #define DFTRACER_UTILS_INDEXER_INDEXER_IMPL_H
 
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/error.h>
 #include <dftracer/utils/indexer/helpers.h>
 #include <dftracer/utils/indexer/sqlite/database.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <sqlite3.h>
 
+#include <cstdint>
 #include <string>
 
 namespace dftracer::utils {
@@ -18,27 +20,29 @@ struct IndexerImplementor {
     std::string idx_path;
     size_t ckpt_size;
     bool force_rebuild;
+    bool is_valid_cache;
     SqliteDatabase db;
-    bool db_opened;
     mutable int cached_file_id;
 
     IndexerImplementor(const std::string &gz_path, const std::string &idx_path,
-                       size_t ckpt_size, bool force_rebuild)
-        : gz_path(gz_path),
-          gz_path_logical_path(get_logical_path(gz_path)),
-          idx_path(idx_path),
-          ckpt_size(ckpt_size),
-          force_rebuild(force_rebuild),
-          db(nullptr),
-          db_opened(false),
-          cached_file_id(-1) {
-        if (ckpt_size == 0) {
-            throw IndexerError(IndexerError::Type::INVALID_ARGUMENT,
-                               "ckpt_size must be greater than 0");
-        }
-        DFTRACER_UTILS_LOG_DEBUG("Created DFT indexer for gz: %s and index: %s",
-                                 gz_path.c_str(), idx_path.c_str());
-    }
+                       size_t ckpt_size, bool force_rebuild);
+
+    void open();
+    void build();
+    bool need_rebuild() const;
+    bool is_valid() const;
+
+    // Metadata
+    std::size_t get_checkpoint_size() const;
+    std::uint64_t get_max_bytes() const;
+    std::uint64_t get_num_lines() const;
+    int get_file_id() const;
+
+    // Lookup
+    int find_file_id(const std::string &gz_path) const;
+    bool find_checkpoint(size_t target_offset,
+                         IndexCheckpoint &checkpoint) const;
+    std::vector<IndexCheckpoint> get_checkpoints() const;
 };
 }  // namespace dftracer::utils
 
