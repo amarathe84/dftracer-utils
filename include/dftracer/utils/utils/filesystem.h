@@ -14,7 +14,7 @@
 // always reported 199711L
 #if __has_include( \
     <filesystem>)  // Two stage __has_include needed for MSVC 2015 and per GCC docs
-#define DFT_USE_STD_FS
+#define DFTRACE_UTILS_USE_STD_FS
 
 // Old Apple OSs don't support std::filesystem, though the header is available
 // at compile time. In particular, std::filesystem is unavailable before
@@ -31,7 +31,7 @@
         __IPHONE_OS_VERSION_MIN_REQUIRED < 130000 ||                         \
     __TV_OS_VERSION_MIN_REQUIRED && __TV_OS_VERSION_MIN_REQUIRED < 130000 || \
     __WATCH_OS_VERSION_MAX_ALLOWED && __WATCH_OS_VERSION_MAX_ALLOWED < 60000
-#undef DFT_USE_STD_FS
+#undef DFTRACE_UTILS_USE_STD_FS
 #endif
 #endif
 #endif
@@ -39,32 +39,33 @@
 
 // check for std::__fs::filesystem (Clang with C++11/14, but not on Apple
 // platforms)
-#if !defined(DFT_USE_STD_FS) && defined(__has_include) && !defined(__APPLE__)
+#if !defined(DFTRACE_UTILS_USE_STD_FS) && defined(__has_include) && \
+    !defined(__APPLE__)
 #if __has_include(<filesystem>)
 // check if std::__fs::filesystem exists (common in Clang with C++11/14)
 #if defined(__clang__) && __clang_major__ >= 7
-#define DFT_USE_STD_FS_INTERNAL
+#define DFTRACE_UTILS_USE_STD_FS_INTERNAL
 #endif
 #endif
 #endif
 
 // try experimental filesystem (but only if we have a good reason to avoid
 // ghc_filesystem)
-#if !defined(DFT_USE_STD_FS) && !defined(DFT_USE_STD_FS_INTERNAL) && \
-    defined(__has_include) && 0
+#if !defined(DFTRACE_UTILS_USE_STD_FS) && \
+    !defined(DFTRACE_UTILS_USE_STD_FS_INTERNAL) && defined(__has_include) && 0
 #if __has_include(<experimental/filesystem>)
-#define DFT_USE_EXPERIMENTAL_FS
+#define DFTRACE_UTILS_USE_EXPERIMENTAL_FS
 #endif
 #endif
 
 // include the appropriate headers and set up the namespace
-#ifdef DFT_USE_STD_FS
+#ifdef DFTRACE_UTILS_USE_STD_FS
 #include <filesystem>
 namespace fs = std::filesystem;
-#elif defined(DFT_USE_STD_FS_INTERNAL)
+#elif defined(DFTRACE_UTILS_USE_STD_FS_INTERNAL)
 #include <filesystem>
 namespace fs = std::__fs::filesystem;
-#elif defined(DFT_USE_EXPERIMENTAL_FS)
+#elif defined(DFTRACE_UTILS_USE_EXPERIMENTAL_FS)
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
 #else
@@ -72,5 +73,5 @@ namespace fs = std::experimental::filesystem;
 #include <ghc/filesystem.hpp>
 namespace fs = ghc::filesystem;
 
-#endif  // DFT_USE_STD_FS
+#endif  // DFTRACE_UTILS_USE_STD_FS
 #endif  // DFTRACER_UTILS_UTILS_FILESYSTEM_H

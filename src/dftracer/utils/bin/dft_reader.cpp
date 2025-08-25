@@ -53,8 +53,6 @@ int main(int argc, char **argv) {
         .default_value<std::string>("bytes")
         .choices("bytes", "line_bytes", "lines");
 
-    DFTRACER_UTILS_LOG_DEBUG("Parsed arguments:");
-
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception &err) {
