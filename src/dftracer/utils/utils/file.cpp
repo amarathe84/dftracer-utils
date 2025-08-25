@@ -15,26 +15,27 @@ namespace dftracer::utils::utils {
 
 time_t get_file_modification_time(const std::string &file_path) {
 #if defined(DFT_USE_STD_FS)
-  // Use std::filesystem when available and working
-  auto ftime = fs::last_write_time(file_path);
-  auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-      ftime - fs::file_time_type::clock::now() +
-      std::chrono::system_clock::now());
-  return std::chrono::system_clock::to_time_t(sctp);
+    // Use std::filesystem when available and working
+    auto ftime = fs::last_write_time(file_path);
+    auto sctp =
+        std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+            ftime - fs::file_time_type::clock::now() +
+            std::chrono::system_clock::now());
+    return std::chrono::system_clock::to_time_t(sctp);
 #else
-  // Fallback to platform-specific stat
+    // Fallback to platform-specific stat
 #ifdef _WIN32
-  struct _stat64 st;
-  if (_stat64(file_path.c_str(), &st) == 0) {
-    return st.st_mtime;
-  }
+    struct _stat64 st;
+    if (_stat64(file_path.c_str(), &st) == 0) {
+        return st.st_mtime;
+    }
 #else
-  struct stat st;
-  if (stat(file_path.c_str(), &st) == 0) {
-    return st.st_mtime;
-  }
+    struct stat st;
+    if (stat(file_path.c_str(), &st) == 0) {
+        return st.st_mtime;
+    }
 #endif
-  return 0;
+    return 0;
 #endif
 }
 

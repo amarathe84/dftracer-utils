@@ -5,8 +5,8 @@
 
 namespace dftracer::utils::analyzers::constants {
 std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat) {
-  os << std::to_string(static_cast<uint64_t>(io_cat));
-  return os;
+    os << std::to_string(static_cast<uint64_t>(io_cat));
+    return os;
 }
 
 // View types
@@ -52,32 +52,32 @@ const std::unordered_set<std::string> POSIX_IPC_FUNCTIONS = {
     "semop",  "shmat",  "shmctl", "shmdt",  "shmget"};
 
 IOCategory get_io_cat(const std::string& func_name) {
-  // if func_name is within POSIX_METADATA_FUNCTIONS then use metadata
-  if (POSIX_METADATA_FUNCTIONS.count(func_name)) {
-    return IOCategory::METADATA;
-  }
+    // if func_name is within POSIX_METADATA_FUNCTIONS then use metadata
+    if (POSIX_METADATA_FUNCTIONS.count(func_name)) {
+        return IOCategory::METADATA;
+    }
 
-  if (POSIX_READ_FUNCTIONS.count(func_name)) {
-    return IOCategory::READ;
-  }
+    if (POSIX_READ_FUNCTIONS.count(func_name)) {
+        return IOCategory::READ;
+    }
 
-  if (POSIX_WRITE_FUNCTIONS.count(func_name)) {
-    return IOCategory::WRITE;
-  }
+    if (POSIX_WRITE_FUNCTIONS.count(func_name)) {
+        return IOCategory::WRITE;
+    }
 
-  if (POSIX_SYNC_FUNCTIONS.count(func_name)) {
-    return IOCategory::SYNC;
-  }
+    if (POSIX_SYNC_FUNCTIONS.count(func_name)) {
+        return IOCategory::SYNC;
+    }
 
-  if (POSIX_PCTL_FUNCTIONS.count(func_name)) {
-    return IOCategory::PCTL;
-  }
+    if (POSIX_PCTL_FUNCTIONS.count(func_name)) {
+        return IOCategory::PCTL;
+    }
 
-  if (POSIX_IPC_FUNCTIONS.count(func_name)) {
-    return IOCategory::IPC;
-  }
+    if (POSIX_IPC_FUNCTIONS.count(func_name)) {
+        return IOCategory::IPC;
+    }
 
-  return IOCategory::OTHER;
+    return IOCategory::OTHER;
 }
 
 // File patterns to ignore (from Python dftracer.py lines 56-69)

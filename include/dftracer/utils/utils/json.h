@@ -13,66 +13,66 @@
 namespace dftracer::utils::json {
 
 class OwnedJsonDocument {
- private:
-  mutable std::string data_;
-  mutable simdjson::dom::element element_;
-  mutable bool parsed_;
+   private:
+    mutable std::string data_;
+    mutable simdjson::dom::element element_;
+    mutable bool parsed_;
 
-  void ensure_parsed() const;
+    void ensure_parsed() const;
 
- public:
-  // Constructors
-  OwnedJsonDocument();
-  OwnedJsonDocument(std::string json_data);
-  OwnedJsonDocument(const char* json_data, size_t size);
-  OwnedJsonDocument(const simdjson::dom::element& element);
+   public:
+    // Constructors
+    OwnedJsonDocument();
+    OwnedJsonDocument(std::string json_data);
+    OwnedJsonDocument(const char* json_data, size_t size);
+    OwnedJsonDocument(const simdjson::dom::element& element);
 
-  // Copy/Move constructors
-  OwnedJsonDocument(const OwnedJsonDocument& other);
-  OwnedJsonDocument(OwnedJsonDocument&& other) noexcept;
+    // Copy/Move constructors
+    OwnedJsonDocument(const OwnedJsonDocument& other);
+    OwnedJsonDocument(OwnedJsonDocument&& other) noexcept;
 
-  // Assignment operators
-  OwnedJsonDocument& operator=(const OwnedJsonDocument& other);
-  OwnedJsonDocument& operator=(OwnedJsonDocument&& other) noexcept;
+    // Assignment operators
+    OwnedJsonDocument& operator=(const OwnedJsonDocument& other);
+    OwnedJsonDocument& operator=(OwnedJsonDocument&& other) noexcept;
 
-  // API compatible with simdjson::dom::element
-  bool is_object() const;
-  bool is_array() const;
-  bool is_string() const;
-  bool is_int64() const;
-  bool is_uint64() const;
-  bool is_double() const;
-  bool is_bool() const;
-  bool is_null() const;
+    // API compatible with simdjson::dom::element
+    bool is_object() const;
+    bool is_array() const;
+    bool is_string() const;
+    bool is_int64() const;
+    bool is_uint64() const;
+    bool is_double() const;
+    bool is_bool() const;
+    bool is_null() const;
 
-  simdjson::dom::element_type type() const;
+    simdjson::dom::element_type type() const;
 
-  simdjson::simdjson_result<simdjson::dom::object> get_object() const;
-  simdjson::simdjson_result<simdjson::dom::array> get_array() const;
-  simdjson::simdjson_result<std::string_view> get_string() const;
-  simdjson::simdjson_result<int64_t> get_int64() const;
-  simdjson::simdjson_result<uint64_t> get_uint64() const;
-  simdjson::simdjson_result<double> get_double() const;
-  simdjson::simdjson_result<bool> get_bool() const;
+    simdjson::simdjson_result<simdjson::dom::object> get_object() const;
+    simdjson::simdjson_result<simdjson::dom::array> get_array() const;
+    simdjson::simdjson_result<std::string_view> get_string() const;
+    simdjson::simdjson_result<int64_t> get_int64() const;
+    simdjson::simdjson_result<uint64_t> get_uint64() const;
+    simdjson::simdjson_result<double> get_double() const;
+    simdjson::simdjson_result<bool> get_bool() const;
 
-  const simdjson::dom::element& get_element() const;
+    const simdjson::dom::element& get_element() const;
 
-  // operator
+    // operator
 
-  // inline operator const simdjson::dom::element&() const {
-  //   ensure_parsed();
-  //   return element_;
-  // }
+    // inline operator const simdjson::dom::element&() const {
+    //   ensure_parsed();
+    //   return element_;
+    // }
 
-  // Additional utility methods
-  bool is_valid() const;
-  const std::string& raw_data() const;
-  std::string minify() const;
+    // Additional utility methods
+    bool is_valid() const;
+    const std::string& raw_data() const;
+    std::string minify() const;
 
-  template <class Archive>
-  void serialize(Archive& ar) {
-    ar(data_);
-  }
+    template <class Archive>
+    void serialize(Archive& ar) {
+        ar(data_);
+    }
 };
 
 using JsonDocument = simdjson::dom::element;

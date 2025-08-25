@@ -9,8 +9,8 @@ void register_reader(nb::module_& m);
 void register_utils(nb::module_& m);
 
 NB_MODULE(dftracer_utils_ext, m) {
-  m.doc() = "DFTracer utilities extension";
-  register_indexer(m);
-  register_reader(m);
-  register_utils(m);
+    m.doc() = "DFTracer utilities extension";
+    register_indexer(m);
+    register_reader(m);
+    register_utils(m);
 }

@@ -14,26 +14,26 @@ namespace dftracer::utils::analyzers::constants {
 enum class AccessPattern { SEQUENTIAL = 0, RANDOM = 1 };
 
 enum class EventType {
-  ATTACH_REASONS,
-  COMPUTE_HLM,
-  COMPUTE_MAIN_VIEW,
-  COMPUTE_METRIC_BOUNDARIES,
-  COMPUTE_PERSPECTIVES,
-  COMPUTE_VIEW,
-  DETECT_CHARACTERISTICS,
-  EVALUATE_VIEW,
-  READ_TRACES,
-  SAVE_VIEWS
+    ATTACH_REASONS,
+    COMPUTE_HLM,
+    COMPUTE_MAIN_VIEW,
+    COMPUTE_METRIC_BOUNDARIES,
+    COMPUTE_PERSPECTIVES,
+    COMPUTE_VIEW,
+    DETECT_CHARACTERISTICS,
+    EVALUATE_VIEW,
+    READ_TRACES,
+    SAVE_VIEWS
 };
 
 enum class IOCategory {
-  READ = 1,
-  WRITE = 2,
-  METADATA = 3,
-  PCTL = 4,
-  IPC = 5,
-  OTHER = 6,
-  SYNC = 7
+    READ = 1,
+    WRITE = 2,
+    METADATA = 3,
+    PCTL = 4,
+    IPC = 5,
+    OTHER = 6,
+    SYNC = 7
 };
 
 std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat);
@@ -132,9 +132,9 @@ constexpr const char* CHECKPOINT_VIEW = "_view";
 // HLM constants
 
 struct HLM_AGG {
-  static constexpr const char* TIME = "time";
-  static constexpr const char* COUNT = "count";
-  static constexpr const char* SIZE = "size";
+    static constexpr const char* TIME = "time";
+    static constexpr const char* COUNT = "count";
+    static constexpr const char* SIZE = "size";
 };
 
 extern const std::vector<std::string> HLM_EXTRA_COLS;
@@ -171,22 +171,23 @@ constexpr const char* PIPELINE_TEST = "test";
 
 // Helper functions
 inline std::string get_block(const std::string& func_name) {
-  return func_name + CTX_SEPARATOR + BLOCK_NAME;
+    return func_name + CTX_SEPARATOR + BLOCK_NAME;
 }
 
 inline std::string get_iter(const std::string& func_name) {
-  return func_name + CTX_SEPARATOR + ITER_NAME;
+    return func_name + CTX_SEPARATOR + ITER_NAME;
 }
 
 inline std::string get_init(const std::string& func_name) {
-  return func_name + CTX_SEPARATOR + INIT_NAME;
+    return func_name + CTX_SEPARATOR + INIT_NAME;
 }
 
 // Check if a record matches epoch criteria
 inline bool is_epoch_event(const std::string& cat,
                            const std::string& func_name) {
-  return cat == CATEGORY_PIPELINE && (func_name == get_block(PIPELINE_EPOCH) ||
-                                      func_name == PIPELINE_EPOCH);
+    return cat == CATEGORY_PIPELINE &&
+           (func_name == get_block(PIPELINE_EPOCH) ||
+            func_name == PIPELINE_EPOCH);
 }
 }  // namespace ai_dftracer
 }  // namespace dftracer::utils::analyzers::constants

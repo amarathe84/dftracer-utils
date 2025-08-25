@@ -13,168 +13,173 @@
 #include <cstring>
 
 int main(int argc, char **argv) {
-  DFTRACER_UTILS_LOGGER_INIT();
-  size_t default_checkpoint_size =
-      dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
-  auto default_checkpoint_size_str =
-      std::to_string(default_checkpoint_size) + " B (" +
-      std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
-  argparse::ArgumentParser program("dft_reader",
-                                   DFTRACER_UTILS_PACKAGE_VERSION);
-  program.add_description(
-      "DFTracer utility for reading and indexing gzipped files");
-  program.add_argument("file").help("Gzipped file to process").required();
-  program.add_argument("-i", "--index")
-      .help("Index file to use")
-      .default_value<std::string>("");
-  program.add_argument("-s", "--start")
-      .help("Start position in bytes")
-      .default_value<int64_t>(-1)
-      .scan<'d', int64_t>();
-  program.add_argument("-e", "--end")
-      .help("End position in bytes")
-      .default_value<int64_t>(-1)
-      .scan<'d', int64_t>();
-  program.add_argument("-c", "--checkpoint-size")
-      .help("Checkpoint size for indexing in bytes (default: " +
-            default_checkpoint_size_str + ")")
-      .scan<'d', size_t>()
-      .default_value(static_cast<size_t>(default_checkpoint_size));
-  program.add_argument("-f", "--force-rebuild")
-      .help("Force rebuild index")
-      .flag();
-  program.add_argument("--check").help("Check if index is valid").flag();
-  program.add_argument("--read-buffer-size")
-      .help("Size of the read buffer in bytes (default: 1MB)")
-      .default_value<size_t>(1 * 1024 * 1024)
-      .scan<'d', size_t>();
-  program.add_argument("--mode")
-      .help("Set the reading mode (bytes, line_bytes, lines)")
-      .default_value<std::string>("bytes")
-      .choices("bytes", "line_bytes", "lines");
+    DFTRACER_UTILS_LOGGER_INIT();
+    size_t default_checkpoint_size =
+        dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
+    auto default_checkpoint_size_str =
+        std::to_string(default_checkpoint_size) + " B (" +
+        std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
+    argparse::ArgumentParser program("dft_reader",
+                                     DFTRACER_UTILS_PACKAGE_VERSION);
+    program.add_description(
+        "DFTracer utility for reading and indexing gzipped files");
+    program.add_argument("file").help("Gzipped file to process").required();
+    program.add_argument("-i", "--index")
+        .help("Index file to use")
+        .default_value<std::string>("");
+    program.add_argument("-s", "--start")
+        .help("Start position in bytes")
+        .default_value<int64_t>(-1)
+        .scan<'d', int64_t>();
+    program.add_argument("-e", "--end")
+        .help("End position in bytes")
+        .default_value<int64_t>(-1)
+        .scan<'d', int64_t>();
+    program.add_argument("-c", "--checkpoint-size")
+        .help("Checkpoint size for indexing in bytes (default: " +
+              default_checkpoint_size_str + ")")
+        .scan<'d', size_t>()
+        .default_value(static_cast<size_t>(default_checkpoint_size));
+    program.add_argument("-f", "--force-rebuild")
+        .help("Force rebuild index")
+        .flag();
+    program.add_argument("--check").help("Check if index is valid").flag();
+    program.add_argument("--read-buffer-size")
+        .help("Size of the read buffer in bytes (default: 1MB)")
+        .default_value<size_t>(1 * 1024 * 1024)
+        .scan<'d', size_t>();
+    program.add_argument("--mode")
+        .help("Set the reading mode (bytes, line_bytes, lines)")
+        .default_value<std::string>("bytes")
+        .choices("bytes", "line_bytes", "lines");
 
-  DFTRACER_UTILS_LOG_DEBUG("Parsed arguments:");
+    DFTRACER_UTILS_LOG_DEBUG("Parsed arguments:");
 
-  try {
-    program.parse_args(argc, argv);
-  } catch (const std::exception &err) {
-    DFTRACER_UTILS_LOG_ERROR("Error occurred: %s", err.what());
-    std::cerr << program;
-    return 1;
-  }
-
-  std::string gz_path = program.get<std::string>("file");
-  std::string index_path = program.get<std::string>("--index");
-  int64_t start = program.get<int64_t>("--start");
-  int64_t end = program.get<int64_t>("--end");
-  size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
-  bool force_rebuild = program.get<bool>("--force-rebuild");
-  bool check_rebuild = program.get<bool>("--check");
-  std::string read_mode = program.get<std::string>("--mode");
-  size_t read_buffer_size = program.get<size_t>("--read-buffer-size");
-
-  DFTRACER_UTILS_LOG_DEBUG("Processing file: %s", gz_path.c_str());
-  DFTRACER_UTILS_LOG_DEBUG("Start position: %lld", (long long)start);
-  DFTRACER_UTILS_LOG_DEBUG("End position: %lld", (long long)end);
-  DFTRACER_UTILS_LOG_DEBUG("Mode: %s", read_mode.c_str());
-  DFTRACER_UTILS_LOG_DEBUG("Checkpoint size: %zu B (%zu MB)", checkpoint_size,
-                           checkpoint_size / (1024 * 1024));
-  DFTRACER_UTILS_LOG_DEBUG("Force rebuild: %s",
-                           force_rebuild ? "true" : "false");
-
-  if (checkpoint_size <= 0) {
-    DFTRACER_UTILS_LOG_ERROR(
-        "Checkpoint size must be positive (greater than 0 and in MB)");
-    return 1;
-  }
-
-  FILE *test_file = fopen(gz_path.c_str(), "rb");
-  if (!test_file) {
-    DFTRACER_UTILS_LOG_ERROR("File '%s' does not exist or cannot be opened",
-                             gz_path.c_str());
-    return 1;
-  }
-  fclose(test_file);
-
-  std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
-
-  try {
-    dftracer::utils::indexer::Indexer indexer(gz_path, idx_path,
-                                              checkpoint_size, force_rebuild);
-
-    if (check_rebuild) {
-      if (!indexer.need_rebuild()) {
-        DFTRACER_UTILS_LOG_DEBUG("Index is up to date, no rebuild needed");
-        return 0;
-      }
-    }
-
-    if (force_rebuild || !fs::exists(idx_path)) {
-      DFTRACER_UTILS_LOG_INFO("Building index for file: %s", gz_path.c_str());
-      indexer.build();
-    }
-  } catch (const std::runtime_error &e) {
-    DFTRACER_UTILS_LOG_ERROR("Indexer error: %s", e.what());
-    return 1;
-  }
-
-  // read operations
-  if (start != -1) {
     try {
-      dftracer::utils::reader::Reader reader(gz_path, idx_path);
-      DFTRACER_UTILS_LOG_DEBUG("Here");
-
-      if (read_mode.find("bytes") == std::string::npos) {
-        size_t end_line = static_cast<size_t>(end);
-        if (end == -1) {
-          end_line = reader.get_num_lines();
-        }
-
-        DFTRACER_UTILS_LOG_DEBUG("Reading lines from %lld to %zu",
-                                 (long long)start, end_line);
-
-        auto lines = reader.read_lines(static_cast<size_t>(start), end_line);
-        fwrite(lines.data(), 1, lines.size(), stdout);
-        size_t line_count =
-            static_cast<size_t>(std::count(lines.begin(), lines.end(), '\n'));
-        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu lines from range",
-                                 line_count);
-      } else {
-        size_t start_bytes_ = static_cast<size_t>(start);
-        size_t end_bytes_ = end == -1 ? std::numeric_limits<size_t>::max()
-                                      : static_cast<size_t>(end);
-
-        auto max_bytes = reader.get_max_bytes();
-        if (end_bytes_ > max_bytes) {
-          end_bytes_ = max_bytes;
-        }
-        DFTRACER_UTILS_LOG_DEBUG("Performing byte range read operation");
-        DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes",
-                                 read_buffer_size);
-        auto buffer = std::make_unique<char[]>(read_buffer_size);
-        size_t bytes_written;
-        size_t total_bytes = 0;
-
-        while ((bytes_written =
-                    read_mode == "bytes"
-                        ? reader.read(start_bytes_, end_bytes_, buffer.get(),
-                                      read_buffer_size)
-                        : reader.read_line_bytes(start_bytes_, end_bytes_,
-                                                 buffer.get(),
-                                                 read_buffer_size)) > 0) {
-          fwrite(buffer.get(), 1, bytes_written, stdout);
-          total_bytes += bytes_written;
-        }
-
-        DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu bytes from range",
-                                 total_bytes);
-      }
-      fflush(stdout);
-    } catch (const std::runtime_error &e) {
-      DFTRACER_UTILS_LOG_ERROR("Reader error: %s", e.what());
-      return 1;
+        program.parse_args(argc, argv);
+    } catch (const std::exception &err) {
+        DFTRACER_UTILS_LOG_ERROR("Error occurred: %s", err.what());
+        std::cerr << program;
+        return 1;
     }
-  }
 
-  return 0;
+    std::string gz_path = program.get<std::string>("file");
+    std::string index_path = program.get<std::string>("--index");
+    int64_t start = program.get<int64_t>("--start");
+    int64_t end = program.get<int64_t>("--end");
+    size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
+    bool force_rebuild = program.get<bool>("--force-rebuild");
+    bool check_rebuild = program.get<bool>("--check");
+    std::string read_mode = program.get<std::string>("--mode");
+    size_t read_buffer_size = program.get<size_t>("--read-buffer-size");
+
+    DFTRACER_UTILS_LOG_DEBUG("Processing file: %s", gz_path.c_str());
+    DFTRACER_UTILS_LOG_DEBUG("Start position: %lld", (long long)start);
+    DFTRACER_UTILS_LOG_DEBUG("End position: %lld", (long long)end);
+    DFTRACER_UTILS_LOG_DEBUG("Mode: %s", read_mode.c_str());
+    DFTRACER_UTILS_LOG_DEBUG("Checkpoint size: %zu B (%zu MB)", checkpoint_size,
+                             checkpoint_size / (1024 * 1024));
+    DFTRACER_UTILS_LOG_DEBUG("Force rebuild: %s",
+                             force_rebuild ? "true" : "false");
+
+    if (checkpoint_size <= 0) {
+        DFTRACER_UTILS_LOG_ERROR(
+            "Checkpoint size must be positive (greater than 0 and in MB)");
+        return 1;
+    }
+
+    FILE *test_file = fopen(gz_path.c_str(), "rb");
+    if (!test_file) {
+        DFTRACER_UTILS_LOG_ERROR("File '%s' does not exist or cannot be opened",
+                                 gz_path.c_str());
+        return 1;
+    }
+    fclose(test_file);
+
+    std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
+
+    try {
+        dftracer::utils::indexer::Indexer indexer(
+            gz_path, idx_path, checkpoint_size, force_rebuild);
+
+        if (check_rebuild) {
+            if (!indexer.need_rebuild()) {
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "Index is up to date, no rebuild needed");
+                return 0;
+            }
+        }
+
+        if (force_rebuild || !fs::exists(idx_path)) {
+            DFTRACER_UTILS_LOG_INFO("Building index for file: %s",
+                                    gz_path.c_str());
+            indexer.build();
+        }
+    } catch (const std::runtime_error &e) {
+        DFTRACER_UTILS_LOG_ERROR("Indexer error: %s", e.what());
+        return 1;
+    }
+
+    // read operations
+    if (start != -1) {
+        try {
+            dftracer::utils::reader::Reader reader(gz_path, idx_path);
+            DFTRACER_UTILS_LOG_DEBUG("Here");
+
+            if (read_mode.find("bytes") == std::string::npos) {
+                size_t end_line = static_cast<size_t>(end);
+                if (end == -1) {
+                    end_line = reader.get_num_lines();
+                }
+
+                DFTRACER_UTILS_LOG_DEBUG("Reading lines from %lld to %zu",
+                                         (long long)start, end_line);
+
+                auto lines =
+                    reader.read_lines(static_cast<size_t>(start), end_line);
+                fwrite(lines.data(), 1, lines.size(), stdout);
+                size_t line_count = static_cast<size_t>(
+                    std::count(lines.begin(), lines.end(), '\n'));
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "Successfully read %zu lines from range", line_count);
+            } else {
+                size_t start_bytes_ = static_cast<size_t>(start);
+                size_t end_bytes_ = end == -1
+                                        ? std::numeric_limits<size_t>::max()
+                                        : static_cast<size_t>(end);
+
+                auto max_bytes = reader.get_max_bytes();
+                if (end_bytes_ > max_bytes) {
+                    end_bytes_ = max_bytes;
+                }
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "Performing byte range read operation");
+                DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes",
+                                         read_buffer_size);
+                auto buffer = std::make_unique<char[]>(read_buffer_size);
+                size_t bytes_written;
+                size_t total_bytes = 0;
+
+                while ((bytes_written =
+                            read_mode == "bytes"
+                                ? reader.read(start_bytes_, end_bytes_,
+                                              buffer.get(), read_buffer_size)
+                                : reader.read_line_bytes(
+                                      start_bytes_, end_bytes_, buffer.get(),
+                                      read_buffer_size)) > 0) {
+                    fwrite(buffer.get(), 1, bytes_written, stdout);
+                    total_bytes += bytes_written;
+                }
+
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "Successfully read %zu bytes from range", total_bytes);
+            }
+            fflush(stdout);
+        } catch (const std::runtime_error &e) {
+            DFTRACER_UTILS_LOG_ERROR("Reader error: %s", e.what());
+            return 1;
+        }
+    }
+
+    return 0;
 }
