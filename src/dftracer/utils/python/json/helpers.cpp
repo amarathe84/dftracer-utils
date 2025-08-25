@@ -3,7 +3,8 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-nb::object convert_jsondoc(const dftracer::utils::json::OwnedJsonDocument& elem) {
+nb::object convert_jsondoc(
+    const dftracer::utils::json::OwnedJsonDocument& elem) {
   switch (elem.type()) {
     case simdjson::dom::element_type::OBJECT: {
       nb::dict result;
@@ -29,7 +30,8 @@ nb::object convert_jsondoc(const dftracer::utils::json::OwnedJsonDocument& elem)
   }
 }
 
-nb::object convert_primitive(const dftracer::utils::json::OwnedJsonDocument& elem) {
+nb::object convert_primitive(
+    const dftracer::utils::json::OwnedJsonDocument& elem) {
   switch (elem.type()) {
     case simdjson::dom::element_type::NULL_VALUE:
       return nb::none();

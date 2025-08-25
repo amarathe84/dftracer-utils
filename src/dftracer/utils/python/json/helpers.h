@@ -6,8 +6,10 @@
 
 namespace nb = nanobind;
 
-nb::object convert_primitive(const dftracer::utils::json::OwnedJsonDocument& elem);
-nb::object convert_jsondoc(const dftracer::utils::json::OwnedJsonDocument& elem);
+nb::object convert_primitive(
+    const dftracer::utils::json::OwnedJsonDocument& elem);
+nb::object convert_jsondoc(
+    const dftracer::utils::json::OwnedJsonDocument& elem);
 nb::list convert_jsondocs(
     const dftracer::utils::json::OwnedJsonDocuments& docs);
 

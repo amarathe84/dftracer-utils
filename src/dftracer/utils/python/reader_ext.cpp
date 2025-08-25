@@ -146,7 +146,8 @@ class DFTracerReader {
         is_open_(false),
         max_bytes_(0),
         index_checkpoint_size_(index_checkpoint_size) {
-    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines ||
+                  Mode == DFTracerReaderMode::JsonLines) {
       current_pos_ = 1;
       default_step_ = constants::DEFAULT_STEP_SIZE_LINES;
       default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
@@ -171,7 +172,8 @@ class DFTracerReader {
       throw std::runtime_error("Indexer cannot be null");
     }
 
-    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines ||
+                  Mode == DFTracerReaderMode::JsonLines) {
       current_pos_ = 1;
       default_step_ = constants::DEFAULT_STEP_SIZE_LINES;
       default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
