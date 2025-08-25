@@ -94,8 +94,6 @@ __all__ = [
     "DFTracerJsonLinesBytesRangeIterator",
     "DFTracerIndexer",
     "CheckpointInfo",
-    "JsonDocument",
-    "JsonArray",
     "dft_reader",
     "dft_reader_range",
 ]

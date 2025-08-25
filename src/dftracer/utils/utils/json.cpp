@@ -159,6 +159,11 @@ simdjson::simdjson_result<bool> OwnedJsonDocument::get_bool() const {
   return element_.get_bool();
 }
 
+const simdjson::dom::element& OwnedJsonDocument::get_element() const {
+  ensure_parsed();
+  return element_;
+}
+
 // Utility methods
 bool OwnedJsonDocument::is_valid() const {
   ensure_parsed();

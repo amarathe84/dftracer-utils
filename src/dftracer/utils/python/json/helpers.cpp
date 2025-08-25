@@ -4,7 +4,8 @@
 #include <nanobind/stl/vector.h>
 
 nb::object convert_jsondoc(
-    const dftracer::utils::json::OwnedJsonDocument& elem) {
+    const dftracer::utils::json::OwnedJsonDocument& doc) {
+  const auto& elem = doc.get_element();
   switch (elem.type()) {
     case simdjson::dom::element_type::OBJECT: {
       nb::dict result;
@@ -30,8 +31,7 @@ nb::object convert_jsondoc(
   }
 }
 
-nb::object convert_primitive(
-    const dftracer::utils::json::OwnedJsonDocument& elem) {
+nb::object convert_primitive(const dftracer::utils::json::JsonDocument& elem) {
   switch (elem.type()) {
     case simdjson::dom::element_type::NULL_VALUE:
       return nb::none();

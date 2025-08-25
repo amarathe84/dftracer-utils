@@ -55,6 +55,8 @@ class OwnedJsonDocument {
   simdjson::simdjson_result<double> get_double() const;
   simdjson::simdjson_result<bool> get_bool() const;
 
+  const simdjson::dom::element& get_element() const;
+
   // operator
 
   // inline operator const simdjson::dom::element&() const {

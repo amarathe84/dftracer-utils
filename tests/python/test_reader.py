@@ -547,7 +547,6 @@ class TestDFTracerJsonLinesReader:
         """Test that we can import JSON lines reader classes"""
         assert hasattr(dft_utils, 'DFTracerJsonLinesReader')
         assert hasattr(dft_utils, 'DFTracerJsonLinesBytesReader')
-        assert hasattr(dft_utils, 'JsonDocument')
     
     def test_json_lines_reader_creation(self):
         """Test JSON lines reader creation"""
@@ -573,7 +572,7 @@ class TestDFTracerJsonLinesReader:
             assert reader.gzip_path == gz_file
     
     def test_json_lines_reader_data_reading(self):
-        """Test JSON lines reader data reading - returns list of JsonDocument objects"""
+        """Test JSON lines reader data reading - returns list of dictionaries"""
         with Environment(lines=100) as env:
             gz_file = env.create_test_gzip_file()
             env.build_index(gz_file, checkpoint_size_bytes=512*1024)
@@ -584,12 +583,12 @@ class TestDFTracerJsonLinesReader:
                     # Read lines 1-5 (JSON lines reader operates on line numbers)
                     data = reader.read(1, 6)
 
-                    assert isinstance(data, list)  # Should return list of JsonDocuments
+                    assert isinstance(data, list)  # Should return list of dictionaries
                     assert len(data) >= 1  # Should get at least 1 JSON object
                     
-                    # Check that each item is a JsonDocument
+                    # Check that each item is a dictionary
                     for json_obj in data:
-                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        assert isinstance(json_obj, dict)
                         # Test accessing JSON fields
                         assert "name" in json_obj  # Should have name field from test data
                         assert "data" in json_obj  # Should have data field from test data
@@ -615,13 +614,13 @@ class TestDFTracerJsonLinesReader:
                 
                 for chunk in reader:
                     chunk_count += 1
-                    assert isinstance(chunk, list)  # Should return list of JsonDocuments
+                    assert isinstance(chunk, list)  # Should return list of dictionaries
                     total_json_objects += len(chunk)
                     assert len(chunk) > 0
                     
                     # Test each JSON object in the chunk
                     for json_obj in chunk:
-                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        assert isinstance(json_obj, dict)
                         assert "name" in json_obj
                         assert "data" in json_obj
                     
@@ -692,12 +691,12 @@ class TestDFTracerJsonLinesBytesReader:
                     # Read bytes 0 to 4 lines worth (JSON lines bytes reader operates on byte ranges)
                     data = reader.read(0, bytes_per_line * 4)
 
-                    assert isinstance(data, list)  # Should return list of JsonDocuments
+                    assert isinstance(data, list)  # Should return list of dictionaries
                     assert len(data) >= 1  # Should get at least 1 JSON object
                     
-                    # Check that each item is a JsonDocument
+                    # Check that each item is a dictionary
                     for json_obj in data:
-                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        assert isinstance(json_obj, dict)
                         # Test accessing JSON fields
                         assert "name" in json_obj  # Should have name field from test data
                         assert "data" in json_obj  # Should have data field from test data
@@ -723,13 +722,13 @@ class TestDFTracerJsonLinesBytesReader:
                 
                 for chunk in reader:
                     chunk_count += 1
-                    assert isinstance(chunk, list)  # Should return list of JsonDocuments
+                    assert isinstance(chunk, list)  # Should return list of dictionaries
                     total_json_objects += len(chunk)
                     assert len(chunk) > 0
                     
                     # Test each JSON object in the chunk
                     for json_obj in chunk:
-                        assert isinstance(json_obj, dft_utils.JsonDocument)
+                        assert isinstance(json_obj, dict)
                         assert "name" in json_obj
                         assert "data" in json_obj
                     
@@ -816,7 +815,7 @@ class TestDFTracerJsonLinesBytesReader:
                         
                         # Test each JSON object
                         for json_obj in chunk:
-                            assert isinstance(json_obj, dft_utils.JsonDocument)
+                            assert isinstance(json_obj, dict)
                             assert "name" in json_obj
                         
                         if chunk_count >= 3:
