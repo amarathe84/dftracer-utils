@@ -26,9 +26,33 @@ need_cpplogger()
 #-----------------------------------------
 
 set(DFTRACER_UTILS_SOURCES
+  # Common
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/common/constants.cpp
+
+  # Indexer
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer_impl.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer_c.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/helpers.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/error.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/delete_file_record.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/insert_checkpoint_record.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/insert_file_metadata_record.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/insert_file_record.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_checkpoint.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_checkpoints.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_file_id.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_max_bytes.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_num_lines.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_schema_validity.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_stored_file_info.cpp
+
+  # Reader
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/file.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader_c.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/error.cpp
+
+
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
 
   # pipeline

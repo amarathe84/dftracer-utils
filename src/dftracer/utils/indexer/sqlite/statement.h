@@ -1,5 +1,5 @@
-#ifndef DFT_UTILS_INDEXER_SQLITE_STATEMENT_H
-#define DFT_UTILS_INDEXER_SQLITE_STATEMENT_H
+#ifndef DFTRACER_UTILS_INDEXER_SQLITE_STATEMENT_H
+#define DFTRACER_UTILS_INDEXER_SQLITE_STATEMENT_H
 
 #include <dftracer/utils/indexer/error.h>
 #include <dftracer/utils/indexer/sqlite/database.h>
@@ -48,4 +48,4 @@ class SqliteStmt {
     sqlite3_stmt *stmt_;
 };
 
-#endif  // DFT_UTILS_INDEXER_SQLITE_STATEMENT_H
+#endif  // DFTRACER_UTILS_INDEXER_SQLITE_STATEMENT_H

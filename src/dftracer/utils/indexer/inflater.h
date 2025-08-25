@@ -1,12 +1,13 @@
 #ifndef DFTRACER_UTILS_INDEXER_INFLATE_H
 #define DFTRACER_UTILS_INDEXER_INFLATE_H
 
-#include <dftracer/utils/indexer/constants.h>
+#include <dftracer/utils/common/constants.h>
 #include <zlib.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 class Inflater {
    public:
@@ -21,7 +22,8 @@ class Inflater {
     void reset() {
         inflateEnd(&stream);
         memset(&stream, 0, sizeof(stream));
-        if (inflateInit2(&stream, constants::ZLIB_GZIP_WINDOW_BITS) != Z_OK) {
+        if (inflateInit2(&stream, constants::indexer::ZLIB_GZIP_WINDOW_BITS) !=
+            Z_OK) {
             throw std::runtime_error("Failed to reinitialize inflater");
         }
     }
@@ -78,7 +80,7 @@ class Inflater {
     }
 
    private:
-    unsigned char internal_buffer_[constants::INFLATE_BUFFER_SIZE];
+    unsigned char internal_buffer_[constants::indexer::INFLATE_BUFFER_SIZE];
 };
 
 #endif  // DFTRACER_UTILS_INDEXER_INFLATE_H

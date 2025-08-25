@@ -1,6 +1,7 @@
 #ifndef DFTRACER_UTILS_PYTHON_INDEXER_EXT_H
 #define DFTRACER_UTILS_PYTHON_INDEXER_EXT_H
 
+#include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <nanobind/nanobind.h>
 
@@ -31,11 +32,10 @@ class DFTracerIndexer {
     uint64_t get_max_bytes() const;
     uint64_t get_num_lines() const;
     int find_file_id(const std::string &gz_path) const;
-    std::vector<dftracer::utils::indexer::CheckpointInfo> get_checkpoints()
-        const;
-    std::vector<dftracer::utils::indexer::CheckpointInfo>
+    std::vector<dftracer::utils::IndexerCheckpoint> get_checkpoints() const;
+    std::vector<dftracer::utils::IndexerCheckpoint>
     find_checkpoints_by_line_range(size_t start_line, size_t end_line) const;
-    std::optional<dftracer::utils::indexer::CheckpointInfo> find_checkpoint(
+    std::optional<dftracer::utils::IndexerCheckpoint> find_checkpoint(
         size_t target_offset) const;
 
     std::string gz_path() const;

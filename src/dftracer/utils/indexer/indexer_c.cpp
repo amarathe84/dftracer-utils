@@ -1,6 +1,8 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
 
+#include <cstring>
+
 extern "C" {
 
 static int validate_handle(dft_indexer_handle_t indexer) {

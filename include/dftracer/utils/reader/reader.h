@@ -1,11 +1,12 @@
 #ifndef DFTRACER_UTILS_READER_READER_H
 #define DFTRACER_UTILS_READER_READER_H
 
+#include <dftracer/utils/indexer/indexer.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <dftracer/utils/indexer/indexer.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -107,6 +108,7 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #ifdef __cplusplus
 }  // extern "C"
 
+#include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/utils/json.h>
 
 #include <cstddef>
@@ -117,12 +119,10 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <vector>
 
 // Forward declaration for indexer
-namespace dftracer::utils::indexer {
-class Indexer;
-struct CheckpointInfo;
-}  // namespace dftracer::utils::indexer
+namespace dftracer::utils {
 
-namespace dftracer::utils::reader {
+class Indexer;
+struct IndexerCheckpoint;
 
 /**
  * DFT reader
@@ -139,6 +139,7 @@ namespace dftracer::utils::reader {
  * }
  * ```
  */
+
 class Reader {
    public:
     /**
@@ -149,14 +150,14 @@ class Reader {
      * @throws std::runtime_error if reader creation fails
      */
     Reader(const std::string &gz_path, const std::string &idx_path,
-           size_t index_ckpt_size = indexer::Indexer::DEFAULT_CHECKPOINT_SIZE);
+           size_t index_ckpt_size = Indexer::DEFAULT_CHECKPOINT_SIZE);
 
     /**
      * Create a new DFT reader instance
      * @param indexer Pointer to the indexer instance
      * @throws std::runtime_error if reader creation fails
      */
-    Reader(indexer::Indexer *indexer);
+    Reader(Indexer *indexer);
 
     /**
      * Destructor - automatically destroys the reader
@@ -301,36 +302,12 @@ class Reader {
      */
     const std::string &get_idx_path() const;
 
-    class Error : public std::runtime_error {
-       public:
-        enum Type {
-            DATABASE_ERROR,
-            FILE_IO_ERROR,
-            COMPRESSION_ERROR,
-            INVALID_ARGUMENT,
-            INITIALIZATION_ERROR,
-            READ_ERROR,
-            UNKNOWN_ERROR,
-        };
-
-        Error(Type type, const std::string &message)
-            : std::runtime_error(format_message(type, message)), type_(type) {}
-
-        Type get_type() const { return type_; }
-
-       private:
-        Type type_;
-
-        static std::string format_message(Type type,
-                                          const std::string &message);
-    };
-
    private:
     class Impl;
     std::unique_ptr<Impl> pImpl_;
 };
 
-}  // namespace dftracer::utils::reader
+}  // namespace dftracer::utils
 #endif
 
 #endif  // DFTRACER_UTILS_READER_READER_H

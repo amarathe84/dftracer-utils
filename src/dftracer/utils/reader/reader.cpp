@@ -1,5 +1,7 @@
+#include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/reader/error.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/platform_compat.h>
 #include <zlib.h>
@@ -13,26 +15,15 @@
 #include <fcntl.h>
 #endif
 
-namespace dftracer::utils::reader {
+using namespace constants;
 
-// Constants for better maintainability
-namespace constants {
-static constexpr size_t DEFAULT_BUFFER_SIZE = 65536;                   // 64KB
-static constexpr size_t DEFAULT_READER_BUFFER_SIZE = 1 * 1024 * 1024;  // 1MB
-static constexpr size_t SKIP_BUFFER_SIZE = 131072;                     // 128KB
-static constexpr size_t SEARCH_BUFFER_SIZE = 2048;
-static constexpr size_t LINE_SEARCH_LOOKBACK = 512;
-static constexpr size_t FIRST_CHECKPOINT_THRESHOLD = 33554401;
-static constexpr size_t SMALL_RANGE_THRESHOLD = 1048576;  // 1MB
-static constexpr size_t LARGE_RANGE_LOG_THRESHOLD = 40000;
-static constexpr size_t FILE_IO_BUFFER_SIZE = 262144;  // 256KB for file I/O
-}  // namespace constants
+namespace dftracer::utils {
 
 // Forward declarations
 struct InflateState {
     z_stream zs;
     FILE *file;
-    unsigned char in[constants::DEFAULT_BUFFER_SIZE];  // Increased buffer size
+    unsigned char in[reader::DEFAULT_BUFFER_SIZE];
     int bits;
     size_t c_off;
 };
@@ -44,22 +35,21 @@ class ErrorHandler {
                                     size_t start_bytes, size_t end_bytes,
                                     size_t max_bytes = SIZE_MAX) {
         if (!buffer || buffer_size == 0) {
-            throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
-                                "Invalid buffer parameters");
+            throw ReaderError(ReaderError::INVALID_ARGUMENT,
+                              "Invalid buffer parameters");
         }
         if (start_bytes >= end_bytes) {
-            throw Reader::Error(Reader::Error::INVALID_ARGUMENT,
-                                "start_bytes must be less than end_bytes");
+            throw ReaderError(ReaderError::INVALID_ARGUMENT,
+                              "start_bytes must be less than end_bytes");
         }
         if (max_bytes != SIZE_MAX) {
             if (end_bytes > max_bytes) {
-                throw Reader::Error(
-                    Reader::Error::INVALID_ARGUMENT,
-                    "end_bytes exceeds maximum available bytes");
+                throw ReaderError(ReaderError::INVALID_ARGUMENT,
+                                  "end_bytes exceeds maximum available bytes");
             }
             if (start_bytes > max_bytes) {
-                throw Reader::Error(
-                    Reader::Error::INVALID_ARGUMENT,
+                throw ReaderError(
+                    ReaderError::INVALID_ARGUMENT,
                     "start_bytes exceeds maximum available bytes");
             }
         }
@@ -193,10 +183,10 @@ class BaseStreamingSession {
     // Less frequently accessed members
     std::string current_gz_path_;
     size_t start_bytes_;
-    std::unique_ptr<dftracer::utils::indexer::CheckpointInfo> checkpoint_;
+    std::unique_ptr<IndexCheckpoint> checkpoint_;
 
     // Align skip buffer to cache line
-    alignas(64) unsigned char skip_buffer_[constants::SKIP_BUFFER_SIZE];
+    alignas(64) unsigned char skip_buffer_[reader::SKIP_BUFFER_SIZE];
 
    public:
     BaseStreamingSession()
@@ -219,8 +209,7 @@ class BaseStreamingSession {
     bool is_finished() const { return is_finished_; }
 
     virtual void initialize(const std::string &gz_path, size_t start_bytes,
-                            size_t end_bytes,
-                            dftracer::utils::indexer::Indexer &indexer) = 0;
+                            size_t end_bytes, Indexer &indexer) = 0;
     virtual size_t stream_chunk(char *buffer, size_t buffer_size) = 0;
 
     virtual void reset() {
@@ -246,12 +235,12 @@ class BaseStreamingSession {
     FILE *open_file(const std::string &path) {
         FILE *file = fopen(path.c_str(), "rb");
         if (!file) {
-            throw Reader::Error(Reader::Error::FILE_IO_ERROR,
-                                "Failed to open file: " + path);
+            throw ReaderError(ReaderError::FILE_IO_ERROR,
+                              "Failed to open file: " + path);
         }
 
         // Optimize file I/O with larger buffer
-        setvbuf(file, nullptr, _IOFBF, constants::FILE_IO_BUFFER_SIZE);
+        setvbuf(file, nullptr, _IOFBF, reader::FILE_IO_BUFFER_SIZE);
 
 #ifdef __linux__
         // Hint to kernel about sequential access
@@ -275,12 +264,11 @@ class BaseStreamingSession {
     }
 
     void initialize_compression(const std::string &gz_path, size_t start_bytes,
-                                dftracer::utils::indexer::Indexer &indexer) {
+                                dftracer::utils::Indexer &indexer) {
         file_handle_ = open_file(gz_path);
         inflate_state_ = std::make_unique<InflateState>();
 
-        checkpoint_ =
-            std::make_unique<dftracer::utils::indexer::CheckpointInfo>();
+        checkpoint_ = std::make_unique<IndexCheckpoint>();
         bool use_checkpoint =
             try_initialize_with_checkpoint(start_bytes, indexer);
 
@@ -288,18 +276,17 @@ class BaseStreamingSession {
             checkpoint_.reset();
             if (CompressionManager::inflate_init(inflate_state_.get(),
                                                  file_handle_, 0, 0) != 0) {
-                throw Reader::Error(Reader::Error::COMPRESSION_ERROR,
-                                    "Failed to initialize inflation");
+                throw ReaderError(ReaderError::COMPRESSION_ERROR,
+                                  "Failed to initialize inflation");
             }
         }
 
         decompression_initialized_ = true;
     }
 
-    bool try_initialize_with_checkpoint(
-        size_t start_bytes, dftracer::utils::indexer::Indexer &indexer) {
+    bool try_initialize_with_checkpoint(size_t start_bytes, Indexer &indexer) {
         bool should_use_first_checkpoint =
-            start_bytes < constants::FIRST_CHECKPOINT_THRESHOLD;
+            start_bytes < reader::FIRST_CHECKPOINT_THRESHOLD;
 
         if (should_use_first_checkpoint) {
             if (indexer.find_checkpoint(0, *checkpoint_)) {
@@ -336,13 +323,12 @@ class BaseStreamingSession {
             CompressionManager::InflationSession session(inflate_state_.get(),
                                                          false);
             session.skip(target_position - current_pos, skip_buffer_,
-                         constants::SKIP_BUFFER_SIZE);
+                         reader::SKIP_BUFFER_SIZE);
         }
     }
 
-    int inflate_init_from_checkpoint(
-        InflateState *state, FILE *f,
-        const dftracer::utils::indexer::CheckpointInfo *checkpoint) const {
+    int inflate_init_from_checkpoint(InflateState *state, FILE *f,
+                                     const IndexCheckpoint *checkpoint) const {
         memset(state, 0, sizeof(*state));
         state->file = f;
         state->c_off = checkpoint->c_offset;
@@ -395,8 +381,8 @@ class BaseStreamingSession {
             }
         }
 
-        unsigned char window[dftracer::utils::indexer::ZLIB_WINDOW_SIZE];
-        size_t window_size = dftracer::utils::indexer::ZLIB_WINDOW_SIZE;
+        unsigned char window[indexer::ZLIB_WINDOW_SIZE];
+        size_t window_size = indexer::ZLIB_WINDOW_SIZE;
         if (decompress_window(checkpoint->dict_compressed.data(),
                               checkpoint->dict_compressed.size(), window,
                               &window_size) != 0) {
@@ -475,8 +461,7 @@ class LineByteStreamingSession : public BaseStreamingSession {
     }
 
     void initialize(const std::string &gz_path, size_t start_bytes,
-                    size_t end_bytes,
-                    dftracer::utils::indexer::Indexer &indexer) override {
+                    size_t end_bytes, Indexer &indexer) override {
         DFTRACER_UTILS_LOG_DEBUG(
             "Initializing JSON streaming session for range [%zu, %zu] from %s",
             start_bytes, end_bytes, gz_path.c_str());
@@ -502,8 +487,8 @@ class LineByteStreamingSession : public BaseStreamingSession {
 #endif
 
         if (!decompression_initialized_) {
-            throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
-                                "Streaming session not properly initialized");
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR,
+                              "Streaming session not properly initialized");
         }
 
         if (is_at_target_end()) {
@@ -517,8 +502,8 @@ class LineByteStreamingSession : public BaseStreamingSession {
         size_t available_buffer_space = buffer_size;
         if (!partial_line_buffer_.empty()) {
             if (partial_line_buffer_.size() > buffer_size) {
-                throw Reader::Error(
-                    Reader::Error::READ_ERROR,
+                throw ReaderError(
+                    ReaderError::READ_ERROR,
                     "Partial line buffer exceeds available buffer space");
             }
             std::memcpy(temp_buffer_.data(), partial_line_buffer_.data(),
@@ -571,7 +556,7 @@ class LineByteStreamingSession : public BaseStreamingSession {
         update_partial_buffer(adjusted_size, total_data_size);
 
         if ((target_end_bytes_ - start_bytes_) >
-            constants::LARGE_RANGE_LOG_THRESHOLD) {
+            reader::LARGE_RANGE_LOG_THRESHOLD) {
             DFTRACER_UTILS_LOG_TRACE_FORMAT(
                 "Large range read: returning %zu bytes, current_pos=%zu, "
                 "target_end=%zu, range_size=%zu",
@@ -603,15 +588,15 @@ class LineByteStreamingSession : public BaseStreamingSession {
         size_t adjusted_size;
         size_t original_range_size = target_end_bytes_ - start_bytes_;
 
-        if (original_range_size < constants::SMALL_RANGE_THRESHOLD) {
+        if (original_range_size < reader::SMALL_RANGE_THRESHOLD) {
             // Small range read - apply cumulative range limiting
             if (current_position_ < actual_start_bytes_) {
                 DFTRACER_UTILS_LOG_ERROR(
                     "Invalid state: current_position_ %zu < "
                     "actual_start_bytes_ %zu",
                     current_position_, actual_start_bytes_);
-                throw Reader::Error(Reader::Error::READ_ERROR,
-                                    "Invalid internal position state detected");
+                throw ReaderError(ReaderError::READ_ERROR,
+                                  "Invalid internal position state detected");
             }
             size_t bytes_already_returned =
                 current_position_ - actual_start_bytes_;
@@ -655,10 +640,9 @@ class LineByteStreamingSession : public BaseStreamingSession {
             return target_start;
         }
 
-        size_t search_start =
-            (target_start >= constants::LINE_SEARCH_LOOKBACK)
-                ? target_start - constants::LINE_SEARCH_LOOKBACK
-                : current_pos;
+        size_t search_start = (target_start >= reader::LINE_SEARCH_LOOKBACK)
+                                  ? target_start - reader::LINE_SEARCH_LOOKBACK
+                                  : current_pos;
 
         if (search_start > current_pos) {
             skip_to_position(search_start);
@@ -666,7 +650,7 @@ class LineByteStreamingSession : public BaseStreamingSession {
         }
 
         // Use stack allocation for small search buffer
-        alignas(64) unsigned char search_buffer[constants::SEARCH_BUFFER_SIZE];
+        alignas(64) unsigned char search_buffer[reader::SEARCH_BUFFER_SIZE];
         size_t search_bytes;
         if (CompressionManager::inflate_read(
                 inflate_state_.get(), search_buffer, sizeof(search_buffer) - 1,
@@ -715,14 +699,14 @@ class LineByteStreamingSession : public BaseStreamingSession {
         if (use_checkpoint) {
             if (inflate_init_from_checkpoint(inflate_state_.get(), file_handle_,
                                              checkpoint_.get()) != 0) {
-                throw Reader::Error(Reader::Error::COMPRESSION_ERROR,
-                                    "Failed to reinitialize from checkpoint");
+                throw ReaderError(ReaderError::COMPRESSION_ERROR,
+                                  "Failed to reinitialize from checkpoint");
             }
         } else {
             if (CompressionManager::inflate_init(inflate_state_.get(),
                                                  file_handle_, 0, 0) != 0) {
-                throw Reader::Error(Reader::Error::COMPRESSION_ERROR,
-                                    "Failed to reinitialize inflation");
+                throw ReaderError(ReaderError::COMPRESSION_ERROR,
+                                  "Failed to reinitialize inflation");
             }
         }
     }
@@ -734,8 +718,7 @@ class ByteStreamingSession : public BaseStreamingSession {
     ByteStreamingSession() : BaseStreamingSession() {}
 
     void initialize(const std::string &gz_path, size_t start_bytes,
-                    size_t end_bytes,
-                    dftracer::utils::indexer::Indexer &indexer) override {
+                    size_t end_bytes, Indexer &indexer) override {
         DFTRACER_UTILS_LOG_DEBUG(
             "Initializing raw streaming session for range [%zu, %zu] from %s",
             start_bytes, end_bytes, gz_path.c_str());
@@ -761,9 +744,8 @@ class ByteStreamingSession : public BaseStreamingSession {
 #endif
 
         if (!decompression_initialized_) {
-            throw Reader::Error(
-                Reader::Error::INITIALIZATION_ERROR,
-                "Raw streaming session not properly initialized");
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR,
+                              "Raw streaming session not properly initialized");
         }
 
         if (is_at_target_end()) {
@@ -797,11 +779,10 @@ class ByteStreamingSession : public BaseStreamingSession {
 // Factory for creating streaming sessions
 class StreamingSessionFactory {
    private:
-    dftracer::utils::indexer::Indexer &indexer_;
+    Indexer &indexer_;
 
    public:
-    explicit StreamingSessionFactory(dftracer::utils::indexer::Indexer &indexer)
-        : indexer_(indexer) {}
+    explicit StreamingSessionFactory(Indexer &indexer) : indexer_(indexer) {}
 
     std::unique_ptr<LineByteStreamingSession> create_line_session(
         const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
@@ -840,10 +821,9 @@ class Reader::Impl {
         : gz_path_(gz_path),
           idx_path_(idx_path),
           is_open_(false),
-          default_buffer_size_(constants::DEFAULT_READER_BUFFER_SIZE) {
+          default_buffer_size_(reader::DEFAULT_READER_BUFFER_SIZE) {
         try {
-            indexer_ = new dftracer::utils::indexer::Indexer(gz_path, idx_path,
-                                                             index_ckpt_size);
+            indexer_ = new Indexer(gz_path, idx_path, index_ckpt_size);
             if (indexer_->need_rebuild()) {
                 indexer_->build();
             }
@@ -857,19 +837,19 @@ class Reader::Impl {
                 "Successfully created DFT reader for gz: %s and index: %s",
                 gz_path.c_str(), idx_path.c_str());
         } catch (const std::exception &e) {
-            throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
-                                "Failed to initialize reader with indexer: " +
-                                    std::string(e.what()));
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR,
+                              "Failed to initialize reader with indexer: " +
+                                  std::string(e.what()));
         }
     }
 
-    Impl(dftracer::utils::indexer::Indexer *indexer)
-        : default_buffer_size_(constants::DEFAULT_READER_BUFFER_SIZE),
+    Impl(Indexer *indexer)
+        : default_buffer_size_(reader::DEFAULT_READER_BUFFER_SIZE),
           indexer_(indexer),
           is_indexer_initialized_internally_(false) {
         if (!indexer_->is_valid()) {
-            throw Reader::Error(Reader::Error::INITIALIZATION_ERROR,
-                                "Invalid indexer provided");
+            throw ReaderError(ReaderError::INITIALIZATION_ERROR,
+                              "Invalid indexer provided");
         }
         session_factory_ = std::make_unique<StreamingSessionFactory>(*indexer_);
         is_open_ = true;
@@ -1128,7 +1108,7 @@ class Reader::Impl {
     bool is_open_;
     size_t default_buffer_size_;
 
-    dftracer::utils::indexer::Indexer *indexer_;
+    Indexer *indexer_;
     bool is_indexer_initialized_internally_;
     std::unique_ptr<StreamingSessionFactory> session_factory_;
     std::unique_ptr<LineByteStreamingSession> line_byte_session_;
@@ -1143,8 +1123,7 @@ Reader::Reader(const std::string &gz_path, const std::string &idx_path,
                size_t index_ckpt_size)
     : pImpl_(new Impl(gz_path, idx_path, index_ckpt_size)) {}
 
-Reader::Reader(dftracer::utils::indexer::Indexer *indexer)
-    : pImpl_(new Impl(indexer)) {}
+Reader::Reader(Indexer *indexer) : pImpl_(new Impl(indexer)) {}
 
 Reader::~Reader() = default;
 
@@ -1206,192 +1185,4 @@ const std::string &Reader::get_gz_path() const { return pImpl_->get_gz_path(); }
 const std::string &Reader::get_idx_path() const {
     return pImpl_->get_idx_path();
 }
-
-std::string Reader::Error::format_message(Type type,
-                                          const std::string &message) {
-    const char *prefix = "";
-    switch (type) {
-        case Reader::Error::DATABASE_ERROR:
-            prefix = "Database error";
-            break;
-        case Reader::Error::FILE_IO_ERROR:
-            prefix = "File I/O error";
-            break;
-        case Reader::Error::COMPRESSION_ERROR:
-            prefix = "Compression error";
-            break;
-        case Reader::Error::INVALID_ARGUMENT:
-            prefix = "Invalid argument";
-            break;
-        case Reader::Error::INITIALIZATION_ERROR:
-            prefix = "Initialization error";
-            break;
-        case Reader::Error::READ_ERROR:
-            prefix = "Read error";
-            break;
-        case Reader::Error::UNKNOWN_ERROR:
-            prefix = "Unknown error";
-            break;
-    }
-    return std::string(prefix) + ": " + message;
-}
-
-}  // namespace dftracer::utils::reader
-
-// ==============================================================================
-// C API Implementation (wraps C++ implementation)
-// ==============================================================================
-
-extern "C" {
-
-// Helper functions for C API
-static int validate_handle(dft_reader_handle_t reader) {
-    return reader ? 0 : -1;
-}
-
-static dftracer::utils::reader::Reader *cast_reader(
-    dft_reader_handle_t reader) {
-    return static_cast<dftracer::utils::reader::Reader *>(reader);
-}
-
-dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
-                                      size_t index_ckpt_size) {
-    if (!gz_path || !idx_path) {
-        DFTRACER_UTILS_LOG_ERROR("Both gz_path and idx_path cannot be null");
-        return nullptr;
-    }
-
-    try {
-        auto *reader = new dftracer::utils::reader::Reader(gz_path, idx_path,
-                                                           index_ckpt_size);
-        return static_cast<dft_reader_handle_t>(reader);
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader: %s", e.what());
-        return nullptr;
-    }
-}
-
-dft_reader_handle_t dft_reader_create_with_indexer(
-    dft_indexer_handle_t indexer) {
-    if (!indexer) {
-        DFTRACER_UTILS_LOG_ERROR("Indexer cannot be null");
-        return nullptr;
-    }
-
-    DFTRACER_UTILS_LOG_INFO("Creating DFT reader with provided indexer");
-
-    try {
-        auto *reader = new dftracer::utils::reader::Reader(
-            static_cast<dftracer::utils::indexer::Indexer *>(indexer));
-        return static_cast<dft_reader_handle_t>(reader);
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader with indexer: %s",
-                                 e.what());
-        return nullptr;
-    }
-}
-
-void dft_reader_destroy(dft_reader_handle_t reader) {
-    if (reader) {
-        delete cast_reader(reader);
-    }
-}
-
-int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes) {
-    if (validate_handle(reader) || !max_bytes) {
-        return -1;
-    }
-
-    try {
-        *max_bytes = cast_reader(reader)->get_max_bytes();
-        return 0;
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to get max bytes: %s", e.what());
-        return -1;
-    }
-}
-
-int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines) {
-    if (validate_handle(reader) || !num_lines) {
-        return -1;
-    }
-
-    try {
-        *num_lines = cast_reader(reader)->get_num_lines();
-        return 0;
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to get number of lines: %s", e.what());
-        return -1;
-    }
-}
-
-int dft_reader_read(dft_reader_handle_t reader, size_t start_bytes,
-                    size_t end_bytes, char *buffer, size_t buffer_size) {
-    if (validate_handle(reader) || !buffer || buffer_size == 0) {
-        return -1;
-    }
-
-    try {
-        size_t bytes_read = cast_reader(reader)->read(start_bytes, end_bytes,
-                                                      buffer, buffer_size);
-        return static_cast<int>(bytes_read);
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to read: %s", e.what());
-        return -1;
-    }
-}
-
-int dft_reader_read_line_bytes(dft_reader_handle_t reader, size_t start_bytes,
-                               size_t end_bytes, char *buffer,
-                               size_t buffer_size) {
-    if (validate_handle(reader) || !buffer || buffer_size == 0) {
-        return -1;
-    }
-
-    try {
-        size_t bytes_read = cast_reader(reader)->read_line_bytes(
-            start_bytes, end_bytes, buffer, buffer_size);
-        return static_cast<int>(bytes_read);
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to read line bytes: %s", e.what());
-        return -1;
-    }
-}
-
-int dft_reader_read_lines(dft_reader_handle_t reader, size_t start_line,
-                          size_t end_line, char *buffer, size_t buffer_size,
-                          size_t *bytes_written) {
-    if (validate_handle(reader) || !buffer || buffer_size == 0 ||
-        !bytes_written) {
-        return -1;
-    }
-
-    try {
-        std::string result =
-            cast_reader(reader)->read_lines(start_line, end_line);
-
-        size_t result_size = result.size();
-        if (result_size >= buffer_size) {
-            *bytes_written = result_size;
-            return -1;
-        }
-
-        std::memcpy(buffer, result.c_str(), result_size);
-        buffer[result_size] = '\0';
-        *bytes_written = result_size;
-
-        return 0;
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to read lines: %s", e.what());
-        *bytes_written = 0;
-        return -1;
-    }
-}
-
-void dft_reader_reset(dft_reader_handle_t reader) {
-    if (reader) {
-        cast_reader(reader)->reset();
-    }
-}
-
-}  // extern "C"
+}  // namespace dftracer::utils

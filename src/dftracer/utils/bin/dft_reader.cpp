@@ -12,13 +12,14 @@
 #include <cstdlib>
 #include <cstring>
 
+using namespace dftracer::utils;
+
 int main(int argc, char **argv) {
     DFTRACER_UTILS_LOGGER_INIT();
-    size_t default_checkpoint_size =
-        dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
     auto default_checkpoint_size_str =
-        std::to_string(default_checkpoint_size) + " B (" +
-        std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
+        std::to_string(Indexer::DEFAULT_CHECKPOINT_SIZE) + " B (" +
+        std::to_string(Indexer::DEFAULT_CHECKPOINT_SIZE / (1024 * 1024)) +
+        " MB)";
     argparse::ArgumentParser program("dft_reader",
                                      DFTRACER_UTILS_PACKAGE_VERSION);
     program.add_description(
@@ -29,25 +30,26 @@ int main(int argc, char **argv) {
         .default_value<std::string>("");
     program.add_argument("-s", "--start")
         .help("Start position in bytes")
-        .default_value<int64_t>(-1)
-        .scan<'d', int64_t>();
+        .default_value<std::int64_t>(-1)
+        .scan<'d', std::int64_t>();
     program.add_argument("-e", "--end")
         .help("End position in bytes")
-        .default_value<int64_t>(-1)
-        .scan<'d', int64_t>();
+        .default_value<std::int64_t>(-1)
+        .scan<'d', std::int64_t>();
     program.add_argument("-c", "--checkpoint-size")
         .help("Checkpoint size for indexing in bytes (default: " +
               default_checkpoint_size_str + ")")
-        .scan<'d', size_t>()
-        .default_value(static_cast<size_t>(default_checkpoint_size));
+        .scan<'d', std::size_t>()
+        .default_value(
+            static_cast<std::size_t>(Indexer::DEFAULT_CHECKPOINT_SIZE));
     program.add_argument("-f", "--force-rebuild")
         .help("Force rebuild index")
         .flag();
     program.add_argument("--check").help("Check if index is valid").flag();
     program.add_argument("--read-buffer-size")
         .help("Size of the read buffer in bytes (default: 1MB)")
-        .default_value<size_t>(1 * 1024 * 1024)
-        .scan<'d', size_t>();
+        .default_value<std::size_t>(1 * 1024 * 1024)
+        .scan<'d', std::size_t>();
     program.add_argument("--mode")
         .help("Set the reading mode (bytes, line_bytes, lines)")
         .default_value<std::string>("bytes")
@@ -65,11 +67,12 @@ int main(int argc, char **argv) {
     std::string index_path = program.get<std::string>("--index");
     int64_t start = program.get<int64_t>("--start");
     int64_t end = program.get<int64_t>("--end");
-    size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
+    std::size_t checkpoint_size = program.get<std::size_t>("--checkpoint-size");
     bool force_rebuild = program.get<bool>("--force-rebuild");
     bool check_rebuild = program.get<bool>("--check");
     std::string read_mode = program.get<std::string>("--mode");
-    size_t read_buffer_size = program.get<size_t>("--read-buffer-size");
+    std::size_t read_buffer_size =
+        program.get<std::size_t>("--read-buffer-size");
 
     DFTRACER_UTILS_LOG_DEBUG("Processing file: %s", gz_path.c_str());
     DFTRACER_UTILS_LOG_DEBUG("Start position: %lld", (long long)start);
@@ -97,8 +100,7 @@ int main(int argc, char **argv) {
     std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
     try {
-        dftracer::utils::indexer::Indexer indexer(
-            gz_path, idx_path, checkpoint_size, force_rebuild);
+        Indexer indexer(gz_path, idx_path, checkpoint_size, force_rebuild);
 
         if (check_rebuild) {
             if (!indexer.need_rebuild()) {
@@ -121,11 +123,11 @@ int main(int argc, char **argv) {
     // read operations
     if (start != -1) {
         try {
-            dftracer::utils::reader::Reader reader(gz_path, idx_path);
+            Reader reader(gz_path, idx_path);
             DFTRACER_UTILS_LOG_DEBUG("Here");
 
             if (read_mode.find("bytes") == std::string::npos) {
-                size_t end_line = static_cast<size_t>(end);
+                std::size_t end_line = static_cast<std::size_t>(end);
                 if (end == -1) {
                     end_line = reader.get_num_lines();
                 }
@@ -136,15 +138,17 @@ int main(int argc, char **argv) {
                 auto lines =
                     reader.read_lines(static_cast<size_t>(start), end_line);
                 fwrite(lines.data(), 1, lines.size(), stdout);
-                size_t line_count = static_cast<size_t>(
+#if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
+                std::size_t line_count = static_cast<std::size_t>(
                     std::count(lines.begin(), lines.end(), '\n'));
                 DFTRACER_UTILS_LOG_DEBUG(
                     "Successfully read %zu lines from range", line_count);
+#endif
             } else {
-                size_t start_bytes_ = static_cast<size_t>(start);
-                size_t end_bytes_ = end == -1
-                                        ? std::numeric_limits<size_t>::max()
-                                        : static_cast<size_t>(end);
+                std::size_t start_bytes_ = static_cast<std::size_t>(start);
+                std::size_t end_bytes_ =
+                    end == -1 ? std::numeric_limits<std::size_t>::max()
+                              : static_cast<size_t>(end);
 
                 auto max_bytes = reader.get_max_bytes();
                 if (end_bytes_ > max_bytes) {
@@ -155,8 +159,8 @@ int main(int argc, char **argv) {
                 DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes",
                                          read_buffer_size);
                 auto buffer = std::make_unique<char[]>(read_buffer_size);
-                size_t bytes_written;
-                size_t total_bytes = 0;
+                std::size_t bytes_written;
+                std::size_t total_bytes = 0;
 
                 while ((bytes_written =
                             read_mode == "bytes"

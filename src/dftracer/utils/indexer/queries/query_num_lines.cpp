@@ -1,0 +1,16 @@
+#include <dftracer/utils/indexer/queries/queries.h>
+
+std::uint64_t query_num_lines(const SqliteDatabase &db,
+                              const std::string &gz_path_logical_path) {
+    SqliteStmt stmt(db,
+                    "SELECT total_lines FROM metadata WHERE file_id = "
+                    "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)");
+    std::uint64_t total_lines = 0;
+
+    sqlite3_bind_text(stmt, 1, gz_path_logical_path.c_str(), -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        total_lines = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 0));
+    }
+
+    return total_lines;
+}

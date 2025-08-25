@@ -20,12 +20,12 @@ struct IndexerImplementor {
     std::string idx_path;
     size_t ckpt_size;
     bool force_rebuild;
-    bool is_valid_cache;
-    SqliteDatabase db;
+    mutable bool cached_is_valid;
     mutable int cached_file_id;
+    SqliteDatabase db;
 
     IndexerImplementor(const std::string &gz_path, const std::string &idx_path,
-                       size_t ckpt_size, bool force_rebuild);
+                       std::size_t ckpt_size, bool force_rebuild);
 
     void open();
     void build();

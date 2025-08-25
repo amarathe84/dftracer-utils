@@ -1,17 +1,9 @@
-#ifndef DFTRACER_UTILS_INDEXER_CONSTANTS_H
-#define DFTRACER_UTILS_INDEXER_CONSTANTS_H
-
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <stdexcept>
+#include <dftracer/utils/common/constants.h>
 
 namespace constants {
-static constexpr size_t INFLATE_BUFFER_SIZE = 16384;
-static constexpr size_t PROCESS_BUFFER_SIZE = 65536;
-static constexpr size_t ZLIB_WINDOW_SIZE = 32768;
-static constexpr int ZLIB_GZIP_WINDOW_BITS = 31;  // 15 + 16 for gzip format
-static const char *SQL_SCHEMA = R"(
+
+namespace indexer {
+const char *SQL_SCHEMA = R"(
     CREATE TABLE IF NOT EXISTS files (
       id INTEGER PRIMARY KEY,
       logical_name TEXT UNIQUE NOT NULL,
@@ -44,6 +36,5 @@ static const char *SQL_SCHEMA = R"(
       PRIMARY KEY(file_id)
     );
   )";
+}
 }  // namespace constants
-
-#endif  // DFTRACER_UTILS_INDEXER_CONSTANTS_H

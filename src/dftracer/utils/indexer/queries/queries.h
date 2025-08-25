@@ -1,0 +1,53 @@
+#ifndef DFTRACER_UTILS_INDEXER_SQLITE_QUERIES_H
+#define DFTRACER_UTILS_INDEXER_SQLITE_QUERIES_H
+
+#include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/indexer/checkpoint.h>
+#include <dftracer/utils/indexer/sqlite/database.h>
+#include <dftracer/utils/indexer/sqlite/statement.h>
+
+#include <cstdint>
+#include <ctime>
+
+using namespace dftracer::utils;
+
+void insert_file_record(const SqliteDatabase &db,
+                        const std::string &gz_path_logical_path,
+                        std::size_t bytes, std::time_t file_mtime,
+                        const std::string &file_sha256, int &db_file_id);
+void insert_file_metadata_record(const SqliteDatabase &db, int file_id,
+                                 std::size_t ckpt_size,
+                                 std::uint64_t total_lines,
+                                 std::uint64_t total_uc_size);
+bool query_stored_file_info(const SqliteDatabase &db,
+                            const std::string &gz_path,
+                            std::string &stored_sha256, time_t &stored_mtime);
+
+struct InsertCheckpointData {
+    std::uint64_t idx;
+    std::uint64_t uc_offset;
+    std::uint64_t uc_size;
+    std::uint64_t c_size;
+    std::uint64_t c_offset;
+    int bits;
+    const void *compressed_dict;
+    std::size_t compressed_dict_size;
+    uint64_t num_lines;
+};
+void insert_checkpoint_record(const SqliteDatabase &db, int file_id,
+                              const InsertCheckpointData &data);
+
+bool query_schema_validity(const SqliteDatabase &db);
+bool delete_file_record(const SqliteDatabase &db, int file_id);
+std::uint64_t query_max_bytes(const SqliteDatabase &db,
+                              const std::string &gz_path_logical_path);
+std::uint64_t query_num_lines(const SqliteDatabase &db,
+                              const std::string &gz_path_logical_path);
+int query_file_id(const SqliteDatabase &db,
+                  const std::string &gz_path_logical_path);
+bool query_checkpoint(const SqliteDatabase &db, size_t target_offset,
+                      int file_id, IndexCheckpoint &checkpoint);
+std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
+                                               int file_id);
+
+#endif  // DFTRACER_UTILS_INDEXER_SQLITE_QUERIES_H
