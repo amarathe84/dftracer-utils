@@ -41,7 +41,7 @@ coverage-view:
 test:
 	@echo "Building and running tests..."
 	@mkdir -p build_test
-	@cd build_test && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON -DCMAKE_INSTALL_PREFIX=$$(pwd)/install .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) && ctest -j8 --output-on-failure
+	@cd build_test && cmake -DCMAKE_BUILD_TYPE=Debug -DDFTRACER_UTILS_TESTS=ON -DCMAKE_INSTALL_PREFIX=$$(pwd)/install .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) && ctest -j8 --output-on-failure
 
 # Run tests with coverage (requires coverage build)
 test-coverage:
@@ -66,7 +66,7 @@ format:
 	@echo "Formatting code..."
 	find ./include ./src ./tests -type f \( -name "*.h" -o -name "*.cpp" \) -exec clang-format -i -style=file {} +
 # 	@mkdir -p build_format
-# 	@cd build_format && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Release ..
+# 	@cd build_format && cmake -DCMAKE_BUILD_TYPE=Release ..
 # 	@if command -v clang-tidy &> /dev/null; then \
 # 		find src include -type f \( -name "*.cpp" -o -name "*.h" \) -exec clang-tidy -p build {} --config-file=.clang-tidy --fix-errors --fix-notes --fix \; ; \
 # 	fi
@@ -75,26 +75,23 @@ format:
 build:
 	@echo "Building project..."
 	@mkdir -p build
-	@cd build && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	@cd build && cmake .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 build-debug:
 	@echo "Building project in debug mode..."
 	@mkdir -p build_debug
-	@cd build_debug && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DDFTRACER_UTILS_DEBUG=ON .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	@cd build_debug && cmake -DDFTRACER_UTILS_DEBUG=ON .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 build-release:
 	@echo "Building project in release mode..."
 	@mkdir -p build
-	@cd build && CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+	@cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 install-debug: build
 	@echo "Installing project..."
 	@mkdir -p build
 
-	@cd build
-	CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -DCMAKE_BUILD_TYPE=Debug ..
-	make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-	CMAKE_POLICY_VERSION_MINIMUM=3.5 make --install . --prefix ./install
+	@cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$$(pwd)/install .. && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 # Clean all builds
 clean:

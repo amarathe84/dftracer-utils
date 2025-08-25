@@ -1,51 +1,6 @@
 set(CPM_USE_LOCAL_PACKAGES ON)
 set(CPM_SOURCE_CACHE "${CMAKE_SOURCE_DIR}/.cpmsource")
 
-# function(need_spdlog)
-#   # Force CPM build for spdlog to avoid system package compatibility issues
-#   if(NOT spdlog_ADDED)
-#     CPMAddPackage(
-#       NAME spdlog
-#       GITHUB_REPOSITORY gabime/spdlog
-#       VERSION 1.12.0
-#       OPTIONS
-#         "SPDLOG_COMPILED_LIB ON"
-#         "SPDLOG_BUILD_SHARED OFF"
-#         "SPDLOG_INSTALL ON"
-#       FORCE YES
-#     )
-#   endif()
-# endfunction()
-
-# function(need_cereal)
-#   if(NOT cereal_ADDED)
-#     CPMAddPackage(
-#       NAME cereal
-#       VERSION 1.3.2
-#       GITHUB_REPOSITORY USCiLab/cereal
-#       GIT_TAG a56bad8bbb770ee266e930c95d37fff2a5be7fea
-#       OPTIONS
-#         "SKIP_PORTABILITY_TEST ON"
-#         "JUST_INSTALL_CEREAL ON"
-#     )
-#   endif()
-# endfunction()
-
-
-# function(need_cpplogger)
-#   if(NOT cpplogger_ADDED)
-#     CPMAddPackage(
-#       NAME cpplogger
-#       GITHUB_REPOSITORY hariharan-devarajan/cpp-logger
-#       VERSION 0.0.4
-#       GIT_TAG v0.0.4
-#       OPTIONS
-#         "CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX}"
-#         "CMAKE_SOURCE_DIR ${cpplogger_SOURCE_DIR}"
-#     )
-#   endif()
-# endfunction()
-
 function(need_cpplogger)
   if(NOT cpplogger_ADDED)
     CPMAddPackage(
@@ -59,6 +14,7 @@ function(need_cpplogger)
     file(READ "${_cmakelists}" _contents)
     string(REPLACE "CMAKE_SOURCE_DIR" "CMAKE_CURRENT_SOURCE_DIR" _contents "${_contents}")
     file(WRITE "${_cmakelists}" "${_contents}")
+    set(CPP_LOGGER_LIBDIR_AS_LIB "${cpplogger_BINARY_DIR}/libcpp_logger.a")
     add_subdirectory("${cpplogger_SOURCE_DIR}" "${cpplogger_BINARY_DIR}")
   endif()
 endfunction()
@@ -72,22 +28,6 @@ function(need_argparse)
       OPTIONS
         "ARGPARSE_BUILD_TESTS OFF"
         "ARGPARSE_BUILD_SAMPLES OFF"
-      FORCE YES
-    )
-  endif()
-endfunction()
-
-function(need_diy)
-  if (NOT diy_ADDED)
-    CPMAddPackage(
-      NAME diy
-      GITHUB_REPOSITORY diatomic/diy
-      VERSION 3.15
-      GIT_TAG 14554617a218a74a4c74a1bf8d0899e85d46fd9f
-      OPTIONS
-        "DIY_BUILD_TESTS OFF"
-        "build_tests OFF"
-        "DIY_SYSTEM_FMT ON"
       FORCE YES
     )
   endif()
@@ -467,182 +407,6 @@ function(link_zlib TARGET_NAME LIBRARY_TYPE)
     endif()
   endif()
 endfunction()
-
-# function(need_zlib)
-#   find_package(ZLIB 1.2 QUIET)
-
-#   if(ZLIB_FOUND)
-#     message(STATUS "Found system ZLIB: ${ZLIB_LIBRARIES}")
-    
-#     # Set variables in parent scope so they persist outside the function
-#     set(ZLIB_FOUND ${ZLIB_FOUND} PARENT_SCOPE)
-#     set(ZLIB_LIBRARIES ${ZLIB_LIBRARIES} PARENT_SCOPE)
-#     set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIRS} PARENT_SCOPE)
-#     set(ZLIB_CPM FALSE PARENT_SCOPE)
-#   else()
-#     set(ZLIB_CPM FALSE PARENT_SCOPE)
-#     # Build with CPM
-#     CPMAddPackage(
-#       NAME ZLIB
-#       GITHUB_REPOSITORY madler/zlib
-#       VERSION 1.3.1
-#       OPTIONS
-#         "ZLIB_BUILD_STATIC ON"
-#         "ZLIB_BUILD_SHARED ON"
-#         "ZLIB_INSTALL OFF"
-#         "ZLIB_BUILD_EXAMPLES OFF"
-#     )
-    
-#     if(ZLIB_ADDED)
-#       message(STATUS "Built ZLIB with CPM")
-#       set(ZLIB_CPM TRUE PARENT_SCOPE) 
-
-#       # Make sure the source and binary directories are available in parent scope
-#       set(ZLIB_SOURCE_DIR ${ZLIB_SOURCE_DIR} PARENT_SCOPE)
-#       set(ZLIB_BINARY_DIR ${ZLIB_BINARY_DIR} PARENT_SCOPE)
-
-#       # Completely override zlib's cmake_install.cmake after configuration
-#       # This works because zlib regenerates its install file, but we'll override it post-generation
-#       add_custom_target(override_zlib_install
-#         ALL
-#         COMMAND ${CMAKE_COMMAND} -E echo "# Installation disabled for zlib to prevent duplicates" > "${ZLIB_BINARY_DIR}/cmake_install.cmake"
-#         COMMAND ${CMAKE_COMMAND} -E echo "message(STATUS \"Skipping zlib installation - handled manually\")" >> "${ZLIB_BINARY_DIR}/cmake_install.cmake"
-#         DEPENDS zlib zlibstatic
-#         COMMENT "Preventing zlib from installing files automatically"
-#         VERBATIM
-#       )
-      
-#       # Also prevent any subdirectory installs
-#       install(CODE "
-#         message(STATUS \"Preventing any residual zlib installation\")
-#         # This prevents any zlib install commands from executing
-#       ")
-
-#       # Add zlib targets if they're CPM-built (our own targets)
-#       # We manually install zlib because ZLIB_INSTALL is problematic
-#       if(TARGET zlib)
-#           # Manual installation of zlib to the correct location
-#           install(TARGETS zlib
-#               EXPORT ZlibTargets
-#               ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#               LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#               RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-#           )
-#       endif()
-#       if(TARGET zlibstatic)
-#           install(TARGETS zlibstatic
-#               EXPORT ZlibTargets
-#               ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#               LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#               RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-#           )
-#       endif()
-
-#       install(EXPORT ZlibTargets
-#           FILE ZlibTargets.cmake
-#           NAMESPACE ZLIB::
-#           DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/zlib
-#       )
-
-#       # Install zlib headers manually
-#       if(ZLIB_SOURCE_DIR AND ZLIB_BINARY_DIR)
-#           # Check if the header files actually exist before trying to install them
-#           if(EXISTS "${ZLIB_SOURCE_DIR}/zlib.h")
-#               install(FILES "${ZLIB_SOURCE_DIR}/zlib.h"
-#                   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-#               )
-#           endif()
-          
-#           if(EXISTS "${ZLIB_BINARY_DIR}/zconf.h")
-#               install(FILES "${ZLIB_BINARY_DIR}/zconf.h"
-#                   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-#               )
-#           endif()
-#       else()
-#           message(WARNING "Using ZLIB with CPM but source/binary directories not found. Skipping zlib header installation.")
-#       endif()
-
-#       # Create exportable aliases for zlib
-#       if(TARGET zlib AND NOT TARGET ZLIB::ZLIB)
-#         add_library(ZLIB::ZLIB ALIAS zlib)
-#         # Make zlib available in parent scope for Arrow
-#         set(ZLIB_LIBRARIES zlib PARENT_SCOPE)
-#         set(ZLIB_INCLUDE_DIRS ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR} PARENT_SCOPE)
-#         set(ZLIB_FOUND TRUE PARENT_SCOPE)
-#       endif()
-
-#       if(TARGET zlibstatic AND NOT TARGET ZLIB::ZLIBSTATIC)
-#         add_library(ZLIB::ZLIBSTATIC ALIAS zlibstatic)
-#       endif()
-#     endif()
-#   endif()
-# endfunction()
-
-# # Function to link zlib to a target
-# # Parameters:
-# #   TARGET_NAME - name of the target to link zlib to
-# #   LIBRARY_TYPE - "STATIC" or "SHARED" to choose appropriate zlib variant
-# function(link_zlib TARGET_NAME LIBRARY_TYPE)
-#   # Validate parameters
-#   if(NOT TARGET_NAME)
-#     message(FATAL_ERROR "link_zlib: TARGET_NAME is required")
-#   endif()
-  
-#   if(NOT LIBRARY_TYPE MATCHES "^(STATIC|SHARED)$")
-#     message(FATAL_ERROR "link_zlib: LIBRARY_TYPE must be either STATIC or SHARED")
-#   endif()
-  
-#   if(NOT TARGET ${TARGET_NAME})
-#     message(FATAL_ERROR "link_zlib: Target '${TARGET_NAME}' does not exist")
-#   endif()
-  
-#   # Check if any zlib variant is available
-#   set(ZLIB_AVAILABLE FALSE)
-#   if(TARGET zlibstatic OR TARGET zlib OR ZLIB_FOUND)
-#     set(ZLIB_AVAILABLE TRUE)
-#   endif()
-  
-#   if(NOT ZLIB_AVAILABLE)
-#     message(FATAL_ERROR "link_zlib: No zlib found! Call need_zlib() first or ensure system zlib is available.")
-#   endif()
-  
-#   # Link appropriate zlib variant
-#   if(LIBRARY_TYPE STREQUAL "STATIC")
-#     # For static libraries, prefer static zlib if available
-#     if(TARGET zlibstatic)
-#       # CPM-built zlib static - use generator expression to avoid export issues
-#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
-#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
-#     elseif(TARGET zlib)
-#       # CPM-built zlib shared - use generator expression to avoid export issues
-#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
-#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
-#     elseif(ZLIB_FOUND)
-#       # System zlib - use normal linking
-#       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
-#       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
-#     endif()
-#   else() # SHARED
-#     # For shared libraries, prefer shared zlib if available
-#     if(TARGET zlib)
-#       # CPM-built zlib shared - use generator expression to avoid export issues
-#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlib>)
-#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlib (shared)")
-#     elseif(TARGET zlibstatic)
-#       # CPM-built zlib static - use generator expression to avoid export issues
-#       target_include_directories(${TARGET_NAME} PRIVATE ${ZLIB_SOURCE_DIR} ${ZLIB_BINARY_DIR})
-#       target_link_libraries(${TARGET_NAME} PRIVATE $<TARGET_FILE:zlibstatic>)
-#       message(STATUS "Linked ${TARGET_NAME} to CPM-built zlibstatic")
-#     elseif(ZLIB_FOUND)
-#       # System zlib - use normal linking
-#       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
-#       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
-#     endif()
-#   endif()
-# endfunction()
 
 function(need_picosha2)
   if(NOT PicoSHA2_ADDED)
