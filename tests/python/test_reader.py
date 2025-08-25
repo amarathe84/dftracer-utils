@@ -650,6 +650,89 @@ class TestDFTracerJsonLinesReader:
                 assert reader.get_max_bytes() > 0
                 assert reader.get_num_lines() > 0
                 assert reader.gzip_path == gz_file
+    
+    def test_json_lines_reader_nested_data(self):
+        """Test JSON lines reader with deeply nested JSON structures"""
+        with Environment(lines=50) as env:
+            # Create a test file with complex nested JSON
+            gz_file = env.create_test_gzip_file_with_nested_json()
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            with dft_utils.DFTracerJsonLinesReader(gz_file) as reader:
+                num_lines = reader.get_num_lines()
+                if num_lines > 2:
+                    data = reader.read(1, 3)
+                    
+                    assert isinstance(data, list)
+                    assert len(data) >= 1
+                    
+                    for json_obj in data:
+                        assert isinstance(json_obj, dict)
+                        
+                        # Test top-level fields
+                        assert "id" in json_obj
+                        assert "metadata" in json_obj
+                        assert "events" in json_obj
+                        assert "config" in json_obj
+                        
+                        # Test nested object access
+                        metadata = json_obj["metadata"]
+                        assert isinstance(metadata, dict)
+                        assert "timestamp" in metadata
+                        assert "user" in metadata
+                        
+                        # Test deeply nested object
+                        user = metadata["user"]
+                        assert isinstance(user, dict)
+                        assert "profile" in user
+                        
+                        profile = user["profile"]
+                        assert isinstance(profile, dict)
+                        assert "settings" in profile
+                        
+                        settings = profile["settings"]
+                        assert isinstance(settings, dict)
+                        assert "theme" in settings
+                        assert isinstance(settings["theme"], str)
+                        
+                        # Test array access
+                        events = json_obj["events"]
+                        assert isinstance(events, list)
+                        assert len(events) > 0
+                        
+                        # Test objects in arrays
+                        for event in events:
+                            assert isinstance(event, dict)
+                            assert "type" in event
+                            assert "data" in event
+                            
+                            # Test nested object in array
+                            event_data = event["data"]
+                            assert isinstance(event_data, dict)
+                            assert "payload" in event_data
+                            
+                            # Test mixed types in nested structures
+                            payload = event_data["payload"]
+                            assert isinstance(payload, dict)
+                            assert "values" in payload
+                            
+                            values = payload["values"]
+                            assert isinstance(values, list)
+                            # Values should contain mixed types (int, float, str, dict)
+                            
+                        # Test config with various nested types
+                        config = json_obj["config"]
+                        assert isinstance(config, dict)
+                        assert "features" in config
+                        assert "limits" in config
+                        
+                        features = config["features"]
+                        assert isinstance(features, dict)
+                        for feature_name, feature_config in features.items():
+                            assert isinstance(feature_name, str)
+                            assert isinstance(feature_config, dict)
+                            assert "enabled" in feature_config
+                            assert isinstance(feature_config["enabled"], bool)
 
 
 class TestDFTracerJsonLinesBytesReader:
@@ -823,6 +906,65 @@ class TestDFTracerJsonLinesBytesReader:
                     
                     assert chunk_count > 0
                     assert total_json_objects > 0
+    
+    def test_json_lines_bytes_reader_nested_data(self):
+        """Test JSON lines bytes reader with deeply nested JSON structures"""
+        with Environment(lines=50) as env:
+            # Create a test file with complex nested JSON
+            gz_file = env.create_test_gzip_file_with_nested_json()
+            env.build_index(gz_file, checkpoint_size_bytes=512*1024)
+            
+            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as reader:
+                max_bytes = reader.get_max_bytes()
+                if max_bytes > 2048:  # Ensure we have enough data
+                    data = reader.read(0, 2048)
+                    
+                    assert isinstance(data, list)
+                    assert len(data) >= 1
+                    
+                    for json_obj in data:
+                        assert isinstance(json_obj, dict)
+                        
+                        # Test the same nested structure as JsonLinesReader
+                        # This ensures both readers produce identical dictionary structures
+                        
+                        # Test top-level fields
+                        assert "id" in json_obj
+                        assert "metadata" in json_obj
+                        assert "events" in json_obj
+                        assert "config" in json_obj
+                        
+                        # Test deeply nested access
+                        settings = json_obj["metadata"]["user"]["profile"]["settings"]
+                        assert isinstance(settings, dict)
+                        assert "privacy" in settings
+                        
+                        privacy = settings["privacy"]
+                        assert isinstance(privacy, dict)
+                        assert "options" in privacy
+                        assert isinstance(privacy["options"], list)
+                        assert len(privacy["options"]) == 3
+                        
+                        # Test mixed types in arrays
+                        events = json_obj["events"]
+                        assert isinstance(events, list)
+                        for event in events:
+                            payload = event["data"]["payload"]
+                            values = payload["values"]
+                            assert isinstance(values, list)
+                            
+                            # Check mixed types in the values array
+                            if len(values) >= 4:
+                                assert isinstance(values[0], int)      # i
+                                assert isinstance(values[1], float)    # i * 2.5
+                                assert isinstance(values[2], str)      # f"string_{i}"
+                                assert isinstance(values[3], dict)     # {"nested": True, "count": i}
+                                
+                                nested_in_array = values[3]
+                                assert "nested" in nested_in_array
+                                assert "count" in nested_in_array
+                                assert isinstance(nested_in_array["nested"], bool)
+                                assert isinstance(nested_in_array["count"], int)
 
 
 class TestDFTracerRangeIterator:

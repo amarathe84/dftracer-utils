@@ -5,30 +5,7 @@
 
 nb::object convert_jsondoc(
     const dftracer::utils::json::OwnedJsonDocument& doc) {
-  const auto& elem = doc.get_element();
-  switch (elem.type()) {
-    case simdjson::dom::element_type::OBJECT: {
-      nb::dict result;
-      auto obj = elem.get_object().value();
-      for (auto field : obj) {
-        std::string key = std::string(field.key);
-        dftracer::utils::json::JsonDocument value_doc(field.value);
-        result[nb::cast(key)] = convert_jsondoc(value_doc);
-      }
-      return result;
-    }
-    case simdjson::dom::element_type::ARRAY: {
-      nb::list result;
-      auto arr = elem.get_array().value();
-      for (auto item : arr) {
-        dftracer::utils::json::JsonDocument item_doc(item);
-        result.append(convert_jsondoc(item_doc));
-      }
-      return result;
-    }
-    default:
-      return convert_primitive(elem);
-  }
+  return convert_jsondoc_element(doc.get_element());
 }
 
 nb::object convert_primitive(const dftracer::utils::json::JsonDocument& elem) {
@@ -47,6 +24,32 @@ nb::object convert_primitive(const dftracer::utils::json::JsonDocument& elem) {
       return nb::cast(std::string(elem.get_string().value()));
     default:
       return nb::none();
+  }
+}
+
+nb::object convert_jsondoc_element(const dftracer::utils::json::JsonDocument& elem) {
+  switch (elem.type()) {
+    case simdjson::dom::element_type::OBJECT: {
+      nb::dict result;
+      auto obj = elem.get_object().value();
+      for (auto field : obj) {
+        std::string key = std::string(field.key);
+        dftracer::utils::json::JsonDocument value_doc(field.value);
+        result[nb::cast(key)] = convert_jsondoc_element(value_doc);
+      }
+      return result;
+    }
+    case simdjson::dom::element_type::ARRAY: {
+      nb::list result;
+      auto arr = elem.get_array().value();
+      for (auto item : arr) {
+        dftracer::utils::json::JsonDocument item_doc(item);
+        result.append(convert_jsondoc_element(item_doc));
+      }
+      return result;
+    }
+    default:
+      return convert_primitive(elem);
   }
 }
 

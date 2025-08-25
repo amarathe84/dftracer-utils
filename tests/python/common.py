@@ -81,6 +81,82 @@ class Environment:
         self.test_files.append(file_path)
         return file_path
     
+    def create_test_gzip_file_with_nested_json(self):
+        """Create a gzip file with complex nested JSON structures for testing"""
+        import json
+        file_path = os.path.join(self.temp_dir, f"nested_test_{len(self.test_files)}.pfw.gz")
+        
+        lines = []
+        for i in range(self.lines):
+            # Create complex nested JSON structure
+            nested_data = {
+                "id": f"item_{i}",
+                "metadata": {
+                    "timestamp": f"2024-01-{i:02d}T10:00:00Z",
+                    "version": "1.0.0",
+                    "user": {
+                        "id": f"user_{i % 10}",
+                        "profile": {
+                            "name": f"User {i}",
+                            "settings": {
+                                "theme": "dark" if i % 2 == 0 else "light",
+                                "notifications": True,
+                                "privacy": {
+                                    "level": "high",
+                                    "options": ["encrypt", "anonymize", "delete_after_30_days"]
+                                }
+                            }
+                        }
+                    }
+                },
+                "events": [
+                    {
+                        "type": "click",
+                        "data": {
+                            "element": "button",
+                            "payload": {
+                                "x": 100 + i,
+                                "y": 200 + i,
+                                "values": [i, i * 2.5, f"string_{i}", {"nested": True, "count": i}]
+                            }
+                        }
+                    },
+                    {
+                        "type": "scroll",
+                        "data": {
+                            "direction": "down",
+                            "payload": {
+                                "distance": i * 10,
+                                "duration": i * 0.1,
+                                "values": [{"position": i, "velocity": i * 1.5}]
+                            }
+                        }
+                    }
+                ],
+                "config": {
+                    "features": {
+                        "analytics": {"enabled": True, "level": 2},
+                        "tracking": {"enabled": i % 3 != 0, "anonymous": True},
+                        "cache": {"enabled": True, "ttl": 3600 + i}
+                    },
+                    "limits": {
+                        "max_events": 1000 + i,
+                        "rate_limit": 100.0 + i * 0.1,
+                        "storage_mb": 500 + i
+                    }
+                }
+            }
+            
+            line = json.dumps(nested_data, separators=(',', ':')) + '\n'
+            lines.append(line)
+        
+        # Write compressed data
+        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+            f.writelines(lines)
+        
+        self.test_files.append(file_path)
+        return file_path
+    
     def get_index_path(self, gz_file_path):
         """Get the index file path for a gzip file"""
         return gz_file_path + ".idx"
