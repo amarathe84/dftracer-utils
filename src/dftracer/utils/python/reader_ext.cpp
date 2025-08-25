@@ -132,7 +132,7 @@ class DFTracerReader {
   using ReturnType = std::conditional_t<
       Mode == DFTracerReaderMode::JsonLines ||
           Mode == DFTracerReaderMode::JsonLinesBytes,
-      nb::list,  // Return Python list of dicts for JSON modes
+      nb::list,
       std::conditional_t<Mode == DFTracerReaderMode::Lines ||
                              Mode == DFTracerReaderMode::LineBytes,
                          std::vector<std::string>, std::string>>;
@@ -146,7 +146,7 @@ class DFTracerReader {
         is_open_(false),
         max_bytes_(0),
         index_checkpoint_size_(index_checkpoint_size) {
-    if constexpr (Mode == DFTracerReaderMode::Lines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
       current_pos_ = 1;
       default_step_ = constants::DEFAULT_STEP_SIZE_LINES;
       default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
@@ -171,7 +171,7 @@ class DFTracerReader {
       throw std::runtime_error("Indexer cannot be null");
     }
 
-    if constexpr (Mode == DFTracerReaderMode::Lines) {
+    if constexpr (Mode == DFTracerReaderMode::Lines || Mode == DFTracerReaderMode::JsonLines) {
       current_pos_ = 1;
       default_step_ = constants::DEFAULT_STEP_SIZE_LINES;
       default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
@@ -322,11 +322,11 @@ class DFTracerReader {
 
       size_t bytes_read;
       if constexpr (Mode == DFTracerReaderMode::JsonLines) {
-        auto json_objects = reader_->read_json_lines(start, end);
-        result = jsondocs_to_python(json_objects);
+        auto json_objects = reader_->read_json_lines_owned(start, end);
+        result = convert_jsondocs(json_objects);
       } else if constexpr (Mode == DFTracerReaderMode::JsonLinesBytes) {
-        auto json_objects = reader_->read_json_lines_bytes(start, end);
-        result = jsondocs_to_python(json_objects);
+        auto json_objects = reader_->read_json_lines_bytes_owned(start, end);
+        result = convert_jsondocs(json_objects);
       } else if constexpr (Mode == DFTracerReaderMode::Bytes) {
         while ((bytes_read = reader_->read(start, end, buffer.data(),
                                            buffer.size())) > 0) {
