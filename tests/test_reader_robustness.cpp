@@ -2,7 +2,6 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
-#include <dftracer/utils/utils/logger.h>
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -1208,7 +1207,6 @@ TEST_CASE("Robustness - Memory and performance stress") {
 }
 
 TEST_CASE("Robustness - Line-based reading stress tests") {
-  // dftracer::utils::utils::set_log_level("debug");
   std::cout << "=== Starting Line-based reading stress tests ===" << std::endl;
   LargeTestEnvironment env(256, 1024);  // Much larger file with bigger lines to
                                         // force successful checkpoints

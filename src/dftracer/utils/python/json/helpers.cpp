@@ -27,7 +27,8 @@ nb::object convert_primitive(const dftracer::utils::json::JsonDocument& elem) {
   }
 }
 
-nb::object convert_jsondoc_element(const dftracer::utils::json::JsonDocument& elem) {
+nb::object convert_jsondoc_element(
+    const dftracer::utils::json::JsonDocument& elem) {
   switch (elem.type()) {
     case simdjson::dom::element_type::OBJECT: {
       nb::dict result;

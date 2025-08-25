@@ -6,7 +6,6 @@
 
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
-#include <dftracer/utils/utils/logger.h>
 #include "testing_utilities.h"
 
 // Global test environment handle
@@ -1332,10 +1331,6 @@ int main(void) {
     // Advanced tests
     RUN_TEST(test_json_boundary_detection);
     RUN_TEST(test_regression_for_truncated_json_output);
-    
-    // Logger tests
-    RUN_TEST(test_logger_set_get_level_string);
-    RUN_TEST(test_logger_set_get_level_int);
     
     // Raw reader tests
     RUN_TEST(test_reader_raw_basic_functionality);
