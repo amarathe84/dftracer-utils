@@ -12,7 +12,9 @@
 #include <vector>
 
 extern "C" {
-size_t mb_to_b(double mb) { return static_cast<size_t>(mb * 1024 * 1024); }
+std::size_t mb_to_b(double mb) {
+    return static_cast<std::size_t>(mb * 1024 * 1024);
+}
 }  // extern "C"
 
 namespace dft_utils_test {
@@ -28,7 +30,7 @@ bool compress_file_to_gzip(const std::string& input_file,
         return false;
     }
 
-    const size_t buffer_size = 8192;
+    const std::size_t buffer_size = 8192;
     std::vector<char> buffer(buffer_size);
 
     while (input.read(buffer.data(), buffer_size) || input.gcount() > 0) {
@@ -44,7 +46,7 @@ bool compress_file_to_gzip(const std::string& input_file,
     return true;
 }
 
-TestEnvironment::TestEnvironment(size_t lines) : num_lines(lines) {
+TestEnvironment::TestEnvironment(std::size_t lines) : num_lines(lines) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(100000, 999999);
@@ -87,7 +89,7 @@ std::string TestEnvironment::create_test_gzip_file() {
         return "";
     }
 
-    for (size_t i = 1; i <= num_lines; ++i) {
+    for (std::size_t i = 1; i <= num_lines; ++i) {
         f << "{\"id\": " << i << ", \"message\": \"Test message " << i
           << "\"}\n";
     }
@@ -116,7 +118,8 @@ test_environment_handle_t test_environment_create(void) {
     return test_environment_create_with_lines(100);
 }
 
-test_environment_handle_t test_environment_create_with_lines(size_t lines) {
+test_environment_handle_t test_environment_create_with_lines(
+    std::size_t lines) {
     try {
         auto* env = new dft_utils_test::TestEnvironment(lines);
         if (env->is_valid()) {

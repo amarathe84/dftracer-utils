@@ -18,23 +18,24 @@
 
 #include "testing_utilities.h"
 
+using namespace dftracer::utils;
 using namespace dft_utils_test;
 
-size_t count_json_lines(const std::string& content);
+std::size_t count_json_lines(const std::string& content);
 bool validate_json_lines(const std::string& content);
 std::string get_last_json_line(const std::string& content);
-size_t extract_id_from_json(const std::string& line);
+std::size_t extract_id_from_json(const std::string& line);
 
 // Helper to create large JSON test data
 class LargeTestEnvironment {
    private:
     std::string temp_dir_;
-    size_t num_lines_;
-    size_t bytes_per_line_;
+    std::size_t num_lines_;
+    std::size_t bytes_per_line_;
 
    public:
-    LargeTestEnvironment(size_t target_size_mb = 128,
-                         size_t bytes_per_line = 1024)
+    LargeTestEnvironment(std::size_t target_size_mb = 128,
+                         std::size_t bytes_per_line = 1024)
         : bytes_per_line_(bytes_per_line) {
         // Calculate number of lines needed for target size
         num_lines_ = (target_size_mb * 1024 * 1024) / bytes_per_line;
@@ -62,17 +63,17 @@ class LargeTestEnvironment {
         std::ofstream f(txt_file, std::ios::binary);
         if (!f) return "";
 
-        constexpr size_t closing_len = 3;  // "\"}\n"
+        constexpr std::size_t closing_len = 3;  // "\"}\n"
 
-        for (size_t i = 1; i <= num_lines_; ++i) {
+        for (std::size_t i = 1; i <= num_lines_; ++i) {
             std::ostringstream line;
             line << "{\"name\":\"name_" << i << "\",\"cat\":\"cat_" << i
                  << "\",\"dur\":" << (i * 123 % 10000) << ",\"data\":\"";
 
             // Measure current size
-            const size_t current_size = line.str().size();
+            const std::size_t current_size = line.str().size();
 
-            size_t needed_padding = 0;
+            std::size_t needed_padding = 0;
             if (bytes_per_line_ > current_size + closing_len) {
                 needed_padding = bytes_per_line_ - current_size - closing_len;
             }
@@ -102,15 +103,15 @@ class LargeTestEnvironment {
     }
 
     std::string get_dir() const { return temp_dir_; }
-    size_t get_num_lines() const { return num_lines_; }
-    size_t get_bytes_per_line() const { return bytes_per_line_; }
+    std::size_t get_num_lines() const { return num_lines_; }
+    std::size_t get_bytes_per_line() const { return bytes_per_line_; }
     bool is_valid() const { return fs::exists(temp_dir_); }
 };
 
 // Helper function to count JSON lines in content
-size_t count_json_lines(const std::string& content) {
-    size_t count = 0;
-    size_t pos = 0;
+std::size_t count_json_lines(const std::string& content) {
+    std::size_t count = 0;
+    std::size_t pos = 0;
     while ((pos = content.find("}\n", pos)) != std::string::npos) {
         count++;
         pos += 2;
@@ -148,14 +149,14 @@ std::string get_last_json_line(const std::string& content) {
     if (content.empty()) return "";
 
     // Find the last occurrence of "}\n"
-    size_t last_pos = content.rfind("}\n");
+    std::size_t last_pos = content.rfind("}\n");
     if (last_pos == std::string::npos) return "";
 
     // Find the start of this line (look backwards for previous "\n" or start of
     // string)
-    size_t line_start = 0;
+    std::size_t line_start = 0;
     if (last_pos > 0) {
-        size_t prev_newline = content.rfind('\n', last_pos - 1);
+        std::size_t prev_newline = content.rfind('\n', last_pos - 1);
         if (prev_newline != std::string::npos) {
             line_start = prev_newline + 1;
         }
@@ -166,12 +167,12 @@ std::string get_last_json_line(const std::string& content) {
 }
 
 // Helper function to extract ID from JSON line
-size_t extract_id_from_json(const std::string& line) {
-    size_t name_pos = line.find("\"name\":\"name_");
+std::size_t extract_id_from_json(const std::string& line) {
+    std::size_t name_pos = line.find("\"name\":\"name_");
     if (name_pos == std::string::npos) return 0;
 
     name_pos += 14;  // Length of "\"name\":\"name_"
-    size_t end_pos = line.find("\"", name_pos);
+    std::size_t end_pos = line.find("\"", name_pos);
     if (end_pos == std::string::npos) return 0;
 
     std::string id_str = line.substr(name_pos, end_pos - name_pos);
@@ -196,33 +197,32 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
 
     // Build index with large chunks for efficiency
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(32.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(32.0));
         indexer.build();
     }
 
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
-    size_t max_bytes = reader.get_max_bytes();
+    Reader reader(gz_file, idx_file);
+    std::size_t max_bytes = reader.get_max_bytes();
     REQUIRE(max_bytes > 0);
 
     SUBCASE("Continuous stride reading with no data loss") {
         // Test with 10MB chunks using 8MB buffer
-        const size_t chunk_size = 10 * 1024 * 1024;  // 10MB
-        const size_t buffer_size = 8 * 1024 * 1024;  // 8MB
+        const std::size_t chunk_size = 10 * 1024 * 1024;  // 10MB
+        const std::size_t buffer_size = 8 * 1024 * 1024;  // 8MB
 
-        size_t current_start = 0;
-        size_t total_lines = 0;
-        std::vector<size_t> chunk_line_counts;
-        std::vector<std::pair<size_t, size_t>>
+        std::size_t current_start = 0;
+        std::size_t total_lines = 0;
+        std::vector<std::size_t> chunk_line_counts;
+        std::vector<std::pair<std::size_t, std::size_t>>
             id_ranges;  // first and last ID in each chunk
 
         // Read chunks with stride (each starts where previous ended +1)
         while (current_start < max_bytes) {
-            size_t current_end =
+            std::size_t current_end =
                 std::min(current_start + chunk_size, max_bytes);
 
             std::vector<char> buffer(buffer_size);
-            size_t bytes_written = 0;
+            std::size_t bytes_written = 0;
             std::string content;
 
             // Read this chunk
@@ -236,7 +236,7 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
                 // Validate JSON completeness for each chunk
                 CHECK(validate_json_lines(content));
 
-                size_t lines_in_chunk = count_json_lines(content);
+                std::size_t lines_in_chunk = count_json_lines(content);
                 chunk_line_counts.push_back(lines_in_chunk);
                 total_lines += lines_in_chunk;
 
@@ -249,8 +249,8 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
                     }
                     if (last_line.empty()) last_line = first_line;
 
-                    size_t first_id = extract_id_from_json(first_line);
-                    size_t last_id = extract_id_from_json(last_line);
+                    std::size_t first_id = extract_id_from_json(first_line);
+                    std::size_t last_id = extract_id_from_json(last_line);
                     id_ranges.push_back({first_id, last_id});
                 }
             }
@@ -268,9 +268,9 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
 
         // Verify no major gaps in IDs (allowing for expected
         // overlap/duplication)
-        for (size_t i = 1; i < id_ranges.size(); ++i) {
-            size_t prev_last = id_ranges[i - 1].second;
-            size_t curr_first = id_ranges[i].first;
+        for (std::size_t i = 1; i < id_ranges.size(); ++i) {
+            std::size_t prev_last = id_ranges[i - 1].second;
+            std::size_t curr_first = id_ranges[i].first;
 
             // IDs should be reasonably continuous (allowing for boundary
             // overlap) Gap should not be more than ~100 lines worth
@@ -280,11 +280,11 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
 
     SUBCASE("Single large read vs stride reading comparison") {
         // Read first 30MB as single read
-        const size_t large_read_size = 30 * 1024 * 1024;
-        const size_t buffer_size = 8 * 1024 * 1024;
+        const std::size_t large_read_size = 30 * 1024 * 1024;
+        const std::size_t buffer_size = 8 * 1024 * 1024;
 
         std::vector<char> buffer(buffer_size);
-        size_t bytes_written = 0;
+        std::size_t bytes_written = 0;
         std::string single_read_content;
 
         while ((bytes_written = reader.read_line_bytes(
@@ -294,19 +294,19 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
 
         // Validate JSON completeness for single large read
         CHECK(validate_json_lines(single_read_content));
-        size_t single_read_lines = count_json_lines(single_read_content);
+        std::size_t single_read_lines = count_json_lines(single_read_content);
         std::string single_read_last_line =
             get_last_json_line(single_read_content);
 
         // Now read same range as three 10MB stride chunks with fresh reader
-        dftracer::utils::reader::Reader stride_reader(gz_file, idx_file);
-        size_t stride_total_lines = 0;
-        const size_t chunk_size = 10 * 1024 * 1024;
+        Reader stride_reader(gz_file, idx_file);
+        std::size_t stride_total_lines = 0;
+        const std::size_t chunk_size = 10 * 1024 * 1024;
         std::string stride_combined_content;
 
-        for (size_t i = 0; i < 3; ++i) {
-            size_t start = (i == 0) ? 0 : (i * chunk_size + 1);
-            size_t end = (i + 1) * chunk_size;
+        for (std::size_t i = 0; i < 3; ++i) {
+            std::size_t start = (i == 0) ? 0 : (i * chunk_size + 1);
+            std::size_t end = (i + 1) * chunk_size;
 
             std::string chunk_content;
             bytes_written = 0;
@@ -350,19 +350,18 @@ TEST_CASE("Robustness - Different buffer sizes consistency") {
 
     // Build index
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(16.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(16.0));
         indexer.build();
     }
 
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
+    Reader reader(gz_file, idx_file);
 
     SUBCASE("Multiple buffer sizes produce identical results") {
-        const size_t start_pos = 1024 * 1024;    // 1MB
-        const size_t end_pos = 5 * 1024 * 1024;  // 5MB
+        const std::size_t start_pos = 1024 * 1024;    // 1MB
+        const std::size_t end_pos = 5 * 1024 * 1024;  // 5MB
 
         // Test with different buffer sizes
-        std::vector<size_t> buffer_sizes = {
+        std::vector<std::size_t> buffer_sizes = {
             1024,            // 1KB (smaller than INCOMPLETE_BUFFER_SIZE)
             4 * 1024,        // 4KB
             64 * 1024,       // 64KB
@@ -371,16 +370,16 @@ TEST_CASE("Robustness - Different buffer sizes consistency") {
         };
 
         std::vector<std::string> results;
-        std::vector<size_t> line_counts;
+        std::vector<std::size_t> line_counts;
         std::vector<std::string> last_lines;
 
-        for (size_t buf_size : buffer_sizes) {
+        for (std::size_t buf_size : buffer_sizes) {
             // Create a fresh reader instance for each buffer size to avoid
             // state issues
-            dftracer::utils::reader::Reader test_reader(gz_file, idx_file);
+            Reader test_reader(gz_file, idx_file);
 
             std::vector<char> buffer(buf_size);
-            size_t bytes_written = 0;
+            std::size_t bytes_written = 0;
             std::string content;
 
             while ((bytes_written = test_reader.read_line_bytes(
@@ -398,17 +397,17 @@ TEST_CASE("Robustness - Different buffer sizes consistency") {
         }
 
         // All results should have the same number of lines
-        for (size_t i = 1; i < line_counts.size(); ++i) {
+        for (std::size_t i = 1; i < line_counts.size(); ++i) {
             CHECK(line_counts[i] == line_counts[0]);
         }
 
         // All results should end with the same last line
-        for (size_t i = 1; i < last_lines.size(); ++i) {
+        for (std::size_t i = 1; i < last_lines.size(); ++i) {
             CHECK(last_lines[i] == last_lines[0]);
         }
 
         // All results should be identical (exact same content)
-        for (size_t i = 1; i < results.size(); ++i) {
+        for (std::size_t i = 1; i < results.size(); ++i) {
             CHECK(results[i] == results[0]);
         }
     }
@@ -425,17 +424,16 @@ TEST_CASE("Robustness - Boundary edge cases") {
 
     // Build index with small chunks to create many boundaries
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(1.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(1.0));
         indexer.build();
     }
 
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
-    size_t max_bytes = reader.get_max_bytes();
+    Reader reader(gz_file, idx_file);
+    std::size_t max_bytes = reader.get_max_bytes();
 
     SUBCASE("Range less than bytes_per_line") {
         // Test very small ranges at various positions
-        std::vector<size_t> test_positions = {
+        std::vector<std::size_t> test_positions = {
             0,                  // Start of file
             1024,               // Early position
             max_bytes / 4,      // Quarter point
@@ -444,12 +442,12 @@ TEST_CASE("Robustness - Boundary edge cases") {
             max_bytes - 1024    // Near end
         };
 
-        const size_t buffer_size = 8 * 1024 * 1024;
+        const std::size_t buffer_size = 8 * 1024 * 1024;
         std::vector<char> buffer(buffer_size);
 
-        for (size_t pos : test_positions) {
+        for (std::size_t pos : test_positions) {
             if (pos + 100 <= max_bytes) {
-                size_t bytes_written = 0;
+                std::size_t bytes_written = 0;
                 std::string content;
 
                 // Read 100 bytes starting at position
@@ -475,7 +473,7 @@ TEST_CASE("Robustness - Boundary edge cases") {
 
     SUBCASE("Tiny ranges near boundaries") {
         // Test very small ranges at various positions
-        std::vector<size_t> test_positions = {
+        std::vector<std::size_t> test_positions = {
             0,                  // Start of file
             1024,               // Early position
             max_bytes / 4,      // Quarter point
@@ -484,12 +482,12 @@ TEST_CASE("Robustness - Boundary edge cases") {
             max_bytes - 1024    // Near end
         };
 
-        const size_t buffer_size = 8 * 1024 * 1024;
+        const std::size_t buffer_size = 8 * 1024 * 1024;
         std::vector<char> buffer(buffer_size);
 
-        for (size_t pos : test_positions) {
+        for (std::size_t pos : test_positions) {
             if (pos + 100 <= max_bytes) {
-                size_t bytes_written = 0;
+                std::size_t bytes_written = 0;
                 std::string content;
 
                 // Read 100 bytes starting at position
@@ -515,18 +513,18 @@ TEST_CASE("Robustness - Boundary edge cases") {
     }
 
     SUBCASE("Adjacent ranges have proper continuation") {
-        const size_t range_size = 1024 * 1024;  // 1MB ranges
-        const size_t buffer_size = 8 * 1024 * 1024;
+        const std::size_t range_size = 1024 * 1024;  // 1MB ranges
+        const std::size_t buffer_size = 8 * 1024 * 1024;
         std::vector<char> buffer(buffer_size);
 
-        std::vector<std::pair<size_t, size_t>> id_ranges;
+        std::vector<std::pair<std::size_t, std::size_t>> id_ranges;
 
         // Read several adjacent ranges
-        for (size_t i = 0; i < 3 && (i * range_size < max_bytes); ++i) {
-            size_t start = (i == 0) ? 0 : (i * range_size + 1);
-            size_t end = std::min((i + 1) * range_size, max_bytes);
+        for (std::size_t i = 0; i < 3 && (i * range_size < max_bytes); ++i) {
+            std::size_t start = (i == 0) ? 0 : (i * range_size + 1);
+            std::size_t end = std::min((i + 1) * range_size, max_bytes);
 
-            size_t bytes_written = 0;
+            std::size_t bytes_written = 0;
             std::string content;
 
             while ((bytes_written = reader.read_line_bytes(
@@ -544,17 +542,17 @@ TEST_CASE("Robustness - Boundary edge cases") {
                     }
                     if (last_line.empty()) last_line = first_line;
 
-                    size_t first_id = extract_id_from_json(first_line);
-                    size_t last_id = extract_id_from_json(last_line);
+                    std::size_t first_id = extract_id_from_json(first_line);
+                    std::size_t last_id = extract_id_from_json(last_line);
                     id_ranges.push_back({first_id, last_id});
                 }
             }
         }
 
         // Verify reasonable ID progression - relax constraints for robustness
-        for (size_t i = 1; i < id_ranges.size(); ++i) {
-            size_t prev_last = id_ranges[i - 1].second;
-            size_t curr_first = id_ranges[i].first;
+        for (std::size_t i = 1; i < id_ranges.size(); ++i) {
+            std::size_t prev_last = id_ranges[i - 1].second;
+            std::size_t curr_first = id_ranges[i].first;
 
             // Just check that IDs are generally progressing (allowing for
             // significant boundary overlap) Due to boundary handling, there can
@@ -578,27 +576,26 @@ TEST_CASE("Robustness - Complete file sequential read") {
 
     // Build index
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(8.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(8.0));
         indexer.build();
     }
 
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
-    size_t max_bytes = reader.get_max_bytes();
+    Reader reader(gz_file, idx_file);
+    std::size_t max_bytes = reader.get_max_bytes();
 
     SUBCASE("Complete file read in chunks matches expected line count") {
-        const size_t chunk_size = 1024 * 1024;  // 1MB chunks
-        const size_t buffer_size = 8 * 1024 * 1024;
+        const std::size_t chunk_size = 1024 * 1024;  // 1MB chunks
+        const std::size_t buffer_size = 8 * 1024 * 1024;
         std::vector<char> buffer(buffer_size);
 
-        size_t total_lines = 0;
-        size_t current_pos = 0;
-        std::vector<size_t> all_ids;
+        std::size_t total_lines = 0;
+        std::size_t current_pos = 0;
+        std::vector<std::size_t> all_ids;
 
         while (current_pos < max_bytes) {
-            size_t end_pos = std::min(current_pos + chunk_size, max_bytes);
+            std::size_t end_pos = std::min(current_pos + chunk_size, max_bytes);
 
-            size_t bytes_written = 0;
+            std::size_t bytes_written = 0;
             std::string content;
 
             while ((bytes_written = reader.read_line_bytes(
@@ -608,7 +605,7 @@ TEST_CASE("Robustness - Complete file sequential read") {
             }
 
             if (!content.empty()) {
-                size_t chunk_lines = count_json_lines(content);
+                std::size_t chunk_lines = count_json_lines(content);
                 total_lines += chunk_lines;
 
                 // Extract all IDs from this chunk
@@ -616,7 +613,7 @@ TEST_CASE("Robustness - Complete file sequential read") {
                 std::string line;
                 while (std::getline(ss, line)) {
                     if (line.find("\"name\":\"name_") != std::string::npos) {
-                        size_t id = extract_id_from_json(line);
+                        std::size_t id = extract_id_from_json(line);
                         if (id > 0) {
                             all_ids.push_back(id);
                         }
@@ -635,29 +632,29 @@ TEST_CASE("Robustness - Complete file sequential read") {
         // IDs should generally be in ascending order (allowing for some
         // boundary duplication)
         if (all_ids.size() > 100) {
-            size_t ascending_count = 0;
-            for (size_t i = 1; i < std::min(all_ids.size(), size_t(1000));
-                 ++i) {
+            std::size_t ascending_count = 0;
+            for (std::size_t i = 1;
+                 i < std::min(all_ids.size(), std::size_t(1000)); ++i) {
                 if (all_ids[i] >= all_ids[i - 1]) {
                     ascending_count++;
                 }
             }
 
             // At least 80% should be in ascending order
-            size_t total_comparisons =
-                std::min(all_ids.size(), size_t(1000)) - 1;
-            size_t min_ascending =
+            std::size_t total_comparisons =
+                std::min(all_ids.size(), std::size_t(1000)) - 1;
+            std::size_t min_ascending =
                 (total_comparisons * 4) / 5;  // 80% using integer arithmetic
             CHECK(ascending_count >= min_ascending);
         }
     }
 
     SUBCASE("Single large read vs chunked read comparison") {
-        const size_t buffer_size = 8 * 1024 * 1024;
+        const std::size_t buffer_size = 8 * 1024 * 1024;
         std::vector<char> buffer(buffer_size);
 
         // Read entire file as single operation
-        size_t bytes_written = 0;
+        std::size_t bytes_written = 0;
         std::string complete_content;
 
         while ((bytes_written = reader.read_line_bytes(
@@ -667,18 +664,18 @@ TEST_CASE("Robustness - Complete file sequential read") {
 
         // Validate JSON completeness for single read
         CHECK(validate_json_lines(complete_content));
-        size_t complete_lines = count_json_lines(complete_content);
+        std::size_t complete_lines = count_json_lines(complete_content);
         std::string complete_last_line = get_last_json_line(complete_content);
 
         // Read same file in 2MB chunks with fresh reader
-        dftracer::utils::reader::Reader chunked_reader(gz_file, idx_file);
-        const size_t chunk_size = 2 * 1024 * 1024;
-        size_t chunked_total_lines = 0;
-        size_t current_pos = 0;
+        Reader chunked_reader(gz_file, idx_file);
+        const std::size_t chunk_size = 2 * 1024 * 1024;
+        std::size_t chunked_total_lines = 0;
+        std::size_t current_pos = 0;
         std::string chunked_complete_content;
 
         while (current_pos < max_bytes) {
-            size_t end_pos = std::min(current_pos + chunk_size, max_bytes);
+            std::size_t end_pos = std::min(current_pos + chunk_size, max_bytes);
 
             bytes_written = 0;
             std::string chunk_content;
@@ -724,28 +721,28 @@ TEST_CASE("Robustness - JSON validation and consistency") {
 
     // Build index
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(8.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(8.0));
         indexer.build();
     }
 
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
-    size_t max_bytes = reader.get_max_bytes();
+    Reader reader(gz_file, idx_file);
+    std::size_t max_bytes = reader.get_max_bytes();
 
     SUBCASE("All JSON lines are valid and complete") {
         // Test various read ranges with different buffer sizes
-        std::vector<size_t> buffer_sizes = {1024, 8192, 64 * 1024, 1024 * 1024};
-        std::vector<std::pair<size_t, size_t>> test_ranges = {
+        std::vector<std::size_t> buffer_sizes = {1024, 8192, 64 * 1024,
+                                                 1024 * 1024};
+        std::vector<std::pair<std::size_t, std::size_t>> test_ranges = {
             {0, max_bytes / 4},
             {max_bytes / 4, max_bytes / 2},
             {max_bytes / 2, max_bytes * 3 / 4},
             {max_bytes * 3 / 4, max_bytes}};
 
-        for (size_t buf_size : buffer_sizes) {
+        for (std::size_t buf_size : buffer_sizes) {
             for (auto range : test_ranges) {
-                dftracer::utils::reader::Reader test_reader(gz_file, idx_file);
+                Reader test_reader(gz_file, idx_file);
                 std::vector<char> buffer(buf_size);
-                size_t bytes_written = 0;
+                std::size_t bytes_written = 0;
                 std::string content;
 
                 while ((bytes_written = test_reader.read_line_bytes(
@@ -769,18 +766,18 @@ TEST_CASE("Robustness - JSON validation and consistency") {
     }
 
     SUBCASE("Last JSON line consistency across buffer sizes") {
-        const size_t start_pos = max_bytes / 4;
-        const size_t end_pos = max_bytes / 2;
+        const std::size_t start_pos = max_bytes / 4;
+        const std::size_t end_pos = max_bytes / 2;
 
-        std::vector<size_t> buffer_sizes = {512, 2048, 16384, 256 * 1024,
-                                            2 * 1024 * 1024};
+        std::vector<std::size_t> buffer_sizes = {512, 2048, 16384, 256 * 1024,
+                                                 2 * 1024 * 1024};
         std::vector<std::string> last_lines;
-        std::vector<size_t> line_counts;
+        std::vector<std::size_t> line_counts;
 
-        for (size_t buf_size : buffer_sizes) {
-            dftracer::utils::reader::Reader test_reader(gz_file, idx_file);
+        for (std::size_t buf_size : buffer_sizes) {
+            Reader test_reader(gz_file, idx_file);
             std::vector<char> buffer(buf_size);
-            size_t bytes_written = 0;
+            std::size_t bytes_written = 0;
             std::string content;
 
             while ((bytes_written = test_reader.read_line_bytes(
@@ -792,32 +789,32 @@ TEST_CASE("Robustness - JSON validation and consistency") {
             REQUIRE(validate_json_lines(content));
 
             std::string last_line = get_last_json_line(content);
-            size_t line_count = count_json_lines(content);
+            std::size_t line_count = count_json_lines(content);
 
             last_lines.push_back(last_line);
             line_counts.push_back(line_count);
         }
 
         // All buffer sizes should produce the same last line
-        for (size_t i = 1; i < last_lines.size(); ++i) {
+        for (std::size_t i = 1; i < last_lines.size(); ++i) {
             CHECK(last_lines[i] == last_lines[0]);
         }
 
         // All buffer sizes should produce the same line count
-        for (size_t i = 1; i < line_counts.size(); ++i) {
+        for (std::size_t i = 1; i < line_counts.size(); ++i) {
             CHECK(line_counts[i] == line_counts[0]);
         }
     }
 
     SUBCASE("Sequential vs chunked reading exact line count comparison") {
-        const size_t test_size =
-            std::min(max_bytes, size_t(16 * 1024 * 1024));  // 16MB max
-        const size_t buffer_size = 4 * 1024 * 1024;
+        const std::size_t test_size =
+            std::min(max_bytes, std::size_t(16 * 1024 * 1024));  // 16MB max
+        const std::size_t buffer_size = 4 * 1024 * 1024;
 
         // Sequential read
-        dftracer::utils::reader::Reader seq_reader(gz_file, idx_file);
+        Reader seq_reader(gz_file, idx_file);
         std::vector<char> buffer(buffer_size);
-        size_t bytes_written = 0;
+        std::size_t bytes_written = 0;
         std::string sequential_content;
 
         while ((bytes_written = seq_reader.read_line_bytes(
@@ -826,22 +823,23 @@ TEST_CASE("Robustness - JSON validation and consistency") {
         }
 
         REQUIRE(validate_json_lines(sequential_content));
-        size_t sequential_lines = count_json_lines(sequential_content);
+        std::size_t sequential_lines = count_json_lines(sequential_content);
         std::string sequential_last_line =
             get_last_json_line(sequential_content);
 
         // Chunked reading with different chunk sizes
-        std::vector<size_t> chunk_sizes = {1024 * 1024, 2 * 1024 * 1024,
-                                           4 * 1024 * 1024};
+        std::vector<std::size_t> chunk_sizes = {1024 * 1024, 2 * 1024 * 1024,
+                                                4 * 1024 * 1024};
 
-        for (size_t chunk_size : chunk_sizes) {
-            dftracer::utils::reader::Reader chunked_reader(gz_file, idx_file);
-            size_t chunked_total_lines = 0;
-            size_t current_pos = 0;
+        for (std::size_t chunk_size : chunk_sizes) {
+            Reader chunked_reader(gz_file, idx_file);
+            std::size_t chunked_total_lines = 0;
+            std::size_t current_pos = 0;
             std::string chunked_last_line;
 
             while (current_pos < test_size) {
-                size_t end_pos = std::min(current_pos + chunk_size, test_size);
+                std::size_t end_pos =
+                    std::min(current_pos + chunk_size, test_size);
 
                 bytes_written = 0;
                 std::string chunk_content;
@@ -854,7 +852,7 @@ TEST_CASE("Robustness - JSON validation and consistency") {
 
                 REQUIRE(validate_json_lines(chunk_content));
 
-                size_t chunk_lines = count_json_lines(chunk_content);
+                std::size_t chunk_lines = count_json_lines(chunk_content);
                 chunked_total_lines += chunk_lines;
 
                 // Update last line from this chunk
@@ -870,8 +868,9 @@ TEST_CASE("Robustness - JSON validation and consistency") {
             // but may not be identical due to chunked boundary handling
             if (!chunked_last_line.empty() && !sequential_last_line.empty()) {
                 // Extract IDs to compare logical ordering
-                size_t chunked_id = extract_id_from_json(chunked_last_line);
-                size_t sequential_id =
+                std::size_t chunked_id =
+                    extract_id_from_json(chunked_last_line);
+                std::size_t sequential_id =
                     extract_id_from_json(sequential_last_line);
 
                 // Due to boundary extension in chunked reading, the chunked
@@ -912,19 +911,18 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
 
     // Build index
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(8.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(8.0));
         indexer.build();
     }
 
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
-    size_t max_bytes = reader.get_max_bytes();
-    const size_t buffer_size = 4 * 1024 * 1024;
+    Reader reader(gz_file, idx_file);
+    std::size_t max_bytes = reader.get_max_bytes();
+    const std::size_t buffer_size = 4 * 1024 * 1024;
 
     SUBCASE("Single read (0, max_bytes) vs stride reading entire file") {
         // Read entire file as single operation
         std::vector<char> buffer(buffer_size);
-        size_t bytes_written = 0;
+        std::size_t bytes_written = 0;
         std::string complete_content;
 
         while ((bytes_written = reader.read_line_bytes(
@@ -934,22 +932,23 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
 
         // Validate single read
         REQUIRE(validate_json_lines(complete_content));
-        size_t complete_lines = count_json_lines(complete_content);
+        std::size_t complete_lines = count_json_lines(complete_content);
         std::string complete_last_line = get_last_json_line(complete_content);
 
         // Read same file using stride (chunked) approach covering entire file
-        dftracer::utils::reader::Reader stride_reader(gz_file, idx_file);
-        std::vector<size_t> chunk_sizes = {512 * 1024, 1024 * 1024,
-                                           2 * 1024 * 1024, 4 * 1024 * 1024};
+        Reader stride_reader(gz_file, idx_file);
+        std::vector<std::size_t> chunk_sizes = {
+            512 * 1024, 1024 * 1024, 2 * 1024 * 1024, 4 * 1024 * 1024};
 
-        for (size_t chunk_size : chunk_sizes) {
-            size_t stride_total_lines = 0;
-            size_t current_pos = 0;
+        for (std::size_t chunk_size : chunk_sizes) {
+            std::size_t stride_total_lines = 0;
+            std::size_t current_pos = 0;
             std::string stride_last_line;
             std::string stride_complete_content;
 
             while (current_pos < max_bytes) {
-                size_t end_pos = std::min(current_pos + chunk_size, max_bytes);
+                std::size_t end_pos =
+                    std::min(current_pos + chunk_size, max_bytes);
 
                 bytes_written = 0;
                 std::string chunk_content;
@@ -1003,22 +1002,23 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
     }
 
     SUBCASE("Different stride sizes produce identical final results") {
-        std::vector<size_t> stride_sizes = {256 * 1024, 1024 * 1024,
-                                            3 * 1024 * 1024};
+        std::vector<std::size_t> stride_sizes = {256 * 1024, 1024 * 1024,
+                                                 3 * 1024 * 1024};
         std::vector<std::string> final_lines;
-        std::vector<size_t> total_line_counts;
+        std::vector<std::size_t> total_line_counts;
 
-        for (size_t stride_size : stride_sizes) {
-            dftracer::utils::reader::Reader test_reader(gz_file, idx_file);
-            size_t total_lines = 0;
-            size_t current_pos = 0;
+        for (std::size_t stride_size : stride_sizes) {
+            Reader test_reader(gz_file, idx_file);
+            std::size_t total_lines = 0;
+            std::size_t current_pos = 0;
             std::string last_line;
 
             while (current_pos < max_bytes) {
-                size_t end_pos = std::min(current_pos + stride_size, max_bytes);
+                std::size_t end_pos =
+                    std::min(current_pos + stride_size, max_bytes);
 
                 std::vector<char> buffer(buffer_size);
-                size_t bytes_written = 0;
+                std::size_t bytes_written = 0;
                 std::string content;
 
                 while ((bytes_written = test_reader.read_line_bytes(
@@ -1045,14 +1045,14 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
         // All stride approaches should end with the identical final JSON line
         // This is the key test - regardless of stride size, all should reach
         // the same end
-        for (size_t i = 1; i < final_lines.size(); ++i) {
+        for (std::size_t i = 1; i < final_lines.size(); ++i) {
             CHECK(final_lines[i] == final_lines[0]);
         }
 
         // All stride approaches should have read substantial data
         // Line counts may vary due to boundary duplication, but all should be
         // positive
-        for (size_t i = 0; i < total_line_counts.size(); ++i) {
+        for (std::size_t i = 0; i < total_line_counts.size(); ++i) {
             CHECK(total_line_counts[i] > 0);
         }
     }
@@ -1069,35 +1069,34 @@ TEST_CASE("Robustness - Memory and performance stress") {
 
     // Build index
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(4.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(4.0));
         indexer.build();
     }
 
     SUBCASE("Many small reads with different buffer sizes") {
-        std::vector<size_t> buffer_sizes = {256, 1024, 4096, 16384, 65536};
+        std::vector<std::size_t> buffer_sizes = {256, 1024, 4096, 16384, 65536};
 
-        for (size_t buf_size : buffer_sizes) {
-            dftracer::utils::reader::Reader reader(gz_file, idx_file);
-            size_t max_bytes = reader.get_max_bytes();
+        for (std::size_t buf_size : buffer_sizes) {
+            Reader reader(gz_file, idx_file);
+            std::size_t max_bytes = reader.get_max_bytes();
 
             std::vector<char> buffer(buf_size);
-            size_t total_bytes_read = 0;
-            size_t total_lines = 0;
+            std::size_t total_bytes_read = 0;
+            std::size_t total_lines = 0;
 
             // Perform many small random reads
             std::random_device rd;
             std::mt19937 gen(rd());
-            std::uniform_int_distribution<size_t> dis(
+            std::uniform_int_distribution<std::size_t> dis(
                 0, max_bytes > 1000 ? max_bytes - 1000 : 0);
 
-            size_t total_bytes_written = 0;
+            std::size_t total_bytes_written = 0;
 
-            for (size_t i = 0; i < 50; ++i) {
-                size_t start = dis(gen);
-                size_t end = std::min(start + 500, max_bytes);
+            for (std::size_t i = 0; i < 50; ++i) {
+                std::size_t start = dis(gen);
+                std::size_t end = std::min(start + 500, max_bytes);
 
-                size_t bytes_written = 0;
+                std::size_t bytes_written = 0;
                 std::string content;
 
                 while ((bytes_written = reader.read_line_bytes(
@@ -1118,20 +1117,20 @@ TEST_CASE("Robustness - Memory and performance stress") {
 
     SUBCASE("Concurrent reader instances") {
         // Create multiple readers for the same file
-        std::vector<std::unique_ptr<dftracer::utils::reader::Reader>> readers;
+        std::vector<std::unique_ptr<Reader>> readers;
 
-        for (size_t i = 0; i < 5; ++i) {
-            readers.push_back(std::unique_ptr<dftracer::utils::reader::Reader>(
-                new dftracer::utils::reader::Reader(gz_file, idx_file)));
+        for (std::size_t i = 0; i < 5; ++i) {
+            readers.push_back(
+                std::unique_ptr<Reader>(new Reader(gz_file, idx_file)));
             CHECK(readers.back()->is_valid());
         }
 
         // All readers should be able to read simultaneously
-        const size_t buffer_size = 4 * 1024 * 1024;
+        const std::size_t buffer_size = 4 * 1024 * 1024;
         std::vector<char> buffer(buffer_size);
 
         for (auto& reader : readers) {
-            size_t bytes_written = 0;
+            std::size_t bytes_written = 0;
             std::string content;
 
             while ((bytes_written = reader->read(0, 1024 * 1024, buffer.data(),
@@ -1146,20 +1145,19 @@ TEST_CASE("Robustness - Memory and performance stress") {
 
     SUBCASE("Threading Concurrent reader instances") {
         // Create multiple threads reading the same file
-        const size_t num_threads = 4;
+        const std::size_t num_threads = 4;
         std::vector<std::thread> threads;
-        std::atomic<size_t> total_lines(0);
+        std::atomic<std::size_t> total_lines(0);
 
-        for (size_t i = 0; i < num_threads; ++i) {
+        for (std::size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([&gz_file, &idx_file, &total_lines]() {
-                dftracer::utils::reader::Reader thread_reader(gz_file,
-                                                              idx_file);
-                size_t max_bytes = thread_reader.get_max_bytes();
+                Reader thread_reader(gz_file, idx_file);
+                std::size_t max_bytes = thread_reader.get_max_bytes();
 
-                const size_t buffer_size = 4 * 1024 * 1024;
+                const std::size_t buffer_size = 4 * 1024 * 1024;
                 std::vector<char> buffer(buffer_size);
 
-                size_t bytes_written = 0;
+                std::size_t bytes_written = 0;
                 std::string content;
 
                 while ((bytes_written = thread_reader.read_line_bytes(
@@ -1186,19 +1184,19 @@ TEST_CASE("Robustness - Memory and performance stress") {
     }
 
     SUBCASE("Future-Async Concurrent reader instances") {
-        const size_t num_futures = 4;
-        std::vector<std::future<size_t>> futures;
+        const std::size_t num_futures = 4;
+        std::vector<std::future<std::size_t>> futures;
 
-        for (size_t i = 0; i < num_futures; ++i) {
+        for (std::size_t i = 0; i < num_futures; ++i) {
             futures.push_back(std::async(std::launch::async, [&gz_file,
                                                               &idx_file]() {
-                dftracer::utils::reader::Reader async_reader(gz_file, idx_file);
-                size_t max_bytes = async_reader.get_max_bytes();
+                Reader async_reader(gz_file, idx_file);
+                std::size_t max_bytes = async_reader.get_max_bytes();
 
-                const size_t buffer_size = 4 * 1024 * 1024;
+                const std::size_t buffer_size = 4 * 1024 * 1024;
                 std::vector<char> buffer(buffer_size);
 
-                size_t bytes_written = 0;
+                std::size_t bytes_written = 0;
                 std::string content;
 
                 while ((bytes_written = async_reader.read_line_bytes(
@@ -1210,15 +1208,15 @@ TEST_CASE("Robustness - Memory and performance stress") {
                 if (validate_json_lines(content)) {
                     return count_json_lines(content);
                 }
-                return static_cast<size_t>(0);
+                return static_cast<std::size_t>(0);
             }));
         }
 
-        size_t total_lines = 0;
-        size_t last_num_lines = 0;
+        std::size_t total_lines = 0;
+        std::size_t last_num_lines = 0;
 
         // Wait for all futures to complete
-        for (size_t i = 0; i < num_futures; ++i) {
+        for (std::size_t i = 0; i < num_futures; ++i) {
             auto& fut = futures[i];
             auto num_lines = fut.get();
             CHECK(num_lines > 0);
@@ -1266,8 +1264,7 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
         std::cout << "Chunk size: 0.5 MB (small enough to create checkpoints "
                      "during processing)"
                   << std::endl;
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(0.5), true);
+        Indexer indexer(gz_file, idx_file, mb_to_b(0.5), true);
         std::cout << "Building index..." << std::endl;
         indexer.build();
         std::cout << "Index built successfully" << std::endl;
@@ -1275,7 +1272,7 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
         // Verify we have line data - skip tests if indexer doesn't support line
         // reading
         auto checkpoints = indexer.get_checkpoints();
-        size_t num_lines = indexer.get_num_lines();
+        std::size_t num_lines = indexer.get_num_lines();
 
         std::cout << "Checkpoints: " << checkpoints.size()
                   << ", Lines: " << num_lines << std::endl;
@@ -1320,17 +1317,16 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
              << " total lines");
     }
 
-    dftracer::utils::reader::Reader reader(gz_file, idx_file);
+    Reader reader(gz_file, idx_file);
 
     SUBCASE("Random line range reading consistency") {
         std::cout << "Starting Random line range reading consistency test"
                   << std::endl;
-        size_t total_lines = 0;
+        std::size_t total_lines = 0;
 
         // Get total lines from indexer
         {
-            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                      mb_to_b(2.0));
+            Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
             total_lines = indexer.get_num_lines();
         }
 
@@ -1338,22 +1334,22 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<size_t> dis(1, total_lines);
+        std::uniform_int_distribution<std::size_t> dis(1, total_lines);
 
         std::vector<std::string> results;
 
         // Test 50 random line ranges
-        for (size_t i = 0; i < 50; ++i) {
-            size_t start_line = dis(gen);
-            size_t range_size =
-                std::min(size_t(100), total_lines - start_line + 1);
-            size_t end_line = start_line + range_size - 1;
+        for (std::size_t i = 0; i < 50; ++i) {
+            std::size_t start_line = dis(gen);
+            std::size_t range_size =
+                std::min(std::size_t(100), total_lines - start_line + 1);
+            std::size_t end_line = start_line + range_size - 1;
 
             try {
                 std::string result = reader.read_lines(start_line, end_line);
 
                 // Count actual lines returned
-                size_t line_count = 0;
+                std::size_t line_count = 0;
                 for (char c : result) {
                     if (c == '\n') line_count++;
                 }
@@ -1396,12 +1392,11 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
     }
 
     SUBCASE("Large line range reading") {
-        size_t total_lines = 0;
+        std::size_t total_lines = 0;
 
         // Get total lines from indexer
         {
-            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                      mb_to_b(2.0));
+            Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
             total_lines = indexer.get_num_lines();
         }
 
@@ -1411,13 +1406,13 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
         }
 
         // Test various large ranges
-        std::vector<std::pair<size_t, size_t>> large_ranges = {
-            {1, std::min(total_lines, size_t(1000))},
-            {std::max(size_t(1), total_lines / 4),
+        std::vector<std::pair<std::size_t, std::size_t>> large_ranges = {
+            {1, std::min(total_lines, std::size_t(1000))},
+            {std::max(std::size_t(1), total_lines / 4),
              std::min(total_lines, total_lines / 4 + 2000)},
-            {std::max(size_t(1), total_lines / 2),
+            {std::max(std::size_t(1), total_lines / 2),
              std::min(total_lines, total_lines / 2 + 1500)},
-            {std::max(size_t(1), total_lines - 500), total_lines}};
+            {std::max(std::size_t(1), total_lines - 500), total_lines}};
 
         for (auto range : large_ranges) {
             if (range.first <= range.second && range.second <= total_lines) {
@@ -1426,12 +1421,12 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
                         reader.read_lines(range.first, range.second);
 
                     // Count lines
-                    size_t line_count = 0;
+                    std::size_t line_count = 0;
                     for (char c : result) {
                         if (c == '\n') line_count++;
                     }
 
-                    size_t expected_lines = range.second - range.first + 1;
+                    std::size_t expected_lines = range.second - range.first + 1;
                     CHECK(line_count == expected_lines);
 
                     // Should not be empty
@@ -1462,12 +1457,11 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
     }
 
     SUBCASE("Single line reading across file") {
-        size_t total_lines = 0;
+        std::size_t total_lines = 0;
 
         // Get total lines from indexer
         {
-            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                      mb_to_b(2.0));
+            Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
             total_lines = indexer.get_num_lines();
         }
 
@@ -1477,22 +1471,22 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
         }
 
         // Test single lines at various positions
-        std::vector<size_t> test_lines = {
+        std::vector<std::size_t> test_lines = {
             1,
-            std::min(total_lines, size_t(100)),
-            std::min(total_lines, size_t(1000)),
+            std::min(total_lines, std::size_t(100)),
+            std::min(total_lines, std::size_t(1000)),
             std::min(total_lines, total_lines / 4),
             std::min(total_lines, total_lines / 2),
             std::min(total_lines, total_lines * 3 / 4),
             total_lines};
 
-        for (size_t line_num : test_lines) {
+        for (std::size_t line_num : test_lines) {
             if (line_num <= total_lines && line_num > 0) {
                 try {
                     std::string result = reader.read_lines(line_num, line_num);
 
                     // Should have exactly one line
-                    size_t line_count = 0;
+                    std::size_t line_count = 0;
                     for (char c : result) {
                         if (c == '\n') line_count++;
                     }
@@ -1517,12 +1511,11 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
     }
 
     SUBCASE("Line reading boundary conditions") {
-        size_t total_lines = 0;
+        std::size_t total_lines = 0;
 
         // Get total lines from indexer
         {
-            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                      mb_to_b(2.0));
+            Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
             total_lines = indexer.get_num_lines();
         }
 
@@ -1548,7 +1541,7 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
             // First few lines
             if (total_lines >= 5) {
                 std::string first_few = reader.read_lines(1, 5);
-                size_t line_count = 0;
+                std::size_t line_count = 0;
                 for (char c : first_few) {
                     if (c == '\n') line_count++;
                 }
@@ -1557,9 +1550,9 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
             // Last few lines
             if (total_lines >= 5) {
-                size_t start = total_lines - 4;
+                std::size_t start = total_lines - 4;
                 std::string last_few = reader.read_lines(start, total_lines);
-                size_t line_count = 0;
+                std::size_t line_count = 0;
                 for (char c : last_few) {
                     if (c == '\n') line_count++;
                 }
@@ -1572,12 +1565,11 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
     }
 
     SUBCASE("Line reading error handling robustness") {
-        size_t total_lines = 0;
+        std::size_t total_lines = 0;
 
         // Get total lines from indexer
         {
-            dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                      mb_to_b(2.0));
+            Indexer indexer(gz_file, idx_file, mb_to_b(2.0));
             total_lines = indexer.get_num_lines();
         }
 
@@ -1620,30 +1612,28 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
     std::string idx_file = env.get_index_path(gz_file);
 
     // Build index
-    size_t total_lines = 0;
+    std::size_t total_lines = 0;
     {
-        dftracer::utils::indexer::Indexer indexer(gz_file, idx_file,
-                                                  mb_to_b(4.0));
+        Indexer indexer(gz_file, idx_file, mb_to_b(4.0));
         indexer.build();
         total_lines = indexer.get_num_lines();
     }
 
     SUBCASE("Multiple reader instances return identical results") {
         // Create multiple readers
-        std::vector<std::unique_ptr<dftracer::utils::reader::Reader>> readers;
-        for (size_t i = 0; i < 5; ++i) {
-            readers.push_back(std::make_unique<dftracer::utils::reader::Reader>(
-                gz_file, idx_file));
+        std::vector<std::unique_ptr<Reader>> readers;
+        for (std::size_t i = 0; i < 5; ++i) {
+            readers.push_back(std::make_unique<Reader>(gz_file, idx_file));
             CHECK(readers.back()->is_valid());
         }
 
         // Test same line ranges across all readers
-        std::vector<std::pair<size_t, size_t>> test_ranges = {
+        std::vector<std::pair<std::size_t, std::size_t>> test_ranges = {
             {1, 10},
             {100, 110},
-            {std::min(total_lines, size_t(1000)),
-             std::min(total_lines, size_t(1010))},
-            {std::max(size_t(1), total_lines - 10), total_lines}};
+            {std::min(total_lines, std::size_t(1000)),
+             std::min(total_lines, std::size_t(1010))},
+            {std::max(std::size_t(1), total_lines - 10), total_lines}};
 
         for (auto range : test_ranges) {
             if (range.first <= range.second && range.second <= total_lines &&
@@ -1666,7 +1656,7 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
 
                 // All successful results should be identical
                 if (!results.empty() && !results[0].empty()) {
-                    for (size_t i = 1; i < results.size(); ++i) {
+                    for (std::size_t i = 1; i < results.size(); ++i) {
                         if (!results[i].empty()) {
                             CHECK(results[i] == results[0]);
                         }
@@ -1677,21 +1667,20 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
     }
 
     SUBCASE("Concurrent line reading threads") {
-        const size_t num_threads = 4;
+        const std::size_t num_threads = 4;
         std::vector<std::thread> threads;
-        std::atomic<size_t> successful_reads(0);
-        std::atomic<size_t> failed_reads(0);
+        std::atomic<std::size_t> successful_reads(0);
+        std::atomic<std::size_t> failed_reads(0);
 
-        for (size_t i = 0; i < num_threads; ++i) {
+        for (std::size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([&gz_file, &idx_file, &total_lines,
                                   &successful_reads, &failed_reads, i]() {
-                dftracer::utils::reader::Reader thread_reader(gz_file,
-                                                              idx_file);
+                Reader thread_reader(gz_file, idx_file);
 
                 // Each thread reads different ranges - smaller ranges for JSON
                 // data
-                size_t thread_start = (i * total_lines / num_threads) + 1;
-                size_t thread_end = std::min(
+                std::size_t thread_start = (i * total_lines / num_threads) + 1;
+                std::size_t thread_end = std::min(
                     total_lines,
                     thread_start + 5);  // Much smaller range for JSON lines
 
@@ -1701,7 +1690,7 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
                             thread_reader.read_lines(thread_start, thread_end);
 
                         // Validate result
-                        size_t line_count = 0;
+                        std::size_t line_count = 0;
                         for (char c : result) {
                             if (c == '\n') line_count++;
                         }
@@ -1745,15 +1734,15 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
 
     SUBCASE("Sequential vs random access pattern comparison") {
         // Create reader for sequential testing
-        dftracer::utils::reader::Reader reader(gz_file, idx_file);
+        Reader reader(gz_file, idx_file);
         REQUIRE(reader.is_valid());
 
         // Sequential reading
         std::vector<std::string> sequential_results;
-        const size_t chunk_size = 50;
+        const std::size_t chunk_size = 50;
 
-        for (size_t start = 1; start <= total_lines; start += chunk_size) {
-            size_t end = std::min(start + chunk_size - 1, total_lines);
+        for (std::size_t start = 1; start <= total_lines; start += chunk_size) {
+            std::size_t end = std::min(start + chunk_size - 1, total_lines);
 
             try {
                 std::string result = reader.read_lines(start, end);
@@ -1770,8 +1759,8 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
 
         // Random access reading (same ranges as sequential)
         std::vector<std::string> random_results;
-        std::vector<size_t> indices;
-        for (size_t i = 0; i < sequential_results.size(); ++i) {
+        std::vector<std::size_t> indices;
+        for (std::size_t i = 0; i < sequential_results.size(); ++i) {
             indices.push_back(i);
         }
 
@@ -1780,10 +1769,10 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
         std::mt19937 gen(rd());
         std::shuffle(indices.begin(), indices.end(), gen);
 
-        dftracer::utils::reader::Reader random_reader(gz_file, idx_file);
-        for (size_t idx : indices) {
-            size_t start = (idx * chunk_size) + 1;
-            size_t end = std::min(start + chunk_size - 1, total_lines);
+        Reader random_reader(gz_file, idx_file);
+        for (std::size_t idx : indices) {
+            std::size_t start = (idx * chunk_size) + 1;
+            std::size_t end = std::min(start + chunk_size - 1, total_lines);
 
             try {
                 std::string result = random_reader.read_lines(start, end);
@@ -1798,8 +1787,8 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
         // Results should be identical (after reordering)
         CHECK(random_results.size() == sequential_results.size());
 
-        for (size_t i = 0; i < indices.size(); ++i) {
-            size_t original_idx = indices[i];
+        for (std::size_t i = 0; i < indices.size(); ++i) {
+            std::size_t original_idx = indices[i];
             if (!sequential_results[original_idx].empty() &&
                 !random_results[i].empty()) {
                 CHECK(random_results[i] == sequential_results[original_idx]);

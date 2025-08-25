@@ -366,8 +366,8 @@ int IndexerImplementor::get_file_id() const {
     return cached_file_id;
 }
 
-int IndexerImplementor::find_file_id(const std::string &gz_path) const {
-    return query_file_id(db, get_logical_path(gz_path));
+int IndexerImplementor::find_file_id(const std::string &path) const {
+    return query_file_id(db, get_logical_path(path));
 }
 
 bool IndexerImplementor::find_checkpoint(std::size_t target_offset,
