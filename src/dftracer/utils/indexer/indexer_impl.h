@@ -28,6 +28,7 @@ struct IndexerImplementor {
                        std::size_t ckpt_size, bool force_rebuild);
 
     void open();
+    void close();
     void build();
     bool need_rebuild() const;
     bool is_valid() const;

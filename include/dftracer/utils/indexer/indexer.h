@@ -27,7 +27,6 @@ class Indexer {
     Indexer &operator=(Indexer &&other) noexcept;
     void build() const;
     bool need_rebuild() const;
-    bool is_valid() const;
 
     // Metadata
     const std::string &get_idx_path() const;

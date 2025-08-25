@@ -1,5 +1,6 @@
 #include "testing_utilities.h"
 
+#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <zlib.h>
 
@@ -12,9 +13,7 @@
 #include <vector>
 
 extern "C" {
-std::size_t mb_to_b(double mb) {
-    return static_cast<std::size_t>(mb * 1024 * 1024);
-}
+size_t mb_to_b(double mb) { return static_cast<std::size_t>(mb * 1024 * 1024); }
 }  // extern "C"
 
 namespace dft_utils_test {
@@ -47,6 +46,7 @@ bool compress_file_to_gzip(const std::string& input_file,
 }
 
 TestEnvironment::TestEnvironment(std::size_t lines) : num_lines(lines) {
+    DFTRACER_UTILS_LOGGER_INIT();
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(100000, 999999);

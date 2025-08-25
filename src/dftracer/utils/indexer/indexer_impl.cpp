@@ -29,6 +29,8 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         return false;
     }
 
+    DFTRACER_UTILS_LOG_DEBUG("Starting to process chunks");
+
     Inflater inflater(fp);
     std::size_t checkpoint_idx = 0;
     std::size_t current_uc_offset = 0;  // Current uncompressed offset
@@ -36,31 +38,32 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         0;  // Start of current checkpoint (uncompressed)
     std::uint64_t total_lines = 0;  // Total lines processed
 
-    unsigned char buffer[constants::indexer::PROCESS_BUFFER_SIZE];
-
     while (true) {
-        std::size_t bytes_read;
-        std::size_t c_off;
+        DFTRACER_UTILS_LOG_DEBUG("Start inflating at uncompressed offset %zu",
+                                 current_uc_offset);
 
-        if (!inflater.process(buffer, sizeof(buffer), &bytes_read, &c_off)) {
+        if (!inflater.process()) {
+            DFTRACER_UTILS_LOG_DEBUG("Inflater process failed");
             break;
         }
 
-        if (bytes_read == 0) {
-            // End of file reached - handle any remaining data
+        DFTRACER_UTILS_LOG_DEBUG("Processed %zu bytes", inflater.bytes_read);
+
+        if (inflater.bytes_read == 0) {
+            DFTRACER_UTILS_LOG_DEBUG("End of file reached");
             break;
         }
         std::uint64_t local_total_lines = 0;
 
         // Count lines in this buffer
-        for (std::size_t i = 0; i < bytes_read; i++) {
-            if (buffer[i] == '\n') {
+        for (std::size_t i = 0; i < inflater.bytes_read; i++) {
+            if (inflater.buffer[i] == '\n') {
                 local_total_lines++;
-                total_lines += local_total_lines;
+                total_lines++;
             }
         }
 
-        current_uc_offset += bytes_read;
+        current_uc_offset += inflater.bytes_read;
 
         std::size_t current_checkpoint_size =
             current_uc_offset - checkpoint_start_uc_offset;
@@ -71,19 +74,31 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
             // Create checkpoint at current position
             size_t checkpoint_uc_size =
                 current_uc_offset - checkpoint_start_uc_offset;
-            Checkpointer checkpointer(inflater);
+            Checkpointer checkpointer(inflater, current_uc_offset);
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Creating checkpoint %zu at UC offset %zu (size %zu), C offset "
+                "%zu",
+                checkpoint_idx, current_uc_offset, checkpoint_uc_size,
+                checkpointer.c_offset);
             if (!checkpointer.create()) {
                 DFTRACER_UTILS_LOG_DEBUG("Failed to create checkpoint");
                 continue;
             }
+
+            DFTRACER_UTILS_LOG_DEBUG("Compressing checkpoint data");
+
             unsigned char *compressed_dict = nullptr;
             std::size_t compressed_dict_size = 0;
-
             if (!checkpointer.compress(&compressed_dict,
                                        &compressed_dict_size)) {
                 DFTRACER_UTILS_LOG_DEBUG("Failed to get compressed dictionary");
                 continue;
             }
+
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Inserting checkpoint record into database with compressed "
+                "checkpoint %p (%zu bytes)",
+                compressed_dict, compressed_dict_size);
 
             InsertCheckpointData ckpt_data;
             ckpt_data.idx = checkpoint_idx;
@@ -112,20 +127,24 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         // Create a special checkpoint for remaining data (might be without
         // deflate boundary)
         if (checkpoint_start_uc_offset == 0) {
-            InsertCheckpointData ckpt_data;
-            ckpt_data.idx = checkpoint_idx;
-            ckpt_data.uc_offset = checkpoint_start_uc_offset;
-            ckpt_data.uc_size = checkpoint_uc_size;
-            ckpt_data.c_offset = 0;
-            ckpt_data.c_size = 0;
-            ckpt_data.bits = 0;
-            ckpt_data.compressed_dict = nullptr;
-            ckpt_data.compressed_dict_size = 0;
-            ckpt_data.num_lines = total_lines;
-            insert_checkpoint_record(db, file_id, ckpt_data);
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Creating final checkpoint, case: no deflate boundary");
+            // InsertCheckpointData ckpt_data;
+            // ckpt_data.idx = checkpoint_idx;
+            // ckpt_data.uc_offset = checkpoint_start_uc_offset;
+            // ckpt_data.uc_size = checkpoint_uc_size;
+            // ckpt_data.c_offset = 0;
+            // ckpt_data.c_size = 0;
+            // ckpt_data.bits = 0;
+            // ckpt_data.compressed_dict = nullptr;
+            // ckpt_data.compressed_dict_size = 0;
+            // ckpt_data.num_lines = total_lines;
+            // insert_checkpoint_record(db, file_id, ckpt_data);
         } else {
             // create regular checkpoint with dictionary if possible
-            Checkpointer checkpointer(inflater);
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Creating final checkpoint, case: regular");
+            Checkpointer checkpointer(inflater, current_uc_offset);
             if (!checkpointer.create()) {
                 DFTRACER_UTILS_LOG_DEBUG("Failed to create final checkpoint");
                 return false;
@@ -165,6 +184,8 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         "total "
         "UC bytes",
         checkpoint_idx, total_lines, current_uc_offset);
+
+    return true;
 }
 
 static bool build_index(const SqliteDatabase &db, int file_id,
@@ -175,7 +196,8 @@ static bool build_index(const SqliteDatabase &db, int file_id,
     sqlite3_exec(db.get(), "BEGIN IMMEDIATE;", NULL, NULL, NULL);
 
     try {
-        if (delete_file_record(db, file_id) != 0) {
+        if (!delete_file_record(db, file_id)) {
+            DFTRACER_UTILS_LOG_DEBUG("Failed to delete existing file record");
             goto failure;
         }
 
@@ -228,8 +250,8 @@ IndexerImplementor::IndexerImplementor(const std::string &gz_path_,
         throw IndexerError(IndexerError::Type::INVALID_ARGUMENT,
                            "ckpt_size must be greater than 0");
     }
-    DFTRACER_UTILS_LOG_DEBUG("Created DFT indexer for gz: %s and index: %s",
-                             gz_path.c_str(), idx_path.c_str());
+
+    open();
 }
 
 void IndexerImplementor::open() {
@@ -242,22 +264,32 @@ void IndexerImplementor::open() {
     }
 }
 
+void IndexerImplementor::close() { db.close(); }
+
 void IndexerImplementor::build() {
     if (!force_rebuild && index_exists_and_valid(idx_path)) {
-        DFTRACER_UTILS_LOG_INFO("Index is already valid, skipping rebuild.");
-        cached_is_valid = true;
-        return;
+        open();
+        if (query_schema_validity(db)) {
+            DFTRACER_UTILS_LOG_INFO(
+                "Index is already valid, skipping rebuild.");
+            cached_is_valid = true;
+            return;
+        } else {
+            DFTRACER_UTILS_LOG_INFO(
+                "Index file exists but schema is invalid, rebuilding.");
+        }
     }
 
     DFTRACER_UTILS_LOG_DEBUG(
         "Building index for %s with %zu bytes (%.1f MB) chunks...",
-        gz_path_.c_str(), ckpt_size_,
-        static_cast<double>(ckpt_size_) / (1024 * 1024));
+        gz_path.c_str(), ckpt_size,
+        static_cast<double>(ckpt_size) / (1024 * 1024));
 
     if (force_rebuild && fs::exists(idx_path)) {
         DFTRACER_UTILS_LOG_DEBUG(
             "Force rebuild enabled, removing existing index file: %s",
             idx_path.c_str());
+        close();  // Ensure database is closed before removing file
         if (!fs::remove(idx_path)) {
             DFTRACER_UTILS_LOG_WARN("Failed to remove existing index file: %s",
                                     idx_path.c_str());
@@ -314,7 +346,7 @@ bool IndexerImplementor::need_rebuild() const {
 
     std::string stored_sha256;
     time_t stored_mtime;
-    if (query_stored_file_info(idx_path, gz_path_logical_path, stored_sha256,
+    if (query_stored_file_info(db, gz_path_logical_path, stored_sha256,
                                stored_mtime)) {
         // quick check using modification time as optimization
         // time_t current_mtime = get_file_mtime(indexer->gz_path);

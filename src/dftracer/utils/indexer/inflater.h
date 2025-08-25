@@ -1,7 +1,8 @@
-#ifndef DFTRACER_UTILS_INDEXER_INFLATE_H
-#define DFTRACER_UTILS_INDEXER_INFLATE_H
+#ifndef DFTRACER_UTILS_INDEXER_INFLATER_H
+#define DFTRACER_UTILS_INDEXER_INFLATER_H
 
 #include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/common/logging.h>
 #include <zlib.h>
 
 #include <cstddef>
@@ -12,20 +13,33 @@
 class Inflater {
    public:
     FILE *file;
+    std::size_t bytes_read;
     z_stream stream;
+    unsigned char buffer[constants::indexer::PROCESS_BUFFER_SIZE];
 
    public:
-    Inflater(FILE *file_) : file(file_) { reset(); }
+    Inflater(FILE *file_) : file(file_), bytes_read(0) {
+        std::memset(&stream, 0, sizeof(stream));
+        if (inflateInit2(&stream, constants::indexer::ZLIB_GZIP_WINDOW_BITS) !=
+            Z_OK) {
+            throw std::runtime_error("Failed to initialize inflater");
+        }
+        std::memset(buffer, 0, sizeof(buffer));
+        std::memset(in_buffer, 0, sizeof(in_buffer));
+    }
 
     ~Inflater() { inflateEnd(&stream); }
 
     void reset() {
+        bytes_read = 0;
         inflateEnd(&stream);
-        memset(&stream, 0, sizeof(stream));
+        std::memset(&stream, 0, sizeof(stream));
         if (inflateInit2(&stream, constants::indexer::ZLIB_GZIP_WINDOW_BITS) !=
             Z_OK) {
             throw std::runtime_error("Failed to reinitialize inflater");
         }
+        std::memset(buffer, 0, sizeof(buffer));
+        std::memset(in_buffer, 0, sizeof(in_buffer));
     }
 
     /*
@@ -33,28 +47,26 @@ class Inflater {
      * Returns the number of bytes written to the output buffer.
      *
      * @param buf The input buffer to process.
-     * @param buf_size The size of the input buffer.
-     * @param c_off The offset to start writing to the output buffer.
-     * @return The number of bytes written to the output buffer.
+     * @return false if the process failed, true otherwise.
      */
-    bool process(unsigned char *buf, size_t buf_size, size_t *bytes_out,
-                 size_t *c_off) {
-        stream.next_out = buf;
-        stream.avail_out = static_cast<uInt>(buf_size);
-        c_off = 0;
+    bool process() {
+        stream.next_out = buffer;
+        stream.avail_out = static_cast<uInt>(sizeof(buffer));
+        bytes_read = 0;
+
+        DFTRACER_UTILS_LOG_DEBUG(
+            "Starting inflation process with buffer size %zu", sizeof(buffer));
 
         while (stream.avail_out > 0) {
             if (stream.avail_in == 0) {
-                size_t n =
-                    fread(internal_buffer_, 1, sizeof(internal_buffer_), file);
+                std::size_t n = fread(in_buffer, 1, sizeof(in_buffer), file);
                 if (n == 0) {
                     break;
                 }
-                stream.next_in = internal_buffer_;
+                stream.next_in = in_buffer;
                 stream.avail_in = static_cast<uInt>(n);
             }
-            size_t c_pos_before =
-                static_cast<size_t>(ftello(file)) - stream.avail_in;
+            (void)ftello(file);
             int ret = inflate(&stream, Z_BLOCK);
 
             if (ret == Z_STREAM_END) {
@@ -65,22 +77,23 @@ class Inflater {
                 return false;
             }
 
-            *c_off = c_pos_before;
-
             // Break early if we've processed at least some data and hit a block
             // boundary This allows us to check for checkpoint opportunities
             // after each block
-            if (*bytes_out > 0 && (stream.data_type & 0xc0) == 0x80) {
+            if (bytes_read > 0 && (stream.data_type & 0xc0) == 0x80) {
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "Hit block boundary after processing %zu bytes",
+                    bytes_read);
                 break;
             }
         }
 
-        *bytes_out = buf_size - stream.avail_out;
+        bytes_read = constants::indexer::PROCESS_BUFFER_SIZE - stream.avail_out;
         return true;
     }
 
    private:
-    unsigned char internal_buffer_[constants::indexer::INFLATE_BUFFER_SIZE];
+    unsigned char in_buffer[constants::indexer::INFLATE_BUFFER_SIZE];
 };
 
-#endif  // DFTRACER_UTILS_INDEXER_INFLATE_H
+#endif  // DFTRACER_UTILS_INDEXER_INFLATER_H

@@ -1,6 +1,7 @@
 #ifndef DFTRACER_UTILS_INDEXER_SQLITE_STATEMENT_H
 #define DFTRACER_UTILS_INDEXER_SQLITE_STATEMENT_H
 
+#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/error.h>
 #include <dftracer/utils/indexer/sqlite/database.h>
 #include <sqlite3.h>
@@ -12,6 +13,7 @@ using namespace dftracer::utils;
 class SqliteStmt {
    public:
     SqliteStmt(const SqliteDatabase &db, const char *sql) {
+        DFTRACER_UTILS_LOG_INFO("Preparing SQL statement: %s", sql);
         sqlite3 *raw_db = db.get();
         if (sqlite3_prepare_v2(raw_db, sql, -1, &stmt_, nullptr) != SQLITE_OK) {
             stmt_ = nullptr;
@@ -32,6 +34,7 @@ class SqliteStmt {
 
     ~SqliteStmt() {
         if (stmt_) {
+            DFTRACER_UTILS_LOG_DEBUG("Finalizing SQL statement");
             sqlite3_finalize(stmt_);
         }
     }

@@ -15,12 +15,12 @@ struct Checkpointer {
     std::size_t uc_offset;
     std::size_t c_offset;
     int bits;
-    unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
     Inflater &inflater;
+    unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
 
-    Checkpointer(Inflater &in)
-        : uc_offset(0), c_offset(0), bits(0), inflater(in) {
-        memset(window, 0, sizeof(window));
+    Checkpointer(Inflater &in, std::size_t uc_offset_ = 0)
+        : uc_offset(uc_offset_), c_offset(0), bits(0), inflater(in) {
+        std::memset(window, 0, sizeof(window));
     }
 
     bool create() {
@@ -46,9 +46,11 @@ struct Checkpointer {
             // Got dictionary successfully
             if (have < constants::indexer::ZLIB_WINDOW_SIZE) {
                 // If less than 32KB available, right-align and pad with zeros
-                memmove(window + (constants::indexer::ZLIB_WINDOW_SIZE - have),
-                        window, have);
-                memset(window, 0, constants::indexer::ZLIB_WINDOW_SIZE - have);
+                std::memmove(
+                    window + (constants::indexer::ZLIB_WINDOW_SIZE - have),
+                    window, have);
+                std::memset(window, 0,
+                            constants::indexer::ZLIB_WINDOW_SIZE - have);
             }
 
             DFTRACER_UTILS_LOG_DEBUG(
@@ -99,7 +101,7 @@ struct Checkpointer {
 
         *compressed_size = max_compressed - zs.avail_out;
         deflateEnd(&zs);
-        return 0;
+        return true;
     }
 };
 

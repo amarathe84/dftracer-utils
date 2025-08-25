@@ -847,7 +847,7 @@ class Reader::Impl {
         : default_buffer_size_(reader::DEFAULT_READER_BUFFER_SIZE),
           indexer_(indexer),
           is_indexer_initialized_internally_(false) {
-        if (!indexer_->is_valid()) {
+        if (indexer_ == nullptr) {
             throw ReaderError(ReaderError::INITIALIZATION_ERROR,
                               "Invalid indexer provided");
         }
