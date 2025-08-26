@@ -22,8 +22,8 @@ static void demonstrate_mpi_pipeline() {
                   << " processes" << std::endl;
     }
 
-    // Create multiple independent CPU-intensive tasks for distributed execution
-    auto task1 = std::make_unique<MapTask<int, double>>([](const int& x) {
+    // Create multiple independent CPU-intensive tasks using factory API
+    auto task1 = Tasks::map<int, double>([](const int& x) {
         // Prime number computation
         int count = 0;
         int limit = x * 200000;  // Much heavier computation
@@ -37,8 +37,7 @@ static void demonstrate_mpi_pipeline() {
         return static_cast<double>(count);
     });
 
-    auto task2 = std::make_unique<MapTask<int, double>>([](const int& x) {
-        // Mathematical series computation
+    auto task2 = Tasks::map<int, double>([](const int& x) {
         double result = 0.0;
         int iterations = x * 500000;
         for (int i = 1; i <= iterations; ++i) {
@@ -46,13 +45,13 @@ static void demonstrate_mpi_pipeline() {
             result += std::sin(angle) * std::cos(angle * 2);
             result += std::log(1.0 + std::sqrt(i)) / std::pow(i, 0.3);
             if (i % 10000 == 0 && std::abs(result) > 1e8) {
-                result /= 1e6;  // Prevent overflow
+                result /= 1e6;
             }
         }
         return result;
     });
 
-    auto task3 = std::make_unique<MapTask<int, double>>([](const int& x) {
+    auto task3 = Tasks::map<int, double>([](const int& x) {
         // Matrix-like computation
         double result = 0.0;
         int size = x * 1000;
@@ -66,7 +65,7 @@ static void demonstrate_mpi_pipeline() {
         return result;
     });
 
-    auto task4 = std::make_unique<MapTask<int, double>>([](const int& x) {
+    auto task4 = Tasks::map<int, double>([](const int& x) {
         // Hash-like processing
         double result = 0.0;
         int iterations = x * 400000;
@@ -81,7 +80,7 @@ static void demonstrate_mpi_pipeline() {
         return result;
     });
 
-    auto task5 = std::make_unique<MapTask<int, double>>([](const int& x) {
+    auto task5 = Tasks::map<int, double>([](const int& x) {
         // Combinatorial computation
         double result = 0.0;
         int base = x * 600000;
@@ -173,7 +172,7 @@ static void demonstrate_mpi_vs_sequential_comparison() {
 
     // Create a CPU-intensive task factory function that can be reused
     auto create_cpu_intensive_task = [](int task_id) {
-        return std::make_unique<MapTask<int, double>>([task_id](const int& x) {
+        return Tasks::map<int, double>([task_id](const int& x) {
             double result = 0.0;
             int base_work =
                 x * 2000000 + task_id * 500000;  // Extremely heavy computation

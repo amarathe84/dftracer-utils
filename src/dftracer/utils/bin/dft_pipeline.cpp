@@ -19,8 +19,9 @@ static void demonstrate_sequential_vs_thread_comparison() {
     // Create multiple independent VERY CPU-intensive tasks that can run in
     // parallel
     auto create_parallel_tasks = []() {
-        // Task 1: Heavy prime number computation (seconds-level work)
-        auto task1 = std::make_unique<MapTask<int, double>>([](const int& x) {
+        // Task 1: Heavy prime number computation (seconds-level work) - Using
+        // factory API
+        auto task1 = Tasks::map<int, double>([](const int& x) {
             int count = 0;
             int limit = x * 100000;  // Much larger computation
             for (int i = 2; i <= limit; ++i) {
@@ -33,9 +34,8 @@ static void demonstrate_sequential_vs_thread_comparison() {
             return static_cast<double>(count);
         });
 
-        // Task 2: Heavy mathematical series (trigonometry + matrix-like
-        // operations)
-        auto task2 = std::make_unique<MapTask<int, double>>([](const int& x) {
+        // Task 2: Heavy mathematical series - Using factory API
+        auto task2 = Tasks::map<int, double>([](const int& x) {
             double result = 0.0;
             int iterations = x * 500000;  // Much more computation
             for (int i = 1; i <= iterations; ++i) {
@@ -51,9 +51,8 @@ static void demonstrate_sequential_vs_thread_comparison() {
             return result;
         });
 
-        // Task 3: Heavy combinatorial computation (fibonacci-like recursive
-        // work)
-        auto task3 = std::make_unique<MapTask<int, double>>([](const int& x) {
+        // Task 3: Heavy combinatorial computation - Using factory API
+        auto task3 = Tasks::map<int, double>([](const int& x) {
             double result = 0.0;
             int base_iterations = x * 300000;
 
@@ -74,8 +73,8 @@ static void demonstrate_sequential_vs_thread_comparison() {
             return result;
         });
 
-        // Task 4: Matrix-like computation simulation
-        auto task4 = std::make_unique<MapTask<int, double>>([](const int& x) {
+        // Task 4: Matrix-like computation - Using factory API
+        auto task4 = Tasks::map<int, double>([](const int& x) {
             double result = 0.0;
             int matrix_size = x * 500;  // Simulate matrix operations
 
@@ -89,8 +88,8 @@ static void demonstrate_sequential_vs_thread_comparison() {
             return result;
         });
 
-        // Task 5: Heavy string/hash-like processing simulation
-        auto task5 = std::make_unique<MapTask<int, double>>([](const int& x) {
+        // Task 5: Heavy string/hash-like processing - Using factory API
+        auto task5 = Tasks::map<int, double>([](const int& x) {
             double result = 0.0;
             int iterations = x * 200000;
 
@@ -181,18 +180,16 @@ static void demonstrate_complex_dag() {
     //          \              /
     //           -> map2 ------
 
-    auto filter_task =
-        std::make_unique<FilterTask<int>>([](const int& x) { return x > 0; });
-
-    auto map1_task = std::make_unique<MapTask<int, double>>(
-        [](const int& x) { return x * 2.0; });
-
-    auto map2_task = std::make_unique<MapTask<int, double>>(
-        [](const int& x) { return x / 2.0; });
+    // Using factory API for cleaner task creation
+    auto filter_task = Tasks::filter<int>([](const int& x) { return x > 0; });
+    auto map1_task =
+        Tasks::map<int, double>([](const int& x) { return x * 2.0; });
+    auto map2_task =
+        Tasks::map<int, double>([](const int& x) { return x / 2.0; });
 
     // Note: This is a simplified example - real DAG merging would need more
     // complex logic
-    auto sum_task = std::make_unique<SumTask<double>>(std::plus<double>{}, 0.0);
+    auto sum_task = Tasks::sum<double>();
 
     // Add tasks
     auto filter_id = pipeline.add_task(std::move(filter_task));

@@ -3,7 +3,7 @@
 
 #include <dftracer/utils/common/config.h>
 
-#if DFTRACER_UTILS_MPI_ENABLE == 1
+#if defined(DFTRACER_UTILS_MPI_ENABLE) && DFTRACER_UTILS_MPI_ENABLE == 1
 
 #include <mpi.h>
 

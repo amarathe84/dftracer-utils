@@ -14,39 +14,41 @@ namespace dftracer::utils {
 
 class Tasks {
    public:
-    // Reduce operations
+    // Reduce operations - return unique_ptr for easy pipeline usage
     template <typename T>
-    static SumTask<T> sum() {
-        return SumTask<T>(std::plus<T>{}, T{});
+    static std::unique_ptr<SumTask<T>> sum() {
+        return std::make_unique<SumTask<T>>(std::plus<T>{}, T{});
     }
 
     template <typename T>
-    static ProductTask<T> product() {
-        return ProductTask<T>(std::multiplies<T>{}, T{1});
+    static std::unique_ptr<ProductTask<T>> product() {
+        return std::make_unique<ProductTask<T>>(std::multiplies<T>{}, T{1});
     }
 
     template <typename T>
-    static MaxTask<T> max(T initial = std::numeric_limits<T>::lowest()) {
-        return MaxTask<T>([](const T& a, const T& b) { return std::max(a, b); },
-                          initial);
+    static std::unique_ptr<MaxTask<T>> max(
+        T initial = std::numeric_limits<T>::lowest()) {
+        return std::make_unique<MaxTask<T>>(
+            [](const T& a, const T& b) { return std::max(a, b); }, initial);
     }
 
     template <typename T>
-    static MinTask<T> min(T initial = std::numeric_limits<T>::max()) {
-        return MinTask<T>([](const T& a, const T& b) { return std::min(a, b); },
-                          initial);
+    static std::unique_ptr<MinTask<T>> min(
+        T initial = std::numeric_limits<T>::max()) {
+        return std::make_unique<MinTask<T>>(
+            [](const T& a, const T& b) { return std::min(a, b); }, initial);
     }
 
-    // Map operations
+    // Map operations - return unique_ptr for easy pipeline usage
     template <typename I, typename O, typename F>
-    static MapTask<I, O, F> map(F func) {
-        return MapTask<I, O, F>(std::move(func));
+    static std::unique_ptr<MapTask<I, O, F>> map(F func) {
+        return std::make_unique<MapTask<I, O, F>>(std::move(func));
     }
 
-    // Filter operations
+    // Filter operations - return unique_ptr for easy pipeline usage
     template <typename T, typename F>
-    static FilterTask<T, F> filter(F predicate) {
-        return FilterTask<T, F>(std::move(predicate));
+    static std::unique_ptr<FilterTask<T, F>> filter(F predicate) {
+        return std::make_unique<FilterTask<T, F>>(std::move(predicate));
     }
 
     // FlatMap operations
