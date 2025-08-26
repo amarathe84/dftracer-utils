@@ -17,12 +17,12 @@ typedef MPI_Request* MPI_Request_ptr;
 typedef MPI_Status* MPI_Status_ptr;
 
 namespace dftracer::utils {
-class MPI {
+class MPIContext {
    public:
     /**
      * Singleton MPI instance
      */
-    static MPI& instance();
+    static MPIContext& instance();
 
     /**
      * safe to call multiple times
@@ -58,13 +58,13 @@ class MPI {
     int probe_any_source(int tag, MPI_Status* status = nullptr);
 
    private:
-    MPI() = default;
-    ~MPI();
+    MPIContext() = default;
+    ~MPIContext();
 
-    MPI(const MPI&) = delete;
-    MPI& operator=(const MPI&) = delete;
-    MPI(MPI&&) = delete;
-    MPI& operator=(MPI&&) = delete;
+    MPIContext(const MPIContext&) = delete;
+    MPIContext& operator=(const MPIContext&) = delete;
+    MPIContext(MPIContext&&) = delete;
+    MPIContext& operator=(MPIContext&&) = delete;
 
     bool initialized_ = false;
     bool finalized_ = false;
@@ -80,10 +80,10 @@ class MPI {
 class MPISession {
    public:
     MPISession(int* argc = nullptr, char*** argv = nullptr) {
-        MPI::instance().init(argc, argv);
+        MPIContext::instance().init(argc, argv);
     }
 
-    ~MPISession() { MPI::instance().finalize(); }
+    ~MPISession() { MPIContext::instance().finalize(); }
 
     // Non-copyable, non-movable
     MPISession(const MPISession&) = delete;
@@ -98,10 +98,10 @@ class MPISession {
 
 namespace dftracer::utils {
 
-class MPI {
+class MPIContext {
    public:
-    static MPI& instance() {
-        static MPI instance_;
+    static MPIContext& instance() {
+        static MPIContext instance_;
         return instance_;
     }
 

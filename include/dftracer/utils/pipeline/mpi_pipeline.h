@@ -18,7 +18,7 @@
 namespace dftracer::utils {
 class MPIPipeline : public Pipeline {
    private:
-    MPI& mpi_;
+    MPIContext& mpi_;
 
     // Task distribution tracking
     std::unordered_map<TaskIndex, int>

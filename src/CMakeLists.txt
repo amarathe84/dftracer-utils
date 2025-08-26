@@ -94,6 +94,7 @@ target_link_libraries(dftracer_utils
 )
 add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
+add_stdfs_if_needed(dftracer_utils)
 
 # Link SQLite3, zlib, and Arrow with appropriate variants for static library
 link_sqlite3(dftracer_utils STATIC)
@@ -133,6 +134,7 @@ target_link_libraries(dftracer_utils_shared
 )
 add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
+add_stdfs_if_needed(dftracer_utils_shared)
 
 # Link SQLite3, zlib, and Arrow with appropriate variants for shared library
 link_sqlite3(dftracer_utils_shared SHARED)

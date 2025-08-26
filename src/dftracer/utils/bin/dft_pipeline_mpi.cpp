@@ -325,7 +325,7 @@ static void demonstrate_mpi_vs_sequential_comparison() {
     }
 
     // Broadcast sequential time to all processes for comparison
-    MPI& mpi = MPI::instance();
+    MPIContext& mpi = MPIContext::instance();
     mpi.broadcast(&sequential_time, 1, MPI_LONG_LONG, 0);
 
     // Run MPI Pipeline
@@ -493,7 +493,7 @@ static void demonstrate_mpi_vs_sequential_comparison() {
 int main(int argc, char** argv) {
     MPISession mpi_session(&argc, &argv);
 
-    MPI& mpi = MPI::instance();
+    MPIContext& mpi = MPIContext::instance();
 
     try {
         // Basic MPI pipeline demonstration

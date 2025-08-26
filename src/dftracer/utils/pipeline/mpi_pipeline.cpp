@@ -8,7 +8,7 @@
 #include <sstream>
 
 namespace dftracer::utils {
-MPIPipeline::MPIPipeline() : mpi_(MPI::instance()) {
+MPIPipeline::MPIPipeline() : mpi_(MPIContext::instance()) {
     if (is_master()) {
         DFTRACER_UTILS_LOG_INFO("Pipeline using %d processes", size());
     }

@@ -8,12 +8,12 @@
 namespace dftracer {
 namespace utils {
 
-MPI& MPI::instance() {
-    static MPI instance_;
+MPIContext& MPIContext::instance() {
+    static MPIContext instance_;
     return instance_;
 }
 
-MPI::~MPI() {
+MPIContext::~MPIContext() {
     if (we_initialized_ && !finalized_) {
         // Clean up MPI if we initialized it and it hasn't been finalized
         try {
@@ -24,7 +24,7 @@ MPI::~MPI() {
     }
 }
 
-void MPI::init(int* argc, char*** argv) {
+void MPIContext::init(int* argc, char*** argv) {
     int flag;
     MPI_Initialized(&flag);
 
@@ -49,7 +49,7 @@ void MPI::init(int* argc, char*** argv) {
     }
 }
 
-void MPI::finalize() {
+void MPIContext::finalize() {
     if (!initialized_ || finalized_) {
         return;  // Nothing to do
     }
@@ -69,50 +69,51 @@ void MPI::finalize() {
     }
 }
 
-bool MPI::is_initialized() const {
+bool MPIContext::is_initialized() const {
     int flag;
     MPI_Initialized(&flag);
     return flag != 0;
 }
 
-bool MPI::is_finalized() const {
+bool MPIContext::is_finalized() const {
     int flag;
     MPI_Finalized(&flag);
     return flag != 0;
 }
 
-int MPI::rank() const {
+int MPIContext::rank() const {
     if (cached_rank_ == -1) {
         update_cache();
     }
     return cached_rank_;
 }
 
-int MPI::size() const {
+int MPIContext::size() const {
     if (cached_size_ == -1) {
         update_cache();
     }
     return cached_size_;
 }
 
-void MPI::barrier() {
+void MPIContext::barrier() {
     int error = MPI_Barrier(MPI_COMM_WORLD);
     check_error(error, "MPI_Barrier");
 }
 
-void MPI::broadcast(void* data, int count, MPI_Datatype datatype, int root) {
+void MPIContext::broadcast(void* data, int count, MPI_Datatype datatype,
+                           int root) {
     int error = MPI_Bcast(data, count, datatype, root, MPI_COMM_WORLD);
     check_error(error, "MPI_Bcast");
 }
 
-void MPI::send(const void* data, int count, MPI_Datatype datatype, int dest,
-               int tag) {
+void MPIContext::send(const void* data, int count, MPI_Datatype datatype,
+                      int dest, int tag) {
     int error = MPI_Send(data, count, datatype, dest, tag, MPI_COMM_WORLD);
     check_error(error, "MPI_Send");
 }
 
-void MPI::recv(void* data, int count, MPI_Datatype datatype, int source,
-               int tag, MPI_Status* status) {
+void MPIContext::recv(void* data, int count, MPI_Datatype datatype, int source,
+                      int tag, MPI_Status* status) {
     MPI_Status local_status;
     MPI_Status* status_ptr = status ? status : &local_status;
 
@@ -121,10 +122,10 @@ void MPI::recv(void* data, int count, MPI_Datatype datatype, int source,
     check_error(error, "MPI_Recv");
 }
 
-void MPI::abort(int errorcode) { MPI_Abort(MPI_COMM_WORLD, errorcode); }
+void MPIContext::abort(int errorcode) { MPI_Abort(MPI_COMM_WORLD, errorcode); }
 
-std::vector<uint8_t> MPI::broadcast_vector(const std::vector<uint8_t>& data,
-                                           int root) {
+std::vector<uint8_t> MPIContext::broadcast_vector(
+    const std::vector<uint8_t>& data, int root) {
     // Broadcast the size first
     int data_size = static_cast<int>(data.size());
     broadcast(&data_size, 1, MPI_INT, root);
@@ -144,7 +145,8 @@ std::vector<uint8_t> MPI::broadcast_vector(const std::vector<uint8_t>& data,
     return result;
 }
 
-void MPI::send_vector(const std::vector<uint8_t>& data, int dest, int tag) {
+void MPIContext::send_vector(const std::vector<uint8_t>& data, int dest,
+                             int tag) {
     // Send size first
     int data_size = static_cast<int>(data.size());
     send(&data_size, 1, MPI_INT, dest, tag);
@@ -155,7 +157,7 @@ void MPI::send_vector(const std::vector<uint8_t>& data, int dest, int tag) {
     }
 }
 
-std::vector<uint8_t> MPI::recv_vector(int source, int tag) {
+std::vector<uint8_t> MPIContext::recv_vector(int source, int tag) {
     // Receive size first
     int data_size;
     recv(&data_size, 1, MPI_INT, source, tag);
@@ -169,21 +171,21 @@ std::vector<uint8_t> MPI::recv_vector(int source, int tag) {
     return result;
 }
 
-void MPI::isend(const void* data, int count, MPI_Datatype datatype, int dest,
-                int tag, MPI_Request* request) {
+void MPIContext::isend(const void* data, int count, MPI_Datatype datatype,
+                       int dest, int tag, MPI_Request* request) {
     int error =
         MPI_Isend(data, count, datatype, dest, tag, MPI_COMM_WORLD, request);
     check_error(error, "MPI_Isend");
 }
 
-void MPI::irecv(void* data, int count, MPI_Datatype datatype, int source,
-                int tag, MPI_Request* request) {
+void MPIContext::irecv(void* data, int count, MPI_Datatype datatype, int source,
+                       int tag, MPI_Request* request) {
     int error =
         MPI_Irecv(data, count, datatype, source, tag, MPI_COMM_WORLD, request);
     check_error(error, "MPI_Irecv");
 }
 
-bool MPI::test(MPI_Request* request, MPI_Status* status) {
+bool MPIContext::test(MPI_Request* request, MPI_Status* status) {
     int flag;
     MPI_Status local_status;
     MPI_Status* status_ptr = status ? status : &local_status;
@@ -193,7 +195,7 @@ bool MPI::test(MPI_Request* request, MPI_Status* status) {
     return flag != 0;
 }
 
-void MPI::wait(MPI_Request* request, MPI_Status* status) {
+void MPIContext::wait(MPI_Request* request, MPI_Status* status) {
     MPI_Status local_status;
     MPI_Status* status_ptr = status ? status : &local_status;
 
@@ -201,7 +203,7 @@ void MPI::wait(MPI_Request* request, MPI_Status* status) {
     check_error(error, "MPI_Wait");
 }
 
-int MPI::probe_any_source(int tag, MPI_Status* status) {
+int MPIContext::probe_any_source(int tag, MPI_Status* status) {
     MPI_Status local_status;
     MPI_Status* status_ptr = status ? status : &local_status;
 
@@ -217,7 +219,7 @@ int MPI::probe_any_source(int tag, MPI_Status* status) {
     }
 }
 
-void MPI::update_cache() const {
+void MPIContext::update_cache() const {
     if (!is_initialized()) {
         cached_rank_ = 0;
         cached_size_ = 1;
@@ -237,7 +239,7 @@ void MPI::update_cache() const {
     }
 }
 
-void MPI::check_error(int error_code, const char* operation) const {
+void MPIContext::check_error(int error_code, const char* operation) const {
     if (error_code == MPI_SUCCESS) {
         return;
     }

@@ -1,6 +1,14 @@
 #ifndef DFTRACER_UTILS_UTILS_FILESYSTEM_H
 #define DFTRACER_UTILS_UTILS_FILESYSTEM_H
 
+#if defined(DFTRACER_UTILS_HAS_STD_FILESYSTEM)
+
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+#else
+
 // C++11 compatible filesystem header
 // This header provides a portable way to use filesystem across different C++
 // standards Based on gulrak/filesystem detection logic with additional support
@@ -74,4 +82,7 @@ namespace fs = std::experimental::filesystem;
 namespace fs = ghc::filesystem;
 
 #endif  // DFTRACE_UTILS_USE_STD_FS
+
+#endif
+
 #endif  // DFTRACER_UTILS_UTILS_FILESYSTEM_H

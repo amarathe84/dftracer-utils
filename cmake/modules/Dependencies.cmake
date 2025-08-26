@@ -637,3 +637,21 @@ function(need_test_deps)
     target_include_directories(unity_lib PUBLIC ${unity_SOURCE_DIR}/src)
   endif()
 endfunction()
+
+macro(check_std_filesystem)
+  try_compile(DFTRACER_UTILS_HAS_STD_FILESYSTEM "${CMAKE_BINARY_DIR}/temp"
+              "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests/has_filesystem.cpp"
+              CMAKE_FLAGS ${CMAKE_CXX_FLAGS}
+              LINK_LIBRARIES stdc++fs)
+  if (DFTRACER_UTILS_HAS_STD_FILESYSTEM)
+    message(STATUS "Compiler has std::filesystem support")
+  else ()
+    message(STATUS "Compiler does not have std::filesystem support. Use gulrak::filesystem")
+  endif (DFTRACER_UTILS_HAS_STD_FILESYSTEM)
+endmacro()
+
+function(add_stdfs_if_needed TARGET)
+  if (DFTRACER_UTILS_HAS_STD_FILESYSTEM)
+    target_link_libraries(${TARGET} PRIVATE stdc++fs)
+  endif()
+endfunction()

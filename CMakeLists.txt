@@ -78,6 +78,7 @@ endif()
 
 set_coverage_compiler_flags(DFTRACER_UTILS_TESTS AND DFTRACER_UTILS_COVERAGE)
 
+check_std_filesystem()
 add_subdirectory(src)
 
 if(DFTRACER_UTILS_TESTS)
