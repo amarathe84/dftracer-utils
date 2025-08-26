@@ -59,8 +59,11 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
 
   # pipeline
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/error.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/pipeline.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/sequential_pipeline.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/thread_pipeline.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/task/task_type.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/task/error.cpp
 
   # analyzer
   # analyzers/analyzer.cpp
@@ -169,7 +172,7 @@ endif()
 #     SOVERSION ${PROJECT_VERSION_MAJOR}
 # )
 # target_link_libraries(dftracer_utils_analyzer 
-#     PUBLIC dftracer_utils cereal::cereal
+#     PUBLIC dftracer_utils
 # )
 # target_add_rpath(dftracer_utils_analyzer)
 
@@ -232,7 +235,6 @@ target_link_libraries(dft_pipeline PRIVATE
   ghc_filesystem
   picosha2
   simdjson::simdjson
-  # cereal::cereal
 )
 # add_mpi_deps_if_needed(dft_map)
 
@@ -269,7 +271,6 @@ install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 #   ghc_filesystem
 #   picosha2
 #   simdjson::simdjson
-#   # cereal::cereal
 # )
 # # add_mpi_deps_if_needed(dft_map)
 
@@ -305,7 +306,6 @@ install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 #     ghc_filesystem
 #     picosha2
 #     simdjson::simdjson
-#     # cereal::cereal
 #   )
 #   add_mpi_deps_if_needed(dft_map_mpi)
 #   target_compile_definitions(dft_map_mpi PRIVATE DFTRACER_UTILS_MPI_ENABLE)
@@ -420,9 +420,6 @@ endif()
 if (TARGET cpp-logger)
   list(APPEND INSTALLABLE_TARGETS cpp-logger)
 endif()
-# if (TARGET cereal)
-#   list(APPEND INSTALLABLE_TARGETS cereal)
-# endif()
 # if (TARGET arrow_array)
 #     list(APPEND INSTALLABLE_TARGETS arrow_array)
 # endif()

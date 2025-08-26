@@ -1,0 +1,80 @@
+#ifndef DFTRACER_UTILS_TASKS_FACTORY_H
+#define DFTRACER_UTILS_TASKS_FACTORY_H
+
+#include <dftracer/utils/pipeline/tasks/op/map.h>
+#include <dftracer/utils/pipeline/tasks/op/reduce.h>
+#include <dftracer/utils/pipeline/tasks/op/filter.h>
+#include <dftracer/utils/pipeline/tasks/op/flatmap.h>
+#include <dftracer/utils/pipeline/tasks/op/sort.h>
+#include <dftracer/utils/pipeline/tasks/op/groupby.h>
+#include <limits>
+
+namespace dftracer::utils {
+
+class Tasks {
+public:
+    // Reduce operations
+    template<typename T>
+    static SumTask<T> sum() {
+        return SumTask<T>(std::plus<T>{}, T{});
+    }
+    
+    template<typename T>
+    static ProductTask<T> product() {
+        return ProductTask<T>(std::multiplies<T>{}, T{1});
+    }
+    
+    template<typename T>
+    static MaxTask<T> max(T initial = std::numeric_limits<T>::lowest()) {
+        return MaxTask<T>([](const T& a, const T& b) { return std::max(a, b); }, initial);
+    }
+    
+    template<typename T>
+    static MinTask<T> min(T initial = std::numeric_limits<T>::max()) {
+        return MinTask<T>([](const T& a, const T& b) { return std::min(a, b); }, initial);
+    }
+    
+    // Map operations
+    template<typename I, typename O, typename F>
+    static MapTask<I, O, F> map(F func) {
+        return MapTask<I, O, F>(std::move(func));
+    }
+    
+    // Filter operations
+    template<typename T, typename F>
+    static FilterTask<T, F> filter(F predicate) {
+        return FilterTask<T, F>(std::move(predicate));
+    }
+    
+    // FlatMap operations
+    template<typename I, typename O, typename F>
+    static FlatMapTask<I, O, F> flatmap(F func) {
+        return FlatMapTask<I, O, F>(std::move(func));
+    }
+    
+    // Sort operations
+    template<typename T, typename F>
+    static SortTask<T, F> sort(F comparator) {
+        return SortTask<T, F>(std::move(comparator));
+    }
+    
+    template<typename T>
+    static DefaultSortTask<T> sort() {
+        return DefaultSortTask<T>(std::less<T>{});
+    }
+    
+    // GroupBy operations
+    template<typename T, typename K, typename F>
+    static GroupByTask<T, K, F> groupby(F key_extractor) {
+        return GroupByTask<T, K, F>(std::move(key_extractor));
+    }
+    
+    template<typename T, typename K, typename F>
+    static FastGroupByTask<T, K, F> fast_groupby(F key_extractor) {
+        return FastGroupByTask<T, K, F>(std::move(key_extractor));
+    }
+};
+
+}  // namespace dftracer::utils
+
+#endif  // DFTRACER_UTILS_TASKS_FACTORY_H

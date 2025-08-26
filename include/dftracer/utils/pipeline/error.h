@@ -1,12 +1,12 @@
-#ifndef DFTRACER_UTILS_PIPELINE_TASKS_ERROR_H
-#define DFTRACER_UTILS_PIPELINE_TASKS_ERROR_H
+#ifndef DFTRACER_UTILS_PIPELINE_ERROR_H
+#define DFTRACER_UTILS_PIPELINE_ERROR_H
 
 #include <stdexcept>
 #include <string>
 
 namespace dftracer::utils {
 
-class TaskError : public std::runtime_error {
+class PipelineError : public std::runtime_error {
    public:
     enum Type {
         TYPE_MISMATCH_ERROR,
@@ -16,7 +16,7 @@ class TaskError : public std::runtime_error {
         UNKNOWN_ERROR,
     };
 
-    TaskError(Type type, const std::string &message)
+    PipelineError(Type type, const std::string &message)
         : std::runtime_error(format_message(type, message)), type_(type) {}
 
     inline Type get_type() const { return type_; }
@@ -29,4 +29,4 @@ class TaskError : public std::runtime_error {
 
 }  // namespace dftracer::utils
 
-#endif  // DFTRACER_UTILS_PIPELINE_TASKS_ERROR_H
+#endif  // DFTRACER_UTILS_PIPELINE_ERROR_H

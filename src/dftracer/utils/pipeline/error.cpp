@@ -1,8 +1,8 @@
-#include <dftracer/utils/pipeline/tasks/error.h>
+#include <dftracer/utils/pipeline/error.h>
 
 namespace dftracer::utils {
 
-std::string TaskError::format_message(Type type, const std::string &message) {
+std::string PipelineError::format_message(Type type, const std::string &message) {
     std::string prefix;
     switch (type) {
         case TYPE_MISMATCH_ERROR:

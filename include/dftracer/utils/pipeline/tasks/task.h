@@ -21,7 +21,12 @@ class Task {
         : type_(t), input_type_(input_type), output_type_(output_type) {}
 
    public:
+    virtual ~Task() = default;
     virtual std::any execute(std::any& in) = 0;
+    
+    TaskType get_type() const { return type_; }
+    std::type_index get_input_type() const { return input_type_; }
+    std::type_index get_output_type() const { return output_type_; }
 };
 
 }  // namespace dftracer::utils

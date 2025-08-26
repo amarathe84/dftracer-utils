@@ -1,5 +1,5 @@
-#ifndef DFTRACER_UTILS_PIPELINE_TASKS_OP_MAP_H
-#define DFTRACER_UTILS_PIPELINE_TASKS_OP_MAP_H
+#ifndef DFTRACER_UTILS_PIPELINE_TASKS_OP_FLATMAP_H
+#define DFTRACER_UTILS_PIPELINE_TASKS_OP_FLATMAP_H
 
 #include <dftracer/utils/pipeline/error.h>
 #include <dftracer/utils/pipeline/tasks/typed_task.h>
@@ -8,14 +8,14 @@
 
 namespace dftracer::utils {
 
-template <typename I, typename O, typename F = std::function<O(const I&)>>
-class MapTask : public TypedTask<std::vector<I>, std::vector<O>> {
+template <typename I, typename O, typename F = std::function<std::vector<O>(const I&)>>
+class FlatMapTask : public TypedTask<std::vector<I>, std::vector<O>> {
    private:
     F func;
 
    public:
-    MapTask(F f)
-        : TypedTask<std::vector<I>, std::vector<O>>(TaskType::MAP),
+    FlatMapTask(F f)
+        : TypedTask<std::vector<I>, std::vector<O>>(TaskType::FLATMAP),
           func(std::move(f)) {}
 
    protected:
@@ -25,10 +25,10 @@ class MapTask : public TypedTask<std::vector<I>, std::vector<O>> {
                             "Input type validation failed");
         
         std::vector<O> result;
-        result.reserve(in.size());
         
         for (const auto& element : in) {
-            result.push_back(func(element));
+            auto sub_result = func(element);
+            result.insert(result.end(), sub_result.begin(), sub_result.end());
         }
         
         return result;
@@ -37,4 +37,4 @@ class MapTask : public TypedTask<std::vector<I>, std::vector<O>> {
 
 }  // namespace dftracer::utils
 
-#endif  // DFTRACER_UTILS_PIPELINE_TASKS_OP_MAP_H
+#endif  // DFTRACER_UTILS_PIPELINE_TASKS_OP_FLATMAP_H

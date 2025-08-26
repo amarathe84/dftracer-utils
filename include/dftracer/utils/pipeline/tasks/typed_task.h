@@ -8,9 +8,12 @@
 namespace dftracer::utils {
 
 template <typename I, typename O>
-class TypedTask : public BaseTask {
+class TypedTask : public Task {
    protected:
-    TypedTask(TaskType t) : BaseTask(t, typeid(I), typeid(O)) {}
+    TypedTask(TaskType t) : Task(t, typeid(I), typeid(O)) {}
+    
+   public:
+    virtual ~TypedTask() = default;
 
     I get_input(std::any& in) { return std::any_cast<I>(in); }
 
@@ -19,10 +22,10 @@ class TypedTask : public BaseTask {
     virtual O apply(I in) = 0;
 
    protected:
-    bool validate(I in) { return typeid(in) != this->input_type_; }
+    bool validate(I in) { return std::type_index(typeid(in)) == this->get_input_type(); }
 
    public:
-    std::any apply(std::any& in) override final {
+    std::any execute(std::any& in) override final {
         return apply(std::any_cast<I>(in));
     }
 };
