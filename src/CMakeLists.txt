@@ -55,10 +55,11 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader_c.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/error.cpp
 
-
+  # Utilities
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/mpi.cpp
 
-  # pipeline
+  # Pipeline
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/error.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/pipeline.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/sequential_pipeline.cpp
@@ -69,6 +70,13 @@ set(DFTRACER_UTILS_SOURCES
   # analyzers/analyzer.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/analyzers/constants.cpp
 )
+
+if (DFTRACER_UTILS_MPI_ENABLE EQUAL 1)
+  list(APPEND DFTRACER_UTILS_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/mpi_pipeline.cpp
+  )
+endif()
+
 
 #+++++++++++++++++++++++++++++++++++++++++
 # Static library
@@ -84,7 +92,7 @@ target_link_libraries(dftracer_utils
     PRIVATE picosha2
     PUBLIC ghc_filesystem simdjson::simdjson_static cpp-logger
 )
-# add_mpi_deps_if_needed(dftracer_utils)
+add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
 
 # Link SQLite3, zlib, and Arrow with appropriate variants for static library
@@ -123,7 +131,7 @@ target_link_libraries(dftracer_utils_shared
     PRIVATE picosha2
     PUBLIC ghc_filesystem simdjson::simdjson cpp-logger
 )
-# add_mpi_deps_if_needed(dftracer_utils_shared)
+add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
 
 # Link SQLite3, zlib, and Arrow with appropriate variants for shared library
@@ -236,7 +244,6 @@ target_link_libraries(dft_pipeline PRIVATE
   picosha2
   simdjson::simdjson
 )
-# add_mpi_deps_if_needed(dft_map)
 
 # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_pipeline STATIC)
@@ -258,6 +265,42 @@ endif()
 
 # Install executable
 install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# ----------------------------------------
+# DFT Pipeline MPI (TEMPORARY)
+# ----------------------------------------
+
+add_executable(dft_pipeline_mpi ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline_mpi.cpp ${DFTRACER_UTILS_SOURCES})
+set_target_properties(dft_pipeline_mpi PROPERTIES OUTPUT_NAME "dft_pipeline_mpi")
+target_link_libraries(dft_pipeline_mpi PRIVATE 
+  dftracer_utils
+  argparse::argparse
+  ghc_filesystem
+  picosha2
+  simdjson::simdjson
+)
+add_mpi_deps_if_needed(dft_pipeline_mpi)
+
+# Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
+link_sqlite3(dft_pipeline_mpi STATIC)
+link_zlib(dft_pipeline_mpi STATIC)
+# link_arrow(dft_pipeline_mpi STATIC)
+
+target_include_directories(dft_pipeline_mpi
+    PRIVATE ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_BINARY_DIR}/include)
+
+target_set_warnings(dft_pipeline_mpi)
+
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_pipeline_mpi PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_pipeline_mpi PRIVATE --coverage)
+endif()
+
+# Install executable
+install(TARGETS dft_pipeline_mpi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ----------------------------------------
 # DFT Map
