@@ -1,5 +1,6 @@
 #include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/indexer/checkpoint_size.h>
 #include <dftracer/utils/indexer/checkpointer.h>
 #include <dftracer/utils/indexer/error.h>
 #include <dftracer/utils/indexer/helpers.h>
@@ -251,6 +252,13 @@ IndexerImplementor::IndexerImplementor(const std::string &gz_path_,
                            "ckpt_size must be greater than 0");
     }
 
+    auto new_ckpt_size = determine_checkpoint_size(ckpt_size, gz_path);
+    if (new_ckpt_size != ckpt_size) {
+        DFTRACER_UTILS_LOG_DEBUG("Adjusted checkpoint size from %zu to %zu",
+                                 ckpt_size, new_ckpt_size);
+        ckpt_size = new_ckpt_size;
+    }
+
     open();
 }
 
@@ -299,10 +307,11 @@ void IndexerImplementor::build() {
     open();
     init_schema(db);
 
-    std::size_t bytes = file_size_bytes(gz_path);
-    if (bytes == static_cast<std::size_t>(-1)) {
-        throw IndexerError(IndexerError::Type::FILE_ERROR,
-                           "Failed to get file size for: " + gz_path);
+    const auto bytes = file_size_bytes(gz_path);
+    if (bytes == 0) {
+        throw IndexerError(
+            IndexerError::Type::FILE_ERROR,
+            "Failed to get file size for: " + gz_path + ", got size: 0");
     }
 
     std::string sha256 = calculate_file_sha256(gz_path);

@@ -12,7 +12,7 @@ std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
         "dict_compressed, num_lines "
         "FROM checkpoints WHERE file_id = ? ORDER BY uc_offset");
 
-    sqlite3_bind_int(stmt, 1, file_id);
+    stmt.bind_int(1, file_id);
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         dftracer::utils::IndexCheckpoint checkpoint;

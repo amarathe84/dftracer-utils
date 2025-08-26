@@ -3,7 +3,6 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/error.h>
 #include <dftracer/utils/reader/reader.h>
-#include <dftracer/utils/utils/platform_compat.h>
 #include <zlib.h>
 
 #include <algorithm>
@@ -530,11 +529,11 @@ class LineByteStreamingSession : public BaseStreamingSession {
             }
         }
 
-        DFTRACER_UTILS_LOG_TRACE_FORMAT(
-            "Read %zu bytes from compressed stream, partial_buffer_size=%zu, "
-            "current_position=%zu, target_end=%zu",
-            bytes_read, partial_line_buffer_.size(), current_position_,
-            target_end_bytes_);
+        // DFTRACER_UTILS_LOG_TRACE(
+        //     "Read %zu bytes from compressed stream, partial_buffer_size=%zu,
+        //     " "current_position=%zu, target_end=%zu", bytes_read,
+        //     partial_line_buffer_.size(), current_position_,
+        //     target_end_bytes_);
 
         size_t total_data_size = partial_line_buffer_.size() + bytes_read;
         size_t adjusted_size = apply_range_and_boundary_limits(
@@ -557,11 +556,11 @@ class LineByteStreamingSession : public BaseStreamingSession {
 
         if ((target_end_bytes_ - start_bytes_) >
             reader::LARGE_RANGE_LOG_THRESHOLD) {
-            DFTRACER_UTILS_LOG_TRACE_FORMAT(
-                "Large range read: returning %zu bytes, current_pos=%zu, "
-                "target_end=%zu, range_size=%zu",
-                adjusted_size, current_position_, target_end_bytes_,
-                target_end_bytes_ - start_bytes_);
+            // DFTRACER_UTILS_LOG_TRACE(
+            //     "Large range read: returning %zu bytes, current_pos=%zu, "
+            //     "target_end=%zu, range_size=%zu",
+            //     adjusted_size, current_position_, target_end_bytes_,
+            //     target_end_bytes_ - start_bytes_);
         }
 
         return adjusted_size;
@@ -613,10 +612,10 @@ class LineByteStreamingSession : public BaseStreamingSession {
             adjusted_size = adjust_to_boundary(buffer, total_data_size);
         }
 
-        DFTRACER_UTILS_LOG_TRACE_FORMAT(
-            "After boundary adjustment: total_data_size=%zu, "
-            "original_range_size=%zu, final_adjusted_size=%zu",
-            total_data_size, original_range_size, adjusted_size);
+        // DFTRACER_UTILS_LOG_TRACE(
+        //     "After boundary adjustment: total_data_size=%zu, "
+        //     "original_range_size=%zu, final_adjusted_size=%zu",
+        //     total_data_size, original_range_size, adjusted_size);
 
         return adjusted_size;
     }

@@ -8,17 +8,16 @@ void insert_checkpoint_record(const SqliteDatabase &db, int file_id,
         "uc_size, c_offset, c_size, bits, dict_compressed, num_lines) "
         "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
-    sqlite3_bind_int(stmt, 1, file_id);
-    sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(data.idx));
-    sqlite3_bind_int64(stmt, 3, static_cast<int64_t>(data.uc_offset));
-    sqlite3_bind_int64(stmt, 4, static_cast<int64_t>(data.uc_size));
-    sqlite3_bind_int64(stmt, 5, static_cast<int64_t>(data.c_offset));
-    sqlite3_bind_int64(stmt, 6, static_cast<int64_t>(data.c_size));
-    sqlite3_bind_int(stmt, 7, data.bits);
-    sqlite3_bind_blob(stmt, 8, data.compressed_dict,
-                      static_cast<int>(data.compressed_dict_size),
-                      SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 9, static_cast<int64_t>(data.num_lines));
+    stmt.bind_int(1, file_id);
+    stmt.bind_int64(2, static_cast<int64_t>(data.idx));
+    stmt.bind_int64(3, static_cast<int64_t>(data.uc_offset));
+    stmt.bind_int64(4, static_cast<int64_t>(data.uc_size));
+    stmt.bind_int64(5, static_cast<int64_t>(data.c_offset));
+    stmt.bind_int64(6, static_cast<int64_t>(data.c_size));
+    stmt.bind_int(7, data.bits);
+    stmt.bind_blob(8, data.compressed_dict,
+                   static_cast<int>(data.compressed_dict_size));
+    stmt.bind_int64(9, static_cast<int64_t>(data.num_lines));
 
     int result = sqlite3_step(stmt);
     if (result != SQLITE_DONE) {

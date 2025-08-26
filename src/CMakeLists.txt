@@ -34,6 +34,7 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer_impl.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer_c.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/helpers.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/checkpoint_size.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/error.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/delete_file_record.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/insert_checkpoint_record.cpp

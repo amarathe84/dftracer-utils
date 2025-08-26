@@ -9,10 +9,10 @@ void insert_file_metadata_record(const SqliteDatabase &db, int file_id,
                     "INSERT INTO metadata(file_id, checkpoint_size, "
                     "total_lines, total_uc_size) VALUES(?, ?, ?, ?);");
 
-    sqlite3_bind_int(stmt, 1, file_id);
-    sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(ckpt_size));
-    sqlite3_bind_int64(stmt, 3, static_cast<sqlite3_int64>(total_lines));
-    sqlite3_bind_int64(stmt, 4, static_cast<sqlite3_int64>(total_uc_size));
+    stmt.bind_int(1, file_id);
+    stmt.bind_int64(2, static_cast<int64_t>(ckpt_size));
+    stmt.bind_int64(3, static_cast<int64_t>(total_lines));
+    stmt.bind_int64(4, static_cast<int64_t>(total_uc_size));
 
     int result = sqlite3_step(stmt);
     if (result != SQLITE_DONE) {

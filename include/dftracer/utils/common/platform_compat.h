@@ -1,5 +1,5 @@
-#ifndef DFTRACER_UTILS_UTILS_PLATFORM_COMPAT_H
-#define DFTRACER_UTILS_UTILS_PLATFORM_COMPAT_H
+#ifndef DFTRACER_UTILS_COMMON_PLATFORM_COMPAT_H
+#define DFTRACER_UTILS_COMMON_PLATFORM_COMPAT_H
 
 // Cross-platform compatibility definitions
 
@@ -11,6 +11,10 @@
 // Map POSIX functions to Windows equivalents
 #define fseeko _fseeki64
 #define ftello _ftelli64
+#define popen _popen
+#define pclose _pclose
+#define fileno _fileno
+#define stat _stat64
 
 // For large file support on Windows
 #ifndef _FILE_OFFSET_BITS
@@ -33,4 +37,4 @@
 
 #endif
 
-#endif  // DFTRACER_UTILS_UTILS_PLATFORM_COMPAT_H
+#endif  // DFTRACER_UTILS_COMMON_PLATFORM_COMPAT_H

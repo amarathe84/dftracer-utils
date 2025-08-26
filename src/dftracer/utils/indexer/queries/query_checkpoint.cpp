@@ -22,8 +22,8 @@ bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,
         "ORDER BY uc_offset DESC LIMIT 1");
     bool found = false;
 
-    sqlite3_bind_int(stmt, 1, file_id);
-    sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(target_offset));
+    stmt.bind_int(1, file_id);
+    stmt.bind_int64(2, static_cast<int64_t>(target_offset));
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         checkpoint.checkpoint_idx =

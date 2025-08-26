@@ -8,8 +8,7 @@ std::uint64_t query_max_bytes(const SqliteDatabase &db,
         "SELECT MAX(uc_offset + uc_size) FROM checkpoints WHERE file_id = "
         "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)");
     std::uint64_t max_bytes = 0;
-
-    sqlite3_bind_text(stmt, 1, gz_path_logical_path.c_str(), -1, SQLITE_STATIC);
+    stmt.bind_text(1, gz_path_logical_path);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         max_bytes = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 0));
     }
@@ -20,8 +19,7 @@ std::uint64_t query_max_bytes(const SqliteDatabase &db,
             db,
             "SELECT total_uc_size FROM metadata WHERE file_id = "
             "(SELECT id FROM files WHERE logical_name = ? LIMIT 1)");
-        sqlite3_bind_text(metadata_stmt, 1, gz_path_logical_path.c_str(), -1,
-                          SQLITE_STATIC);
+        metadata_stmt.bind_text(1, gz_path_logical_path);
         if (sqlite3_step(metadata_stmt) == SQLITE_ROW) {
             max_bytes =
                 static_cast<uint64_t>(sqlite3_column_int64(metadata_stmt, 0));

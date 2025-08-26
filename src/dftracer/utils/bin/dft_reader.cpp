@@ -3,7 +3,6 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
-#include <dftracer/utils/utils/platform_compat.h>
 
 #include <algorithm>
 #include <argparse/argparse.hpp>

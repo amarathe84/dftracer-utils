@@ -7,7 +7,7 @@ bool query_stored_file_info(const SqliteDatabase &db,
                     "SELECT sha256_hex, mtime_unix FROM files WHERE "
                     "logical_name = ? LIMIT 1");
 
-    sqlite3_bind_text(stmt, 1, gz_path.c_str(), -1, SQLITE_STATIC);
+    stmt.bind_text(1, gz_path);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         const char *sha256_text =

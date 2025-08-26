@@ -68,13 +68,27 @@ std::string calculate_file_sha256(const std::string &file_path) {
     return hex_str;
 }
 
-std::size_t file_size_bytes(const std::string &path) {
-    FILE *fp = fopen(path.c_str(), "rb");
-    if (!fp) return UINT64_MAX;
-    fseeko(fp, 0, SEEK_END);
-    auto sz = static_cast<std::size_t>(ftello(fp));
-    fclose(fp);
-    return sz;
+std::uint64_t file_size_bytes(const std::string &path) {
+    struct stat st {};
+    if (stat(path.c_str(), &st) == 0) {
+#if defined(_WIN32)
+        if ((st.st_mode & _S_IFREG) != 0)
+            return static_cast<uint64_t>(st.st_size);
+#else
+        if (S_ISREG(st.st_mode)) return static_cast<uint64_t>(st.st_size);
+#endif
+    }
+
+    FILE *fp = std::fopen(path.c_str(), "rb");
+    if (!fp) return 0;
+    if (fseeko(fp, 0, SEEK_END) != 0) {
+        std::fclose(fp);
+        return 0;
+    }
+    const auto pos = ftello(fp);
+    std::fclose(fp);
+    if (pos < 0) return 0;
+    return static_cast<uint64_t>(pos);
 }
 
 bool index_exists_and_valid(const std::string &idx_path) {

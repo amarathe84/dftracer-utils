@@ -14,97 +14,22 @@ extern "C" {
  * Opaque handle for DFT reader
  */
 typedef void *dft_reader_handle_t;
-
-/**
- * Create a new DFT reader instance
- *
- * The index file will be automatically create if it does not exist
- *
- * @param gz_path Path to the gzipped trace file
- * @param idx_path Path to the index file
- * @param index_ckpt_size Checkpoint size for indexing in bytes
- * @return Opaque handle to the reader instance, or NULL on failure
- */
 dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
                                       size_t index_ckpt_size);
-
-/**
- * Create a new DFT reader instance with indexer
- * @param indexer Indexer instance
- */
 dft_reader_handle_t dft_reader_create_with_indexer(
     dft_indexer_handle_t indexer);
-
-/**
- * Destroy a DFT reader instance and free all associated resources
- * @param reader Opaque handle to the reader instance
- */
 void dft_reader_destroy(dft_reader_handle_t reader);
-
-/**
- * Get the maximum byte position available in the indexed gzip file
- * @param reader DFT reader handle
- * @param max_bytes Pointer to store the maximum byte position
- * @return 0 on success, -1 on error
- */
 int dft_reader_get_max_bytes(dft_reader_handle_t reader, size_t *max_bytes);
-
-/**
- * Get the maximum number of lines available in the indexed gzip file
- * @param reader DFT reader handle
- * @param num_lines Pointer to store the maximum number of lines
- * @return 0 on success, -1 on error
- */
 int dft_reader_get_num_lines(dft_reader_handle_t reader, size_t *num_lines);
-
-/**
- * Read raw bytes from the gzip file using the index database (streaming)
- * Returns data without caring about JSON line boundaries. Call repeatedly until
- * returns 0.
- * @param reader DFT reader handle
- * @param start_bytes Start position in bytes
- * @param end_bytes End position in bytes
- * @param buffer User-provided buffer for raw data
- * @param buffer_size Size of user-provided buffer
- * @return Number of bytes read, 0 indicates end of stream, -1 on error
- */
 int dft_reader_read(dft_reader_handle_t reader, size_t start_bytes,
                     size_t end_bytes, char *buffer, size_t buffer_size);
-
-/**
- * Read a range of bytes from the gzip file using the index database (streaming)
- * Returns complete lines only. Call repeatedly until returns 0.
- * @param reader DFT reader handle
- * @param start_bytes Start position in bytes
- * @param end_bytes End position in bytes
- * @param buffer User-provided buffer for complete lines
- * @param buffer_size Size of user-provided buffer
- * @return Number of bytes read, 0 indicates end of stream, -1 on error
- */
 int dft_reader_read_line_bytes(dft_reader_handle_t reader, size_t start_bytes,
                                size_t end_bytes, char *buffer,
                                size_t buffer_size);
-
-/**
- * Read complete lines from the gzip file using line numbers
- * @param reader DFT reader handle
- * @param start_line Start line number (1-based)
- * @param end_line End line number (1-based, inclusive)
- * @param buffer User-provided buffer for the lines
- * @param buffer_size Size of user-provided buffer
- * @param bytes_written Pointer to store number of bytes written to buffer
- * @return 0 on success, -1 on error
- */
 int dft_reader_read_lines(dft_reader_handle_t reader, size_t start_line,
                           size_t end_line, char *buffer, size_t buffer_size,
                           size_t *bytes_written);
-
-/**
- * Reset the reader to the initial state
- * @param reader DFT reader handle
- */
 void dft_reader_reset(dft_reader_handle_t reader);
-
 #ifdef __cplusplus
 }  // extern "C"
 

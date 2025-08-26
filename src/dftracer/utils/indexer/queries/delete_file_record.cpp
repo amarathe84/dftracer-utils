@@ -9,7 +9,7 @@ bool delete_file_record(const SqliteDatabase &db, int file_id) {
     for (const char *query : cleanup_queries) {
         try {
             SqliteStmt stmt(db, query);
-            sqlite3_bind_int(stmt, 1, file_id);
+            stmt.bind_int(1, file_id);
             int result = sqlite3_step(stmt);
             if (result != SQLITE_DONE) {
                 DFTRACER_UTILS_LOG_ERROR(

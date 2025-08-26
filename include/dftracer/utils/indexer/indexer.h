@@ -4,6 +4,8 @@
 #include <dftracer/utils/indexer/checkpoint.h>
 
 #ifdef __cplusplus
+#include <dftracer/utils/common/constants.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -16,7 +18,8 @@ namespace dftracer::utils {
 class IndexerImplementor;
 class Indexer {
    public:
-    static constexpr std::size_t DEFAULT_CHECKPOINT_SIZE = 32 * 1024 * 1024;
+    static constexpr std::size_t DEFAULT_CHECKPOINT_SIZE =
+        constants::indexer::DEFAULT_CHECKPOINT_SIZE;
     Indexer(const std::string &gz_path, const std::string &idx_path,
             size_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE,
             bool force = false);

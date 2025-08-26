@@ -47,7 +47,9 @@ TEST_CASE("C++ Indexer - Basic functionality") {
         // Test getter methods
         CHECK(indexer.get_gz_path() == gz_file);
         CHECK(indexer.get_idx_path() == idx_file);
-        CHECK(indexer.get_checkpoint_size() == ckpt_size);
+
+        // size will be adjusted
+        CHECK(indexer.get_checkpoint_size() <= ckpt_size);
     }
 
     SUBCASE("Move semantics") {
@@ -1256,7 +1258,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
             Indexer indexer(gz_file, idx_file + std::to_string(ckpt_size_mb),
                             ckpt_size);
             CHECK_NOTHROW(indexer.build());
-            CHECK(indexer.get_checkpoint_size() == ckpt_size);
+            CHECK(indexer.get_checkpoint_size() <= ckpt_size);
         }
     }
 

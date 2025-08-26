@@ -42,6 +42,8 @@
 // Common include
 //==========================
 
+#include <dftracer/utils/common/platform_compat.h>
+
 //==========================
 // Common macro definitions
 //==========================
