@@ -41,9 +41,29 @@ class TakeTask : public TypedTask<std::vector<T>, std::vector<T>> {
     }
 };
 
-// Alias for consistency with common naming conventions
 template <typename T>
 using LimitTask = TakeTask<T>;
+
+namespace stream_ops {
+
+struct Take {
+    size_t count;
+};
+struct Limit {
+    size_t count;
+};
+
+}  // namespace stream_ops
+
+namespace ops {
+
+inline stream_ops::Take take(size_t count) { return stream_ops::Take{count}; }
+
+inline stream_ops::Limit limit(size_t count) {
+    return stream_ops::Limit{count};
+}
+
+}  // namespace ops
 
 }  // namespace dftracer::utils
 

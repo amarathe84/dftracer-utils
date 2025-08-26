@@ -32,9 +32,32 @@ class SortTask : public TypedTask<std::vector<T>, std::vector<T>> {
     }
 };
 
-// Convenience alias for default (ascending) sort
+// Ascending sort
 template <typename T>
 using DefaultSortTask = SortTask<T, std::less<T>>;
+
+namespace stream_ops {
+
+template <typename F>
+struct Sort {
+    F comparator;
+    explicit Sort(F comp) : comparator(std::move(comp)) {}
+};
+
+struct DefaultSort {};
+
+}  // namespace stream_ops
+
+namespace ops {
+
+template <typename F>
+stream_ops::Sort<F> sort(F comparator) {
+    return stream_ops::Sort<F>(std::move(comparator));
+}
+
+inline stream_ops::DefaultSort sort() { return stream_ops::DefaultSort{}; }
+
+}  // namespace ops
 
 }  // namespace dftracer::utils
 

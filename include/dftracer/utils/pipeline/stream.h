@@ -2,13 +2,25 @@
 #define DFTRACER_UTILS_PIPELINE_STREAM_H
 
 #include <dftracer/utils/pipeline/builder.h>
+#include <dftracer/utils/pipeline/stream/execution.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
+#include <dftracer/utils/pipeline/tasks/op/distinct.h>
+#include <dftracer/utils/pipeline/tasks/op/filter.h>
+#include <dftracer/utils/pipeline/tasks/op/flatmap.h>
+#include <dftracer/utils/pipeline/tasks/op/groupby.h>
+#include <dftracer/utils/pipeline/tasks/op/map.h>
+#include <dftracer/utils/pipeline/tasks/op/reduce.h>
+#include <dftracer/utils/pipeline/tasks/op/skip.h>
+#include <dftracer/utils/pipeline/tasks/op/sort.h>
+#include <dftracer/utils/pipeline/tasks/op/take.h>
 
 #include <any>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -18,58 +30,7 @@ namespace dftracer::utils {
 template <typename T>
 class Stream;
 
-// Stream operations (pipeline stages)
-namespace stream_ops {
-
-// Filter operation
-template <typename F>
-struct Filter {
-    F predicate;
-    explicit Filter(F pred) : predicate(std::move(pred)) {}
-};
-
-// Map operation
-template <typename F>
-struct Map {
-    F func;
-    explicit Map(F f) : func(std::move(f)) {}
-};
-
-// Reduce operations
-struct Sum {};
-struct Product {};
-template <typename T>
-struct Max {
-    T initial;
-};
-template <typename T>
-struct Min {
-    T initial;
-};
-
-// Collection operations
-struct Take {
-    size_t count;
-};
-struct Limit {
-    size_t count;
-};
-struct Skip {
-    size_t count;
-};
-struct Drop {
-    size_t count;
-};
-struct Distinct {};
-
-// Execution operations
-struct ExecuteSequential {};
-struct ExecuteThreaded {};
-struct ExecuteMPI {};
-
-}  // namespace stream_ops
-
-// Stream class - wraps PipelineBuilder with pipe operator support
+// Wrap PipelineBuilder with pipe operator support
 template <typename InputType>
 class Stream {
    public:
@@ -81,16 +42,13 @@ class Stream {
     Stream(Stream&&) = default;
     Stream& operator=(Stream&&) = default;
 
-    // Allow access to builder
     PipelineBuilder<InputType>&& get_builder() && {
         return std::move(builder_);
     }
 
-    // Constructor from moved builder
     explicit Stream(PipelineBuilder<InputType>&& builder)
         : builder_(std::move(builder)) {}
 
-    // Pipe operations
     template <typename F>
     Stream<InputType> operator|(stream_ops::Filter<F>&& filter_op) && {
         return Stream<InputType>(
@@ -148,6 +106,50 @@ class Stream {
         return Stream<InputType>(std::move(builder_).distinct());
     }
 
+    template <typename F>
+    auto operator|(stream_ops::FlatMap<F>&& flatmap_op) && {
+        // FlatMap transforms vector<I> to vector<O>, need to deduce O from
+        // function Assuming function type is I -> vector<O>
+        using VectorType = std::invoke_result_t<F, InputType>;
+        using OutputType = typename VectorType::value_type;
+
+        return Stream<OutputType>(
+            std::move(builder_).template flatmap<OutputType>(
+                std::move(flatmap_op.func)));
+    }
+
+    template <typename F>
+    Stream<InputType> operator|(stream_ops::Sort<F>&& sort_op) && {
+        return Stream<InputType>(
+            std::move(builder_).sort(std::move(sort_op.comparator)));
+    }
+
+    Stream<InputType> operator|(stream_ops::DefaultSort&&) && {
+        return Stream<InputType>(std::move(builder_).sort());
+    }
+
+    template <typename F>
+    auto operator|(stream_ops::GroupBy<F>&& groupby_op) && {
+        // GroupBy transforms vector<T> to map<K, vector<T>>, need to deduce K
+        // from function
+        using KeyType = std::invoke_result_t<F, InputType>;
+        using OutputType = std::map<KeyType, std::vector<InputType>>;
+
+        return Stream<OutputType>(std::move(builder_).template groupby<KeyType>(
+            std::move(groupby_op.key_extractor)));
+    }
+
+    template <typename F>
+    auto operator|(stream_ops::FastGroupBy<F>&& groupby_op) && {
+        // FastGroupBy transforms vector<T> to unordered_map<K, vector<T>>
+        using KeyType = std::invoke_result_t<F, InputType>;
+        using OutputType = std::unordered_map<KeyType, std::vector<InputType>>;
+
+        return Stream<OutputType>(
+            std::move(builder_).template fast_groupby<KeyType>(
+                std::move(groupby_op.key_extractor)));
+    }
+
     // Execution operations
     std::any operator|(stream_ops::ExecuteSequential&&) && {
         return std::move(builder_).execute_sequential();
@@ -167,7 +169,7 @@ class Stream {
     friend class Stream;
 };
 
-// Factory function for creating streams
+// Factory functions
 template <typename T>
 Stream<T> stream(const std::vector<T>& data) {
     return Stream<T>(std::any(data));
@@ -177,58 +179,6 @@ template <typename T>
 Stream<T> stream(std::vector<T>&& data) {
     return Stream<T>(std::any(std::move(data)));
 }
-
-// Convenient factory functions for operations
-namespace ops {
-
-template <typename F>
-stream_ops::Filter<F> filter(F predicate) {
-    return stream_ops::Filter<F>(std::move(predicate));
-}
-
-template <typename F>
-stream_ops::Map<F> map(F func) {
-    return stream_ops::Map<F>(std::move(func));
-}
-
-inline stream_ops::Sum sum() { return stream_ops::Sum{}; }
-
-inline stream_ops::Product product() { return stream_ops::Product{}; }
-
-template <typename T>
-stream_ops::Max<T> max(T initial = std::numeric_limits<T>::lowest()) {
-    return stream_ops::Max<T>{initial};
-}
-
-template <typename T>
-stream_ops::Min<T> min(T initial = std::numeric_limits<T>::max()) {
-    return stream_ops::Min<T>{initial};
-}
-
-inline stream_ops::Take take(size_t count) { return stream_ops::Take{count}; }
-
-inline stream_ops::Limit limit(size_t count) {
-    return stream_ops::Limit{count};
-}
-
-inline stream_ops::Skip skip(size_t count) { return stream_ops::Skip{count}; }
-
-inline stream_ops::Drop drop(size_t count) { return stream_ops::Drop{count}; }
-
-inline stream_ops::Distinct distinct() { return stream_ops::Distinct{}; }
-
-// Execution operations
-inline stream_ops::ExecuteSequential execute_sequential() {
-    return stream_ops::ExecuteSequential{};
-}
-
-inline stream_ops::ExecuteThreaded execute_threaded() {
-    return stream_ops::ExecuteThreaded{};
-}
-
-inline stream_ops::ExecuteMPI execute_mpi() { return stream_ops::ExecuteMPI{}; }
-
-}  // namespace ops
 
 }  // namespace dftracer::utils
 

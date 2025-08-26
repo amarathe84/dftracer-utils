@@ -37,6 +37,25 @@ class FilterTask : public TypedTask<std::vector<T>, std::vector<T>> {
     }
 };
 
+namespace stream_ops {
+
+template <typename F>
+struct Filter {
+    F predicate;
+    explicit Filter(F pred) : predicate(std::move(pred)) {}
+};
+
+}  // namespace stream_ops
+
+namespace ops {
+
+template <typename F>
+stream_ops::Filter<F> filter(F predicate) {
+    return stream_ops::Filter<F>(std::move(predicate));
+}
+
+}  // namespace ops
+
 }  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_PIPELINE_TASKS_OP_FILTER_H

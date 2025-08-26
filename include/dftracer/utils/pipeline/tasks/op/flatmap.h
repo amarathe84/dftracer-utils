@@ -37,6 +37,25 @@ class FlatMapTask : public TypedTask<std::vector<I>, std::vector<O>> {
     }
 };
 
+namespace stream_ops {
+
+template <typename F>
+struct FlatMap {
+    F func;
+    explicit FlatMap(F f) : func(std::move(f)) {}
+};
+
+}  // namespace stream_ops
+
+namespace ops {
+
+template <typename F>
+stream_ops::FlatMap<F> flatmap(F func) {
+    return stream_ops::FlatMap<F>(std::move(func));
+}
+
+}  // namespace ops
+
 }  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_PIPELINE_TASKS_OP_FLATMAP_H

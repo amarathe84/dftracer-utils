@@ -40,15 +40,14 @@ class GroupByTask
     }
 };
 
-// Fast version using unordered_map for better performance
 template <typename T, typename K, typename F = std::function<K(const T&)>>
-class FastGroupByTask
+class UnorderedGroupByTask
     : public TypedTask<std::vector<T>, std::unordered_map<K, std::vector<T>>> {
    private:
     F key_extractor;
 
    public:
-    FastGroupByTask(F extractor)
+    UnorderedGroupByTask(F extractor)
         : TypedTask<std::vector<T>, std::unordered_map<K, std::vector<T>>>(
               TaskType::GROUPBY),
           key_extractor(std::move(extractor)) {}
@@ -70,6 +69,42 @@ class FastGroupByTask
         return groups;
     }
 };
+
+// Convenience aliases
+template <typename T, typename K, typename F = std::function<K(const T&)>>
+using FastGroupByTask = UnorderedGroupByTask<T, K, F>;
+
+// Stream operations (pipeline stages)
+namespace stream_ops {
+
+template <typename F>
+struct GroupBy {
+    F key_extractor;
+    explicit GroupBy(F extractor) : key_extractor(std::move(extractor)) {}
+};
+
+template <typename F>
+struct FastGroupBy {
+    F key_extractor;
+    explicit FastGroupBy(F extractor) : key_extractor(std::move(extractor)) {}
+};
+
+}  // namespace stream_ops
+
+// Convenient factory functions for operations
+namespace ops {
+
+template <typename F>
+stream_ops::GroupBy<F> groupby(F key_extractor) {
+    return stream_ops::GroupBy<F>(std::move(key_extractor));
+}
+
+template <typename F>
+stream_ops::FastGroupBy<F> fast_groupby(F key_extractor) {
+    return stream_ops::FastGroupBy<F>(std::move(key_extractor));
+}
+
+}  // namespace ops
 
 }  // namespace dftracer::utils
 

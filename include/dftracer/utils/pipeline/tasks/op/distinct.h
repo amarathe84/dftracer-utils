@@ -37,6 +37,18 @@ class DistinctTask : public TypedTask<std::vector<T>, std::vector<T>> {
     }
 };
 
+namespace stream_ops {
+
+struct Distinct {};
+
+}  // namespace stream_ops
+
+namespace ops {
+
+inline stream_ops::Distinct distinct() { return stream_ops::Distinct{}; }
+
+}  // namespace ops
+
 }  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_PIPELINE_TASKS_OP_DISTINCT_H

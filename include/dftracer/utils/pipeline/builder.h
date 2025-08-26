@@ -17,13 +17,10 @@ namespace dftracer::utils {
 template <typename InputType>
 class PipelineBuilder {
    public:
-    // Allow different template instantiations to access each other's members
     template <typename>
     friend class PipelineBuilder;
 
     explicit PipelineBuilder(std::any input) : input_data_(std::move(input)) {}
-
-    // Move-only semantics
     PipelineBuilder(const PipelineBuilder&) = delete;
     PipelineBuilder& operator=(const PipelineBuilder&) = delete;
     PipelineBuilder(PipelineBuilder&&) = default;
@@ -47,11 +44,9 @@ class PipelineBuilder {
     PipelineBuilder<OutputType> map(F func) && {
         PipelineBuilder<OutputType> next_builder(std::move(input_data_));
 
-        // Transfer existing tasks by move
         next_builder.tasks_ = std::move(tasks_);
         next_builder.dependencies_ = std::move(dependencies_);
 
-        // Add map task
         next_builder.tasks_.push_back(
             Tasks::map<InputType, OutputType>(std::move(func)));
 
@@ -196,11 +191,10 @@ class PipelineBuilder {
    private:
     std::any input_data_;
     std::vector<std::unique_ptr<Task>> tasks_;
-    std::vector<std::pair<size_t, size_t>>
-        dependencies_;  // (dependent, dependency)
+    std::vector<std::pair<size_t, size_t>> dependencies_;
 };
 
-// Factory function for creating builders
+// Factory functions
 template <typename T>
 PipelineBuilder<T> from(const std::vector<T>& data) {
     return PipelineBuilder<T>(std::any(data));
