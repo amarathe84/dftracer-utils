@@ -74,7 +74,8 @@ static void demonstrate_mpi_pipeline() {
             long long hash = i;
             for (int round = 0; round < 30; ++round) {
                 hash = (hash * 1103515245LL + 12345LL) % (1LL << 31);
-                result += std::log(1.0 + hash % 1000) / (1.0 + round);
+                result += std::log(1.0 + static_cast<double>(hash % 1000)) /
+                          (1.0 + round);
             }
         }
         return result;
@@ -403,8 +404,8 @@ static void demonstrate_mpi_vs_sequential_comparison() {
                       << " processes): " << mpi_time << " ms" << std::endl;
 
             if (mpi_time > 0) {
-                double speedup =
-                    static_cast<double>(sequential_time) / mpi_time;
+                double speedup = static_cast<double>(sequential_time) /
+                                 static_cast<double>(mpi_time);
                 double efficiency = speedup / mpi_pipeline.size() * 100.0;
 
                 std::cout << "Speedup: " << std::fixed << std::setprecision(2)

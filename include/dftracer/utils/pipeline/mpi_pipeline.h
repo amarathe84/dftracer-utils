@@ -27,6 +27,17 @@ class MPIPipeline : public Pipeline {
     std::unordered_map<TaskIndex, std::vector<uint8_t>>
         serialized_outputs_;  // Serialized task outputs
 
+    // Targeted dependency synchronization
+    std::unordered_map<TaskIndex, std::vector<int>>
+        dependency_ranks_;  // Which ranks this task depends on
+    std::unordered_map<TaskIndex, std::vector<int>>
+        dependent_ranks_;  // Which ranks depend on this task
+    std::unordered_map<TaskIndex, std::unordered_set<int>>
+        pending_dependencies_;  // Ranks this task is still waiting for
+    std::unordered_map<int, std::vector<TaskIndex>>
+        rank_completion_queue_;  // Tasks completed by each rank (for receiving
+                                 // signals)
+
    public:
     MPIPipeline();
     ~MPIPipeline() override = default;
@@ -50,6 +61,10 @@ class MPIPipeline : public Pipeline {
     std::any get_final_result();
     bool can_execute_task(TaskIndex task_id) const;
     void wait_for_dependencies(TaskIndex task_id);
+    void setup_dependency_tracking();
+    void send_completion_signal(TaskIndex task_id);
+    void receive_completion_signals(TaskIndex task_id);
+    bool check_completion_signals(TaskIndex task_id);
 };
 
 }  // namespace dftracer::utils

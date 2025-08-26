@@ -169,6 +169,54 @@ std::vector<uint8_t> MPI::recv_vector(int source, int tag) {
     return result;
 }
 
+void MPI::isend(const void* data, int count, MPI_Datatype datatype, int dest,
+                int tag, MPI_Request* request) {
+    int error =
+        MPI_Isend(data, count, datatype, dest, tag, MPI_COMM_WORLD, request);
+    check_error(error, "MPI_Isend");
+}
+
+void MPI::irecv(void* data, int count, MPI_Datatype datatype, int source,
+                int tag, MPI_Request* request) {
+    int error =
+        MPI_Irecv(data, count, datatype, source, tag, MPI_COMM_WORLD, request);
+    check_error(error, "MPI_Irecv");
+}
+
+bool MPI::test(MPI_Request* request, MPI_Status* status) {
+    int flag;
+    MPI_Status local_status;
+    MPI_Status* status_ptr = status ? status : &local_status;
+
+    int error = MPI_Test(request, &flag, status_ptr);
+    check_error(error, "MPI_Test");
+    return flag != 0;
+}
+
+void MPI::wait(MPI_Request* request, MPI_Status* status) {
+    MPI_Status local_status;
+    MPI_Status* status_ptr = status ? status : &local_status;
+
+    int error = MPI_Wait(request, status_ptr);
+    check_error(error, "MPI_Wait");
+}
+
+int MPI::probe_any_source(int tag, MPI_Status* status) {
+    MPI_Status local_status;
+    MPI_Status* status_ptr = status ? status : &local_status;
+
+    int flag;
+    int error =
+        MPI_Iprobe(MPI_ANY_SOURCE, tag, MPI_COMM_WORLD, &flag, status_ptr);
+    check_error(error, "MPI_Iprobe");
+
+    if (flag) {
+        return status_ptr->MPI_SOURCE;
+    } else {
+        throw std::runtime_error("No message available");
+    }
+}
+
 void MPI::update_cache() const {
     if (!is_initialized()) {
         cached_rank_ = 0;

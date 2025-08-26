@@ -12,9 +12,11 @@
 #include <stdexcept>
 #include <vector>
 
-namespace dftracer {
-namespace utils {
+// MPI types
+typedef MPI_Request* MPI_Request_ptr;
+typedef MPI_Status* MPI_Status_ptr;
 
+namespace dftracer::utils {
 class MPI {
    public:
     /**
@@ -47,6 +49,13 @@ class MPI {
                                           int root);
     void send_vector(const std::vector<uint8_t>& data, int dest, int tag);
     std::vector<uint8_t> recv_vector(int source, int tag);
+    void isend(const void* data, int count, MPI_Datatype datatype, int dest,
+               int tag, MPI_Request* request);
+    void irecv(void* data, int count, MPI_Datatype datatype, int source,
+               int tag, MPI_Request* request);
+    bool test(MPI_Request* request, MPI_Status* status = nullptr);
+    void wait(MPI_Request* request, MPI_Status* status = nullptr);
+    int probe_any_source(int tag, MPI_Status* status = nullptr);
 
    private:
     MPI() = default;
@@ -83,13 +92,11 @@ class MPISession {
     MPISession& operator=(MPISession&&) = delete;
 };
 
-}  // namespace utils
-}  // namespace dftracer
+}  // namespace dftracer::utils
 
 #else  // DFTRACER_UTILS_MPI_ENABLE != 1
 
-namespace dftracer {
-namespace utils {
+namespace dftracer::utils {
 
 class MPI {
    public:
@@ -116,6 +123,11 @@ class MPI {
     }
     void send_vector(const std::vector<uint8_t>&, int, int) {}
     std::vector<uint8_t> recv_vector(int, int) { return {}; }
+    void isend(const void*, int, int, int, int, void*) {}
+    void irecv(void*, int, int, int, int, void*) {}
+    bool test(void*, void* = nullptr) { return true; }
+    void wait(void*, void* = nullptr) {}
+    int probe_any_source(int, void* = nullptr) { return 0; }
 };
 
 class MPISession {
@@ -123,8 +135,7 @@ class MPISession {
     MPISession(int* = nullptr, char*** = nullptr) {}
 };
 
-}  // namespace utils
-}  // namespace dftracer
+}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_MPI_ENABLE
 

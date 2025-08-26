@@ -11,7 +11,7 @@ namespace dftracer::utils {
 
 MPIPipeline::MPIPipeline() : mpi_(MPI::instance()) {
     if (is_master()) {
-        DFTRACER_UTILS_LOG_INFO("Pipeline using %d processes", get_size());
+        DFTRACER_UTILS_LOG_INFO("Pipeline using %d processes", size());
     }
 }
 
@@ -32,6 +32,7 @@ std::any MPIPipeline::execute(std::any in) {
     }
 
     distribute_tasks();
+    setup_dependency_tracking();
 
     // Broadcast input data to all processes
     std::vector<uint8_t> serialized_input = broadcast_input(in);
@@ -103,6 +104,9 @@ void MPIPipeline::execute_local_tasks(const std::any& input) {
         DFTRACER_UTILS_LOG_INFO("Rank %d completed task %d in %dms", rank(),
                                 task_id, duration.count());
 
+        // Send completion signals to dependent ranks
+        send_completion_signal(task_id);
+
         // Serialize and store result for communication
         serialized_outputs_[task_id] = serialize_any(result);
     }
@@ -126,12 +130,12 @@ void MPIPipeline::gather_results() {
         if (assigned_rank == rank() && !is_master()) {
             // Worker sends result to master
             auto& serialized_result = serialized_outputs_[task_id];
-            mpi_.send_vector(serialized_result, 0, task_id);
+            mpi_.send_vector(serialized_result, 0, static_cast<int>(task_id));
 
         } else if (is_master() && assigned_rank != 0) {
             // Master receives result from worker
             std::vector<uint8_t> serialized_result =
-                mpi_.recv_vector(assigned_rank, task_id);
+                mpi_.recv_vector(assigned_rank, static_cast<int>(task_id));
 
             // Deserialize and store result
             task_outputs_[task_id] = deserialize_any(serialized_result);
@@ -244,14 +248,145 @@ bool MPIPipeline::can_execute_task(TaskIndex task_id) const {
     return true;
 }
 
-void MPIPipeline::wait_for_dependencies(TaskIndex task_id) {
-    // For this simple implementation, we use barriers for synchronization
-    // In a more sophisticated implementation, you'd have targeted
-    // synchronization
+void MPIPipeline::setup_dependency_tracking() {
+    // Build rank-to-rank dependency mappings
+    for (TaskIndex task_id = 0; task_id < nodes_.size(); ++task_id) {
+        int task_rank = task_assignments_[task_id];
 
-    if (!dependents_[task_id].empty()) {
-        // This task has dependencies, so we need to synchronize
-        mpi_.barrier();
+        // Find which ranks this task depends on
+        for (TaskIndex dep_task_id : dependents_[task_id]) {
+            int dep_rank = task_assignments_[dep_task_id];
+            if (dep_rank != task_rank) {
+                dependency_ranks_[task_id].push_back(dep_rank);
+                dependent_ranks_[dep_task_id].push_back(task_rank);
+            }
+        }
+
+        // Initialize pending dependencies for this task
+        for (int dep_rank : dependency_ranks_[task_id]) {
+            pending_dependencies_[task_id].insert(dep_rank);
+        }
+    }
+
+    if (is_master()) {
+        DFTRACER_UTILS_LOG_INFO("Dependency tracking setup complete");
+    }
+}
+
+void MPIPipeline::send_completion_signal(TaskIndex task_id) {
+    // Send completion signals to all ranks that depend on this task
+    for (int dependent_rank : dependent_ranks_[task_id]) {
+        if (dependent_rank != rank()) {
+            // Send a simple completion signal (task_id) to the dependent rank
+            int signal = static_cast<int>(task_id);
+            mpi_.send(&signal, 1, MPI_INT, dependent_rank, 9999);
+
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Rank %d sent completion signal for task %d to rank %d", rank(),
+                task_id, dependent_rank);
+        }
+    }
+}
+
+bool MPIPipeline::check_completion_signals(TaskIndex task_id) {
+    // Check if we have any pending dependencies for this task
+    auto it = pending_dependencies_.find(task_id);
+    if (it == pending_dependencies_.end() || it->second.empty()) {
+        return true;  // No pending dependencies
+    }
+
+    // Non-blocking check for completion signals
+    int signal;
+    MPI_Status status;
+
+    // Keep checking for signals until no more are available
+    while (true) {
+        try {
+            // Use probe to check if there's a message waiting
+            int source = mpi_.probe_any_source(9999, &status);
+
+            // Receive the signal
+            mpi_.recv(&signal, 1, MPI_INT, source, 9999, &status);
+
+            static_cast<void>(signal);  // Acknowledge signal received
+
+            // Remove this rank from pending dependencies for the completed task
+            auto dep_it = pending_dependencies_.find(task_id);
+            if (dep_it != pending_dependencies_.end()) {
+                dep_it->second.erase(source);
+
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "Rank %d received completion signal from rank %d", rank(),
+                    source);
+            }
+
+        } catch (const std::exception&) {
+            // No more messages available
+            break;
+        }
+    }
+
+    // Check if all dependencies are now satisfied
+    return pending_dependencies_[task_id].empty();
+}
+
+void MPIPipeline::receive_completion_signals(TaskIndex task_id) {
+    // Wait for all pending dependencies to be resolved
+    while (!pending_dependencies_[task_id].empty()) {
+        int signal;
+        MPI_Status status;
+
+        // Blocking receive from any source
+        int source = mpi_.probe_any_source(9999, &status);
+        mpi_.recv(&signal, 1, MPI_INT, source, 9999, &status);
+
+        static_cast<void>(signal);  // Acknowledge signal received
+
+        // Remove this rank from pending dependencies
+        pending_dependencies_[task_id].erase(source);
+
+        DFTRACER_UTILS_LOG_DEBUG(
+            "Rank %d received completion signal from rank %d", rank(), source);
+    }
+}
+
+void MPIPipeline::wait_for_dependencies(TaskIndex task_id) {
+    // Sophisticated targeted synchronization
+    if (dependents_[task_id].empty()) {
+        return;  // No dependencies, can execute immediately
+    }
+
+    // Check for local dependencies first (tasks on same rank)
+    bool local_deps_ready = true;
+    for (TaskIndex dep_task_id : dependents_[task_id]) {
+        int dep_rank = task_assignments_[dep_task_id];
+        if (dep_rank == rank()) {
+            // Local dependency - check if completed
+            auto it = task_completed_.find(dep_task_id);
+            if (it == task_completed_.end() || !it->second.load()) {
+                local_deps_ready = false;
+                break;
+            }
+        }
+    }
+
+    if (!local_deps_ready) {
+        DFTRACER_UTILS_LOG_ERROR(
+            "Local dependencies not ready for task %d on rank %d", task_id,
+            rank());
+        return;
+    }
+
+    // Wait for remote dependencies using targeted synchronization
+    if (!pending_dependencies_[task_id].empty()) {
+        DFTRACER_UTILS_LOG_INFO(
+            "Rank %d waiting for %d remote dependencies for task %d", rank(),
+            pending_dependencies_[task_id].size(), task_id);
+
+        receive_completion_signals(task_id);
+
+        DFTRACER_UTILS_LOG_INFO(
+            "Rank %d all dependencies satisfied for task %d", rank(), task_id);
     }
 }
 
