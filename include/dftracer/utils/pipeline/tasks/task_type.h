@@ -12,7 +12,10 @@ enum class TaskType : std::uint8_t {
     FILTER,
     FLATMAP,
     SORT,
-    GROUPBY
+    GROUPBY,
+    TAKE,
+    SKIP,
+    DISTINCT
 };
 
 std::string task_type_to_string(TaskType type);

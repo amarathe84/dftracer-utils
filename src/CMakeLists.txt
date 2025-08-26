@@ -303,6 +303,65 @@ endif()
 install(TARGETS dft_pipeline_mpi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ----------------------------------------
+# Fluent API Pipeline Demo (TEMPORARY)
+# ----------------------------------------
+
+add_executable(dft_pipeline_fluent ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline_fluent.cpp ${DFTRACER_UTILS_SOURCES})
+set_target_properties(dft_pipeline_fluent PROPERTIES OUTPUT_NAME "dft_pipeline_fluent")
+target_link_libraries(dft_pipeline_fluent PRIVATE 
+  dftracer_utils
+  argparse::argparse
+  ghc_filesystem
+  picosha2
+  simdjson::simdjson
+)
+
+link_sqlite3(dft_pipeline_fluent STATIC)
+link_zlib(dft_pipeline_fluent STATIC)
+
+target_include_directories(dft_pipeline_fluent 
+    PRIVATE ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_BINARY_DIR}/include)
+
+target_set_warnings(dft_pipeline_fluent)
+
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_pipeline_fluent PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_pipeline_fluent PRIVATE --coverage)
+endif()
+
+install(TARGETS dft_pipeline_fluent RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Streaming API demo
+add_executable(dft_pipeline_stream ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline_stream.cpp ${DFTRACER_UTILS_SOURCES})
+set_target_properties(dft_pipeline_stream PROPERTIES OUTPUT_NAME "dft_pipeline_stream")
+target_link_libraries(dft_pipeline_stream PRIVATE 
+  dftracer_utils
+  argparse::argparse
+  ghc_filesystem
+  picosha2
+  simdjson::simdjson
+)
+
+link_sqlite3(dft_pipeline_stream STATIC)
+link_zlib(dft_pipeline_stream STATIC)
+
+target_include_directories(dft_pipeline_stream 
+    PRIVATE ${CMAKE_SOURCE_DIR}/include
+            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_BINARY_DIR}/include)
+
+target_set_warnings(dft_pipeline_stream)
+
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(dft_pipeline_stream PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(dft_pipeline_stream PRIVATE --coverage)
+endif()
+
+install(TARGETS dft_pipeline_stream RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# ----------------------------------------
 # DFT Map
 # ----------------------------------------
 

@@ -49,7 +49,7 @@ bool Pipeline::has_cycles() {
         }
     }
 
-    int processed = 0;
+    std::size_t processed = 0;
     while (!queue.empty()) {
         TaskIndex current = queue.front();
         queue.pop();

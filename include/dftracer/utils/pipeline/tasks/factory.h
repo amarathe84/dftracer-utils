@@ -1,12 +1,15 @@
 #ifndef DFTRACER_UTILS_TASKS_FACTORY_H
 #define DFTRACER_UTILS_TASKS_FACTORY_H
 
+#include <dftracer/utils/pipeline/tasks/op/distinct.h>
 #include <dftracer/utils/pipeline/tasks/op/filter.h>
 #include <dftracer/utils/pipeline/tasks/op/flatmap.h>
 #include <dftracer/utils/pipeline/tasks/op/groupby.h>
 #include <dftracer/utils/pipeline/tasks/op/map.h>
 #include <dftracer/utils/pipeline/tasks/op/reduce.h>
+#include <dftracer/utils/pipeline/tasks/op/skip.h>
 #include <dftracer/utils/pipeline/tasks/op/sort.h>
+#include <dftracer/utils/pipeline/tasks/op/take.h>
 
 #include <limits>
 
@@ -57,26 +60,62 @@ class Tasks {
         return FlatMapTask<I, O, F>(std::move(func));
     }
 
-    // Sort operations
+    // FlatMap operations - return unique_ptr for easy pipeline usage
+    template <typename I, typename O, typename F>
+    static std::unique_ptr<FlatMapTask<I, O, F>> flatmap(F func) {
+        return std::make_unique<FlatMapTask<I, O, F>>(std::move(func));
+    }
+
+    // Sort operations - return unique_ptr for easy pipeline usage
     template <typename T, typename F>
-    static SortTask<T, F> sort(F comparator) {
-        return SortTask<T, F>(std::move(comparator));
+    static std::unique_ptr<SortTask<T, F>> sort(F comparator) {
+        return std::make_unique<SortTask<T, F>>(std::move(comparator));
     }
 
     template <typename T>
-    static DefaultSortTask<T> sort() {
-        return DefaultSortTask<T>(std::less<T>{});
+    static std::unique_ptr<DefaultSortTask<T>> sort() {
+        return std::make_unique<DefaultSortTask<T>>(std::less<T>{});
     }
 
-    // GroupBy operations
+    // GroupBy operations - return unique_ptr for easy pipeline usage
     template <typename T, typename K, typename F>
-    static GroupByTask<T, K, F> groupby(F key_extractor) {
-        return GroupByTask<T, K, F>(std::move(key_extractor));
+    static std::unique_ptr<GroupByTask<T, K, F>> groupby(F key_extractor) {
+        return std::make_unique<GroupByTask<T, K, F>>(std::move(key_extractor));
     }
 
     template <typename T, typename K, typename F>
-    static FastGroupByTask<T, K, F> fast_groupby(F key_extractor) {
-        return FastGroupByTask<T, K, F>(std::move(key_extractor));
+    static std::unique_ptr<FastGroupByTask<T, K, F>> fast_groupby(
+        F key_extractor) {
+        return std::make_unique<FastGroupByTask<T, K, F>>(
+            std::move(key_extractor));
+    }
+
+    // Take/Limit operations - return unique_ptr for easy pipeline usage
+    template <typename T>
+    static std::unique_ptr<TakeTask<T>> take(size_t count) {
+        return std::make_unique<TakeTask<T>>(count);
+    }
+
+    template <typename T>
+    static std::unique_ptr<LimitTask<T>> limit(size_t count) {
+        return std::make_unique<LimitTask<T>>(count);
+    }
+
+    // Skip/Drop operations - return unique_ptr for easy pipeline usage
+    template <typename T>
+    static std::unique_ptr<SkipTask<T>> skip(size_t count) {
+        return std::make_unique<SkipTask<T>>(count);
+    }
+
+    template <typename T>
+    static std::unique_ptr<DropTask<T>> drop(size_t count) {
+        return std::make_unique<DropTask<T>>(count);
+    }
+
+    // Distinct operations - return unique_ptr for easy pipeline usage
+    template <typename T>
+    static std::unique_ptr<DistinctTask<T>> distinct() {
+        return std::make_unique<DistinctTask<T>>();
     }
 };
 
