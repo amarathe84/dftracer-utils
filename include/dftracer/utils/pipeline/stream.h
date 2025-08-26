@@ -2,7 +2,6 @@
 #define DFTRACER_UTILS_PIPELINE_STREAM_H
 
 #include <dftracer/utils/pipeline/builder.h>
-#include <dftracer/utils/pipeline/stream/execution.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
 #include <dftracer/utils/pipeline/tasks/op/distinct.h>
 #include <dftracer/utils/pipeline/tasks/op/filter.h>
@@ -29,6 +28,24 @@ namespace dftracer::utils {
 // Forward declarations
 template <typename T>
 class Stream;
+
+namespace stream_ops {
+// Execution operations
+struct ExecuteSequential {};
+struct ExecuteThreaded {};
+struct ExecuteMPI {};
+}  // namespace stream_ops
+
+// Convenient factory functions for operations
+namespace ops {
+inline stream_ops::ExecuteSequential execute_sequential() {
+    return stream_ops::ExecuteSequential{};
+}
+inline stream_ops::ExecuteThreaded execute_threaded() {
+    return stream_ops::ExecuteThreaded{};
+}
+inline stream_ops::ExecuteMPI execute_mpi() { return stream_ops::ExecuteMPI{}; }
+}  // namespace ops
 
 // Wrap PipelineBuilder with pipe operator support
 template <typename InputType>
