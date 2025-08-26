@@ -1,30 +1,33 @@
 #ifndef DFTRACER_UTILS_PIPELINE_MPI_PIPELINE_H
 #define DFTRACER_UTILS_PIPELINE_MPI_PIPELINE_H
 
-#include <dftracer/utils/pipeline/pipeline.h>
-#include <dftracer/utils/pipeline/error.h>
 #include <dftracer/utils/common/typedefs.h>
+#include <dftracer/utils/pipeline/error.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/utils/mpi.h>
+
 #include <any>
-#include <vector>
-#include <unordered_map>
-#include <unordered_set>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <sstream>
 #include <typeindex>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace dftracer::utils {
 class MPIPipeline : public Pipeline {
-private:
+   private:
     MPI& mpi_;
-    
-    // Task distribution tracking
-    std::unordered_map<TaskIndex, int> task_assignments_;  // Which rank executes which task
-    std::unordered_set<TaskIndex> local_tasks_;           // Tasks assigned to this rank
-    std::unordered_map<TaskIndex, std::vector<uint8_t>> serialized_outputs_;  // Serialized task outputs
 
-public:
+    // Task distribution tracking
+    std::unordered_map<TaskIndex, int>
+        task_assignments_;  // Which rank executes which task
+    std::unordered_set<TaskIndex> local_tasks_;  // Tasks assigned to this rank
+    std::unordered_map<TaskIndex, std::vector<uint8_t>>
+        serialized_outputs_;  // Serialized task outputs
+
+   public:
     MPIPipeline();
     ~MPIPipeline() override = default;
     MPIPipeline(const MPIPipeline&) = delete;
@@ -37,7 +40,7 @@ public:
     inline int size() const { return mpi_.size(); }
     inline bool is_master() const { return mpi_.rank() == 0; }
 
-private:
+   private:
     void distribute_tasks();
     void execute_local_tasks(const std::any& input);
     std::vector<uint8_t> broadcast_input(const std::any& input);

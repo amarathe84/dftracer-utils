@@ -11,7 +11,7 @@ template <typename I, typename O>
 class TypedTask : public Task {
    protected:
     TypedTask(TaskType t) : Task(t, typeid(I), typeid(O)) {}
-    
+
    public:
     virtual ~TypedTask() = default;
 
@@ -22,7 +22,9 @@ class TypedTask : public Task {
     virtual O apply(I in) = 0;
 
    protected:
-    bool validate(I in) { return std::type_index(typeid(in)) == this->get_input_type(); }
+    bool validate(I in) {
+        return std::type_index(typeid(in)) == this->get_input_type();
+    }
 
    public:
     std::any execute(std::any& in) override final {

@@ -6,7 +6,7 @@
 namespace dftracer::utils {
 
 class SequentialPipeline : public Pipeline {
-public:
+   public:
     SequentialPipeline() = default;
     ~SequentialPipeline() override = default;
 
@@ -18,7 +18,7 @@ public:
 
     std::any execute(std::any in) override;
 
-private:
+   private:
     std::any execute_sequential_internal(std::any in);
 };
 

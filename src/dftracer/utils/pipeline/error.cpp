@@ -2,7 +2,8 @@
 
 namespace dftracer::utils {
 
-std::string PipelineError::format_message(Type type, const std::string &message) {
+std::string PipelineError::format_message(Type type,
+                                          const std::string &message) {
     std::string prefix;
     switch (type) {
         case TYPE_MISMATCH_ERROR:

@@ -3,8 +3,9 @@
 
 #include <dftracer/utils/pipeline/error.h>
 #include <dftracer/utils/pipeline/tasks/typed_task.h>
-#include <vector>
+
 #include <functional>
+#include <vector>
 
 namespace dftracer::utils {
 
@@ -22,15 +23,15 @@ class MapTask : public TypedTask<std::vector<I>, std::vector<O>> {
     inline std::vector<O> apply(std::vector<I> in) override {
         if (!this->validate(in))
             throw PipelineError(PipelineError::TYPE_MISMATCH_ERROR,
-                            "Input type validation failed");
-        
+                                "Input type validation failed");
+
         std::vector<O> result;
         result.reserve(in.size());
-        
+
         for (const auto& element : in) {
             result.push_back(func(element));
         }
-        
+
         return result;
     }
 };

@@ -3,9 +3,10 @@
 
 #include <dftracer/utils/pipeline/error.h>
 #include <dftracer/utils/pipeline/tasks/typed_task.h>
-#include <vector>
-#include <functional>
+
 #include <algorithm>
+#include <functional>
+#include <vector>
 
 namespace dftracer::utils {
 
@@ -23,8 +24,8 @@ class SortTask : public TypedTask<std::vector<T>, std::vector<T>> {
     inline std::vector<T> apply(std::vector<T> in) override {
         if (!this->validate(in))
             throw PipelineError(PipelineError::TYPE_MISMATCH_ERROR,
-                            "Input type validation failed");
-        
+                                "Input type validation failed");
+
         // Sort in-place for efficiency
         std::sort(in.begin(), in.end(), comparator);
         return in;
@@ -32,7 +33,7 @@ class SortTask : public TypedTask<std::vector<T>, std::vector<T>> {
 };
 
 // Convenience alias for default (ascending) sort
-template<typename T>
+template <typename T>
 using DefaultSortTask = SortTask<T, std::less<T>>;
 
 }  // namespace dftracer::utils

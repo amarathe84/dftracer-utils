@@ -6,7 +6,14 @@
 
 namespace dftracer::utils {
 
-enum class TaskType : std::uint8_t { MAP, REDUCE, FILTER, FLATMAP, SORT, GROUPBY };
+enum class TaskType : std::uint8_t {
+    MAP,
+    REDUCE,
+    FILTER,
+    FLATMAP,
+    SORT,
+    GROUPBY
+};
 
 std::string task_type_to_string(TaskType type);
 TaskType string_to_task_type(const std::string &str);

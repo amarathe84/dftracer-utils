@@ -2,13 +2,14 @@
 #define DFTRACER_UTILS_PIPELINE_THREAD_PIPELINE_H
 
 #include <dftracer/utils/pipeline/pipeline.h>
+
 #include <future>
 #include <vector>
 
 namespace dftracer::utils {
 
 class ThreadPipeline : public Pipeline {
-public:
+   public:
     ThreadPipeline() = default;
     ~ThreadPipeline() override = default;
 
@@ -20,7 +21,7 @@ public:
 
     std::any execute(std::any in) override;
 
-private:
+   private:
     std::any execute_parallel_internal(std::any in);
 };
 
