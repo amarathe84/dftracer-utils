@@ -18,7 +18,7 @@ using namespace dftracer::utils;
 using namespace dft_utils_test;
 
 TEST_CASE("C++ Indexer - Basic functionality") {
-    TestEnvironment env;
+    TestEnvironment env(1000);
     REQUIRE(env.is_valid());
 
     std::string gz_file = env.create_test_gzip_file();
@@ -47,6 +47,9 @@ TEST_CASE("C++ Indexer - Basic functionality") {
         // Test getter methods
         CHECK(indexer.get_gz_path() == gz_file);
         CHECK(indexer.get_idx_path() == idx_file);
+
+        // Build index first before accessing metadata
+        indexer.build();
 
         // size will be adjusted
         CHECK(indexer.get_checkpoint_size() <= ckpt_size);

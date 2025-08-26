@@ -1,5 +1,7 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 
+#include <dftracer/utils/indexer/sqlite/statement.h>
+
 #include <cstring>
 
 std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,

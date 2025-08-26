@@ -46,6 +46,7 @@ bool compress_file_to_gzip(const std::string& input_file,
 }
 
 TestEnvironment::TestEnvironment(std::size_t lines) : num_lines(lines) {
+    // @note: enable this for debugging
     // DFTRACER_UTILS_LOGGER_INIT();
     std::random_device rd;
     std::mt19937 gen(rd());

@@ -1,5 +1,7 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 
+#include <dftracer/utils/indexer/sqlite/statement.h>
+
 int query_file_id(const SqliteDatabase &db,
                   const std::string &gz_path_logical_path) {
     SqliteStmt stmt(db, "SELECT id FROM files WHERE logical_name = ? LIMIT 1");

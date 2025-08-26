@@ -1,6 +1,8 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/queries/queries.h>
 
+#include <dftracer/utils/indexer/sqlite/statement.h>
+
 std::uint64_t query_max_bytes(const SqliteDatabase &db,
                               const std::string &gz_path_logical_path) {
     SqliteStmt stmt(

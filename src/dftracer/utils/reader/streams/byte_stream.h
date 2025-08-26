@@ -7,10 +7,6 @@
 #include <cstdint>
 #include <vector>
 
-#ifdef __linux__
-#include <fcntl.h>
-#endif
-
 class ByteStream : public Stream {
    public:
     ByteStream() : Stream() {}
@@ -44,7 +40,7 @@ class ByteStream : public Stream {
         size_t read_size = std::min(buffer_size, max_read);
 
         size_t bytes_read;
-        bool result = inflater_.read(reinterpret_cast<unsigned char *>(buffer),
+        bool result = inflater_.read_continuous(file_handle_, reinterpret_cast<unsigned char *>(buffer),
                                      read_size, bytes_read);
 
         if (!result || bytes_read == 0) {

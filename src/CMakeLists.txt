@@ -47,6 +47,7 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_num_lines.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_schema_validity.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_stored_file_info.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/queries/query_checkpoint_size.cpp
 
   # Reader
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader.cpp

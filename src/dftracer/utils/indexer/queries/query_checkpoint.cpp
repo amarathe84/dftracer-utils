@@ -1,5 +1,7 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 
+#include <dftracer/utils/indexer/sqlite/statement.h>
+
 #include <cstring>
 
 bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,

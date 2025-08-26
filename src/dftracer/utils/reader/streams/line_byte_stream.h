@@ -7,10 +7,6 @@
 #include <cstdint>
 #include <vector>
 
-#ifdef __linux__
-#include <fcntl.h>
-#endif
-
 class LineByteStream : public Stream {
    private:
     static constexpr std::size_t SEARCH_BUFFER_SIZE = 2048;
@@ -53,7 +49,7 @@ class LineByteStream : public Stream {
         // Use stack allocation for small search buffer
         alignas(64) unsigned char search_buffer[SEARCH_BUFFER_SIZE];
         size_t search_bytes;
-        if (inflater_.read(search_buffer, sizeof(search_buffer) - 1,
+        if (inflater_.read_continuous(file_handle_, search_buffer, sizeof(search_buffer) - 1,
                            search_bytes)) {
             size_t relative_target = target_start - current_pos;
             if (relative_target < search_bytes) {
@@ -117,7 +113,7 @@ class LineByteStream : public Stream {
 
         size_t bytes_read = 0;
         if (bytes_to_read > 0) {
-            bool status = inflater_.read(
+            bool status = inflater_.read_continuous(file_handle_,
                 reinterpret_cast<unsigned char *>(temp_buffer_.data() +
                                                   partial_line_buffer_.size()),
                 bytes_to_read, bytes_read);
@@ -164,6 +160,15 @@ class LineByteStream : public Stream {
         return adjusted_size;
     }
 
+    void reset() override {
+        Stream::reset();
+        partial_line_buffer_.clear();
+        partial_line_buffer_.shrink_to_fit();
+        temp_buffer_.clear();
+        temp_buffer_.shrink_to_fit();
+        actual_start_bytes_ = 0;
+    }
+
    private:
     void ensure_temp_buffer_size(std::size_t required_size) {
         if (temp_buffer_.size() < required_size) {
@@ -184,7 +189,7 @@ class LineByteStream : public Stream {
     }
 
     std::size_t adjust_to_boundary(char *buffer, std::size_t buffer_size) {
-        for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i > 0; i--) {
+        for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i >= 0; i--) {
             if (buffer[i] == '\n') {
                 return static_cast<std::size_t>(i) + 1;
             }
@@ -226,10 +231,6 @@ class LineByteStream : public Stream {
             adjusted_size = adjust_to_boundary(buffer, total_data_size);
         }
 
-        DFTRACER_UTILS_LOG_DEBUG(
-            "After boundary adjustment: total_data_size=%zu, "
-            "original_range_size=%zu, final_adjusted_size=%zu",
-            total_data_size, original_range_size, adjusted_size);
 
         return adjusted_size;
     }

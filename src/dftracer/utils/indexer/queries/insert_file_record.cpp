@@ -1,5 +1,7 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 
+#include <dftracer/utils/indexer/sqlite/statement.h>
+
 void insert_file_record(const SqliteDatabase &db,
                         const std::string &gz_path_logical_path,
                         std::size_t bytes, std::time_t file_mtime,

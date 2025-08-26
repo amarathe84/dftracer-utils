@@ -7,6 +7,10 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/error.h>
 
+#ifdef __linux__
+#include <fcntl.h>
+#endif
+
 using namespace dftracer::utils;
 
 class Stream {
@@ -33,8 +37,8 @@ class Stream {
           is_active_(false),
           is_finished_(false),
           decompression_initialized_(false),
-          start_bytes_(0),
-          use_checkpoint_(false) {}
+          use_checkpoint_(false),
+          start_bytes_(0) {}
 
     virtual ~Stream() { reset(); }
 
@@ -96,13 +100,12 @@ class Stream {
         is_finished_ = false;
 
         file_handle_ = open_file(gz_path);
-        inflater_.initialize(file_handle_);
 
         use_checkpoint_ = try_initialize_with_checkpoint(start_bytes, indexer);
 
         if (!use_checkpoint_) {
             checkpoint_ = IndexCheckpoint();
-            if (!inflater_.initialize(file_handle_, 0, 0)) {
+            if (!inflater_.initialize(file_handle_, 0, constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
                 throw ReaderError(ReaderError::COMPRESSION_ERROR,
                                   "Failed to initialize inflater");
             }
@@ -114,7 +117,7 @@ class Stream {
     bool try_initialize_with_checkpoint(std::size_t start_bytes,
                                         Indexer &indexer) {
         bool should_use_first_checkpoint =
-            start_bytes < constants::reader::FIRST_CHECKPOINT_THRESHOLD;
+            start_bytes < indexer.get_checkpoint_size();
 
         if (should_use_first_checkpoint) {
             if (indexer.find_checkpoint(0, checkpoint_)) {
@@ -144,7 +147,7 @@ class Stream {
     void skip(std::size_t target_position) {
         std::size_t current_pos = checkpoint_.uc_offset;
         if (target_position > current_pos) {
-            inflater_.skip(target_position - current_pos);
+            inflater_.skip(file_handle_, target_position - current_pos);
         }
     }
 
@@ -160,7 +163,7 @@ class Stream {
                                   "Failed to reinitialize from checkpoint");
             }
         } else {
-            if (!inflater_.initialize(file_handle_, 0, 0)) {
+            if (!inflater_.initialize(file_handle_, 0, constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
                 throw ReaderError(ReaderError::COMPRESSION_ERROR,
                                   "Failed to initialize inflater");
             }
@@ -191,7 +194,9 @@ class Stream {
             }
         }
 
-        inflater_.initialize(file_handle_, checkpoint_.c_offset, -15);
+        if (!inflater_.initialize(file_handle_, checkpoint_.c_offset, -15)) {
+            return false;
+        }
 
         if (checkpoint_.bits != 0) {
             int prime_value = ch >> (8 - checkpoint_.bits);
@@ -207,19 +212,20 @@ class Stream {
         }
 
         unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
+        std::size_t window_size = constants::indexer::ZLIB_WINDOW_SIZE;
 
-        if (Checkpointer::decompress(checkpoint_.dict_compressed.data(),
-                                     checkpoint_.dict_compressed.size()) != 0) {
+        if (!Checkpointer::decompress(checkpoint_.dict_compressed.data(),
+                                      checkpoint_.dict_compressed.size(),
+                                      window, &window_size)) {
             return false;
         }
 
-        if (!inflater_.set_dictionary(window,
-                                      constants::indexer::ZLIB_WINDOW_SIZE)) {
+        if (!inflater_.set_dictionary(window, window_size)) {
             DFTRACER_UTILS_LOG_ERROR("inflateSetDictionary failed");
             return false;
         }
 
-        if (!inflater_.fread()) {
+        if (!inflater_.fread(file_handle_)) {
             DFTRACER_UTILS_LOG_ERROR("Failed to read from file");
             return false;
         }

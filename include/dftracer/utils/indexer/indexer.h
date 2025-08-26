@@ -34,7 +34,7 @@ class Indexer {
     // Metadata
     const std::string &get_idx_path() const;
     const std::string &get_gz_path() const;
-    size_t get_checkpoint_size() const;
+    std::size_t get_checkpoint_size() const;
     std::uint64_t get_max_bytes() const;
     std::uint64_t get_num_lines() const;
     int get_file_id() const;

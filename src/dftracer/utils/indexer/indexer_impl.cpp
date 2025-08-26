@@ -32,7 +32,11 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
 
     DFTRACER_UTILS_LOG_DEBUG("Starting to process chunks");
 
-    Inflater inflater(fp);
+    Inflater inflater;
+    if (!inflater.initialize(fp, 0, constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
+        DFTRACER_UTILS_LOG_DEBUG("Failed to initialize inflater");
+        return false;
+    }
     std::size_t checkpoint_idx = 0;
     std::size_t current_uc_offset = 0;  // Current uncompressed offset
     std::size_t checkpoint_start_uc_offset =
@@ -43,28 +47,29 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         DFTRACER_UTILS_LOG_DEBUG("Start inflating at uncompressed offset %zu",
                                  current_uc_offset);
 
-        if (!inflater.read()) {
+        size_t bytes_read;
+        if (!inflater.read(fp, inflater.buffer, sizeof(inflater.buffer), bytes_read)) {
             DFTRACER_UTILS_LOG_DEBUG("Inflater read failed");
             break;
         }
 
-        DFTRACER_UTILS_LOG_DEBUG("Processed %zu bytes", inflater.bytes_read);
+        DFTRACER_UTILS_LOG_DEBUG("Processed %zu bytes", bytes_read);
 
-        if (inflater.bytes_read == 0) {
+        if (bytes_read == 0) {
             DFTRACER_UTILS_LOG_DEBUG("End of file reached");
             break;
         }
         std::uint64_t local_total_lines = 0;
 
         // Count lines in this buffer
-        for (std::size_t i = 0; i < inflater.bytes_read; i++) {
+        for (std::size_t i = 0; i < bytes_read; i++) {
             if (inflater.buffer[i] == '\n') {
                 local_total_lines++;
                 total_lines++;
             }
         }
 
-        current_uc_offset += inflater.bytes_read;
+        current_uc_offset += bytes_read;
 
         std::size_t current_checkpoint_size =
             current_uc_offset - checkpoint_start_uc_offset;
@@ -81,7 +86,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                 "%zu",
                 checkpoint_idx, current_uc_offset, checkpoint_uc_size,
                 checkpointer.c_offset);
-            if (!checkpointer.create()) {
+            if (!checkpointer.create(fp)) {
                 DFTRACER_UTILS_LOG_DEBUG("Failed to create checkpoint");
                 continue;
             }
@@ -146,7 +151,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
             DFTRACER_UTILS_LOG_DEBUG(
                 "Creating final checkpoint, case: regular");
             Checkpointer checkpointer(inflater, current_uc_offset);
-            if (!checkpointer.create()) {
+            if (!checkpointer.create(fp)) {
                 DFTRACER_UTILS_LOG_DEBUG("Failed to create final checkpoint");
                 return false;
             }
@@ -390,7 +395,7 @@ std::uint64_t IndexerImplementor::get_max_bytes() const {
 }
 
 std::size_t IndexerImplementor::get_checkpoint_size() const {
-    return ckpt_size;
+    return query_checkpoint_size(db, cached_file_id);
 }
 
 std::uint64_t IndexerImplementor::get_num_lines() const {

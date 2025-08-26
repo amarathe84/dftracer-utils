@@ -21,10 +21,10 @@ struct Checkpointer {
         std::memset(window, 0, sizeof(window));
     }
 
-    bool create() {
+    bool create(FILE *file) {
         // Get precise compressed position: file position minus unprocessed
         // input
-        size_t file_pos = static_cast<size_t>(ftello(inflater.file));
+        size_t file_pos = static_cast<size_t>(ftello(file));
         size_t absolute_c_offset = file_pos - inflater.stream.avail_in;
 
         // Store absolute file position (as in original zran)
@@ -105,11 +105,11 @@ struct Checkpointer {
     }
 
     static bool decompress(const unsigned char *compressed,
-                           std::size_t compressed_size) {
+                           std::size_t compressed_size,
+                           unsigned char *window,
+                           std::size_t *window_size) {
         z_stream zs;
-        alignas(16) unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
         std::memset(&zs, 0, sizeof(zs));
-        std::memset(window, 0, sizeof(window));
 
         if (inflateInit(&zs) != Z_OK) {
             DFTRACER_UTILS_LOG_DEBUG("Failed to initialize zlib");
@@ -119,7 +119,7 @@ struct Checkpointer {
         zs.next_in = const_cast<unsigned char *>(compressed);
         zs.avail_in = static_cast<uInt>(compressed_size);
         zs.next_out = window;
-        zs.avail_out = static_cast<uInt>(sizeof(window));
+        zs.avail_out = static_cast<uInt>(*window_size);
 
         int ret = inflate(&zs, Z_FINISH);
         if (ret != Z_STREAM_END) {
@@ -131,6 +131,7 @@ struct Checkpointer {
             return false;
         }
 
+        *window_size = *window_size - zs.avail_out;
         inflateEnd(&zs);
         return true;
     }

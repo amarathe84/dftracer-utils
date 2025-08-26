@@ -1,5 +1,6 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/queries/queries.h>
+#include <dftracer/utils/indexer/sqlite/statement.h>
 
 bool delete_file_record(const SqliteDatabase &db, int file_id) {
     const char *cleanup_queries[] = {

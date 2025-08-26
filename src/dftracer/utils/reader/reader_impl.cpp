@@ -179,10 +179,10 @@ std::size_t ReaderImplementor::read_line_bytes(std::size_t start_bytes,
     validate_parameters(buffer, buffer_size, start_bytes, end_bytes,
                         indexer->get_max_bytes());
 
-    if (stream_factory->needs_new_line_stream(line_byte_stream.get(), gz_path,
-                                              start_bytes, end_bytes)) {
-        line_byte_stream =
-            stream_factory->create_line_stream(gz_path, start_bytes, end_bytes);
+    if (stream_factory->needs_new_line_stream(
+            line_byte_stream.get(), gz_path, start_bytes, end_bytes)) {
+        line_byte_stream = stream_factory->create_line_stream(
+            gz_path, start_bytes, end_bytes);
     }
 
     if (line_byte_stream->is_finished()) {

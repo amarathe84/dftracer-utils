@@ -4,7 +4,6 @@
 #include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/sqlite/database.h>
-#include <dftracer/utils/indexer/sqlite/statement.h>
 
 #include <cstdint>
 #include <ctime>
@@ -49,5 +48,6 @@ bool query_checkpoint(const SqliteDatabase &db, size_t target_offset,
                       int file_id, IndexCheckpoint &checkpoint);
 std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
                                                int file_id);
+std::size_t query_checkpoint_size(const SqliteDatabase &db, int file_id);
 
 #endif  // DFTRACER_UTILS_INDEXER_SQLITE_QUERIES_H

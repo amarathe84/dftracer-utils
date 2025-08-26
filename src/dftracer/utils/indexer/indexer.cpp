@@ -44,7 +44,7 @@ const std::string &Indexer::get_gz_path() const { return p_impl_->gz_path; }
 
 const std::string &Indexer::get_idx_path() const { return p_impl_->idx_path; }
 
-size_t Indexer::get_checkpoint_size() const {
+std::size_t Indexer::get_checkpoint_size() const {
     return p_impl_->get_checkpoint_size();
 }
 

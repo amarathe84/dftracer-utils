@@ -1,5 +1,7 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 
+#include <dftracer/utils/indexer/sqlite/statement.h>
+
 bool query_stored_file_info(const SqliteDatabase &db,
                             const std::string &gz_path,
                             std::string &stored_sha256, time_t &stored_mtime) {
