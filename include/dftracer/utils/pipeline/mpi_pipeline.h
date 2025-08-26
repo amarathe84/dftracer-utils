@@ -54,7 +54,6 @@ class MPIPipeline : public Pipeline {
    private:
     void distribute_tasks();
     void execute_local_tasks(const std::any& input);
-    std::vector<uint8_t> broadcast_input(const std::any& input);
     void gather_results();
     std::vector<uint8_t> serialize_any(const std::any& data);
     std::any deserialize_any(const std::vector<uint8_t>& data);

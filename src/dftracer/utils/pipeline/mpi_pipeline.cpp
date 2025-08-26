@@ -34,12 +34,9 @@ std::any MPIPipeline::execute(std::any in) {
     distribute_tasks();
     setup_dependency_tracking();
 
-    // Broadcast input data to all processes
-    std::vector<uint8_t> serialized_input = broadcast_input(in);
-    std::any distributed_input = deserialize_any(serialized_input);
-
-    // Each rank executes its assigned tasks
-    execute_local_tasks(distributed_input);
+    // Each rank executes its assigned tasks with the same input
+    // No broadcast needed - all ranks have the same input data
+    execute_local_tasks(in);
 
     gather_results();
 
@@ -110,18 +107,6 @@ void MPIPipeline::execute_local_tasks(const std::any& input) {
         // Serialize and store result for communication
         serialized_outputs_[task_id] = serialize_any(result);
     }
-}
-
-std::vector<uint8_t> MPIPipeline::broadcast_input(const std::any& input) {
-    std::vector<uint8_t> serialized_data;
-
-    if (is_master()) {
-        // Master serializes the input
-        serialized_data = serialize_any(input);
-    }
-
-    // Use MPI wrapper to broadcast data
-    return mpi_.broadcast_vector(serialized_data, 0);
 }
 
 void MPIPipeline::gather_results() {
