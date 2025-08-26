@@ -17,8 +17,8 @@ extern const char *SQL_SCHEMA;
 }  // namespace indexer
 
 namespace reader {
-static constexpr std::size_t DEFAULT_BUFFER_SIZE = 65536;            // 64KB
-static constexpr std::size_t SKIP_BUFFER_SIZE = 131072;              // 128KB
+static constexpr std::size_t DEFAULT_BUFFER_SIZE = 65536;  // 64KB
+static constexpr std::size_t SKIP_BUFFER_SIZE = 131072;    // 128KB
 static constexpr std::size_t FILE_IO_BUFFER_SIZE =
     262144;  // 256KB for file I/O
 }  // namespace reader

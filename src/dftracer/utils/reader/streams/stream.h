@@ -105,7 +105,9 @@ class Stream {
 
         if (!use_checkpoint_) {
             checkpoint_ = IndexCheckpoint();
-            if (!inflater_.initialize(file_handle_, 0, constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
+            if (!inflater_.initialize(
+                    file_handle_, 0,
+                    constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
                 throw ReaderError(ReaderError::COMPRESSION_ERROR,
                                   "Failed to initialize inflater");
             }
@@ -163,7 +165,9 @@ class Stream {
                                   "Failed to reinitialize from checkpoint");
             }
         } else {
-            if (!inflater_.initialize(file_handle_, 0, constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
+            if (!inflater_.initialize(
+                    file_handle_, 0,
+                    constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
                 throw ReaderError(ReaderError::COMPRESSION_ERROR,
                                   "Failed to initialize inflater");
             }

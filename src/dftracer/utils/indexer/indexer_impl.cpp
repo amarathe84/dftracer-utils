@@ -33,7 +33,8 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
     DFTRACER_UTILS_LOG_DEBUG("Starting to process chunks");
 
     Inflater inflater;
-    if (!inflater.initialize(fp, 0, constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
+    if (!inflater.initialize(fp, 0,
+                             constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
         DFTRACER_UTILS_LOG_DEBUG("Failed to initialize inflater");
         return false;
     }
@@ -48,7 +49,8 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                                  current_uc_offset);
 
         size_t bytes_read;
-        if (!inflater.read(fp, inflater.buffer, sizeof(inflater.buffer), bytes_read)) {
+        if (!inflater.read(fp, inflater.buffer, sizeof(inflater.buffer),
+                           bytes_read)) {
             DFTRACER_UTILS_LOG_DEBUG("Inflater read failed");
             break;
         }

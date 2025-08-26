@@ -1,5 +1,4 @@
 #include <dftracer/utils/indexer/queries/queries.h>
-
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
 void insert_file_record(const SqliteDatabase &db,

@@ -1,5 +1,4 @@
 #include <dftracer/utils/indexer/queries/queries.h>
-
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
 std::uint64_t query_num_lines(const SqliteDatabase &db,

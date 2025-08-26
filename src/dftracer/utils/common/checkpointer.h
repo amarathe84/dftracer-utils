@@ -105,8 +105,7 @@ struct Checkpointer {
     }
 
     static bool decompress(const unsigned char *compressed,
-                           std::size_t compressed_size,
-                           unsigned char *window,
+                           std::size_t compressed_size, unsigned char *window,
                            std::size_t *window_size) {
         z_stream zs;
         std::memset(&zs, 0, sizeof(zs));

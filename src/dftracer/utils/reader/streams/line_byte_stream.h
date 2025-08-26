@@ -49,8 +49,9 @@ class LineByteStream : public Stream {
         // Use stack allocation for small search buffer
         alignas(64) unsigned char search_buffer[SEARCH_BUFFER_SIZE];
         size_t search_bytes;
-        if (inflater_.read_continuous(file_handle_, search_buffer, sizeof(search_buffer) - 1,
-                           search_bytes)) {
+        if (inflater_.read_continuous(file_handle_, search_buffer,
+                                      sizeof(search_buffer) - 1,
+                                      search_bytes)) {
             size_t relative_target = target_start - current_pos;
             if (relative_target < search_bytes) {
                 for (int64_t i = static_cast<int64_t>(relative_target); i >= 0;
@@ -113,7 +114,8 @@ class LineByteStream : public Stream {
 
         size_t bytes_read = 0;
         if (bytes_to_read > 0) {
-            bool status = inflater_.read_continuous(file_handle_,
+            bool status = inflater_.read_continuous(
+                file_handle_,
                 reinterpret_cast<unsigned char *>(temp_buffer_.data() +
                                                   partial_line_buffer_.size()),
                 bytes_to_read, bytes_read);
@@ -230,7 +232,6 @@ class LineByteStream : public Stream {
             // Large range or full file read - no artificial limiting
             adjusted_size = adjust_to_boundary(buffer, total_data_size);
         }
-
 
         return adjusted_size;
     }

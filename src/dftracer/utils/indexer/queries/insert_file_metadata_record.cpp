@@ -1,6 +1,5 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/queries/queries.h>
-
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
 void insert_file_metadata_record(const SqliteDatabase &db, int file_id,

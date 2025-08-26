@@ -19,9 +19,7 @@ class Inflater {
     alignas(64) unsigned char buffer[BUFFER_SIZE];
 
    public:
-    Inflater()
-        : bits(constants::indexer::ZLIB_GZIP_WINDOW_BITS),
-          c_off(0) {
+    Inflater() : bits(constants::indexer::ZLIB_GZIP_WINDOW_BITS), c_off(0) {
         std::memset(&stream, 0, sizeof(stream));
         std::memset(buffer, 0, sizeof(buffer));
         std::memset(in_buffer, 0, sizeof(in_buffer));
@@ -58,21 +56,21 @@ class Inflater {
         bits = bits_;
         c_off = c_off_;
         std::memset(&stream, 0, sizeof(stream));
-        
+
         if (inflateInit2(&stream, bits) != Z_OK) {
             throw std::runtime_error("Failed to initialize inflater");
         }
-        
+
         if (fseeko(file, static_cast<off_t>(c_off), SEEK_SET) != 0) {
             throw std::runtime_error("Failed to seek to initial offset");
         }
         std::memset(buffer, 0, sizeof(buffer));
         std::memset(in_buffer, 0, sizeof(in_buffer));
-        
+
         // Reset stream input state
         stream.avail_in = 0;
         stream.next_in = nullptr;
-        
+
         return true;
     }
 
@@ -81,7 +79,8 @@ class Inflater {
         std::memset(&stream, 0, sizeof(stream));
     }
 
-    bool read(FILE *file, unsigned char *buf, std::size_t len, std::size_t &bytes_out) {
+    bool read(FILE *file, unsigned char *buf, std::size_t len,
+              std::size_t &bytes_out) {
         stream.next_out = buf;
         stream.avail_out = static_cast<uInt>(len);
         bytes_out = 0;
@@ -120,7 +119,8 @@ class Inflater {
     }
 
     // Variant for reader streams - uses Z_NO_FLUSH without early breaking
-    bool read_continuous(FILE *file, unsigned char *buf, std::size_t len, std::size_t &bytes_out) {
+    bool read_continuous(FILE *file, unsigned char *buf, std::size_t len,
+                         std::size_t &bytes_out) {
         stream.next_out = buf;
         stream.avail_out = static_cast<uInt>(len);
         bytes_out = 0;
