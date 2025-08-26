@@ -1,11 +1,11 @@
+#include <dftracer/utils/common/checkpointer.h>
 #include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/common/inflater.h>
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/checkpoint_size.h>
-#include <dftracer/utils/indexer/checkpointer.h>
 #include <dftracer/utils/indexer/error.h>
 #include <dftracer/utils/indexer/helpers.h>
 #include <dftracer/utils/indexer/indexer_impl.h>
-#include <dftracer/utils/indexer/inflater.h>
 #include <dftracer/utils/indexer/queries/queries.h>
 
 static void init_schema(const SqliteDatabase &db) {
@@ -43,8 +43,8 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         DFTRACER_UTILS_LOG_DEBUG("Start inflating at uncompressed offset %zu",
                                  current_uc_offset);
 
-        if (!inflater.process()) {
-            DFTRACER_UTILS_LOG_DEBUG("Inflater process failed");
+        if (!inflater.read()) {
+            DFTRACER_UTILS_LOG_DEBUG("Inflater read failed");
             break;
         }
 
@@ -226,7 +226,6 @@ failure:
     return false;
 }
 
-namespace dftracer::utils {
 IndexerImplementor::IndexerImplementor(const std::string &gz_path_,
                                        const std::string &idx_path_,
                                        std::size_t ckpt_size_, bool force_)
@@ -419,4 +418,3 @@ bool IndexerImplementor::find_checkpoint(std::size_t target_offset,
 std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints() const {
     return query_checkpoints(db, cached_file_id);
 }
-}  // namespace dftracer::utils

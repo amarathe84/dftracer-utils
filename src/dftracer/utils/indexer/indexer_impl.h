@@ -12,8 +12,6 @@
 #include <cstdint>
 #include <string>
 
-namespace dftracer::utils {
-
 struct IndexerImplementor {
     std::string gz_path;
     std::string gz_path_logical_path;
@@ -45,6 +43,5 @@ struct IndexerImplementor {
                          IndexCheckpoint &checkpoint) const;
     std::vector<IndexCheckpoint> get_checkpoints() const;
 };
-}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_INDEXER_INDEXER_IMPL_H

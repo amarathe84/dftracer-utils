@@ -1,10 +1,10 @@
 #include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/common/inflater.h>
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/error.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/indexer/indexer_impl.h>
-#include <dftracer/utils/indexer/inflater.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <picosha2.h>
 #include <sqlite3.h>

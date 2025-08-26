@@ -50,6 +50,7 @@ set(DFTRACER_UTILS_SOURCES
 
   # Reader
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader_impl.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/reader_c.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/error.cpp
 
