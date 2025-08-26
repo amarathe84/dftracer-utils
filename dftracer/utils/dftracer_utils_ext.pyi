@@ -10,7 +10,7 @@ JsonDict = Dict[str, JsonValue]
 
 # ========== INDEXER FUNCTIONALITY ==========
 
-class CheckpointInfo:
+class IndexCheckpoint:
     """Information about a checkpoint in the index."""
     checkpoint_idx: int
     uc_offset: int
@@ -56,16 +56,16 @@ class DFTracerIndexer:
     def find_file_id(self, gz_path: str) -> int:
         """Find file ID for given path."""
         ...
-    
-    def get_checkpoints(self) -> List[CheckpointInfo]:
+
+    def get_checkpoints(self) -> List[IndexCheckpoint]:
         """Get all checkpoints."""
         ...
-    
-    def find_checkpoints_by_line_range(self, start_line: int, end_line: int) -> List[CheckpointInfo]:
+
+    def find_checkpoints_by_line_range(self, start_line: int, end_line: int) -> List[IndexCheckpoint]:
         """Find checkpoints in line range."""
         ...
-    
-    def find_checkpoint(self, target_offset: int) -> Optional[CheckpointInfo]:
+
+    def find_checkpoint(self, target_offset: int) -> Optional[IndexCheckpoint]:
         """Find checkpoint for target offset."""
         ...
     

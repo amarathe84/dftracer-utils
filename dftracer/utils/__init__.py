@@ -21,7 +21,7 @@ from .dftracer_utils_ext import (
     dft_reader_range, # noqa: F401
     # Indexer classes
     DFTracerIndexer,  # noqa: F401
-    CheckpointInfo,  # noqa: F401
+    IndexCheckpoint,  # noqa: F401
     # Utility functions
     _register_logging,  # noqa: F401
 )
@@ -93,7 +93,7 @@ __all__ = [
     "DFTracerJsonLinesRangeIterator",
     "DFTracerJsonLinesBytesRangeIterator",
     "DFTracerIndexer",
-    "CheckpointInfo",
+    "IndexCheckpoint",
     "dft_reader",
     "dft_reader_range",
 ]

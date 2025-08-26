@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -20,18 +21,19 @@
 namespace nb = nanobind;
 
 using namespace nb::literals;
+using namespace dftracer::utils;
 
 namespace constants {
 
-constexpr uint64_t DEFAULT_STEP_SIZE_BYTES = 4 * 1024 * 1024;  // 4MB
-constexpr uint64_t DEFAULT_STEP_SIZE_LINES = 1;
+constexpr std::uint64_t DEFAULT_STEP_SIZE_BYTES = 4 * 1024 * 1024;  // 4MB
+constexpr std::uint64_t DEFAULT_STEP_SIZE_LINES = 1;
 
 }  // namespace constants
 
-std::string trim_trailing(const char *data, size_t size) {
+std::string trim_trailing(const char *data, std::size_t size) {
     if (size == 0) return "";
 
-    size_t end = size;
+    std::size_t end = size;
     while (end > 0 && (std::isspace(data[end - 1]) || data[end - 1] == '\0')) {
         end--;
     }
@@ -41,9 +43,9 @@ std::string trim_trailing(const char *data, size_t size) {
 
 std::vector<std::string> split_lines(const std::string &data) {
     std::vector<std::string> lines;
-    size_t start = 0;
+    std::size_t start = 0;
 
-    for (size_t i = 0; i < data.size(); ++i) {
+    for (std::size_t i = 0; i < data.size(); ++i) {
         if (data[i] == '\n') {
             lines.push_back(trim_trailing(data.data() + start, i - start));
             start = i + 1;
@@ -73,12 +75,12 @@ template <DFTracerReaderMode Mode>
 class DFTracerReaderIterator {
    private:
     DFTracerReader<Mode> *reader_;
-    uint64_t current_pos_;
-    uint64_t max_pos_;
-    uint64_t step_;
+    std::uint64_t current_pos_;
+    std::uint64_t max_pos_;
+    std::uint64_t step_;
 
    public:
-    DFTracerReaderIterator(DFTracerReader<Mode> *reader, uint64_t step)
+    DFTracerReaderIterator(DFTracerReader<Mode> *reader, std::uint64_t step)
         : reader_(reader), current_pos_(0), step_(step) {
         switch (Mode) {
             case DFTracerReaderMode::Lines:
@@ -106,7 +108,7 @@ class DFTracerReaderIterator {
             throw nb::stop_iteration();
         }
 
-        uint64_t end_pos = std::min(current_pos_ + step_, max_pos_);
+        std::uint64_t end_pos = std::min(current_pos_ + step_, max_pos_);
         typename DFTracerReader<Mode>::ReturnType result;
         result = reader_->read(current_pos_, end_pos);
         current_pos_ = end_pos;
@@ -117,17 +119,17 @@ class DFTracerReaderIterator {
 template <DFTracerReaderMode Mode>
 class DFTracerReader {
    private:
-    std::unique_ptr<dftracer::utils::reader::Reader> reader_;
+    std::unique_ptr<Reader> reader_;
     std::string gzip_path_;
     std::string index_path_;
     bool is_open_;
 
-    uint64_t current_pos_;
-    uint64_t max_bytes_;
-    uint64_t num_lines_;
-    uint64_t default_step_;
-    uint64_t default_step_lines_;
-    uint64_t index_checkpoint_size_;
+    std::uint64_t current_pos_;
+    std::uint64_t max_bytes_;
+    std::uint64_t num_lines_;
+    std::uint64_t default_step_;
+    std::uint64_t default_step_lines_;
+    std::uint64_t index_checkpoint_size_;
 
    public:
     using ReturnType = std::conditional_t<
@@ -141,8 +143,7 @@ class DFTracerReader {
     DFTracerReader(
         const std::string &gzip_path,
         const std::optional<std::string> &index_path = std::nullopt,
-        uint64_t index_checkpoint_size =
-            dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE)
+        std::uint64_t index_checkpoint_size = Indexer::DEFAULT_CHECKPOINT_SIZE)
         : gzip_path_(gzip_path),
           reader_(nullptr),
           is_open_(false),
@@ -190,11 +191,10 @@ class DFTracerReader {
         index_checkpoint_size_ = indexer->checkpoint_size();
 
         try {
-            reader_ = std::make_unique<dftracer::utils::reader::Reader>(
-                indexer->get_indexer_ptr());
+            reader_ = std::make_unique<Reader>(indexer->get_indexer_ptr());
             is_open_ = true;
-            max_bytes_ = static_cast<uint64_t>(reader_->get_max_bytes());
-            num_lines_ = static_cast<uint64_t>(reader_->get_num_lines());
+            max_bytes_ = static_cast<std::uint64_t>(reader_->get_max_bytes());
+            num_lines_ = static_cast<std::uint64_t>(reader_->get_num_lines());
         } catch (const std::runtime_error &e) {
             throw std::runtime_error(
                 "Failed to create DFT reader with indexer for gzip: " +
@@ -214,11 +214,11 @@ class DFTracerReader {
         }
 
         try {
-            reader_ = std::make_unique<dftracer::utils::reader::Reader>(
-                gzip_path_, index_path_, index_checkpoint_size_);
+            reader_ = std::make_unique<Reader>(gzip_path_, index_path_,
+                                               index_checkpoint_size_);
             is_open_ = true;
-            max_bytes_ = static_cast<uint64_t>(reader_->get_max_bytes());
-            num_lines_ = static_cast<uint64_t>(reader_->get_num_lines());
+            max_bytes_ = static_cast<std::uint64_t>(reader_->get_max_bytes());
+            num_lines_ = static_cast<std::uint64_t>(reader_->get_num_lines());
         } catch (const std::runtime_error &e) {
             throw std::runtime_error(
                 "Failed to create DFT reader for gzip: " + gzip_path_ +
@@ -244,27 +244,27 @@ class DFTracerReader {
         }
     }
 
-    uint64_t get_max_bytes() {
+    std::uint64_t get_max_bytes() {
         ensure_open();
         try {
-            return static_cast<uint64_t>(reader_->get_max_bytes());
+            return static_cast<std::uint64_t>(reader_->get_max_bytes());
         } catch (const std::runtime_error &e) {
             throw std::runtime_error("Failed to get maximum bytes: " +
                                      std::string(e.what()));
         }
     }
 
-    uint64_t get_num_lines() {
+    std::uint64_t get_num_lines() {
         ensure_open();
         try {
-            return static_cast<uint64_t>(reader_->get_num_lines());
+            return static_cast<std::uint64_t>(reader_->get_num_lines());
         } catch (const std::runtime_error &e) {
             throw std::runtime_error("Failed to get number of lines: " +
                                      std::string(e.what()));
         }
     }
 
-    void set_buffer_size(size_t size) {
+    void set_buffer_size(std::size_t size) {
         ensure_open();
         try {
             reader_->set_buffer_size(size);
@@ -285,14 +285,14 @@ class DFTracerReader {
         return *this;
     }
 
-    DFTracerReaderIterator<Mode> iter(uint64_t step) {
+    DFTracerReaderIterator<Mode> iter(std::uint64_t step) {
         ensure_open();
         return DFTracerReaderIterator<Mode>(this, step);
     }
 
     ReturnType __next__() {
         ensure_open();
-        uint64_t max_pos;
+        std::uint64_t max_pos;
         if constexpr (Mode == DFTracerReaderMode::Lines ||
                       Mode == DFTracerReaderMode::JsonLines) {
             max_pos = num_lines_;
@@ -304,27 +304,27 @@ class DFTracerReader {
             throw nb::stop_iteration();
         }
 
-        uint64_t end_pos = std::min(current_pos_ + default_step_, max_pos);
+        std::uint64_t end_pos = std::min(current_pos_ + default_step_, max_pos);
         ReturnType result = read(current_pos_, end_pos);
         current_pos_ = end_pos;
         return result;
     }
 
-    void set_default_step(uint64_t step_bytes) {
+    void set_default_step(std::uint64_t step_bytes) {
         validate_step(step_bytes);
         default_step_ = step_bytes;
     }
 
-    uint64_t get_default_step() const { return default_step_; }
+    std::uint64_t get_default_step() const { return default_step_; }
 
-    ReturnType read(uint64_t start, uint64_t end) {
+    ReturnType read(std::uint64_t start, std::uint64_t end) {
         ensure_open();
         try {
             ReturnType result;
-            const size_t buffer_size = 64 * 1024;
+            const std::size_t buffer_size = 64 * 1024;
             std::vector<char> buffer(buffer_size);
 
-            size_t bytes_read;
+            std::size_t bytes_read;
             if constexpr (Mode == DFTracerReaderMode::JsonLines) {
                 auto json_objects = reader_->read_json_lines_owned(start, end);
                 result = convert_jsondocs(json_objects);
@@ -362,7 +362,7 @@ class DFTracerReader {
         }
     }
 
-    void validate_step(uint64_t step_bytes) {
+    void validate_step(std::uint64_t step_bytes) {
         if (step_bytes == 0) {
             throw std::invalid_argument("step must be greater than 0");
         }
@@ -387,14 +387,14 @@ template <DFTracerReaderMode Mode>
 class DFTracerRangeIterator {
    private:
     DFTracerReader<Mode> *reader_;
-    uint64_t start_pos_;
-    uint64_t end_pos_;
-    uint64_t current_pos_;
-    uint64_t step_;
+    std::uint64_t start_pos_;
+    std::uint64_t end_pos_;
+    std::uint64_t current_pos_;
+    std::uint64_t step_;
 
    public:
-    DFTracerRangeIterator(DFTracerReader<Mode> *reader, uint64_t start,
-                          uint64_t end, uint64_t step)
+    DFTracerRangeIterator(DFTracerReader<Mode> *reader, std::uint64_t start,
+                          std::uint64_t end, std::uint64_t step)
         : reader_(reader),
           start_pos_(start),
           end_pos_(end),
@@ -413,7 +413,7 @@ class DFTracerRangeIterator {
 
         if constexpr (Mode == DFTracerReaderMode::Lines ||
                       Mode == DFTracerReaderMode::JsonLines) {
-            uint64_t num_lines = reader_->get_num_lines();
+            std::uint64_t num_lines = reader_->get_num_lines();
             if (end_pos_ > num_lines) {
                 end_pos_ = num_lines;
             }
@@ -422,7 +422,7 @@ class DFTracerRangeIterator {
                     "Start position exceeds number of lines");
             }
         } else {
-            uint64_t max_bytes = reader_->get_max_bytes();
+            std::uint64_t max_bytes = reader_->get_max_bytes();
             if (end_pos_ > max_bytes) {
                 end_pos_ = max_bytes;
             }
@@ -442,17 +442,17 @@ class DFTracerRangeIterator {
             throw nb::stop_iteration();
         }
 
-        uint64_t chunk_end = std::min(current_pos_ + step_, end_pos_);
+        std::uint64_t chunk_end = std::min(current_pos_ + step_, end_pos_);
         typename DFTracerReader<Mode>::ReturnType result =
             reader_->read(current_pos_, chunk_end);
         current_pos_ = chunk_end;
         return result;
     }
 
-    uint64_t get_start() const { return start_pos_; }
-    uint64_t get_end() const { return end_pos_; }
-    uint64_t get_step() const { return step_; }
-    uint64_t get_current() const { return current_pos_; }
+    std::uint64_t get_start() const { return start_pos_; }
+    std::uint64_t get_end() const { return end_pos_; }
+    std::uint64_t get_step() const { return step_; }
+    std::uint64_t get_current() const { return current_pos_; }
 };
 
 // Mode aliases for template specializations
@@ -484,8 +484,9 @@ using DFTracerJsonLinesBytesRangeIterator =
     DFTracerRangeIterator<DFTracerReaderMode::JsonLinesBytes>;
 
 template <typename ReaderMode>
-auto dft_reader_range_impl(ReaderMode &reader, uint64_t start, uint64_t end,
-                           const std::string &mode, uint64_t step = 0) {
+auto dft_reader_range_impl(ReaderMode &reader, std::uint64_t start,
+                           std::uint64_t end, const std::string &mode,
+                           std::uint64_t step = 0) {
     if (step == 0) {
         if (mode == "lines") {
             step = constants::DEFAULT_STEP_SIZE_LINES;
@@ -521,23 +522,23 @@ auto dft_reader_range_impl(ReaderMode &reader, uint64_t start, uint64_t end,
 
 // Wrapper functions for different reader types
 DFTracerLineBytesRangeIterator dft_reader_range(
-    DFTracerLineBytesReader &reader, uint64_t start, uint64_t end,
+    DFTracerLineBytesReader &reader, std::uint64_t start, std::uint64_t end,
     const std::string &mode = "line_bytes",
-    uint64_t step = constants::DEFAULT_STEP_SIZE_BYTES) {
+    std::uint64_t step = constants::DEFAULT_STEP_SIZE_BYTES) {
     return dft_reader_range_impl(reader, start, end, mode, step);
 }
 
 DFTracerBytesRangeIterator dft_reader_range(
-    DFTracerBytesReader &reader, uint64_t start, uint64_t end,
+    DFTracerBytesReader &reader, std::uint64_t start, std::uint64_t end,
     const std::string &mode = "bytes",
-    uint64_t step = constants::DEFAULT_STEP_SIZE_BYTES) {
+    std::uint64_t step = constants::DEFAULT_STEP_SIZE_BYTES) {
     return dft_reader_range_impl(reader, start, end, mode, step);
 }
 
 DFTracerLinesRangeIterator dft_reader_range(
-    DFTracerLinesReader &reader, uint64_t start, uint64_t end,
+    DFTracerLinesReader &reader, std::uint64_t start, std::uint64_t end,
     const std::string &mode = "lines",
-    uint64_t step = constants::DEFAULT_STEP_SIZE_LINES) {
+    std::uint64_t step = constants::DEFAULT_STEP_SIZE_LINES) {
     return dft_reader_range_impl(reader, start, end, mode, step);
 }
 
@@ -841,8 +842,8 @@ void register_reader(nb::module_ &m) {
     // Generic dft_reader_range function with mode parameter
     m.def("dft_reader_range",
           static_cast<DFTracerLineBytesRangeIterator (*)(
-              DFTracerLineBytesReader &, uint64_t, uint64_t,
-              const std::string &, uint64_t)>(&dft_reader_range),
+              DFTracerLineBytesReader &, std::uint64_t, std::uint64_t,
+              const std::string &, std::uint64_t)>(&dft_reader_range),
           "reader"_a, "start"_a, "end"_a, "mode"_a = "line_bytes",
           "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
           "Create a range iterator with specified mode ('line_bytes', 'bytes', "
@@ -850,8 +851,8 @@ void register_reader(nb::module_ &m) {
 
     m.def("dft_reader_range",
           static_cast<DFTracerBytesRangeIterator (*)(
-              DFTracerBytesReader &, uint64_t, uint64_t, const std::string &,
-              uint64_t)>(&dft_reader_range),
+              DFTracerBytesReader &, std::uint64_t, std::uint64_t,
+              const std::string &, std::uint64_t)>(&dft_reader_range),
           "reader"_a, "start"_a, "end"_a, "mode"_a = "bytes",
           "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
           "Create a range iterator with specified mode ('line_bytes', 'bytes', "
@@ -859,8 +860,8 @@ void register_reader(nb::module_ &m) {
 
     m.def("dft_reader_range",
           static_cast<DFTracerLinesRangeIterator (*)(
-              DFTracerLinesReader &, uint64_t, uint64_t, const std::string &,
-              uint64_t)>(&dft_reader_range),
+              DFTracerLinesReader &, std::uint64_t, std::uint64_t,
+              const std::string &, std::uint64_t)>(&dft_reader_range),
           "reader"_a, "start"_a, "end"_a, "mode"_a = "lines",
           "step"_a = constants::DEFAULT_STEP_SIZE_LINES,
           "Create a range iterator with specified mode ('line_bytes', 'bytes', "

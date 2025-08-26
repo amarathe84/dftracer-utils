@@ -19,7 +19,7 @@ class TestDFTracerBytesReader:
         assert hasattr(dft_utils, 'DFTracerLineBytesReader')
         assert hasattr(dft_utils, 'DFTracerLinesReader')
         assert hasattr(dft_utils, 'DFTracerIndexer')
-        assert hasattr(dft_utils, 'CheckpointInfo')
+        assert hasattr(dft_utils, 'IndexCheckpoint')
         assert hasattr(dft_utils, 'DFTracerLineBytesRangeIterator')
         assert hasattr(dft_utils, 'DFTracerBytesRangeIterator')
         assert hasattr(dft_utils, 'DFTracerLinesRangeIterator')

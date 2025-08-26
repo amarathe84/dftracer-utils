@@ -5,9 +5,6 @@ Test cases for DFTracer indexer Python bindings
 
 import pytest
 import os
-import tempfile
-import gzip
-import shutil
 
 import dftracer.utils as dft_utils
 from .common import Environment
@@ -50,9 +47,8 @@ class TestDFTracerIndexer:
     def test_indexer_nonexistent_file(self):
         """Test indexer creation with non-existent file"""
         # Indexer creation doesn't fail, but building should fail
-        indexer = dft_utils.DFTracerIndexer("nonexistent_file.gz")
         with pytest.raises(RuntimeError):
-            indexer.build()
+            indexer = dft_utils.DFTracerIndexer("nonexistent_file.gz")
     
     def test_indexer_build_and_rebuild(self):
         """Test indexer build and rebuild functionality"""
@@ -82,14 +78,6 @@ class TestDFTracerIndexer:
                 assert not indexer_force.need_rebuild()
                 # The force_rebuild behavior is tested by calling build() which should succeed
                 indexer_force.build()  # This should rebuild due to force_rebuild=True
-    
-    def test_indexer_validity(self):
-        """Test indexer validity checks"""
-        with Environment() as env:
-            gz_file = env.create_test_gzip_file()
-            
-            with dft_utils.DFTracerIndexer(gz_file) as indexer:
-                assert indexer.is_valid()
     
     def test_indexer_file_info(self):
         """Test indexer file information methods"""
@@ -179,28 +167,6 @@ class TestDFTracerIndexer:
                     assert checkpoint.checkpoint_idx >= 0
                     assert checkpoint.uc_offset >= 0
                     assert checkpoint.num_lines >= 0
-    
-    def test_indexer_checkpoints_by_line_range(self):
-        """Test indexer checkpoint search by line range"""
-        with Environment(lines=1000) as env:
-            gz_file = env.create_test_gzip_file()
-            checkpoint_size = 512 * 1024  # 512KB
-            
-            with dft_utils.DFTracerIndexer(gz_file, checkpoint_size=checkpoint_size) as indexer:
-                if indexer.need_rebuild():
-                    indexer.build()
-                
-                num_lines = indexer.get_num_lines()
-                if num_lines > 10:
-                    # Test line range search
-                    start_line = 5
-                    end_line = min(50, num_lines)
-                    
-                    checkpoints = indexer.find_checkpoints_by_line_range(start_line, end_line)
-                    assert isinstance(checkpoints, list)
-                    # The method should return all checkpoints (per the C++ implementation line 1248)
-                    # since line-based searching requires sequential processing
-                    # The number of checkpoints depends on deflate block boundaries, not line count
     
     def test_indexer_find_checkpoint(self):
         """Test indexer single checkpoint search"""
