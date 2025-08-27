@@ -42,21 +42,29 @@ class Pipeline {
 
     size_t size() const { return nodes_.size(); }
     bool empty() const { return nodes_.empty(); }
-    
+
     // Inline accessor methods for executors
-    inline const std::vector<std::unique_ptr<Task>>& get_nodes() const { return nodes_; }
-    inline const std::vector<std::vector<TaskIndex>>& get_dependencies() const { return dependencies_; }
-    inline const std::vector<std::vector<TaskIndex>>& get_dependents() const { return dependents_; }
-    inline Task* get_task(TaskIndex index) const { 
-        return index < nodes_.size() ? nodes_[index].get() : nullptr; 
+    inline const std::vector<std::unique_ptr<Task>>& get_nodes() const {
+        return nodes_;
     }
-    inline const std::vector<TaskIndex>& get_task_dependencies(TaskIndex index) const { 
-        return dependencies_[index]; 
+    inline const std::vector<std::vector<TaskIndex>>& get_dependencies() const {
+        return dependencies_;
     }
-    inline const std::vector<TaskIndex>& get_task_dependents(TaskIndex index) const { 
-        return dependents_[index]; 
+    inline const std::vector<std::vector<TaskIndex>>& get_dependents() const {
+        return dependents_;
     }
-    
+    inline Task* get_task(TaskIndex index) const {
+        return index < nodes_.size() ? nodes_[index].get() : nullptr;
+    }
+    inline const std::vector<TaskIndex>& get_task_dependencies(
+        TaskIndex index) const {
+        return dependencies_[index];
+    }
+    inline const std::vector<TaskIndex>& get_task_dependents(
+        TaskIndex index) const {
+        return dependents_[index];
+    }
+
     // Validation methods (now public for executors)
     bool validate_types() const;
     bool has_cycles() const;

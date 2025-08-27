@@ -1,12 +1,7 @@
 #include <dftracer/utils/utils/mpi.h>
 
-#if DFTRACER_UTILS_MPI_ENABLE == 1
-
 #include <iostream>
 #include <sstream>
-
-namespace dftracer {
-namespace utils {
 
 MPIContext& MPIContext::instance() {
     static MPIContext instance_;
@@ -256,7 +251,3 @@ void MPIContext::check_error(int error_code, const char* operation) const {
     throw std::runtime_error(oss.str());
 }
 
-}  // namespace utils
-}  // namespace dftracer
-
-#endif  // DFTRACER_UTILS_MPI_ENABLE

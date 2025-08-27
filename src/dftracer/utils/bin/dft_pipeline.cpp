@@ -1,6 +1,6 @@
-#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/executors/sequential_executor.h>
 #include <dftracer/utils/pipeline/executors/thread_executor.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
 
 #include <any>

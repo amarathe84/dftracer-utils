@@ -65,6 +65,8 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/executor_type.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/sequential_executor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/thread_executor.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/mpi_helpers/serializers/any.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/mpi_executor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/tasks/task_type.cpp
 
   # analyzer

@@ -1,22 +1,24 @@
 #ifndef DFTRACER_UTILS_PIPELINE_EXECUTORS_EXECUTOR_H
 #define DFTRACER_UTILS_PIPELINE_EXECUTORS_EXECUTOR_H
 
-#include <any>
-#include <string>
-
 #include <dftracer/utils/pipeline/executors/executor_type.h>
 #include <dftracer/utils/pipeline/pipeline.h>
 
+#include <any>
+#include <string>
+
 namespace dftracer::utils {
 class Executor {
-protected:
+   protected:
     Executor(ExecutorType type) : type_(type) {}
 
-public:
+   public:
     virtual ~Executor() = default;
-    virtual std::any execute(const Pipeline& pipeline, std::any input, bool gather = true) = 0;
+    virtual std::any execute(const Pipeline& pipeline, std::any input,
+                             bool gather = true) = 0;
     inline ExecutorType type() const { return type_; }
-public:
+
+   public:
     const ExecutorType type_;
 };
 

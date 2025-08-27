@@ -3,27 +3,27 @@
 
 #include <dftracer/utils/common/typedefs.h>
 #include <dftracer/utils/pipeline/error.h>
-#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/executors/executor.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/utils/mpi.h>
 
 #include <any>
-#include <string>
 #include <chrono>
 #include <memory>
+#include <optional>
+#include <queue>
+#include <set>
 #include <sstream>
+#include <string>
 #include <typeindex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <queue>
-#include <set>
-#include <optional>
 
 namespace dftracer::utils {
 
 class MPIExecutor : public Executor {
-public:
+   public:
     MPIExecutor();
     ~MPIExecutor() override = default;
     MPIExecutor(const MPIExecutor&) = delete;
@@ -31,15 +31,16 @@ public:
     MPIExecutor(MPIExecutor&&) = default;
     MPIExecutor& operator=(MPIExecutor&&) = default;
 
-    std::any execute(const Pipeline& pipeline, std::any input, bool gather = true) override;
-    
+    std::any execute(const Pipeline& pipeline, std::any input,
+                     bool gather = true) override;
+
     inline int rank() const { return mpi_.rank(); }
     inline int size() const { return mpi_.size(); }
     inline bool is_master() const { return mpi_.rank() == 0; }
 
-private:
+   private:
     MPIContext& mpi_;
-    
+
     // Helper method for gathering results from all ranks
     std::any gather_results(const std::any& local_result);
 };

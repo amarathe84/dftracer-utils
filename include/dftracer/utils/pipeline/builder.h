@@ -1,10 +1,10 @@
 #ifndef DFTRACER_UTILS_PIPELINE_BUILDER_H
 #define DFTRACER_UTILS_PIPELINE_BUILDER_H
 
-#include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/executors/mpi_executor.h>
 #include <dftracer/utils/pipeline/executors/sequential_executor.h>
 #include <dftracer/utils/pipeline/executors/thread_executor.h>
-#include <dftracer/utils/pipeline/executors/mpi_executor.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
 
 #include <any>
@@ -175,7 +175,7 @@ class PipelineBuilder {
    private:
     std::any execute_with_executor(Executor& executor) {
         Pipeline pipeline;
-        
+
         // Add all tasks to pipeline
         std::vector<TaskIndex> task_ids;
         for (auto& task : tasks_) {

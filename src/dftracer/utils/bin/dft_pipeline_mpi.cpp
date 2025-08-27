@@ -1,9 +1,9 @@
-#include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/executors/mpi_executor.h>
 #include <dftracer/utils/pipeline/executors/sequential_executor.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
 #include <dftracer/utils/utils/mpi.h>
-#include <dftracer/utils/common/logging.h>
 
 #include <any>
 #include <chrono>
@@ -410,7 +410,8 @@ static void demonstrate_mpi_vs_sequential_comparison() {
             if (mpi_time > 0) {
                 double speedup = static_cast<double>(sequential_time) /
                                  static_cast<double>(mpi_time);
-                double efficiency = speedup / static_cast<double>(mpi_executor.size()) * 100.0;
+                double efficiency =
+                    speedup / static_cast<double>(mpi_executor.size()) * 100.0;
 
                 std::cout << "Speedup: " << std::fixed << std::setprecision(2)
                           << speedup << "x" << std::endl;

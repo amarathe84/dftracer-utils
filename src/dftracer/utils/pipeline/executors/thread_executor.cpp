@@ -1,21 +1,23 @@
-#include <dftracer/utils/pipeline/executors/thread_executor.h>
-#include <dftracer/utils/pipeline/executors/sequential_executor.h>
 #include <dftracer/utils/pipeline/error.h>
+#include <dftracer/utils/pipeline/executors/sequential_executor.h>
+#include <dftracer/utils/pipeline/executors/thread_executor.h>
 
 #include <any>
-#include <thread>
 #include <future>
-#include <vector>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace dftracer::utils {
 
 ThreadExecutor::ThreadExecutor() : Executor(ExecutorType::THREAD) {}
 
-std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input, bool gather) {
+std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input,
+                                 bool gather) {
     // gather parameter is ignored in thread executor (noop)
     if (pipeline.empty()) {
-        throw PipelineError(PipelineError::VALIDATION_ERROR, "Pipeline is empty");
+        throw PipelineError(PipelineError::VALIDATION_ERROR,
+                            "Pipeline is empty");
     }
 
     if (!pipeline.validate_types()) {
@@ -42,24 +44,29 @@ std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input, bool 
         }
 
         if (deps_ready) {
-            task_futures[task_id] = std::async(std::launch::async, [&pipeline, task_id, input, &task_outputs]() {
-                std::any task_input;
-                
-                if (pipeline.get_task_dependencies(task_id).empty()) {
-                    task_input = input;
-                } else if (pipeline.get_task_dependencies(task_id).size() == 1) {
-                    TaskIndex dependency = pipeline.get_task_dependencies(task_id)[0];
-                    task_input = task_outputs[dependency];
-                } else {
-                    std::vector<std::any> combined_inputs;
-                    for (TaskIndex dependency : pipeline.get_task_dependencies(task_id)) {
-                        combined_inputs.push_back(task_outputs[dependency]);
+            task_futures[task_id] = std::async(
+                std::launch::async,
+                [&pipeline, task_id, input, &task_outputs]() {
+                    std::any task_input;
+
+                    if (pipeline.get_task_dependencies(task_id).empty()) {
+                        task_input = input;
+                    } else if (pipeline.get_task_dependencies(task_id).size() ==
+                               1) {
+                        TaskIndex dependency =
+                            pipeline.get_task_dependencies(task_id)[0];
+                        task_input = task_outputs[dependency];
+                    } else {
+                        std::vector<std::any> combined_inputs;
+                        for (TaskIndex dependency :
+                             pipeline.get_task_dependencies(task_id)) {
+                            combined_inputs.push_back(task_outputs[dependency]);
+                        }
+                        task_input = combined_inputs;
                     }
-                    task_input = combined_inputs;
-                }
-                
-                return pipeline.get_task(task_id)->execute(task_input);
-            });
+
+                    return pipeline.get_task(task_id)->execute(task_input);
+                });
         }
     }
 

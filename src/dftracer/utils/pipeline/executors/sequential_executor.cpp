@@ -1,5 +1,5 @@
-#include <dftracer/utils/pipeline/executors/sequential_executor.h>
 #include <dftracer/utils/pipeline/error.h>
+#include <dftracer/utils/pipeline/executors/sequential_executor.h>
 
 #include <any>
 #include <unordered_map>
@@ -8,10 +8,12 @@ namespace dftracer::utils {
 
 SequentialExecutor::SequentialExecutor() : Executor(ExecutorType::SEQUENTIAL) {}
 
-std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input, bool gather) {
+std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input,
+                                     bool gather) {
     // gather parameter is ignored in sequential executor (noop)
     if (pipeline.empty()) {
-        throw PipelineError(PipelineError::VALIDATION_ERROR, "Pipeline is empty");
+        throw PipelineError(PipelineError::VALIDATION_ERROR,
+                            "Pipeline is empty");
     }
 
     if (!pipeline.validate_types()) {
@@ -29,7 +31,7 @@ std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input, b
 
     for (TaskIndex task_id : execution_order) {
         std::any task_input;
-        
+
         // For tasks with no dependencies, use the original input
         if (pipeline.get_task_dependencies(task_id).empty()) {
             task_input = input;
@@ -40,12 +42,13 @@ std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input, b
         } else {
             // Multiple dependencies - combine into vector for CombineTask
             std::vector<std::any> combined_inputs;
-            for (TaskIndex dependency : pipeline.get_task_dependencies(task_id)) {
+            for (TaskIndex dependency :
+                 pipeline.get_task_dependencies(task_id)) {
                 combined_inputs.push_back(task_outputs[dependency]);
             }
             task_input = combined_inputs;
         }
-        
+
         task_outputs[task_id] = pipeline.get_task(task_id)->execute(task_input);
     }
 

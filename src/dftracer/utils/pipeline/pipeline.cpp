@@ -19,8 +19,8 @@ void Pipeline::add_dependency(TaskIndex from, TaskIndex to) {
     }
 
     // For edge: from -> to
-    dependencies_[to].push_back(from);        // "to" depends on "from"
-    dependents_[from].push_back(to);          // "from" has dependent "to"
+    dependencies_[to].push_back(from);  // "to" depends on "from"
+    dependents_[from].push_back(to);    // "from" has dependent "to"
     dependency_count_[to]++;
 }
 
