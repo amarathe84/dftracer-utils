@@ -5,7 +5,7 @@
 
 namespace dftracer::utils {
 
-typedef std::size_t TaskIndex;
+typedef int TaskIndex;
 
 }  // namespace dftracer::utils
 

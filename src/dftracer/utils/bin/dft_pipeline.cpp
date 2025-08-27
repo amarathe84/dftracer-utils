@@ -1,6 +1,7 @@
-#include <dftracer/utils/pipeline/sequential_pipeline.h>
+#include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/executors/sequential_executor.h>
+#include <dftracer/utils/pipeline/executors/thread_executor.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
-#include <dftracer/utils/pipeline/thread_pipeline.h>
 
 #include <any>
 #include <chrono>
@@ -121,20 +122,21 @@ static void demonstrate_sequential_vs_thread_comparison() {
 
     // Sequential Pipeline - tasks run one after another
     {
-        SequentialPipeline seq_pipeline;
+        Pipeline pipeline;
+        SequentialExecutor executor;
         auto [task1, task2, task3, task4, task5] = create_parallel_tasks();
 
         // Add tasks with NO dependencies - they should still run sequentially
-        seq_pipeline.add_task(std::move(task1));
-        seq_pipeline.add_task(std::move(task2));
-        seq_pipeline.add_task(std::move(task3));
-        seq_pipeline.add_task(std::move(task4));
-        seq_pipeline.add_task(std::move(task5));
+        pipeline.add_task(std::move(task1));
+        pipeline.add_task(std::move(task2));
+        pipeline.add_task(std::move(task3));
+        pipeline.add_task(std::move(task4));
+        pipeline.add_task(std::move(task5));
 
         std::cout << "Running sequential pipeline (this will take a while)..."
                   << std::endl;
         auto start = std::chrono::high_resolution_clock::now();
-        std::any result = seq_pipeline.execute(input);
+        std::any result = executor.execute(pipeline, input);
         auto end = std::chrono::high_resolution_clock::now();
 
         auto duration =
@@ -145,20 +147,21 @@ static void demonstrate_sequential_vs_thread_comparison() {
 
     // Thread Pipeline - tasks can run in parallel
     {
-        ThreadPipeline thread_pipeline;
+        Pipeline pipeline;
+        ThreadExecutor executor;
         auto [task1, task2, task3, task4, task5] = create_parallel_tasks();
 
         // Add tasks with NO dependencies - they can run in parallel
-        thread_pipeline.add_task(std::move(task1));
-        thread_pipeline.add_task(std::move(task2));
-        thread_pipeline.add_task(std::move(task3));
-        thread_pipeline.add_task(std::move(task4));
-        thread_pipeline.add_task(std::move(task5));
+        pipeline.add_task(std::move(task1));
+        pipeline.add_task(std::move(task2));
+        pipeline.add_task(std::move(task3));
+        pipeline.add_task(std::move(task4));
+        pipeline.add_task(std::move(task5));
 
         std::cout << "Running thread pipeline (should be much faster)..."
                   << std::endl;
         auto start = std::chrono::high_resolution_clock::now();
-        std::any result = thread_pipeline.execute(input);
+        std::any result = executor.execute(pipeline, input);
         auto end = std::chrono::high_resolution_clock::now();
 
         auto duration =
@@ -173,7 +176,8 @@ static void demonstrate_sequential_vs_thread_comparison() {
 static void demonstrate_complex_dag() {
     std::cout << "=== Complex DAG Example ===" << std::endl;
 
-    ThreadPipeline pipeline;
+    Pipeline pipeline;
+    ThreadExecutor executor;
 
     // Create a more complex DAG:
     //     filter1 -> map1 -> reduce1
@@ -198,9 +202,9 @@ static void demonstrate_complex_dag() {
     auto sum_id = pipeline.add_task(std::move(sum_task));
 
     // Create DAG structure
-    pipeline.add_dependency(map1_id, filter_id);  // map1 depends on filter
-    pipeline.add_dependency(map2_id, filter_id);  // map2 depends on filter
-    pipeline.add_dependency(sum_id, map1_id);     // sum depends on map1
+    pipeline.add_dependency(filter_id, map1_id);  // map1 depends on filter
+    pipeline.add_dependency(filter_id, map2_id);  // map2 depends on filter
+    pipeline.add_dependency(map1_id, sum_id);     // sum depends on map1
     // Note: In a real implementation, you'd need a merge task for multiple
     // inputs
 
@@ -211,7 +215,7 @@ static void demonstrate_complex_dag() {
 
     try {
         auto start = std::chrono::high_resolution_clock::now();
-        std::any result = pipeline.execute(input);
+        std::any result = executor.execute(pipeline, input);
         auto end = std::chrono::high_resolution_clock::now();
 
         double final_result = std::any_cast<double>(result);

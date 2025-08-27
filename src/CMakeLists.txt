@@ -62,9 +62,10 @@ set(DFTRACER_UTILS_SOURCES
   # Pipeline
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/error.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/pipeline.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/sequential_pipeline.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/thread_pipeline.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/task/task_type.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/executor_type.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/sequential_executor.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/thread_executor.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/tasks/task_type.cpp
 
   # analyzer
   # analyzers/analyzer.cpp
@@ -73,7 +74,7 @@ set(DFTRACER_UTILS_SOURCES
 
 if (DFTRACER_UTILS_MPI_ENABLE EQUAL 1)
   list(APPEND DFTRACER_UTILS_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/mpi_pipeline.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/mpi_executor.cpp
   )
 endif()
 

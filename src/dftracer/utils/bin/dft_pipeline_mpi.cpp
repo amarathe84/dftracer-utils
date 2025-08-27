@@ -1,7 +1,9 @@
-#include <dftracer/utils/pipeline/mpi_pipeline.h>
-#include <dftracer/utils/pipeline/sequential_pipeline.h>
+#include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/executors/mpi_executor.h>
+#include <dftracer/utils/pipeline/executors/sequential_executor.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
 #include <dftracer/utils/utils/mpi.h>
+#include <dftracer/utils/common/logging.h>
 
 #include <any>
 #include <chrono>
@@ -14,11 +16,12 @@
 using namespace dftracer::utils;
 
 static void demonstrate_mpi_pipeline() {
-    MPIPipeline pipeline;
+    Pipeline pipeline;
+    MPIExecutor executor;
 
-    if (pipeline.is_master()) {
+    if (executor.is_master()) {
         std::cout << "=== MPI Pipeline Example ===" << std::endl;
-        std::cout << "Running distributed pipeline with " << pipeline.size()
+        std::cout << "Running distributed pipeline with " << executor.size()
                   << " processes" << std::endl;
     }
 
@@ -110,7 +113,7 @@ static void demonstrate_mpi_pipeline() {
         input.push_back(i);
     }
 
-    if (pipeline.is_master()) {
+    if (executor.is_master()) {
         std::cout << "Input dataset: 6 integers with 5 independent heavy tasks"
                   << std::endl;
         std::cout << "Starting MPI distributed execution..." << std::endl;
@@ -118,10 +121,10 @@ static void demonstrate_mpi_pipeline() {
 
     try {
         auto start = std::chrono::high_resolution_clock::now();
-        std::any result = pipeline.execute(input);
+        std::any result = executor.execute(pipeline, input);
         auto end = std::chrono::high_resolution_clock::now();
 
-        if (pipeline.is_master()) {
+        if (executor.is_master()) {
             auto duration =
                 std::chrono::duration_cast<std::chrono::seconds>(end - start);
             std::cout << "MPI Pipeline completed in: " << duration.count()
@@ -146,24 +149,25 @@ static void demonstrate_mpi_pipeline() {
         }
 
     } catch (const PipelineError& e) {
-        if (pipeline.is_master()) {
+        if (executor.is_master()) {
             std::cerr << "Pipeline Error: " << e.what() << std::endl;
         }
     } catch (const std::exception& e) {
-        if (pipeline.is_master()) {
+        if (executor.is_master()) {
             std::cerr << "Error: " << e.what() << std::endl;
         }
     }
 
-    if (pipeline.is_master()) {
+    if (executor.is_master()) {
         std::cout << std::endl;
     }
 }
 
 static void demonstrate_mpi_vs_sequential_comparison() {
-    MPIPipeline mpi_pipeline;
+    Pipeline mpi_pipeline;
+    MPIExecutor mpi_executor;
 
-    if (mpi_pipeline.is_master()) {
+    if (mpi_executor.is_master()) {
         std::cout << "=== MPI vs Sequential Direct Comparison ===" << std::endl;
         std::cout << "Running identical workloads on sequential vs distributed "
                      "pipeline"
@@ -270,13 +274,13 @@ static void demonstrate_mpi_vs_sequential_comparison() {
     std::vector<int> input = {25, 30,
                               35};  // Even larger input for extreme work
     int num_tasks =
-        mpi_pipeline.size() * 4;  // 4 tasks per process for maximum load
+        mpi_executor.size() * 4;  // 4 tasks per process for maximum load
 
-    if (mpi_pipeline.is_master()) {
+    if (mpi_executor.is_master()) {
         std::cout << "Input: " << input.size() << " integers" << std::endl;
         std::cout << "Tasks: " << num_tasks
                   << " CPU-intensive independent tasks" << std::endl;
-        std::cout << "Processes: " << mpi_pipeline.size() << std::endl;
+        std::cout << "Processes: " << mpi_executor.size() << std::endl;
         std::cout << std::endl;
     }
 
@@ -286,9 +290,10 @@ static void demonstrate_mpi_vs_sequential_comparison() {
     std::vector<double> mpi_result;
 
     // Run Sequential Pipeline (only on master to avoid duplicate work)
-    if (mpi_pipeline.is_master()) {
+    if (mpi_executor.is_master()) {
         std::cout << "Running Sequential Pipeline..." << std::endl;
-        SequentialPipeline seq_pipeline;
+        Pipeline seq_pipeline;
+        SequentialExecutor seq_executor;
 
         // Add identical tasks to sequential pipeline
         for (int i = 0; i < num_tasks; ++i) {
@@ -296,7 +301,7 @@ static void demonstrate_mpi_vs_sequential_comparison() {
         }
 
         auto start = std::chrono::high_resolution_clock::now();
-        std::any seq_result = seq_pipeline.execute(input);
+        std::any seq_result = seq_executor.execute(seq_pipeline, input);
         auto end = std::chrono::high_resolution_clock::now();
 
         sequential_time =
@@ -329,7 +334,7 @@ static void demonstrate_mpi_vs_sequential_comparison() {
     mpi.broadcast(&sequential_time, 1, MPI_LONG_LONG, 0);
 
     // Run MPI Pipeline
-    if (mpi_pipeline.is_master()) {
+    if (mpi_executor.is_master()) {
         std::cout << "Running MPI Distributed Pipeline..." << std::endl;
     }
 
@@ -340,14 +345,14 @@ static void demonstrate_mpi_vs_sequential_comparison() {
 
     try {
         auto start = std::chrono::high_resolution_clock::now();
-        std::any mpi_result_any = mpi_pipeline.execute(input);
+        std::any mpi_result_any = mpi_executor.execute(mpi_pipeline, input);
         auto end = std::chrono::high_resolution_clock::now();
 
         mpi_time =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
                 .count();
 
-        if (mpi_pipeline.is_master()) {
+        if (mpi_executor.is_master()) {
             std::cout << "MPI Time: " << mpi_time << " ms" << std::endl;
 
             // Extract and store MPI result for comparison
@@ -399,13 +404,13 @@ static void demonstrate_mpi_vs_sequential_comparison() {
             std::cout << "=== Performance Comparison ===" << std::endl;
             std::cout << "Sequential: " << sequential_time << " ms"
                       << std::endl;
-            std::cout << "MPI (" << mpi_pipeline.size()
+            std::cout << "MPI (" << mpi_executor.size()
                       << " processes): " << mpi_time << " ms" << std::endl;
 
             if (mpi_time > 0) {
                 double speedup = static_cast<double>(sequential_time) /
                                  static_cast<double>(mpi_time);
-                double efficiency = speedup / mpi_pipeline.size() * 100.0;
+                double efficiency = speedup / static_cast<double>(mpi_executor.size()) * 100.0;
 
                 std::cout << "Speedup: " << std::fixed << std::setprecision(2)
                           << speedup << "x" << std::endl;
@@ -480,17 +485,18 @@ static void demonstrate_mpi_vs_sequential_comparison() {
         }
 
     } catch (const std::exception& e) {
-        if (mpi_pipeline.is_master()) {
+        if (mpi_executor.is_master()) {
             std::cerr << "MPI Pipeline Error: " << e.what() << std::endl;
         }
     }
 
-    if (mpi_pipeline.is_master()) {
+    if (mpi_executor.is_master()) {
         std::cout << std::endl;
     }
 }
 
 int main(int argc, char** argv) {
+    DFTRACER_UTILS_LOGGER_INIT();
     MPISession mpi_session(&argc, &argv);
 
     MPIContext& mpi = MPIContext::instance();

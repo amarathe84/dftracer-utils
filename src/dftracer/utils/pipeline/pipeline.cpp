@@ -12,19 +12,19 @@ TaskIndex Pipeline::add_task(std::unique_ptr<Task> task) {
     return index;
 }
 
-void Pipeline::add_dependency(TaskIndex dependent_task,
-                              TaskIndex dependency_task) {
-    if (dependent_task >= nodes_.size() || dependency_task >= nodes_.size()) {
+void Pipeline::add_dependency(TaskIndex from, TaskIndex to) {
+    if (from >= nodes_.size() || to >= nodes_.size()) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,
                             "Invalid task index");
     }
 
-    dependencies_[dependency_task].push_back(dependent_task);
-    dependents_[dependent_task].push_back(dependency_task);
-    dependency_count_[dependent_task]++;
+    // For edge: from -> to
+    dependencies_[to].push_back(from);        // "to" depends on "from"
+    dependents_[from].push_back(to);          // "from" has dependent "to"
+    dependency_count_[to]++;
 }
 
-bool Pipeline::validate_types() {
+bool Pipeline::validate_types() const {
     for (TaskIndex i = 0; i < nodes_.size(); ++i) {
         for (TaskIndex dependent : dependencies_[i]) {
             if (nodes_[i]->get_output_type() !=
@@ -36,10 +36,10 @@ bool Pipeline::validate_types() {
     return true;
 }
 
-bool Pipeline::has_cycles() {
+bool Pipeline::has_cycles() const {
     std::vector<int> in_degree(nodes_.size(), 0);
     for (TaskIndex i = 0; i < nodes_.size(); ++i) {
-        in_degree[i] = dependency_count_[i];
+        in_degree[i] = dependency_count_.at(i);
     }
 
     std::queue<TaskIndex> queue;
@@ -66,12 +66,12 @@ bool Pipeline::has_cycles() {
     return processed != nodes_.size();
 }
 
-std::vector<TaskIndex> Pipeline::topological_sort() {
+std::vector<TaskIndex> Pipeline::topological_sort() const {
     std::vector<TaskIndex> result;
     std::vector<int> in_degree(nodes_.size(), 0);
 
     for (TaskIndex i = 0; i < nodes_.size(); ++i) {
-        in_degree[i] = dependency_count_[i];
+        in_degree[i] = dependency_count_.at(i);
     }
 
     std::queue<TaskIndex> queue;

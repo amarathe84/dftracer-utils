@@ -1,10 +1,11 @@
 #ifndef DFTRACER_UTILS_PIPELINE_BUILDER_H
 #define DFTRACER_UTILS_PIPELINE_BUILDER_H
 
-#include <dftracer/utils/pipeline/mpi_pipeline.h>
-#include <dftracer/utils/pipeline/sequential_pipeline.h>
+#include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/executors/sequential_executor.h>
+#include <dftracer/utils/pipeline/executors/thread_executor.h>
+#include <dftracer/utils/pipeline/executors/mpi_executor.h>
 #include <dftracer/utils/pipeline/tasks/factory.h>
-#include <dftracer/utils/pipeline/thread_pipeline.h>
 
 #include <any>
 #include <limits>
@@ -157,22 +158,24 @@ class PipelineBuilder {
 
     // Execution methods
     std::any execute_sequential() && {
-        SequentialPipeline pipeline;
-        return execute_on_pipeline(pipeline);
+        SequentialExecutor executor;
+        return execute_with_executor(executor);
     }
 
     std::any execute_threaded() && {
-        ThreadPipeline pipeline;
-        return execute_on_pipeline(pipeline);
+        ThreadExecutor executor;
+        return execute_with_executor(executor);
     }
 
     std::any execute_mpi() && {
-        MPIPipeline pipeline;
-        return execute_on_pipeline(pipeline);
+        MPIExecutor executor;
+        return execute_with_executor(executor);
     }
 
    private:
-    std::any execute_on_pipeline(Pipeline& pipeline) {
+    std::any execute_with_executor(Executor& executor) {
+        Pipeline pipeline;
+        
         // Add all tasks to pipeline
         std::vector<TaskIndex> task_ids;
         for (auto& task : tasks_) {
@@ -181,11 +184,11 @@ class PipelineBuilder {
 
         // Add dependencies
         for (const auto& [dependent_idx, dependency_idx] : dependencies_) {
-            pipeline.add_dependency(task_ids[dependent_idx],
-                                    task_ids[dependency_idx]);
+            pipeline.add_dependency(task_ids[dependency_idx],
+                                    task_ids[dependent_idx]);
         }
 
-        return pipeline.execute(input_data_);
+        return executor.execute(pipeline, input_data_);
     }
 
    private:

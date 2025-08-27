@@ -26,6 +26,8 @@ std::string task_type_to_string(TaskType type) {
             return "skip";
         case TaskType::DISTINCT:
             return "distinct";
+        case TaskType::COMBINE:
+            return "combine";
         default:
             return "unknown";
     }
@@ -43,6 +45,7 @@ TaskType string_to_task_type(const std::string &str) {
     if (lower == "take") return TaskType::TAKE;
     if (lower == "skip") return TaskType::SKIP;
     if (lower == "distinct") return TaskType::DISTINCT;
+    if (lower == "combine") return TaskType::COMBINE;
     throw std::invalid_argument("Invalid task type");
 }
 

@@ -15,7 +15,8 @@ enum class TaskType : std::uint8_t {
     GROUPBY,
     TAKE,
     SKIP,
-    DISTINCT
+    DISTINCT,
+    COMBINE
 };
 
 std::string task_type_to_string(TaskType type);
