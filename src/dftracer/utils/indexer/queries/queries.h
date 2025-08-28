@@ -50,6 +50,6 @@ std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
                                                int file_id);
 std::size_t query_checkpoint_size(const SqliteDatabase &db, int file_id);
 
-} // namespace dftracer::utils
+}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_INDEXER_SQLITE_QUERIES_H

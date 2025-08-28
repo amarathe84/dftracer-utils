@@ -93,6 +93,6 @@ class AnalyzerConfigManager {
     double time_resolution_;
 };
 
-}  // namespace dftracer::utils
+}  // namespace dftracer::utils::analyzers
 
 #endif  // DFTRACER_UTILS_ANALYZERS_CONFIGURATION_MANAGER_H

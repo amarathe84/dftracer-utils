@@ -3,6 +3,7 @@
 
 #include <dftracer/utils/pipeline/executors/mpi_helpers/serializers/serializer.h>
 #include <mpi.h>
+
 #include <string>
 
 // Forward declare mpi_send/mpi_recv to avoid circular dependency
@@ -17,7 +18,8 @@ struct Serializer<std::string> {
     static void send(const std::string& s, int dest, int tag, MPI_Comm comm) {
         mpi_send(static_cast<std::size_t>(s.size()), dest, tag, comm);
         if (!s.empty()) {
-            MPI_Send(s.data(), static_cast<int>(s.size()), MPI_CHAR, dest, tag, comm);
+            MPI_Send(s.data(), static_cast<int>(s.size()), MPI_CHAR, dest, tag,
+                     comm);
         }
     }
 
@@ -26,7 +28,8 @@ struct Serializer<std::string> {
         mpi_recv(size, src, tag, comm);
         s.resize(size);
         if (size > 0) {
-            MPI_Recv(&s[0], static_cast<int>(size), MPI_CHAR, src, tag, comm, MPI_STATUS_IGNORE);
+            MPI_Recv(&s[0], static_cast<int>(size), MPI_CHAR, src, tag, comm,
+                     MPI_STATUS_IGNORE);
         }
     }
 };

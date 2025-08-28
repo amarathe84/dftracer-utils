@@ -1,7 +1,6 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/reader/reader.h>
 
-
 using namespace dftracer::utils;
 
 static Reader *cast_reader(dft_reader_handle_t reader) {
@@ -23,8 +22,7 @@ dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
     }
 
     try {
-        auto *reader =
-            new Reader(gz_path, idx_path, index_ckpt_size);
+        auto *reader = new Reader(gz_path, idx_path, index_ckpt_size);
         return static_cast<dft_reader_handle_t>(reader);
     } catch (const std::exception &e) {
         DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader: %s", e.what());
@@ -42,8 +40,7 @@ dft_reader_handle_t dft_reader_create_with_indexer(
     DFTRACER_UTILS_LOG_DEBUG("Creating DFT reader with provided indexer");
 
     try {
-        auto *reader = new Reader(
-            static_cast<Indexer *>(indexer));
+        auto *reader = new Reader(static_cast<Indexer *>(indexer));
         return static_cast<dft_reader_handle_t>(reader);
     } catch (const std::exception &e) {
         DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader with indexer: %s",

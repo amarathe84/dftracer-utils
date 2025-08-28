@@ -6,12 +6,12 @@
 #include <dftracer/utils/pipeline/bag.h>
 #include <dftracer/utils/utils/json.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <cstdint>
 
 namespace dftracer::utils::analyzers {
 

@@ -1,8 +1,8 @@
 // #include <arrow/api.h>
 // #include <arrow/io/api.h>
 #include <dftracer/utils/analyzers/analyzer.h>
-#include <dftracer/utils/utils/filesystem.h>
 #include <dftracer/utils/analyzers/pipeline/trace_reader.h>
+#include <dftracer/utils/utils/filesystem.h>
 // #include <parquet/arrow/reader.h>
 // #include <parquet/arrow/writer.h>
 
@@ -43,7 +43,8 @@ namespace helpers {
 
 //     // CSV Header
 //     if (header) {
-//         csv_stream << "proc_name,cat,epoch,acc_pat,func_name,io_cat,time_range,"
+//         csv_stream <<
+//         "proc_name,cat,epoch,acc_pat,func_name,io_cat,time_range,"
 //                    << "time,count,size," << generate_size_bin_headers();
 //         csv_stream << std::endl;
 //     }
@@ -57,7 +58,8 @@ namespace helpers {
 //                                   ? hlm.group_values.at("acc_pat")
 //                                   : "";
 //         std::string epoch =
-//             hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : "";
+//             hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") :
+//             "";
 //         std::string io_cat = hlm.group_values.count("io_cat")
 //                                  ? hlm.group_values.at("io_cat")
 //                                  : "";
@@ -72,9 +74,11 @@ namespace helpers {
 //                                      : "";
 
 //         // Output row with proper CSV formatting
-//         csv_stream << proc_name << "," << cat << "," << epoch << "," << acc_pat
+//         csv_stream << proc_name << "," << cat << "," << epoch << "," <<
+//         acc_pat
 //                    << "," << func_name << "," << io_cat << "," << time_range
-//                    << "," << std::fixed << std::setprecision(6) << hlm.time_sum
+//                    << "," << std::fixed << std::setprecision(6) <<
+//                    hlm.time_sum
 //                    << std::defaultfloat << "," << hlm.count_sum << ",";
 
 //         // Handle optional size_sum (nullopt -> empty string for NaN)
@@ -105,7 +109,8 @@ namespace helpers {
 
 //     // Build column arrays
 //     arrow::StringBuilder proc_name_builder, cat_builder, epoch_builder,
-//         acc_pat_builder, func_name_builder, io_cat_builder, time_range_builder;
+//         acc_pat_builder, func_name_builder, io_cat_builder,
+//         time_range_builder;
 //     arrow::DoubleBuilder time_builder;
 //     arrow::UInt64Builder count_builder;
 //     arrow::UInt64Builder size_builder;
@@ -122,7 +127,8 @@ namespace helpers {
 //         std::string cat =
 //             hlm.group_values.count("cat") ? hlm.group_values.at("cat") : "";
 //         std::string epoch =
-//             hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") : "";
+//             hlm.group_values.count("epoch") ? hlm.group_values.at("epoch") :
+//             "";
 //         std::string acc_pat = hlm.group_values.count("acc_pat")
 //                                   ? hlm.group_values.at("acc_pat")
 //                                   : "";
@@ -206,7 +212,8 @@ namespace helpers {
 //     // Add size bin fields
 //     for (const auto& suffix : constants::SIZE_BIN_SUFFIXES) {
 //         fields.push_back(
-//             arrow::field(constants::SIZE_BIN_PREFIX + suffix, arrow::uint32()));
+//             arrow::field(constants::SIZE_BIN_PREFIX + suffix,
+//             arrow::uint32()));
 //     }
 
 //     auto schema = arrow::schema(fields);
@@ -218,7 +225,8 @@ namespace helpers {
 //         count_array,     size_array};
 
 //     // Add size bin arrays
-//     arrays.insert(arrays.end(), size_bin_arrays.begin(), size_bin_arrays.end());
+//     arrays.insert(arrays.end(), size_bin_arrays.begin(),
+//     size_bin_arrays.end());
 
 //     // Create table
 //     auto table = arrow::Table::Make(schema, arrays);
@@ -242,7 +250,8 @@ namespace helpers {
 
 //     std::unique_ptr<parquet::arrow::FileReader> reader;
 //     ARROW_ASSIGN_OR_RAISE(
-//         reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+//         reader, parquet::arrow::OpenFile(infile,
+//         arrow::default_memory_pool()));
 
 //     std::shared_ptr<arrow::Table> table;
 //     ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
@@ -316,7 +325,8 @@ namespace helpers {
 
 //         // Handle size bins
 //         auto size_bins = generate_size_bins_vec();
-//         for (size_t j = 0; j < size_bins.size() && j < size_bin_arrays.size();
+//         for (size_t j = 0; j < size_bins.size() && j <
+//         size_bin_arrays.size();
 //              ++j) {
 //             if (size_bin_arrays[j] && !size_bin_arrays[j]->IsNull(i)) {
 //                 hlm.bin_sums[size_bins[j]] = size_bin_arrays[j]->Value(i);
@@ -335,19 +345,19 @@ namespace helpers {
 Analyzer::Analyzer(const AnalyzerConfigManager& config) : config_(config) {}
 
 Pipeline Analyzer::analyze(
-const std::vector<std::string>& traces,
+    const std::vector<std::string>& traces,
     const std::vector<std::string>& /*view_types*/,
     const std::vector<std::string>& /*exclude_characteristics*/,
     const std::unordered_map<std::string, std::string>& /*extra_columns*/
 ) {
-  TraceReader trace_reader(traces, 128 * 1024 * 1024 /* 128MB */);
-  return trace_reader.build();
+    TraceReader trace_reader(traces, 128 * 1024 * 1024 /* 128MB */);
+    return trace_reader.build();
 }
 
-Pipeline Analyzer::compute_high_level_metrics(const std::vector<Trace>& /*trace_records*/,
-                                    const std::vector<std::string>& /*view_types*/) {
-
-  return {};
+Pipeline Analyzer::compute_high_level_metrics(
+    const std::vector<Trace>& /*trace_records*/,
+    const std::vector<std::string>& /*view_types*/) {
+    return {};
 }
 
 std::string Analyzer::get_checkpoint_path(const std::string& name) const {

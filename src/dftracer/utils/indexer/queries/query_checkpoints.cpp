@@ -5,7 +5,6 @@
 
 namespace dftracer::utils {
 
-
 std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
                                                int file_id) {
     std::vector<dftracer::utils::IndexCheckpoint> checkpoints;

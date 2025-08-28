@@ -25,8 +25,9 @@ class TypedTask : public Task {
     bool validate(I in) {
         bool result = std::type_index(typeid(in)) == this->get_input_type();
         if (!result) {
-            DFTRACER_UTILS_LOG_ERROR("Input type validation failed, expected: {}, got: {}",
-                                      this->get_input_type().name(), typeid(in).name());
+            DFTRACER_UTILS_LOG_ERROR(
+                "Input type validation failed, expected: {}, got: {}",
+                this->get_input_type().name(), typeid(in).name());
         }
         return result;
     }

@@ -1,7 +1,6 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
-
 namespace dftracer::utils {
 
 void insert_checkpoint_record(const SqliteDatabase &db, int file_id,

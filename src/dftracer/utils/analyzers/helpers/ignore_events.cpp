@@ -44,13 +44,11 @@ static const std::unordered_set<std::string> IGNORED_FUNC_NAMES = {
     "TorchFramework.is_nativeio_available",
     "TorchFramework.trace_object"};
 
-
 static const std::vector<std::string> IGNORED_FUNC_PATTERNS = {
     ".save_state", "checkpoint_end_", "checkpoint_start_"};
 
 bool should_ignore_event(const std::string& func_name) {
-    if (IGNORED_FUNC_NAMES.find(func_name) !=
-        IGNORED_FUNC_NAMES.end()) {
+    if (IGNORED_FUNC_NAMES.find(func_name) != IGNORED_FUNC_NAMES.end()) {
         return true;
     }
 
@@ -62,4 +60,3 @@ bool should_ignore_event(const std::string& func_name) {
 
     return false;
 }
-

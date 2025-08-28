@@ -69,6 +69,6 @@ struct ReaderImplementor {
     std::unique_ptr<LineByteStream> line_byte_stream;
     std::unique_ptr<ByteStream> byte_stream;
 };
-} // namespace dftracer::utils
+}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_READER_READER_IMPL_H

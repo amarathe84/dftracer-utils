@@ -1,7 +1,6 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
-
 namespace dftracer::utils {
 
 int query_file_id(const SqliteDatabase &db,

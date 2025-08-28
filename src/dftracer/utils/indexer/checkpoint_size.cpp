@@ -153,7 +153,6 @@ static std::size_t choose_divisible_checkpoint(
     return C;
 }
 
-
 namespace dftracer::utils {
 
 std::size_t determine_checkpoint_size(std::size_t user_checkpoint_size,

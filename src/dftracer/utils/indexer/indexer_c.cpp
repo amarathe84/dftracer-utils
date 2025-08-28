@@ -3,7 +3,6 @@
 
 #include <cstring>
 
-
 using namespace dftracer::utils;
 
 extern "C" {
@@ -26,8 +25,8 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
     }
 
     try {
-        auto *indexer = new Indexer(
-            gz_path, idx_path, checkpoint_size, force_rebuild != 0);
+        auto *indexer =
+            new Indexer(gz_path, idx_path, checkpoint_size, force_rebuild != 0);
         return static_cast<dft_indexer_handle_t>(indexer);
     } catch (const std::exception &e) {
         DFTRACER_UTILS_LOG_ERROR("Failed to create DFT indexer: %s", e.what());

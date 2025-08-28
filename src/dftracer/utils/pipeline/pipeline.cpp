@@ -1,6 +1,5 @@
-#include <dftracer/utils/pipeline/pipeline.h>
-
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/pipeline/pipeline.h>
 
 namespace dftracer::utils {
 
@@ -31,9 +30,11 @@ bool Pipeline::validate_types() const {
         for (TaskIndex dependent : dependencies_[i]) {
             if (nodes_[dependent]->get_output_type() !=
                 nodes_[i]->get_input_type()) {
-                  DFTRACER_UTILS_LOG_ERROR("Type mismatch between task %d (output: %s) and task %d (expected input: %s)",
-                  dependent, nodes_[dependent]->get_output_type().name(),
-                  i, nodes_[i]->get_input_type().name());
+                DFTRACER_UTILS_LOG_ERROR(
+                    "Type mismatch between task %d (output: %s) and task %d "
+                    "(expected input: %s)",
+                    dependent, nodes_[dependent]->get_output_type().name(), i,
+                    nodes_[i]->get_input_type().name());
                 return false;
             }
         }
@@ -106,9 +107,9 @@ void Pipeline::chain(Pipeline&& other) {
     if (other.empty()) {
         return;
     }
-    
+
     TaskIndex offset = nodes_.size();
-    
+
     for (auto& task : other.nodes_) {
         nodes_.push_back(std::move(task));
         dependencies_.push_back({});
@@ -116,7 +117,7 @@ void Pipeline::chain(Pipeline&& other) {
         task_completed_[nodes_.size() - 1] = false;
         dependency_count_[nodes_.size() - 1] = 0;
     }
-    
+
     for (TaskIndex i = 0; i < other.dependencies_.size(); ++i) {
         TaskIndex new_index = offset + i;
         for (TaskIndex dep : other.dependencies_[i]) {

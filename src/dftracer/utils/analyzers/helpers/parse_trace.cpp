@@ -1,12 +1,12 @@
-#include <algorithm>
-
 #include <dftracer/utils/analyzers/helpers/helpers.h>
+
+#include <algorithm>
 
 using namespace dftracer::utils::json;
 using namespace dftracer::utils::analyzers;
 
-std::optional<Trace> parse_trace(const dftracer::utils::json::OwnedJsonDocument& doc) {
-
+std::optional<Trace> parse_trace(
+    const dftracer::utils::json::OwnedJsonDocument& doc) {
     Trace trace = {};
 
     try {
@@ -167,4 +167,3 @@ std::optional<Trace> parse_trace(const dftracer::utils::json::OwnedJsonDocument&
 
     return trace;
 }
-

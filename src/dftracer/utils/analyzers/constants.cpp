@@ -94,7 +94,6 @@ const std::vector<std::string> IGNORED_FILE_PATTERNS = {"/dev/",
                                                         "/venv",
                                                         "__pycache__"};
 
-
 // Humanized column mappings
 const std::unordered_map<std::string, std::string> HUMANIZED_COLS = {
     {"acc_pat", "Access Pattern"},

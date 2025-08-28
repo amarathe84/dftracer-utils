@@ -3,7 +3,6 @@
 
 #include <cstring>
 
-
 namespace dftracer::utils {
 
 bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,

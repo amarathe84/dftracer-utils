@@ -56,9 +56,10 @@ class Pipeline {
         return dependents_;
     }
     inline Task* get_task(TaskIndex index) const {
-      if (index < 0)
-        return nullptr;
-      return index < static_cast<TaskIndex>(nodes_.size()) ? nodes_[index].get() : nullptr;
+        if (index < 0) return nullptr;
+        return index < static_cast<TaskIndex>(nodes_.size())
+                   ? nodes_[index].get()
+                   : nullptr;
     }
     inline const std::vector<TaskIndex>& get_task_dependencies(
         TaskIndex index) const {

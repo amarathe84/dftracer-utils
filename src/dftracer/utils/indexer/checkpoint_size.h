@@ -15,6 +15,6 @@ std::size_t determine_checkpoint_size(
     // default:
     std::size_t window = constants::indexer::ZLIB_WINDOW_SIZE);
 
-} // namespace dftracer::utils
+}  // namespace dftracer::utils
 
 #endif  // __DFTRACER_UTILS_INDEXER_CHECKPOINT_SIZE_H

@@ -40,8 +40,8 @@ struct Trace {
     std::uint64_t image_id;
     TraceType type;
 
-    std::int64_t size = -1; // -1 means NaN or unknown
-    std::int64_t offset = -1; // -1 means NaN or unknown
+    std::int64_t size = -1;    // -1 means NaN or unknown
+    std::int64_t offset = -1;  // -1 means NaN or unknown
     std::unordered_map<std::string, std::string> view_fields;
     BinFields bin_fields;
 };

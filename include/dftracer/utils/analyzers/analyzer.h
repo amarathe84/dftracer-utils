@@ -1,12 +1,12 @@
 #ifndef DFTRACER_UTILS_ANALYZERS_ANALYZER_H
 #define DFTRACER_UTILS_ANALYZERS_ANALYZER_H
 
+#include <dftracer/utils/analyzers/configuration_manager.h>
 #include <dftracer/utils/analyzers/constants.h>
 #include <dftracer/utils/analyzers/trace.h>
 #include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/utils/json.h>
 #include <dftracer/utils/pipeline/pipeline.h>
-#include <dftracer/utils/analyzers/configuration_manager.h>
+#include <dftracer/utils/utils/json.h>
 
 #include <memory>
 #include <optional>
@@ -28,7 +28,8 @@ class Analyzer {
 
     inline const AnalyzerConfigManager& config() const { return config_; }
 
-    Pipeline analyze(const std::vector<std::string>& traces,
+    Pipeline analyze(
+        const std::vector<std::string>& traces,
         const std::vector<std::string>& view_types,
         const std::vector<std::string>& exclude_characteristics = {},
         const std::unordered_map<std::string, std::string>& extra_columns = {}
@@ -40,7 +41,8 @@ class Analyzer {
     std::string get_checkpoint_path(const std::string& name) const;
     bool has_checkpoint(const std::string& name) const;
     Pipeline compute_high_level_metrics(
-        const std::vector<Trace>& trace_records, const std::vector<std::string>& view_types);
+        const std::vector<Trace>& trace_records,
+        const std::vector<std::string>& view_types);
 
    private:
     AnalyzerConfigManager config_;
