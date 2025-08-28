@@ -4,18 +4,27 @@
 #include <dftracer/utils/pipeline/executors/executor.h>
 
 #include <future>
+#include <memory>
 #include <vector>
 
 namespace dftracer::utils {
 
+class ThreadPool;
+class ThreadWorker;
+
+// struct ThreadWorker {
+//   std::queue
+// };
+
 class ThreadExecutor : public Executor {
    private:
     size_t max_threads_;
+    std::unique_ptr<ThreadPool> pool_;
 
    public:
     ThreadExecutor();
     explicit ThreadExecutor(size_t max_threads);
-    ~ThreadExecutor() override = default;
+    ~ThreadExecutor() override;
     ThreadExecutor(const ThreadExecutor&) = delete;
     ThreadExecutor& operator=(const ThreadExecutor&) = delete;
     ThreadExecutor(ThreadExecutor&&) = default;

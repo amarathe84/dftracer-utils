@@ -5,7 +5,6 @@
 #include <dftracer/utils/utils/json.h>
 
 #include <cstdint>
-#include <optional>
 #include <string>
 
 inline std::uint64_t calc_time_range(std::uint64_t time,
@@ -21,7 +20,9 @@ bool should_ignore_event(const std::string& func_name);
 std::size_t get_size_bin_index(std::uint64_t size);
 std::size_t get_num_size_bins();
 void set_size_bins(dftracer::utils::analyzers::Trace& trace);
-std::optional<dftracer::utils::analyzers::Trace> parse_trace(
+dftracer::utils::analyzers::Trace parse_trace(
+    const dftracer::utils::json::JsonDocument& doc);
+dftracer::utils::analyzers::Trace parse_trace_owned(
     const dftracer::utils::json::OwnedJsonDocument& doc);
 
 #endif  // DFTRACER_UTILS_ANALYZERS_HELPERS_HELPERS_H

@@ -9,13 +9,12 @@
 
 need_zlib()
 need_sqlite3()
-# need_spdlog()
 need_argparse()
 need_ghc_filesystem()
 need_picosha2()
 need_simdjson()
 need_cpplogger()
-
+find_package(Threads REQUIRED)
 
 ##########################################
 # Libraries
@@ -57,7 +56,6 @@ set(DFTRACER_UTILS_SOURCES
 
   # Utilities
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/mpi.cpp
 
   # Pipeline
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/error.cpp
@@ -77,13 +75,6 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/analyzers/helpers/parse_trace.cpp
 )
 
-if (DFTRACER_UTILS_MPI_ENABLE EQUAL 1)
-  list(APPEND DFTRACER_UTILS_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/mpi_executor.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/mpi_helpers/serializers/any.cpp
-  )
-endif()
-
 
 #+++++++++++++++++++++++++++++++++++++++++
 # Static library
@@ -97,7 +88,7 @@ set_target_properties(dftracer_utils PROPERTIES
 )
 target_link_libraries(dftracer_utils 
     PRIVATE picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson_static cpp-logger
+    PUBLIC ghc_filesystem simdjson::simdjson_static cpp-logger Threads::Threads
 )
 add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
@@ -137,7 +128,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
 )
 target_link_libraries(dftracer_utils_shared 
     PRIVATE picosha2
-    PUBLIC ghc_filesystem simdjson::simdjson cpp-logger
+    PUBLIC ghc_filesystem simdjson::simdjson cpp-logger Threads::Threads
 )
 add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
@@ -214,7 +205,7 @@ endif()
 # DFT Reader
 # ----------------------------------------
 
-add_executable(dft_reader ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_reader.cpp ${DFTRACER_UTILS_SOURCES})
+add_executable(dft_reader ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_reader.cpp)
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
 target_link_libraries(dft_reader PRIVATE dftracer_utils argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
 
@@ -240,136 +231,6 @@ endif()
 # Install executable
 install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# # ----------------------------------------
-# # DFT Pipeline (TEMPORARY)
-# # ----------------------------------------
-
-# add_executable(dft_pipeline ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline.cpp ${DFTRACER_UTILS_SOURCES})
-# set_target_properties(dft_pipeline PROPERTIES OUTPUT_NAME "dft_pipeline")
-# target_link_libraries(dft_pipeline PRIVATE 
-#   dftracer_utils
-#   argparse::argparse
-#   ghc_filesystem
-#   picosha2
-#   simdjson::simdjson
-# )
-
-# # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
-# link_sqlite3(dft_pipeline STATIC)
-# link_zlib(dft_pipeline STATIC)
-# # link_arrow(dft_pipeline STATIC)
-
-# target_include_directories(dft_pipeline 
-#     PRIVATE ${CMAKE_SOURCE_DIR}/include
-#             ${CMAKE_SOURCE_DIR}/src
-#             ${CMAKE_BINARY_DIR}/include)
-
-# target_set_warnings(dft_pipeline)
-
-# # Apply coverage flags if enabled
-# if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#     target_compile_options(dft_pipeline PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-#     target_link_libraries(dft_pipeline PRIVATE --coverage)
-# endif()
-
-# # Install executable
-# install(TARGETS dft_pipeline RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# # ----------------------------------------
-# # DFT Pipeline MPI (TEMPORARY)
-# # ----------------------------------------
-
-# add_executable(dft_pipeline_mpi ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline_mpi.cpp ${DFTRACER_UTILS_SOURCES})
-# set_target_properties(dft_pipeline_mpi PROPERTIES OUTPUT_NAME "dft_pipeline_mpi")
-# target_link_libraries(dft_pipeline_mpi PRIVATE 
-#   dftracer_utils
-#   argparse::argparse
-#   ghc_filesystem
-#   picosha2
-#   simdjson::simdjson
-# )
-# add_mpi_deps_if_needed(dft_pipeline_mpi)
-
-# # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
-# link_sqlite3(dft_pipeline_mpi STATIC)
-# link_zlib(dft_pipeline_mpi STATIC)
-# # link_arrow(dft_pipeline_mpi STATIC)
-
-# target_include_directories(dft_pipeline_mpi
-#     PRIVATE ${CMAKE_SOURCE_DIR}/include
-#             ${CMAKE_SOURCE_DIR}/src
-#             ${CMAKE_BINARY_DIR}/include)
-
-# target_set_warnings(dft_pipeline_mpi)
-
-# # Apply coverage flags if enabled
-# if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#     target_compile_options(dft_pipeline_mpi PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-#     target_link_libraries(dft_pipeline_mpi PRIVATE --coverage)
-# endif()
-
-# # Install executable
-# install(TARGETS dft_pipeline_mpi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# ----------------------------------------
-# Fluent API Pipeline Demo (TEMPORARY)
-# ----------------------------------------
-
-# add_executable(dft_pipeline_fluent ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline_fluent.cpp ${DFTRACER_UTILS_SOURCES})
-# set_target_properties(dft_pipeline_fluent PROPERTIES OUTPUT_NAME "dft_pipeline_fluent")
-# target_link_libraries(dft_pipeline_fluent PRIVATE 
-#   dftracer_utils
-#   argparse::argparse
-#   ghc_filesystem
-#   picosha2
-#   simdjson::simdjson
-# )
-
-# link_sqlite3(dft_pipeline_fluent STATIC)
-# link_zlib(dft_pipeline_fluent STATIC)
-
-# target_include_directories(dft_pipeline_fluent 
-#     PRIVATE ${CMAKE_SOURCE_DIR}/include
-#             ${CMAKE_SOURCE_DIR}/src
-#             ${CMAKE_BINARY_DIR}/include)
-
-# target_set_warnings(dft_pipeline_fluent)
-
-# if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#     target_compile_options(dft_pipeline_fluent PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-#     target_link_libraries(dft_pipeline_fluent PRIVATE --coverage)
-# endif()
-
-# install(TARGETS dft_pipeline_fluent RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# # Streaming API demo
-# add_executable(dft_pipeline_stream ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_pipeline_stream.cpp ${DFTRACER_UTILS_SOURCES})
-# set_target_properties(dft_pipeline_stream PROPERTIES OUTPUT_NAME "dft_pipeline_stream")
-# target_link_libraries(dft_pipeline_stream PRIVATE 
-#   dftracer_utils
-#   argparse::argparse
-#   ghc_filesystem
-#   picosha2
-#   simdjson::simdjson
-# )
-
-# link_sqlite3(dft_pipeline_stream STATIC)
-# link_zlib(dft_pipeline_stream STATIC)
-
-# target_include_directories(dft_pipeline_stream 
-#     PRIVATE ${CMAKE_SOURCE_DIR}/include
-#             ${CMAKE_SOURCE_DIR}/src
-#             ${CMAKE_BINARY_DIR}/include)
-
-# target_set_warnings(dft_pipeline_stream)
-
-# if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#     target_compile_options(dft_pipeline_stream PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-#     target_link_libraries(dft_pipeline_stream PRIVATE --coverage)
-# endif()
-
-# install(TARGETS dft_pipeline_stream RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
 # ----------------------------------------
 # DFT Map
 # ----------------------------------------
@@ -385,10 +246,8 @@ target_link_libraries(dft_map PRIVATE
 )
 # add_mpi_deps_if_needed(dft_map)
 
-# Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_map STATIC)
 link_zlib(dft_map STATIC)
-# link_arrow(dft_map STATIC)
 
 target_include_directories(dft_map 
     PRIVATE ${CMAKE_SOURCE_DIR}/include)
@@ -403,43 +262,6 @@ endif()
 
 # Install executable
 install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# ----------------------------------------
-# DFT Map MPI (only when MPI is enabled)
-# ----------------------------------------
-
-# if(DFTRACER_UTILS_MPI_ENABLE)
-#   add_executable(dft_map_mpi bin/dft_map_mpi.cpp ${DFTRACER_UTILS_SOURCES})
-#   set_target_properties(dft_map_mpi PROPERTIES OUTPUT_NAME "dft_map_mpi")
-#   target_link_libraries(dft_map_mpi PRIVATE 
-#     dftracer_utils
-#     argparse::argparse
-#     ghc_filesystem
-#     picosha2
-#     simdjson::simdjson
-#   )
-#   add_mpi_deps_if_needed(dft_map_mpi)
-#   target_compile_definitions(dft_map_mpi PRIVATE DFTRACER_UTILS_MPI_ENABLE)
-
-#   # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
-#   link_sqlite3(dft_map_mpi STATIC)
-#   link_zlib(dft_map_mpi STATIC)
-#   # link_arrow(dft_map_mpi STATIC)
-
-#   target_include_directories(dft_map_mpi 
-#       PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
-#   target_set_warnings(dft_map_mpi)
-
-#   # Apply coverage flags if enabled
-#   if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#       target_compile_options(dft_map_mpi PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-#       target_link_libraries(dft_map_mpi PRIVATE --coverage)
-#   endif()
-
-#   # Install executable
-#   install(TARGETS dft_map_mpi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# endif()
 
 ##########################################
 # Python binding
@@ -531,45 +353,6 @@ endif()
 if (TARGET cpp-logger)
   list(APPEND INSTALLABLE_TARGETS cpp-logger)
 endif()
-# if (TARGET arrow_array)
-#     list(APPEND INSTALLABLE_TARGETS arrow_array)
-# endif()
-# if (TARGET arrow_ipc)
-#     list(APPEND INSTALLABLE_TARGETS arrow_ipc)
-# endif()
-# if (TARGET arrow_util)
-#     list(APPEND INSTALLABLE_TARGETS arrow_util)
-# endif()
-# if (TARGET arrow_compute_core)
-#     list(APPEND INSTALLABLE_TARGETS arrow_compute_core)
-# endif()
-# if (TARGET arrow_vendored)
-#     list(APPEND INSTALLABLE_TARGETS arrow_vendored)
-# endif()
-# foreach(boost_target IN ITEMS
-#     boost_headers boost_algorithm boost_align boost_array boost_assert boost_bind boost_concept_check boost_config boost_container_hash boost_conversion boost_core boost_crc boost_describe boost_detail boost_exception boost_function boost_function_types boost_functional boost_fusion boost_integer boost_intrusive boost_io boost_iterator boost_lexical_cast boost_move boost_mp11 boost_mpl boost_optional boost_predef boost_preprocessor boost_range boost_ratio boost_regex boost_scope_exit boost_smart_ptr boost_static_assert boost_system boost_throw_exception boost_tokenizer boost_tuple boost_type_traits boost_typeof boost_unordered boost_utility boost_uuid boost_variant2 boost_winapi boost_numeric_conversion boost_comptarget_disable_autolinking boost_container)
-#     if(TARGET ${boost_target})
-#         list(APPEND INSTALLABLE_TARGETS ${boost_target})
-#     endif()
-# endforeach()
-# if (TARGET arrow_memory_pool)
-#     list(APPEND INSTALLABLE_TARGETS arrow_memory_pool)
-# endif()
-# if (TARGET arrow_io)
-#     list(APPEND INSTALLABLE_TARGETS arrow_io)
-# endif()
-# if (TARGET arrow_static)
-#     list(APPEND INSTALLABLE_TARGETS arrow_static)
-# endif()
-# if (TARGET arrow_shared)
-#     list(APPEND INSTALLABLE_TARGETS arrow_shared)
-# endif()
-# if (TARGET parquet_static)
-#     list(APPEND INSTALLABLE_TARGETS parquet_static)
-# endif()
-# if (TARGET parquet_shared)
-#     list(APPEND INSTALLABLE_TARGETS parquet_shared)
-# endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)
 
@@ -589,10 +372,6 @@ message(STATUS "Creating package config for dftracer_utils")
 # Determine which dependencies to require based on what was found vs built with CPM
 set(PKG_CONFIG_REQUIRES "")
 set(PKG_CONFIG_LIBS_PRIVATE "")
-
-# Add spdlog to requirements (always needed)
-# set(PKG_CONFIG_REQUIRES "spdlog")
-# set(PKG_CONFIG_LIBS_PRIVATE "-lspdlog")
 
 # Only add sqlite3 to pkg-config requirements if it was found on system
 if(SQLite3_FOUND AND NOT SQLite3_CPM)

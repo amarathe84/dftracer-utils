@@ -6,7 +6,7 @@
 
 namespace dftracer::utils {
 
-enum class ExecutorType : std::uint8_t { SEQUENTIAL, THREAD, MPI };
+enum class ExecutorType : std::uint8_t { SEQUENTIAL, THREAD };
 
 std::string executor_type_to_string(ExecutorType type);
 ExecutorType string_to_executor_type(const std::string &str);

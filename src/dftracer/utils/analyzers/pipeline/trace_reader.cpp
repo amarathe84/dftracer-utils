@@ -38,6 +38,10 @@ Pipeline TraceReader::build() {
     Pipeline pipeline;
     std::vector<TaskIndex> metadata_indices;
 
+    // Query every chunk to do the serial part
+    // Set of tasks
+    // - 
+
     // Create individual metadata tasks for each trace file (source tasks, no
     // dependencies)
     for (size_t file_idx = 0; file_idx < traces.size(); ++file_idx) {
@@ -49,14 +53,14 @@ Pipeline TraceReader::build() {
                 // Only process when input_path matches this task's assigned
                 // file
                 if (input_path == trace_path) {
-                    DFTRACER_UTILS_LOG_ERROR(
+                    DFTRACER_UTILS_LOG_DEBUG(
                         "[Thread %zu] Processing metadata for file [%zu]: %s",
                         std::hash<std::thread::id>{}(thread_id), file_idx,
                         trace_path.c_str());
                     Indexer indexer(trace_path, trace_path + ".idx");
                     indexer.build();
                     auto max_bytes = indexer.get_max_bytes();
-                    DFTRACER_UTILS_LOG_ERROR(
+                    DFTRACER_UTILS_LOG_DEBUG(
                         "[Thread %zu] Max bytes for %s: %zu",
                         std::hash<std::thread::id>{}(thread_id),
                         trace_path.c_str(), max_bytes);
@@ -133,11 +137,11 @@ Pipeline TraceReader::build() {
                     Reader reader(work.path, work.path + ".idx");
                     auto docs = reader.read_json_lines_bytes_owned(work.start,
                                                                    work.end);
-                    DFTRACER_UTILS_LOG_DEBUG(
+                    DFTRACER_UTILS_LOG_INFO(
                         "[Thread %zu] Loaded %zu documents from %s",
                         std::hash<std::thread::id>{}(thread_id), docs.size(),
                         work.path.c_str());
-                    results.push_back(docs);
+                    results.push_back(std::move(docs));
                 } catch (const std::exception& e) {
                     // noop
                 }
@@ -161,16 +165,14 @@ Pipeline TraceReader::build() {
 
                 for (const auto& doc : documents) {
                     try {
-                        auto record = parse_trace(doc);
+                        auto record = parse_trace_owned(doc);
 
-                        if (!record) {
+                        if (!record.is_valid) {
                             continue;
                         }
 
-                        if (!record->func_name.empty() &&
-                            !record->cat.empty()) {
-                            valid_records.push_back(std::move(*record));
-                        }
+                        DFTRACER_UTILS_LOG_INFO("Parsed trace: %s, duration %f", record.func_name.c_str(), record.duration);
+                        valid_records.push_back(std::move(record));
                     } catch (const std::exception& e) {
                         // noop
                     }

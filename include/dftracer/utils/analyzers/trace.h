@@ -44,6 +44,8 @@ struct Trace {
     std::int64_t offset = -1;  // -1 means NaN or unknown
     std::unordered_map<std::string, std::string> view_fields;
     BinFields bin_fields;
+
+    bool is_valid; // set manually after parsing, to reduce using optional
 };
 
 }  // namespace dftracer::utils::analyzers
