@@ -2,6 +2,9 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
+
+namespace dftracer::utils {
+
 void insert_file_metadata_record(const SqliteDatabase &db, int file_id,
                                  std::size_t ckpt_size,
                                  std::uint64_t total_lines,
@@ -27,3 +30,5 @@ void insert_file_metadata_record(const SqliteDatabase &db, int file_id,
         "total_lines=%llu, total_uc_size=%llu",
         file_id, ckpt_size, total_lines, total_uc_size);
 }
+
+}  // namespace dftracer::utils

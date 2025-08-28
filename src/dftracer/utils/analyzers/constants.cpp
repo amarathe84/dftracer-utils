@@ -36,6 +36,13 @@ const std::unordered_set<std::string> POSIX_WRITE_FUNCTIONS = {
 const std::unordered_set<std::string> POSIX_SYNC_FUNCTIONS = {
     "fsync", "fdatasync", "msync", "sync"};
 
+const std::unordered_set<std::string> POSIX_PCTL_FUNCTIONS = {
+    "exec", "exit", "fork", "kill", "pipe", "wait"};
+
+const std::unordered_set<std::string> POSIX_IPC_FUNCTIONS = {
+    "msgctl", "msgget", "msgrcv", "msgsnd", "semctl", "semget",
+    "semop",  "shmat",  "shmctl", "shmdt",  "shmget"};
+
 const std::unordered_set<std::string> POSIX_METADATA_FUNCTIONS = {
     "__fxstat", "__fxstat64", "__lxstat", "__lxstat64", "__xstat", "__xstat64",
     "access",   "close",      "closedir", "fclose",     "fcntl",   "fopen",
@@ -43,13 +50,6 @@ const std::unordered_set<std::string> POSIX_METADATA_FUNCTIONS = {
     "link",     "lseek",      "lseek64",  "mkdir",      "open",    "open64",
     "opendir",  "readdir",    "readlink", "remove",     "rename",  "rmdir",
     "seek",     "stat",       "unlink"};
-
-const std::unordered_set<std::string> POSIX_PCTL_FUNCTIONS = {
-    "exec", "exit", "fork", "kill", "pipe", "wait"};
-
-const std::unordered_set<std::string> POSIX_IPC_FUNCTIONS = {
-    "msgctl", "msgget", "msgrcv", "msgsnd", "semctl", "semget",
-    "semop",  "shmat",  "shmctl", "shmdt",  "shmget"};
 
 IOCategory get_io_cat(const std::string& func_name) {
     // if func_name is within POSIX_METADATA_FUNCTIONS then use metadata
@@ -94,37 +94,6 @@ const std::vector<std::string> IGNORED_FILE_PATTERNS = {"/dev/",
                                                         "/venv",
                                                         "__pycache__"};
 
-// Size constants
-const std::string SIZE_BIN_PREFIX = "size_bin_";
-
-const std::vector<double> SIZE_BINS = {-std::numeric_limits<double>::infinity(),
-                                       4 * KiB,
-                                       16 * KiB,
-                                       64 * KiB,
-                                       256 * KiB,
-                                       1 * MiB,
-                                       4 * MiB,
-                                       16 * MiB,
-                                       64 * MiB,
-                                       256 * MiB,
-                                       1 * GiB,
-                                       4 * GiB,
-                                       std::numeric_limits<double>::infinity()};
-
-const std::vector<std::string> SIZE_BIN_LABELS = {
-    "<4 KiB",           "4 KiB - 16 KiB",  "16 KiB - 64 KiB",
-    "64 KiB - 256 KiB", "256 KiB - 1 MiB", "1 MiB - 4 MiB",
-    "4 MiB - 16 MiB",   "16 MiB - 64 MiB", "64 MiB - 256 MiB",
-    "256 MiB - 1 GiB",  "1 GiB - 4 GiB",   ">4 GiB"};
-
-const std::vector<std::string> SIZE_BIN_NAMES = {
-    "<4 kiB", "4 KiB",  "16 KiB", "64 KiB",  "256 KiB", "1 MiB",
-    "4 MiB",  "16 MiB", "64 MiB", "256 MiB", "1 GiB",   ">4 GiB"};
-
-const std::vector<std::string> SIZE_BIN_SUFFIXES = {
-    "0_4kib",       "4kib_16kib",  "16kib_64kib", "64kib_256kib",
-    "256kib_1mib",  "1mib_4mib",   "4mib_16mib",  "16mib_64mib",
-    "64mib_256mib", "256mib_1gib", "1gib_4gib",   "4gib_plus"};
 
 // Humanized column mappings
 const std::unordered_map<std::string, std::string> HUMANIZED_COLS = {

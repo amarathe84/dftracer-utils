@@ -32,6 +32,8 @@ static void check_reader_state(bool is_open, const void *indexer) {
 
 static constexpr std::size_t DEFAULT_READER_BUFFER_SIZE = 1 * 1024 * 1024;
 
+namespace dftracer::utils {
+
 ReaderImplementor::ReaderImplementor(const std::string &gz_path_,
                                      const std::string &idx_path_,
                                      std::size_t index_ckpt_size)
@@ -262,3 +264,4 @@ json::OwnedJsonDocuments ReaderImplementor::read_json_lines_bytes_owned(
     return json::parse_json_lines_owned(buffer_content.data(),
                                         buffer_content.size());
 }
+}  // namespace dftracer::utils

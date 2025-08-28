@@ -3,14 +3,17 @@
 
 #include <cstring>
 
+
+using namespace dftracer::utils;
+
 extern "C" {
 
 static int validate_handle(dft_indexer_handle_t indexer) {
     return indexer ? 0 : -1;
 }
 
-static dftracer::utils::Indexer *cast_indexer(dft_indexer_handle_t indexer) {
-    return static_cast<dftracer::utils::Indexer *>(indexer);
+static Indexer *cast_indexer(dft_indexer_handle_t indexer) {
+    return static_cast<Indexer *>(indexer);
 }
 
 dft_indexer_handle_t dft_indexer_create(const char *gz_path,
@@ -23,7 +26,7 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
     }
 
     try {
-        auto *indexer = new dftracer::utils::Indexer(
+        auto *indexer = new Indexer(
             gz_path, idx_path, checkpoint_size, force_rebuild != 0);
         return static_cast<dft_indexer_handle_t>(indexer);
     } catch (const std::exception &e) {
@@ -108,7 +111,7 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
     }
 
     try {
-        dftracer::utils::IndexCheckpoint temp_ckpt;
+        IndexCheckpoint temp_ckpt;
 
         if (cast_indexer(indexer)->find_checkpoint(
                 static_cast<size_t>(target_offset), temp_ckpt)) {
@@ -221,7 +224,7 @@ void dft_indexer_free_checkpoints(dft_indexer_checkpoint_t *checkpoints,
 
 void dft_indexer_destroy(dft_indexer_handle_t indexer) {
     if (indexer) {
-        delete static_cast<dftracer::utils::Indexer *>(indexer);
+        delete static_cast<Indexer *>(indexer);
     }
 }
 

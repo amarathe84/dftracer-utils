@@ -17,7 +17,6 @@ namespace dftracer::utils {
 
 class Tasks {
    public:
-    // Reduce operations - return unique_ptr for easy pipeline usage
     template <typename T>
     static std::unique_ptr<SumTask<T>> sum() {
         return std::make_unique<SumTask<T>>(std::plus<T>{}, T{});
@@ -42,31 +41,21 @@ class Tasks {
             [](const T& a, const T& b) { return std::min(a, b); }, initial);
     }
 
-    // Map operations - return unique_ptr for easy pipeline usage
     template <typename I, typename O, typename F>
     static std::unique_ptr<MapTask<I, O, F>> map(F func) {
         return std::make_unique<MapTask<I, O, F>>(std::move(func));
     }
 
-    // Filter operations - return unique_ptr for easy pipeline usage
     template <typename T, typename F>
     static std::unique_ptr<FilterTask<T, F>> filter(F predicate) {
         return std::make_unique<FilterTask<T, F>>(std::move(predicate));
     }
 
-    // FlatMap operations
-    template <typename I, typename O, typename F>
-    static FlatMapTask<I, O, F> flatmap(F func) {
-        return FlatMapTask<I, O, F>(std::move(func));
-    }
-
-    // FlatMap operations - return unique_ptr for easy pipeline usage
     template <typename I, typename O, typename F>
     static std::unique_ptr<FlatMapTask<I, O, F>> flatmap(F func) {
         return std::make_unique<FlatMapTask<I, O, F>>(std::move(func));
     }
 
-    // Sort operations - return unique_ptr for easy pipeline usage
     template <typename T, typename F>
     static std::unique_ptr<SortTask<T, F>> sort(F comparator) {
         return std::make_unique<SortTask<T, F>>(std::move(comparator));
@@ -77,7 +66,6 @@ class Tasks {
         return std::make_unique<DefaultSortTask<T>>(std::less<T>{});
     }
 
-    // GroupBy operations - return unique_ptr for easy pipeline usage
     template <typename T, typename K, typename F>
     static std::unique_ptr<GroupByTask<T, K, F>> groupby(F key_extractor) {
         return std::make_unique<GroupByTask<T, K, F>>(std::move(key_extractor));
@@ -90,7 +78,6 @@ class Tasks {
             std::move(key_extractor));
     }
 
-    // Take/Limit operations - return unique_ptr for easy pipeline usage
     template <typename T>
     static std::unique_ptr<TakeTask<T>> take(size_t count) {
         return std::make_unique<TakeTask<T>>(count);
@@ -101,7 +88,6 @@ class Tasks {
         return std::make_unique<LimitTask<T>>(count);
     }
 
-    // Skip/Drop operations - return unique_ptr for easy pipeline usage
     template <typename T>
     static std::unique_ptr<SkipTask<T>> skip(size_t count) {
         return std::make_unique<SkipTask<T>>(count);
@@ -112,7 +98,6 @@ class Tasks {
         return std::make_unique<DropTask<T>>(count);
     }
 
-    // Distinct operations - return unique_ptr for easy pipeline usage
     template <typename T>
     static std::unique_ptr<DistinctTask<T>> distinct() {
         return std::make_unique<DistinctTask<T>>();

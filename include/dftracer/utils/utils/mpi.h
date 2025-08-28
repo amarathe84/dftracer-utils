@@ -2,7 +2,6 @@
 #define DFTRACER_UTILS_UTILS_MPI_H
 
 #include <dftracer/utils/common/config.h>
-
 #include <mpi.h>
 
 #include <cstdint>

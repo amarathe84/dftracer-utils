@@ -1,8 +1,11 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/reader/reader.h>
 
-static dftracer::utils::Reader *cast_reader(dft_reader_handle_t reader) {
-    return static_cast<dftracer::utils::Reader *>(reader);
+
+using namespace dftracer::utils;
+
+static Reader *cast_reader(dft_reader_handle_t reader) {
+    return static_cast<Reader *>(reader);
 }
 
 extern "C" {
@@ -21,7 +24,7 @@ dft_reader_handle_t dft_reader_create(const char *gz_path, const char *idx_path,
 
     try {
         auto *reader =
-            new dftracer::utils::Reader(gz_path, idx_path, index_ckpt_size);
+            new Reader(gz_path, idx_path, index_ckpt_size);
         return static_cast<dft_reader_handle_t>(reader);
     } catch (const std::exception &e) {
         DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader: %s", e.what());
@@ -36,11 +39,11 @@ dft_reader_handle_t dft_reader_create_with_indexer(
         return nullptr;
     }
 
-    DFTRACER_UTILS_LOG_INFO("Creating DFT reader with provided indexer");
+    DFTRACER_UTILS_LOG_DEBUG("Creating DFT reader with provided indexer");
 
     try {
-        auto *reader = new dftracer::utils::Reader(
-            static_cast<dftracer::utils::Indexer *>(indexer));
+        auto *reader = new Reader(
+            static_cast<Indexer *>(indexer));
         return static_cast<dft_reader_handle_t>(reader);
     } catch (const std::exception &e) {
         DFTRACER_UTILS_LOG_ERROR("Failed to create DFT reader with indexer: %s",

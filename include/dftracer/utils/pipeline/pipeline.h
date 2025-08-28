@@ -40,6 +40,8 @@ class Pipeline {
     TaskIndex add_task(std::unique_ptr<Task> task);
     void add_dependency(TaskIndex from, TaskIndex to);
 
+    void chain(Pipeline&& other);
+
     size_t size() const { return nodes_.size(); }
     bool empty() const { return nodes_.empty(); }
 
@@ -54,7 +56,9 @@ class Pipeline {
         return dependents_;
     }
     inline Task* get_task(TaskIndex index) const {
-        return index < nodes_.size() ? nodes_[index].get() : nullptr;
+      if (index < 0)
+        return nullptr;
+      return index < static_cast<TaskIndex>(nodes_.size()) ? nodes_[index].get() : nullptr;
     }
     inline const std::vector<TaskIndex>& get_task_dependencies(
         TaskIndex index) const {

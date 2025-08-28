@@ -2,6 +2,9 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
+
+namespace dftracer::utils {
+
 bool delete_file_record(const SqliteDatabase &db, int file_id) {
     const char *cleanup_queries[] = {
         "DELETE FROM checkpoints WHERE file_id = ?;",
@@ -31,3 +34,5 @@ bool delete_file_record(const SqliteDatabase &db, int file_id) {
         "Successfully cleaned up existing data for file_id %d", file_id);
     return true;
 }
+
+}  // namespace dftracer::utils

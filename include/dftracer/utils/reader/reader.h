@@ -43,10 +43,10 @@ void dft_reader_reset(dft_reader_handle_t reader);
 #include <string>
 #include <vector>
 
-class ReaderImplementor;
 namespace dftracer::utils {
 
 class Indexer;
+class ReaderImplementor;
 
 class Reader {
    public:

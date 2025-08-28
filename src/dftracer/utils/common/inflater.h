@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 
+namespace dftracer::utils {
 class Inflater {
    public:
     static constexpr std::size_t BUFFER_SIZE = 65536;
@@ -175,5 +176,6 @@ class Inflater {
    private:
     alignas(64) unsigned char in_buffer[BUFFER_SIZE];
 };
+}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_COMMON_INFLATER_H

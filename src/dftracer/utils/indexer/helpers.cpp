@@ -69,7 +69,7 @@ std::string calculate_file_sha256(const std::string &file_path) {
 }
 
 std::uint64_t file_size_bytes(const std::string &path) {
-    struct stat st{};
+    struct stat st {};
     if (stat(path.c_str(), &st) == 0) {
 #if defined(_WIN32)
         if ((st.st_mode & _S_IFREG) != 0)

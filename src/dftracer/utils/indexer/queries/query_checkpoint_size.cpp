@@ -1,6 +1,8 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
+namespace dftracer::utils {
+
 std::size_t query_checkpoint_size(const SqliteDatabase &db, int file_id) {
     SqliteStmt stmt(db,
                     "SELECT checkpoint_size FROM metadata WHERE file_id = ?");
@@ -13,3 +15,5 @@ std::size_t query_checkpoint_size(const SqliteDatabase &db, int file_id) {
 
     return ckpt_size;
 }
+
+}  // namespace dftracer::utils

@@ -1,6 +1,9 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
+
+namespace dftracer::utils {
+
 void insert_file_record(const SqliteDatabase &db,
                         const std::string &gz_path_logical_path,
                         std::size_t bytes, std::time_t file_mtime,
@@ -29,3 +32,5 @@ void insert_file_record(const SqliteDatabase &db,
 
     db_file_id = sqlite3_column_int(stmt, 0);
 }
+
+}  // namespace dftracer::utils

@@ -1,6 +1,9 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
+
+namespace dftracer::utils {
+
 void insert_checkpoint_record(const SqliteDatabase &db, int file_id,
                               const InsertCheckpointData &data) {
     SqliteStmt stmt(
@@ -27,3 +30,5 @@ void insert_checkpoint_record(const SqliteDatabase &db, int file_id,
                                std::string(sqlite3_errmsg(db.get())));
     }
 }
+
+}  // namespace dftracer::utils

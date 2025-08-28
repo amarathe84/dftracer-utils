@@ -93,14 +93,6 @@ constexpr double KiB = 1024.0;
 constexpr double MiB = KiB * KiB;
 constexpr double GiB = KiB * MiB;
 
-extern const std::string SIZE_BIN_PREFIX;
-extern const std::vector<double> SIZE_BINS;
-extern const std::vector<std::string> SIZE_BIN_LABELS;
-extern const std::vector<std::string> SIZE_BIN_NAMES;
-extern const std::vector<std::string> SIZE_BIN_SUFFIXES;
-
-constexpr size_t NUM_SIZE_BINS = 12;  // SIZE_BINS.size() - 1
-
 // Patterns and separators
 constexpr const char* FILE_PATTERN_PLACEHOLDER = "[0-9]";
 constexpr const char* PROC_NAME_SEPARATOR = "#";
@@ -141,8 +133,8 @@ extern const std::vector<std::string> HLM_EXTRA_COLS;
 constexpr const char* PARTITION_SIZE = "128MB";
 constexpr bool VIEW_PERMUTATIONS = false;
 
-const double DEFAULT_TIME_RESOLUTION = 1e6;
-const double DEFAULT_TIME_GRANULARITY = 1e6;
+constexpr double DEFAULT_TIME_RESOLUTION = 1e6;
+constexpr double DEFAULT_TIME_GRANULARITY = 1e6;
 
 // AI DFTracer constants for epoch processing
 namespace ai_dftracer {
@@ -169,26 +161,13 @@ constexpr const char* PIPELINE_TRAIN = "train";
 constexpr const char* PIPELINE_EVALUATE = "evaluate";
 constexpr const char* PIPELINE_TEST = "test";
 
-// Helper functions
-inline std::string get_block(const std::string& func_name) {
-    return func_name + CTX_SEPARATOR + BLOCK_NAME;
-}
-
-inline std::string get_iter(const std::string& func_name) {
-    return func_name + CTX_SEPARATOR + ITER_NAME;
-}
-
-inline std::string get_init(const std::string& func_name) {
-    return func_name + CTX_SEPARATOR + INIT_NAME;
-}
-
 // Check if a record matches epoch criteria
-inline bool is_epoch_event(const std::string& cat,
-                           const std::string& func_name) {
-    return cat == CATEGORY_PIPELINE &&
-           (func_name == get_block(PIPELINE_EPOCH) ||
-            func_name == PIPELINE_EPOCH);
-}
+// inline bool is_epoch_event(const std::string& cat,
+//                            const std::string& func_name) {
+//     return cat == CATEGORY_PIPELINE &&
+//            (func_name == get_block(PIPELINE_EPOCH) ||
+//             func_name == PIPELINE_EPOCH);
+// }
 }  // namespace ai_dftracer
 }  // namespace dftracer::utils::analyzers::constants
 

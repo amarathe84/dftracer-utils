@@ -1,5 +1,7 @@
 #include <dftracer/utils/pipeline/pipeline.h>
 
+#include <dftracer/utils/common/logging.h>
+
 namespace dftracer::utils {
 
 TaskIndex Pipeline::add_task(std::unique_ptr<Task> task) {
@@ -27,8 +29,11 @@ void Pipeline::add_dependency(TaskIndex from, TaskIndex to) {
 bool Pipeline::validate_types() const {
     for (TaskIndex i = 0; i < nodes_.size(); ++i) {
         for (TaskIndex dependent : dependencies_[i]) {
-            if (nodes_[i]->get_output_type() !=
-                nodes_[dependent]->get_input_type()) {
+            if (nodes_[dependent]->get_output_type() !=
+                nodes_[i]->get_input_type()) {
+                  DFTRACER_UTILS_LOG_ERROR("Type mismatch between task %d (output: %s) and task %d (expected input: %s)",
+                  dependent, nodes_[dependent]->get_output_type().name(),
+                  i, nodes_[i]->get_input_type().name());
                 return false;
             }
         }
@@ -55,7 +60,7 @@ bool Pipeline::has_cycles() const {
         queue.pop();
         processed++;
 
-        for (TaskIndex dependent : dependencies_[current]) {
+        for (TaskIndex dependent : dependents_[current]) {
             in_degree[dependent]--;
             if (in_degree[dependent] == 0) {
                 queue.push(dependent);
@@ -86,7 +91,7 @@ std::vector<TaskIndex> Pipeline::topological_sort() const {
         queue.pop();
         result.push_back(current);
 
-        for (TaskIndex dependent : dependencies_[current]) {
+        for (TaskIndex dependent : dependents_[current]) {
             in_degree[dependent]--;
             if (in_degree[dependent] == 0) {
                 queue.push(dependent);
@@ -95,6 +100,32 @@ std::vector<TaskIndex> Pipeline::topological_sort() const {
     }
 
     return result;
+}
+
+void Pipeline::chain(Pipeline&& other) {
+    if (other.empty()) {
+        return;
+    }
+    
+    TaskIndex offset = nodes_.size();
+    
+    for (auto& task : other.nodes_) {
+        nodes_.push_back(std::move(task));
+        dependencies_.push_back({});
+        dependents_.push_back({});
+        task_completed_[nodes_.size() - 1] = false;
+        dependency_count_[nodes_.size() - 1] = 0;
+    }
+    
+    for (TaskIndex i = 0; i < other.dependencies_.size(); ++i) {
+        TaskIndex new_index = offset + i;
+        for (TaskIndex dep : other.dependencies_[i]) {
+            TaskIndex new_dep = offset + dep;
+            dependencies_[new_index].push_back(new_dep);
+            dependents_[new_dep].push_back(new_index);
+            dependency_count_[new_index]++;
+        }
+    }
 }
 
 }  // namespace dftracer::utils

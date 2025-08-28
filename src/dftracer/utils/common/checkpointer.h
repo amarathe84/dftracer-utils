@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace dftracer::utils {
 struct Checkpointer {
     std::size_t uc_offset;
     std::size_t c_offset;
@@ -135,5 +136,6 @@ struct Checkpointer {
         return true;
     }
 };
+}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_COMMON_CHECKPOINTER_H

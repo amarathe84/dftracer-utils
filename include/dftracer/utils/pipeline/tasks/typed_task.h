@@ -23,7 +23,12 @@ class TypedTask : public Task {
 
    protected:
     bool validate(I in) {
-        return std::type_index(typeid(in)) == this->get_input_type();
+        bool result = std::type_index(typeid(in)) == this->get_input_type();
+        if (!result) {
+            DFTRACER_UTILS_LOG_ERROR("Input type validation failed, expected: {}, got: {}",
+                                      this->get_input_type().name(), typeid(in).name());
+        }
+        return result;
     }
 
    public:

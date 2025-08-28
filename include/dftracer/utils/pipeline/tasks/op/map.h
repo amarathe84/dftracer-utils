@@ -21,9 +21,10 @@ class MapTask : public TypedTask<std::vector<I>, std::vector<O>> {
 
    protected:
     inline std::vector<O> apply(std::vector<I> in) override {
-        if (!this->validate(in))
+        if (!this->validate(in)) {
             throw PipelineError(PipelineError::TYPE_MISMATCH_ERROR,
                                 "Input type validation failed");
+        }
 
         std::vector<O> result;
         result.reserve(in.size());

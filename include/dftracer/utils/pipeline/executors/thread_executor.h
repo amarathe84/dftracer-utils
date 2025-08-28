@@ -9,8 +9,12 @@
 namespace dftracer::utils {
 
 class ThreadExecutor : public Executor {
+   private:
+    size_t max_threads_;
+    
    public:
     ThreadExecutor();
+    explicit ThreadExecutor(size_t max_threads);
     ~ThreadExecutor() override = default;
     ThreadExecutor(const ThreadExecutor&) = delete;
     ThreadExecutor& operator=(const ThreadExecutor&) = delete;

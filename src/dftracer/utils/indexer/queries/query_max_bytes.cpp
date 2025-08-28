@@ -2,6 +2,9 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
+
+namespace dftracer::utils {
+
 std::uint64_t query_max_bytes(const SqliteDatabase &db,
                               const std::string &gz_path_logical_path) {
     SqliteStmt stmt(
@@ -32,3 +35,5 @@ std::uint64_t query_max_bytes(const SqliteDatabase &db,
 
     return max_bytes;
 }
+
+}  // namespace dftracer::utils

@@ -19,7 +19,7 @@ inline std::string dftracer_utils_macro_get_time() {
     auto now = std::localtime(&dftracer_utils_ts_t);
     char dftracer_utils_ts_time_str[256];
     snprintf(dftracer_utils_ts_time_str, sizeof(dftracer_utils_ts_time_str),
-             "%04d-%02d-%02d %02d:%02d:%02d.%ld", now->tm_year + 1900,
+             "%04d-%02d-%02d %02d:%02d:%02d.%lld", now->tm_year + 1900,
              now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min,
              now->tm_sec, dftracer_utils_ts_millis);
     return dftracer_utils_ts_time_str;

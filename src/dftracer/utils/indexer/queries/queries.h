@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <ctime>
 
-using namespace dftracer::utils;
+namespace dftracer::utils {
 
 void insert_file_record(const SqliteDatabase &db,
                         const std::string &gz_path_logical_path,
@@ -49,5 +49,7 @@ bool query_checkpoint(const SqliteDatabase &db, size_t target_offset,
 std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
                                                int file_id);
 std::size_t query_checkpoint_size(const SqliteDatabase &db, int file_id);
+
+} // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_INDEXER_SQLITE_QUERIES_H

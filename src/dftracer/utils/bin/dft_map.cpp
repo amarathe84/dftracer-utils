@@ -1,12 +1,11 @@
 #include <dftracer/utils/analyzers/analyzer.h>
-#include <dftracer/utils/config.h>
+#include <dftracer/utils/common/config.h>
 #include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/pipeline/execution_context/threaded.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
-#include <dftracer/utils/utils/logger.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/spdlog.h>
+#include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/pipeline/executors/thread_executor.h>
+#include <dftracer/utils/pipeline/executors/sequential_executor.h>
 
 #include <argparse/argparse.hpp>
 #include <iostream>
@@ -17,8 +16,8 @@
 using namespace dftracer::utils;
 
 int main(int argc, char* argv[]) {
-    size_t default_checkpoint_size =
-        dftracer::utils::indexer::Indexer::DEFAULT_CHECKPOINT_SIZE;
+    DFTRACER_UTILS_LOGGER_INIT();
+    size_t default_checkpoint_size = Indexer::DEFAULT_CHECKPOINT_SIZE;
     auto default_checkpoint_size_str =
         std::to_string(default_checkpoint_size) + " B (" +
         std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
@@ -73,14 +72,10 @@ int main(int argc, char* argv[]) {
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
-        spdlog::error("Error occurred: {}", err.what());
+        DFTRACER_UTILS_LOG_ERROR("Error occurred: %s", err.what());
         std::cerr << program;
         return 1;
     }
-
-    auto logger = spdlog::stderr_color_mt("stderr");
-    spdlog::set_default_logger(logger);
-    logger::set_log_level(program.get<std::string>("--log-level"));
 
     auto trace_paths = program.get<std::vector<std::string>>("files");
     size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
@@ -102,51 +97,53 @@ int main(int argc, char* argv[]) {
     }
 
     if (trace_paths.empty()) {
-        spdlog::error("No trace files specified");
+        DFTRACER_UTILS_LOG_ERROR("No trace files specified");
         std::cerr << program;
         return 1;
     }
 
     // Validate checkpoint arguments
     if (checkpoint && checkpoint_dir.empty()) {
-        spdlog::error(
-            "--checkpoint-dir must be specified when --checkpoint is enabled");
+        DFTRACER_UTILS_LOG_ERROR("--checkpoint-dir must be specified when --checkpoint is enabled");
         std::cerr << program;
         return 1;
     }
 
-    spdlog::info("=== DFTracer High-Level Metrics Computation ===");
-    spdlog::info("Configuration:");
-    spdlog::info("  Checkpoint size: {} MB", checkpoint_size / (1024 * 1024));
-    spdlog::info("  Force rebuild: {}", force_rebuild ? "true" : "false");
-    spdlog::info("  Time granularity: {} µs", time_granularity);
-    spdlog::info("  Checkpointing: {}", checkpoint ? "enabled" : "disabled");
+    DFTRACER_UTILS_LOG_INFO("=== DFTracer High-Level Metrics Computation ===");
+    DFTRACER_UTILS_LOG_INFO("Configuration:");
+    DFTRACER_UTILS_LOG_INFO("  Checkpoint size: %.1f MB", static_cast<float>(checkpoint_size) / (1024 * 1024));
+    DFTRACER_UTILS_LOG_INFO("  Force rebuild: %s", force_rebuild ? "true" : "false");
+    DFTRACER_UTILS_LOG_INFO("  Time granularity: %.1f µs", time_granularity);
+    DFTRACER_UTILS_LOG_INFO("  Checkpointing: %s", checkpoint ? "enabled" : "disabled");
     if (checkpoint) {
-        spdlog::info("  Checkpoint directory: {}", checkpoint_dir);
+        DFTRACER_UTILS_LOG_INFO("  Checkpoint directory: %s", checkpoint_dir.c_str());
     }
     std::ostringstream view_types_oss;
     for (size_t i = 0; i < view_types.size(); ++i) {
         view_types_oss << view_types[i];
         if (i < view_types.size() - 1) view_types_oss << ", ";
     }
-    spdlog::info("  View types: {}", view_types_oss.str());
-    spdlog::info("  Trace files: {}", trace_paths.size());
+    DFTRACER_UTILS_LOG_INFO("  View types: %s", view_types_oss.str().c_str());
+    DFTRACER_UTILS_LOG_INFO("  Trace files: %d", trace_paths.size());
 
-    pipeline::context::ThreadedContext ctx;
+    // ThreadExecutor executor;
+    SequentialExecutor executor;
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    auto config = analyzers::AnalyzerConfig::Default()
+    auto config = analyzers::AnalyzerConfigManager::Default()
                       .set_time_granularity(time_granularity)
                       .set_checkpoint(checkpoint)
                       .set_checkpoint_dir(checkpoint_dir)
                       .set_checkpoint_size(checkpoint_size);
 
     analyzers::Analyzer analyzer(config);
-    auto result = analyzer.analyze_trace(ctx, trace_paths, view_types);
+    auto pipeline = analyzer.analyze(trace_paths, view_types);
+
+    executor.execute(pipeline, trace_paths);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end_time - start_time;
-    spdlog::debug("Duration: {} ms", duration.count());
+    DFTRACER_UTILS_LOG_DEBUG("Duration: %.1f ms", duration.count());
 
     return 0;
 }

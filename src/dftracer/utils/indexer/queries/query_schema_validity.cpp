@@ -1,6 +1,9 @@
 #include <dftracer/utils/indexer/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
 
+
+namespace dftracer::utils {
+
 bool query_schema_validity(const SqliteDatabase &db) {
     SqliteStmt stmt(db,
                     "SELECT name FROM sqlite_master WHERE type='table' AND "
@@ -13,3 +16,5 @@ bool query_schema_validity(const SqliteDatabase &db) {
 
     return table_count >= 3;
 }
+
+}  // namespace dftracer::utils

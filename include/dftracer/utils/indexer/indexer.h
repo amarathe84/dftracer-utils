@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
-class IndexerImplementor;
 namespace dftracer::utils {
 
+class IndexerImplementor;
 class Indexer {
    public:
     static constexpr std::size_t DEFAULT_CHECKPOINT_SIZE =

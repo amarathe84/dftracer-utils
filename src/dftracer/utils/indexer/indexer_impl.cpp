@@ -8,6 +8,8 @@
 #include <dftracer/utils/indexer/indexer_impl.h>
 #include <dftracer/utils/indexer/queries/queries.h>
 
+namespace dftracer::utils {
+
 static void init_schema(const SqliteDatabase &db) {
     char *errmsg = NULL;
     int rc = sqlite3_exec(db.get(), constants::indexer::SQL_SCHEMA, NULL, NULL,
@@ -284,12 +286,12 @@ void IndexerImplementor::build() {
     if (!force_rebuild && index_exists_and_valid(idx_path)) {
         open();
         if (query_schema_validity(db)) {
-            DFTRACER_UTILS_LOG_INFO(
+            DFTRACER_UTILS_LOG_DEBUG(
                 "Index is already valid, skipping rebuild.");
             cached_is_valid = true;
             return;
         } else {
-            DFTRACER_UTILS_LOG_INFO(
+            DFTRACER_UTILS_LOG_DEBUG(
                 "Index file exists but schema is invalid, rebuilding.");
         }
     }
@@ -379,7 +381,7 @@ bool IndexerImplementor::need_rebuild() const {
         }
 
         if (current_sha256 != stored_sha256) {
-            DFTRACER_UTILS_LOG_INFO(
+            DFTRACER_UTILS_LOG_DEBUG(
                 "Index rebuild needed: file SHA256 changed (%s vs %s)",
                 (current_sha256.substr(0, 16) + "...").c_str(),
                 (stored_sha256.substr(0, 16) + "...").c_str());
@@ -425,3 +427,5 @@ bool IndexerImplementor::find_checkpoint(std::size_t target_offset,
 std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints() const {
     return query_checkpoints(db, cached_file_id);
 }
+
+}  // namespace dftracer::utils

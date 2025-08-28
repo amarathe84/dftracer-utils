@@ -1,6 +1,6 @@
 #include <dftracer/utils/common/constants.h>
 
-namespace constants {
+namespace dftracer::utils::constants {
 
 namespace indexer {
 const char *SQL_SCHEMA = R"(
@@ -37,4 +37,4 @@ const char *SQL_SCHEMA = R"(
     );
   )";
 }
-}  // namespace constants
+}  // namespace dftracer::utils::constants

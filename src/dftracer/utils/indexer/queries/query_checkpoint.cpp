@@ -3,6 +3,9 @@
 
 #include <cstring>
 
+
+namespace dftracer::utils {
+
 bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,
                       int file_id, IndexCheckpoint& checkpoint) {
     // For target offset 0, always decompress from beginning of file (no
@@ -50,3 +53,5 @@ bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,
 
     return found;
 }
+
+}  // namespace dftracer::utils
