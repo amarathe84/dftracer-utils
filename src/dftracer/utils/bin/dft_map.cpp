@@ -1,11 +1,11 @@
 #include <dftracer/utils/analyzers/analyzer.h>
 #include <dftracer/utils/common/config.h>
-#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/pipeline/executors/sequential_executor.h>
-#include <dftracer/utils/pipeline/executors/thread_executor.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/json.h>
+#include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/pipeline/executors/thread_executor.h>
+#include <dftracer/utils/pipeline/executors/sequential_executor.h>
 
 #include <argparse/argparse.hpp>
 #include <iostream>
@@ -104,25 +104,19 @@ int main(int argc, char* argv[]) {
 
     // Validate checkpoint arguments
     if (checkpoint && checkpoint_dir.empty()) {
-        DFTRACER_UTILS_LOG_ERROR(
-            "--checkpoint-dir must be specified when --checkpoint is enabled");
+        DFTRACER_UTILS_LOG_ERROR("--checkpoint-dir must be specified when --checkpoint is enabled");
         std::cerr << program;
         return 1;
     }
 
     DFTRACER_UTILS_LOG_INFO("=== DFTracer High-Level Metrics Computation ===");
     DFTRACER_UTILS_LOG_INFO("Configuration:");
-    DFTRACER_UTILS_LOG_INFO(
-        "  Checkpoint size: %.1f MB",
-        static_cast<float>(checkpoint_size) / (1024 * 1024));
-    DFTRACER_UTILS_LOG_INFO("  Force rebuild: %s",
-                            force_rebuild ? "true" : "false");
+    DFTRACER_UTILS_LOG_INFO("  Checkpoint size: %.1f MB", static_cast<float>(checkpoint_size) / (1024 * 1024));
+    DFTRACER_UTILS_LOG_INFO("  Force rebuild: %s", force_rebuild ? "true" : "false");
     DFTRACER_UTILS_LOG_INFO("  Time granularity: %.1f µs", time_granularity);
-    DFTRACER_UTILS_LOG_INFO("  Checkpointing: %s",
-                            checkpoint ? "enabled" : "disabled");
+    DFTRACER_UTILS_LOG_INFO("  Checkpointing: %s", checkpoint ? "enabled" : "disabled");
     if (checkpoint) {
-        DFTRACER_UTILS_LOG_INFO("  Checkpoint directory: %s",
-                                checkpoint_dir.c_str());
+        DFTRACER_UTILS_LOG_INFO("  Checkpoint directory: %s", checkpoint_dir.c_str());
     }
     std::ostringstream view_types_oss;
     for (size_t i = 0; i < view_types.size(); ++i) {
@@ -132,8 +126,8 @@ int main(int argc, char* argv[]) {
     DFTRACER_UTILS_LOG_INFO("  View types: %s", view_types_oss.str().c_str());
     DFTRACER_UTILS_LOG_INFO("  Trace files: %d", trace_paths.size());
 
-    // ThreadExecutor executor;
-    SequentialExecutor executor;
+    ThreadExecutor executor;
+    // SequentialExecutor executor;
     auto start_time = std::chrono::high_resolution_clock::now();
 
     auto config = analyzers::AnalyzerConfigManager::Default()
