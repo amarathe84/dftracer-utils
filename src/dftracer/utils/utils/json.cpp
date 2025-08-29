@@ -144,7 +144,7 @@ simdjson::simdjson_result<int64_t> OwnedJsonDocument::get_int64() const {
     return element_.get_int64();
 }
 
-simdjson::simdjson_result<uint64_t> OwnedJsonDocument::get_uint64() const {
+simdjson::simdjson_result<std::uint64_t> OwnedJsonDocument::get_uint64() const {
     ensure_parsed();
     return element_.get_uint64();
 }
@@ -334,7 +334,7 @@ double _get_double_field_impl(const JsonDoc& doc, const std::string& key) {
 }
 
 template <typename JsonDoc>
-uint64_t _get_uint64_field_impl(const JsonDoc& doc, const std::string& key) {
+std::uint64_t _get_uint64_field_impl(const JsonDoc& doc, const std::string& key) {
     if (!doc.is_object()) return 0;
 
     auto obj_result = doc.get_object();
@@ -412,7 +412,7 @@ double get_double_field(const JsonDocument& doc, const std::string& key) {
     return _get_double_field_impl(doc, key);
 }
 
-uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key) {
+std::uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key) {
     return _get_uint64_field_impl(doc, key);
 }
 
@@ -431,7 +431,7 @@ double get_double_field_owned(const OwnedJsonDocument& doc,
     return _get_double_field_impl(doc, key);
 }
 
-uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc,
+std::uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc,
                                 const std::string& key) {
     return _get_uint64_field_impl(doc, key);
 }

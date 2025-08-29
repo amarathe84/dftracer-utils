@@ -2,10 +2,11 @@
 
 #include <limits>
 #include <string>
+#include <cstdint>
 
 namespace dftracer::utils::analyzers::constants {
 std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat) {
-    os << std::to_string(static_cast<uint64_t>(io_cat));
+    os << std::to_string(static_cast<std::uint64_t>(io_cat));
     return os;
 }
 

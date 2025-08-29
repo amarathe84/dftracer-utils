@@ -100,7 +100,7 @@ Trace parse_trace(const dftracer::utils::json::JsonDocument& doc) {
                                     std::string arg_key =
                                         std::string(arg_field.key);
                                     if (arg_key == "ret") {
-                                        uint64_t ret_value = 0;
+                                        std::uint64_t ret_value = 0;
                                         if (arg_field.value.is_uint64()) {
                                             ret_value =
                                                 arg_field.value.get_uint64();
@@ -108,8 +108,8 @@ Trace parse_trace(const dftracer::utils::json::JsonDocument& doc) {
                                             int64_t signed_ret =
                                                 arg_field.value.get_int64();
                                             if (signed_ret > 0) {
-                                                ret_value =
-                                                    static_cast<uint64_t>(
+                                                ret_value +=
+                                                    static_cast<std::uint64_t>(
                                                         signed_ret);
                                             }
                                         }
@@ -269,7 +269,7 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
                                     std::string arg_key =
                                         std::string(arg_field.key);
                                     if (arg_key == "ret") {
-                                        uint64_t ret_value = 0;
+                                        std::uint64_t ret_value = 0;
                                         if (arg_field.value.is_uint64()) {
                                             ret_value =
                                                 arg_field.value.get_uint64();
@@ -278,7 +278,7 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
                                                 arg_field.value.get_int64();
                                             if (signed_ret > 0) {
                                                 ret_value =
-                                                    static_cast<uint64_t>(
+                                                    static_cast<std::uint64_t>(
                                                         signed_ret);
                                             }
                                         }

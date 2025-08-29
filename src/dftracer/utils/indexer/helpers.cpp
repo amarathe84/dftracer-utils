@@ -95,9 +95,9 @@ std::uint64_t file_size_bytes(const std::string &path) {
     if (stat(path.c_str(), &st) == 0) {
 #if defined(_WIN32)
         if ((st.st_mode & _S_IFREG) != 0)
-            return static_cast<uint64_t>(st.st_size);
+            return static_cast<std::uint64_t>(st.st_size);
 #else
-        if (S_ISREG(st.st_mode)) return static_cast<uint64_t>(st.st_size);
+        if (S_ISREG(st.st_mode)) return static_cast<std::uint64_t>(st.st_size);
 #endif
     }
 
@@ -110,7 +110,7 @@ std::uint64_t file_size_bytes(const std::string &path) {
     const auto pos = ftello(fp);
     std::fclose(fp);
     if (pos < 0) return 0;
-    return static_cast<uint64_t>(pos);
+    return static_cast<std::uint64_t>(pos);
 }
 
 bool index_exists_and_valid(const std::string &idx_path) {

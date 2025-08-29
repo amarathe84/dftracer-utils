@@ -15,15 +15,16 @@
 #include <map>
 #include <optional>
 #include <unordered_map>
+#include <cstdint>
 
 namespace dftracer::utils::analyzers {
 using namespace dftracer::utils::json;
 using namespace dftracer::utils::pipeline;
 
 namespace helpers {
-uint64_t calc_time_range(uint64_t time, double time_granularity);
+std::uint64_t calc_time_range(std::uint64_t time, double time_granularity);
 std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
-                        bool header = true);
+       bool header = true);
 arrow::Status hlms_to_parquet(const std::vector<HighLevelMetrics>& hlms,
                               const std::string& output_path);
 arrow::Result<std::vector<HighLevelMetrics>> hlms_from_parquet(
@@ -352,10 +353,10 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
 }
 
 struct EpochSpanEntry {
-    uint64_t epoch_num;
-    uint64_t start_time;
-    uint64_t end_time;
-    uint64_t duration;
+    std::uint64_t epoch_num;
+    std::uint64_t start_time;
+    std::uint64_t end_time;
+    std::uint64_t duration;
 
     template <typename Archive>
     void serialize(Archive& ar) {
@@ -382,14 +383,14 @@ inline auto postread_trace(Context& ctx, BagType&& events,
             .compute(ctx);
 
     // Compute epoch spans from all collected events
-    std::map<uint64_t, std::pair<uint64_t, uint64_t>> epoch_spans;
-    std::map<uint64_t, std::vector<EpochSpanEntry>> epoch_groups;
+    std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>> epoch_spans;
+    std::map<std::uint64_t, std::vector<EpochSpanEntry>> epoch_groups;
 
     for (const auto& record : all_epoch_events) {
-        uint64_t start_time_range = record.time_range;
-        uint64_t end_time_range = helpers::calc_time_range(
+        std::uint64_t start_time_range = record.time_range;
+        std::uint64_t end_time_range = helpers::calc_time_range(
             record.time_end, config.time_granularity());
-        uint64_t duration = end_time_range - start_time_range;
+        std::uint64_t duration = end_time_range - start_time_range;
         epoch_groups[record.epoch].push_back(
             {record.epoch, start_time_range, end_time_range, duration});
     }
@@ -435,7 +436,7 @@ inline auto postread_trace(Context& ctx, BagType&& events,
         size_t unassigned_events = 0;
 
         for (auto record : partition) {
-            uint64_t assigned_epoch = 0;
+            std::uint64_t assigned_epoch = 0;
             for (const auto& [epoch_num, span] : epoch_spans) {
                 auto [start, end] = span;
                 if (record.time_range >= start && record.time_range <= end) {

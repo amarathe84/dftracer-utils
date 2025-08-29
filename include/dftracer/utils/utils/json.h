@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <cstdint>
 
 namespace dftracer::utils::json {
 
@@ -91,7 +92,7 @@ OwnedJsonDocuments parse_json_lines_owned(const char* data, size_t size);
 
 std::string get_string_field(const JsonDocument& doc, const std::string& key);
 double get_double_field(const JsonDocument& doc, const std::string& key);
-uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key);
+std::uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key);
 std::string get_args_string_field(const JsonDocument& doc,
                                   const std::string& key);
 
@@ -99,7 +100,7 @@ std::string get_string_field_owned(const OwnedJsonDocument& doc,
                                    const std::string& key);
 double get_double_field_owned(const OwnedJsonDocument& doc,
                               const std::string& key);
-uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc,
+std::uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc,
                                 const std::string& key);
 std::string get_args_string_field_owned(const OwnedJsonDocument& doc,
                                         const std::string& key);

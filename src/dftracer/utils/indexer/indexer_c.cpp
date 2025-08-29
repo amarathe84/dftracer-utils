@@ -178,16 +178,16 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
             const auto &checkpoint = ckpts[i];
 
             temp_ckpts[i].checkpoint_idx =
-                static_cast<uint64_t>(checkpoint.checkpoint_idx);
+                static_cast<std::uint64_t>(checkpoint.checkpoint_idx);
             temp_ckpts[i].uc_offset =
-                static_cast<uint64_t>(checkpoint.uc_offset);
-            temp_ckpts[i].uc_size = static_cast<uint64_t>(checkpoint.uc_size);
-            temp_ckpts[i].c_offset = static_cast<uint64_t>(checkpoint.c_offset);
-            temp_ckpts[i].c_size = static_cast<uint64_t>(checkpoint.c_size);
+                static_cast<std::uint64_t>(checkpoint.uc_offset);
+            temp_ckpts[i].uc_size = static_cast<std::uint64_t>(checkpoint.uc_size);
+            temp_ckpts[i].c_offset = static_cast<std::uint64_t>(checkpoint.c_offset);
+            temp_ckpts[i].c_size = static_cast<std::uint64_t>(checkpoint.c_size);
             temp_ckpts[i].bits = checkpoint.bits;
             temp_ckpts[i].dict_size = checkpoint.dict_compressed.size();
             temp_ckpts[i].num_lines =
-                static_cast<uint64_t>(checkpoint.num_lines);
+                static_cast<std::uint64_t>(checkpoint.num_lines);
 
             // Allocate and copy dictionary data
             temp_ckpts[i].dict_compressed =
