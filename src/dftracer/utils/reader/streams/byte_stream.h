@@ -46,7 +46,7 @@ class ByteStream : public Stream {
 
         size_t bytes_read;
         DFTRACER_UTILS_LOG_DEBUG("ByteStream::stream - about to read: read_size=%zu, current_position_=%zu", read_size, current_position_);
-        bool result = inflater_.read_continuous(
+        bool result = inflater_.read(
             file_handle_, reinterpret_cast<unsigned char *>(buffer), read_size,
             bytes_read);
 

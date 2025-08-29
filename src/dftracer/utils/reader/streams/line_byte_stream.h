@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_READER_STREAMS_LINE_BYTE_STREAM_H
 
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/common/platform_compat.h>
 #include <dftracer/utils/reader/streams/stream.h>
 
 #include <cstdint>
@@ -47,9 +48,9 @@ class LineByteStream : public Stream {
         }
 
         // Use stack allocation for small search buffer
-        alignas(64) unsigned char search_buffer[SEARCH_BUFFER_SIZE];
+        alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char search_buffer[SEARCH_BUFFER_SIZE];
         size_t search_bytes;
-        if (inflater_.read_continuous(file_handle_, search_buffer,
+        if (inflater_.read(file_handle_, search_buffer,
                                       sizeof(search_buffer) - 1,
                                       search_bytes)) {
             size_t relative_target = target_start - current_pos;
@@ -114,7 +115,7 @@ class LineByteStream : public Stream {
 
         size_t bytes_read = 0;
         if (bytes_to_read > 0) {
-            bool status = inflater_.read_continuous(
+            bool status = inflater_.read(
                 file_handle_,
                 reinterpret_cast<unsigned char *>(temp_buffer_.data() +
                                                   partial_line_buffer_.size()),

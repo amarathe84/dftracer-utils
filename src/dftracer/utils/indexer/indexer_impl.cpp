@@ -1,6 +1,6 @@
 #include <dftracer/utils/common/checkpointer.h>
 #include <dftracer/utils/common/constants.h>
-#include <dftracer/utils/common/inflater.h>
+#include <dftracer/utils/indexer/inflater.h>
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/checkpoint_size.h>
 #include <dftracer/utils/indexer/error.h>
@@ -34,7 +34,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
 
     DFTRACER_UTILS_LOG_DEBUG("Starting to process chunks");
 
-    Inflater inflater;
+    IndexerInflater inflater;
     if (!inflater.initialize(fp, 0,
                              constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
         DFTRACER_UTILS_LOG_DEBUG("Failed to initialize inflater");
@@ -45,23 +45,15 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
     std::size_t current_uc_offset = 0;
     std::uint64_t total_lines = 0;
     std::size_t last_checkpoint_uc_offset = 0;
-    std::size_t total_input_bytes = 0;
-    
-    // Track total input bytes consumed for correct checkpoint positioning
-    // This follows zran.c approach: totin - strm.avail_in
-    auto get_input_position = [&]() -> std::size_t {
-        return total_input_bytes - inflater.stream.avail_in;
-    };
 
     while (true) {
-        // Check if we're at proper block boundary (end of header or non-last deflate block)
-        // Following zran.c logic: (data_type & 0xc0) == 0x80
-        bool at_block_boundary = (inflater.stream.data_type & 0xc0) == 0x80;
+        // Check if we're at proper block boundary using the new API
+        bool at_block_boundary = inflater.is_at_checkpoint_boundary();
         bool need_checkpoint = (checkpoint_idx == 0) || 
                               (current_uc_offset - last_checkpoint_uc_offset >= checkpoint_size);
         
         if (at_block_boundary && need_checkpoint) {
-            std::size_t input_pos = get_input_position();
+            std::size_t input_pos = inflater.get_total_input_consumed();
             
             Checkpointer checkpointer(inflater, current_uc_offset);
             
@@ -96,28 +88,25 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
             }
         }
 
-        // Track input bytes for debugging (removed unused variable)
-        
-        // Now read and process data using block-aware method
-        size_t bytes_read;
-        uint64_t lines_found;
-        if (!inflater.read_and_count_lines_with_blocks_track_input(fp, bytes_read, lines_found, total_input_bytes)) {
+        // Now read and process data using the new IndexerInflater API
+        IndexerInflaterResult result;
+        if (!inflater.read(fp, result)) {
             DFTRACER_UTILS_LOG_DEBUG("Inflater read failed");
             break;
         }
 
-        if (bytes_read == 0) {
+        if (result.bytes_read == 0) {
             DFTRACER_UTILS_LOG_DEBUG("End of file reached");
             break;
         }
 
-        total_lines += lines_found;
-        current_uc_offset += bytes_read;
+        total_lines += result.lines_found;
+        current_uc_offset += result.bytes_read;
     }
 
     // Create final checkpoint if needed (following zran approach)
     if (current_uc_offset > last_checkpoint_uc_offset) {
-        std::size_t input_pos = get_input_position();
+        std::size_t input_pos = inflater.get_total_input_consumed();
         
         // Create proper final checkpoint with dictionary (like zran does)
         Checkpointer final_checkpointer(inflater, current_uc_offset);

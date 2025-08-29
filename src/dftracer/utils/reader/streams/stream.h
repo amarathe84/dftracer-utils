@@ -2,7 +2,7 @@
 #define DFTRACER_UTILS_READER_STREAMS_STREAM_H
 
 #include <dftracer/utils/common/checkpointer.h>
-#include <dftracer/utils/common/inflater.h>
+#include <dftracer/utils/reader/inflater.h>
 #include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/error.h>
@@ -16,7 +16,7 @@ using namespace dftracer::utils;
 class Stream {
    protected:
     FILE *file_handle_;
-    mutable Inflater inflater_;
+    mutable ReaderInflater inflater_;
     size_t current_position_;
     size_t target_end_bytes_;
     bool is_active_;
@@ -149,7 +149,7 @@ class Stream {
     void skip(std::size_t target_position) {
         std::size_t current_pos = checkpoint_.uc_offset;
         if (target_position > current_pos) {
-            inflater_.skip(file_handle_, target_position - current_pos);
+            inflater_.skip_bytes(file_handle_, target_position - current_pos);
         }
     }
 
@@ -176,79 +176,7 @@ class Stream {
 
    private:
     bool inflate_init_from_checkpoint() const {
-        DFTRACER_UTILS_LOG_DEBUG("Checkpoint c_offset: %zu, bits: %d",
-                                 checkpoint_.c_offset, checkpoint_.bits);
-
-        // Seek to the correct position following zran logic
-        // If bits != 0, we need to read the byte containing the bits
-        off_t seek_pos = static_cast<off_t>(checkpoint_.c_offset);
-        if (checkpoint_.bits != 0) {
-            seek_pos -= 1;  // Go back one byte to read the partial byte
-        }
-        
-        if (fseeko(file_handle_, seek_pos, SEEK_SET) != 0) {
-            DFTRACER_UTILS_LOG_ERROR(
-                "Failed to seek to checkpoint position: %lld",
-                (long long)seek_pos);
-            return false;
-        }
-
-        // Reset the inflater to raw deflate mode (following zran approach)
-        inflater_.reset();
-        inflater_.stream.next_in = nullptr;
-        inflater_.stream.avail_in = 0;
-        
-        if (inflateInit2(&inflater_.stream, -15) != Z_OK) {
-            DFTRACER_UTILS_LOG_ERROR("Failed to initialize inflater in raw mode");
-            return false;
-        }
-
-        // Decompress and set the dictionary first (following zran order)
-        unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
-        std::size_t window_size = constants::indexer::ZLIB_WINDOW_SIZE;
-
-        if (!Checkpointer::decompress(checkpoint_.dict_compressed.data(),
-                                      checkpoint_.dict_compressed.size(),
-                                      window, &window_size)) {
-            DFTRACER_UTILS_LOG_ERROR("Failed to decompress dictionary");
-            return false;
-        }
-
-        if (!inflater_.set_dictionary(window, window_size)) {
-            DFTRACER_UTILS_LOG_ERROR("inflateSetDictionary failed");
-            return false;
-        }
-
-        // Handle partial byte after dictionary setup (following zran approach)
-        if (checkpoint_.bits != 0) {
-            int ch = fgetc(file_handle_);
-            if (ch == EOF) {
-                DFTRACER_UTILS_LOG_ERROR(
-                    "Failed to read byte at checkpoint position");
-                return false;
-            }
-            
-            // Apply inflatePrime with the correct bits
-            int prime_value = ch >> (8 - checkpoint_.bits);
-            DFTRACER_UTILS_LOG_DEBUG(
-                "Applying inflatePrime with %d bits, value: %d (ch=0x%02x)",
-                checkpoint_.bits, prime_value, ch);
-            if (!inflater_.prime(checkpoint_.bits, prime_value)) {
-                DFTRACER_UTILS_LOG_ERROR(
-                    "inflatePrime failed with %d bits, value: %d",
-                    checkpoint_.bits, prime_value);
-                return false;
-            }
-        }
-
-        // Prime the inflater with initial input
-        if (!inflater_.fread(file_handle_)) {
-            DFTRACER_UTILS_LOG_ERROR("Failed to read from file");
-            return false;
-        }
-
-        DFTRACER_UTILS_LOG_DEBUG("Checkpoint initialization successful - avail_in=%u", inflater_.stream.avail_in);
-        return true;
+        return inflater_.restore_from_checkpoint(file_handle_, checkpoint_);
     }
 };
 
