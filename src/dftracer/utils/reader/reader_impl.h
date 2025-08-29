@@ -50,8 +50,8 @@ struct ReaderImplementor {
 
     json::JsonDocuments read_json_lines_bytes(std::size_t start_bytes,
                                               std::size_t end_bytes);
-    json::OwnedJsonDocuments read_json_lines_bytes_owned(size_t start_bytes,
-                                                         size_t end_bytes);
+    json::OwnedJsonDocuments read_json_lines_bytes_owned(std::size_t start_bytes,
+                                                         std::size_t end_bytes);
 
     void reset();
     inline bool is_valid() const { return is_open && indexer != nullptr; }
@@ -60,8 +60,12 @@ struct ReaderImplementor {
     inline void set_buffer_size(size_t size) { default_buffer_size = size; }
 
    private:
-    std::string read_lines_from_beginning(std::size_t start_line,
-                                          std::size_t end_line);
+    std::string read_lines_optimized(std::size_t start_line,
+                                      std::size_t end_line);
+    std::string extract_lines_from_chunk(const std::string& chunk_data,
+                                          std::size_t target_start_line,
+                                          std::size_t target_end_line,
+                                          std::size_t chunk_first_line);
 
    private:
     bool is_indexer_initialized_internally;

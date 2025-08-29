@@ -66,4 +66,9 @@ std::vector<IndexCheckpoint> Indexer::get_checkpoints() const {
     return p_impl_->get_checkpoints();
 }
 
+std::vector<IndexCheckpoint> Indexer::get_checkpoints_for_line_range(std::uint64_t start_line,
+                                                                     std::uint64_t end_line) const {
+    return p_impl_->get_checkpoints_for_line_range(start_line, end_line);
+}
+
 }  // namespace dftracer::utils

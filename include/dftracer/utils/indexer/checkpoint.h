@@ -18,6 +18,8 @@ typedef struct dft_indexer_checkpoint_t {
     unsigned char *dict_compressed;
     size_t dict_size;
     uint64_t num_lines;
+    uint64_t first_line_num;
+    uint64_t last_line_num;
 } dft_indexer_checkpoint_t;
 
 void dft_indexer_free_checkpoint(dft_indexer_checkpoint_t *checkpoint);
@@ -42,6 +44,8 @@ struct IndexCheckpoint {
     int bits;
     std::vector<unsigned char> dict_compressed;
     std::uint64_t num_lines;
+    std::uint64_t first_line_num;
+    std::uint64_t last_line_num;
 };
 }  // namespace utils
 }  // namespace dftracer

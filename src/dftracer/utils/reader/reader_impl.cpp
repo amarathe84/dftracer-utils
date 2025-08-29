@@ -102,46 +102,82 @@ void ReaderImplementor::reset() {
     }
 }
 
-std::string ReaderImplementor::read_lines_from_beginning(size_t start_line,
-                                                         size_t end_line) {
-    size_t max_bytes = indexer->get_max_bytes();
-    DFTRACER_UTILS_LOG_DEBUG(
-        "Reading lines [%zu, %zu] from file beginning (max bytes: %zu)",
-        start_line, end_line, max_bytes);
-
-    // Always create a fresh session for line reading
-    line_byte_stream =
-        stream_factory->create_line_stream(gz_path, 0, max_bytes);
-
+std::string ReaderImplementor::extract_lines_from_chunk(
+    const std::string& chunk_data, 
+    size_t target_start_line, 
+    size_t target_end_line, 
+    size_t chunk_first_line) {
+    
     std::string result;
-    size_t current_line = 1;
-    std::string current_line_content;
-    const size_t buffer_size = default_buffer_size;
-    std::vector<char> buffer(buffer_size);
-
-    while (!line_byte_stream->is_finished() && current_line <= end_line) {
-        size_t bytes_read =
-            line_byte_stream->stream(buffer.data(), buffer_size);
-        if (bytes_read == 0) break;
-
-        for (size_t i = 0; i < bytes_read && current_line <= end_line; i++) {
-            current_line_content += buffer[i];
-
-            if (buffer[i] == '\n') {
-                if (current_line >= start_line) {
-                    result += current_line_content;
-                }
-                current_line_content.clear();
-                current_line++;
+    size_t current_line = chunk_first_line;
+    size_t line_start = 0;
+    
+    for (size_t i = 0; i <= chunk_data.size(); i++) {
+        // Check if we've reached end of line or end of data
+        if (i == chunk_data.size() || chunk_data[i] == '\n') {
+            // Include the newline character if present
+            size_t line_end = (i == chunk_data.size()) ? i : i + 1;
+            
+            if (current_line >= target_start_line && current_line <= target_end_line) {
+                result += chunk_data.substr(line_start, line_end - line_start);
+            }
+            
+            current_line++;
+            line_start = line_end;
+            
+            // Early termination if we've passed our target range
+            if (current_line > target_end_line) {
+                break;
             }
         }
     }
+    
+    return result;
+}
 
-    if (!current_line_content.empty() && current_line >= start_line &&
-        current_line <= end_line) {
-        result += current_line_content;
+std::string ReaderImplementor::read_lines_optimized(std::size_t start_line,
+                                                    std::size_t end_line) {
+    check_reader_state(is_open, indexer);
+    
+    auto checkpoints = indexer->get_checkpoints_for_line_range(start_line, end_line);
+    
+    if (checkpoints.empty()) {
+        DFTRACER_UTILS_LOG_DEBUG("No checkpoints found for line range [%zu, %zu]", start_line, end_line);
+        return "";
     }
-
+    
+    std::string result;
+    
+    for (const auto& checkpoint : checkpoints) {
+        // Calculate which lines we need from this checkpoint
+        size_t chunk_start_line = std::max(start_line, static_cast<std::size_t>(checkpoint.first_line_num));
+        size_t chunk_end_line = std::min(end_line, static_cast<std::size_t>(checkpoint.last_line_num));
+        
+        DFTRACER_UTILS_LOG_DEBUG(
+            "Processing checkpoint %zu: lines [%zu, %zu], extracting lines [%zu, %zu]",
+            checkpoint.checkpoint_idx, checkpoint.first_line_num, checkpoint.last_line_num,
+            chunk_start_line, chunk_end_line);
+        
+        // Read the entire checkpoint's byte range
+        size_t bytes_to_read = checkpoint.uc_size > 0 ? checkpoint.uc_size : (1024 * 1024); // Default to 1MB if uc_size not set
+        std::vector<char> chunk_buffer(bytes_to_read);
+        
+        size_t bytes_read = read_line_bytes(checkpoint.uc_offset, 
+                                           checkpoint.uc_offset + bytes_to_read,
+                                           chunk_buffer.data(), 
+                                           bytes_to_read);
+        
+        if (bytes_read > 0) {
+            std::string chunk_data(chunk_buffer.data(), bytes_read);
+            
+            // Extract only the lines we need from this chunk
+            std::string chunk_lines = extract_lines_from_chunk(
+                chunk_data, chunk_start_line, chunk_end_line, static_cast<std::size_t>(checkpoint.first_line_num));
+            
+            result += chunk_lines;
+        }
+    }
+    
     return result;
 }
 
@@ -160,17 +196,17 @@ std::size_t ReaderImplementor::read(std::size_t start_bytes,
     if (stream_factory->needs_new_byte_stream(byte_stream.get(), gz_path,
                                               start_bytes, end_bytes)) {
         DFTRACER_UTILS_LOG_DEBUG(
-            "ReaderImplementor::read - creating new byte stream");
+            "ReaderImplementor::read - creating new byte stream", "");
         byte_stream =
             stream_factory->create_byte_stream(gz_path, start_bytes, end_bytes);
     } else {
         DFTRACER_UTILS_LOG_DEBUG(
-            "ReaderImplementor::read - reusing existing byte stream");
+            "ReaderImplementor::read - reusing existing byte stream", "");
     }
 
     if (byte_stream->is_finished()) {
         DFTRACER_UTILS_LOG_DEBUG(
-            "ReaderImplementor::read - stream is finished");
+            "ReaderImplementor::read - stream is finished", "");
         return 0;
     }
 
@@ -223,7 +259,7 @@ std::string ReaderImplementor::read_lines(size_t start_line, size_t end_line) {
                                  std::to_string(total_lines) + ")");
     }
 
-    return read_lines_from_beginning(start_line, end_line);
+    return read_lines_optimized(start_line, end_line);
 }
 
 json::JsonDocuments ReaderImplementor::read_json_lines_bytes(
