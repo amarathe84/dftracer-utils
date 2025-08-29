@@ -19,6 +19,7 @@ class IndexCheckpoint:
     c_size: int
     bits: int
     dict_compressed: bytes
+    num_lines: int
 
 class DFTracerIndexer:
     """DFTracer indexer for creating and managing gzip file indices."""
@@ -41,8 +42,8 @@ class DFTracerIndexer:
         """Check if index needs rebuilding."""
         ...
     
-    def is_valid(self) -> bool:
-        """Check if index is valid."""
+    def exists(self) -> bool:
+        """Check if the index file exists."""
         ...
     
     def get_max_bytes(self) -> int:
@@ -59,10 +60,6 @@ class DFTracerIndexer:
 
     def get_checkpoints(self) -> List[IndexCheckpoint]:
         """Get all checkpoints."""
-        ...
-
-    def find_checkpoints_by_line_range(self, start_line: int, end_line: int) -> List[IndexCheckpoint]:
-        """Find checkpoints in line range."""
         ...
 
     def find_checkpoint(self, target_offset: int) -> Optional[IndexCheckpoint]:
@@ -217,6 +214,42 @@ class DFTracerBytesReader:
         """Get the number of lines in the file."""
         ...
     
+    def set_buffer_size(self, size: int) -> None:
+        """Set the buffer size for reading operations."""
+        ...
+    
+    def reset(self) -> None:
+        """Reset the reader to initial state."""
+        ...
+    
+    def is_valid(self) -> bool:
+        """Check if the reader is valid."""
+        ...
+    
+    def get_gz_path(self) -> str:
+        """Get the gzip file path."""
+        ...
+    
+    def get_idx_path(self) -> str:
+        """Get the index file path."""
+        ...
+    
+    def set_default_step(self, step: int) -> None:
+        """Set default step for iteration."""
+        ...
+    
+    def get_default_step(self) -> int:
+        """Get current default step."""
+        ...
+    
+    def open(self) -> None:
+        """Open the index database."""
+        ...
+    
+    def close(self) -> None:
+        """Close the index database."""
+        ...
+    
     def iter(self, step: int = 4194304) -> DFTracerBytesIterator:
         """Get iterator with optional step size."""
         ...
@@ -275,6 +308,42 @@ class DFTracerLineBytesReader:
     
     def get_num_lines(self) -> int:
         """Get the number of lines in the file."""
+        ...
+    
+    def set_buffer_size(self, size: int) -> None:
+        """Set the buffer size for reading operations."""
+        ...
+    
+    def reset(self) -> None:
+        """Reset the reader to initial state."""
+        ...
+    
+    def is_valid(self) -> bool:
+        """Check if the reader is valid."""
+        ...
+    
+    def get_gz_path(self) -> str:
+        """Get the gzip file path."""
+        ...
+    
+    def get_idx_path(self) -> str:
+        """Get the index file path."""
+        ...
+    
+    def set_default_step(self, step: int) -> None:
+        """Set default step for iteration."""
+        ...
+    
+    def get_default_step(self) -> int:
+        """Get current default step."""
+        ...
+    
+    def open(self) -> None:
+        """Open the index database."""
+        ...
+    
+    def close(self) -> None:
+        """Close the index database."""
         ...
     
     def iter(self, step: int = 4194304) -> DFTracerLineBytesIterator:
@@ -337,6 +406,42 @@ class DFTracerLinesReader:
         """Get the number of lines in the file."""
         ...
     
+    def set_buffer_size(self, size: int) -> None:
+        """Set the buffer size for reading operations."""
+        ...
+    
+    def reset(self) -> None:
+        """Reset the reader to initial state."""
+        ...
+    
+    def is_valid(self) -> bool:
+        """Check if the reader is valid."""
+        ...
+    
+    def get_gz_path(self) -> str:
+        """Get the gzip file path."""
+        ...
+    
+    def get_idx_path(self) -> str:
+        """Get the index file path."""
+        ...
+    
+    def set_default_step(self, step: int) -> None:
+        """Set default step for iteration."""
+        ...
+    
+    def get_default_step(self) -> int:
+        """Get current default step."""
+        ...
+    
+    def open(self) -> None:
+        """Open the index database."""
+        ...
+    
+    def close(self) -> None:
+        """Close the index database."""
+        ...
+    
     def iter(self, step: int = 1) -> DFTracerLinesIterator:
         """Get iterator with optional step size."""
         ...
@@ -397,6 +502,42 @@ class DFTracerJsonLinesReader:
         """Get the number of lines in the file."""
         ...
     
+    def set_buffer_size(self, size: int) -> None:
+        """Set the buffer size for reading operations."""
+        ...
+    
+    def reset(self) -> None:
+        """Reset the reader to initial state."""
+        ...
+    
+    def is_valid(self) -> bool:
+        """Check if the reader is valid."""
+        ...
+    
+    def get_gz_path(self) -> str:
+        """Get the gzip file path."""
+        ...
+    
+    def get_idx_path(self) -> str:
+        """Get the index file path."""
+        ...
+    
+    def set_default_step(self, step: int) -> None:
+        """Set default step for iteration."""
+        ...
+    
+    def get_default_step(self) -> int:
+        """Get current default step."""
+        ...
+    
+    def open(self) -> None:
+        """Open the index database."""
+        ...
+    
+    def close(self) -> None:
+        """Close the index database."""
+        ...
+    
     def iter(self, step: int = 1) -> DFTracerJsonLinesIterator:
         """Get iterator with optional step size."""
         ...
@@ -455,6 +596,42 @@ class DFTracerJsonLinesBytesReader:
     
     def get_num_lines(self) -> int:
         """Get the number of lines in the file."""
+        ...
+    
+    def set_buffer_size(self, size: int) -> None:
+        """Set the buffer size for reading operations."""
+        ...
+    
+    def reset(self) -> None:
+        """Reset the reader to initial state."""
+        ...
+    
+    def is_valid(self) -> bool:
+        """Check if the reader is valid."""
+        ...
+    
+    def get_gz_path(self) -> str:
+        """Get the gzip file path."""
+        ...
+    
+    def get_idx_path(self) -> str:
+        """Get the index file path."""
+        ...
+    
+    def set_default_step(self, step: int) -> None:
+        """Set default step for iteration."""
+        ...
+    
+    def get_default_step(self) -> int:
+        """Get current default step."""
+        ...
+    
+    def open(self) -> None:
+        """Open the index database."""
+        ...
+    
+    def close(self) -> None:
+        """Close the index database."""
         ...
     
     def iter(self, step: int = 4194304) -> DFTracerJsonLinesBytesIterator:
@@ -525,3 +702,21 @@ def dft_reader_range(
     mode: Literal["lines"] = "lines",
     step: int = 1
 ) -> DFTracerLinesRangeIterator: ...
+
+@overload
+def dft_reader_range(
+    reader: DFTracerJsonLinesReader, 
+    start: int, 
+    end: int, 
+    mode: Literal["json_lines"] = "json_lines",
+    step: int = 1
+) -> DFTracerJsonLinesRangeIterator: ...
+
+@overload
+def dft_reader_range(
+    reader: DFTracerJsonLinesBytesReader, 
+    start: int, 
+    end: int, 
+    mode: Literal["json_lines_bytes"] = "json_lines_bytes",
+    step: int = 4194304
+) -> DFTracerJsonLinesBytesRangeIterator: ...

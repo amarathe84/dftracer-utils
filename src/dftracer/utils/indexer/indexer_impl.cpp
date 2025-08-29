@@ -330,7 +330,7 @@ void IndexerImplementor::build() {
 
 bool IndexerImplementor::is_valid() const { return cached_is_valid; }
 
-bool IndexerImplementor::index_exists() const { return fs::exists(idx_path); }
+bool IndexerImplementor::exists() const { return fs::exists(idx_path); }
 
 bool IndexerImplementor::need_rebuild() const {
     if (is_valid()) return false;

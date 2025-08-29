@@ -30,12 +30,11 @@ class DFTracerIndexer {
 
     void build();
     bool need_rebuild() const;
+    bool exists() const;
     std::uint64_t get_max_bytes() const;
     std::uint64_t get_num_lines() const;
     int find_file_id(const std::string &gz_path) const;
     std::vector<IndexCheckpoint> get_checkpoints() const;
-    std::vector<IndexCheckpoint> find_checkpoints_by_line_range(
-        std::size_t start_line, std::size_t end_line) const;
     std::optional<IndexCheckpoint> find_checkpoint(
         std::size_t target_offset) const;
 

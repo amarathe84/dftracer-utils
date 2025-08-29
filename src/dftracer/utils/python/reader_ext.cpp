@@ -23,12 +23,8 @@ namespace nb = nanobind;
 using namespace nb::literals;
 using namespace dftracer::utils;
 
-namespace constants {
-
 constexpr std::uint64_t DEFAULT_STEP_SIZE_BYTES = 4 * 1024 * 1024;  // 4MB
 constexpr std::uint64_t DEFAULT_STEP_SIZE_LINES = 1;
-
-}  // namespace constants
 
 std::string trim_trailing(const char *data, std::size_t size) {
     if (size == 0) return "";
@@ -122,6 +118,7 @@ class DFTracerReader {
     std::unique_ptr<Reader> reader_;
     std::string gzip_path_;
     std::string index_path_;
+    std::uint64_t checkpoint_size_;
     bool is_open_;
 
     std::uint64_t current_pos_;
@@ -129,7 +126,6 @@ class DFTracerReader {
     std::uint64_t num_lines_;
     std::uint64_t default_step_;
     std::uint64_t default_step_lines_;
-    std::uint64_t index_checkpoint_size_;
 
    public:
     using ReturnType = std::conditional_t<
@@ -143,21 +139,21 @@ class DFTracerReader {
     DFTracerReader(
         const std::string &gzip_path,
         const std::optional<std::string> &index_path = std::nullopt,
-        std::uint64_t index_checkpoint_size = Indexer::DEFAULT_CHECKPOINT_SIZE)
+        std::uint64_t checkpoint_size = Indexer::DEFAULT_CHECKPOINT_SIZE)
         : gzip_path_(gzip_path),
+          checkpoint_size_(checkpoint_size),
           reader_(nullptr),
           is_open_(false),
-          max_bytes_(0),
-          index_checkpoint_size_(index_checkpoint_size) {
+          max_bytes_(0) {
         if constexpr (Mode == DFTracerReaderMode::Lines ||
                       Mode == DFTracerReaderMode::JsonLines) {
             current_pos_ = 1;
-            default_step_ = constants::DEFAULT_STEP_SIZE_LINES;
-            default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
+            default_step_ = DEFAULT_STEP_SIZE_LINES;
+            default_step_lines_ = DEFAULT_STEP_SIZE_LINES;
         } else {
             current_pos_ = 0;
-            default_step_ = constants::DEFAULT_STEP_SIZE_BYTES;
-            default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
+            default_step_ = DEFAULT_STEP_SIZE_BYTES;
+            default_step_lines_ = DEFAULT_STEP_SIZE_LINES;
         }
 
         if (index_path.has_value()) {
@@ -178,17 +174,17 @@ class DFTracerReader {
         if constexpr (Mode == DFTracerReaderMode::Lines ||
                       Mode == DFTracerReaderMode::JsonLines) {
             current_pos_ = 1;
-            default_step_ = constants::DEFAULT_STEP_SIZE_LINES;
-            default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
+            default_step_ = DEFAULT_STEP_SIZE_LINES;
+            default_step_lines_ = DEFAULT_STEP_SIZE_LINES;
         } else {
             current_pos_ = 0;
-            default_step_ = constants::DEFAULT_STEP_SIZE_BYTES;
-            default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
+            default_step_ = DEFAULT_STEP_SIZE_BYTES;
+            default_step_lines_ = DEFAULT_STEP_SIZE_LINES;
         }
 
         gzip_path_ = indexer->gz_path();
         index_path_ = indexer->idx_path();
-        index_checkpoint_size_ = indexer->checkpoint_size();
+        checkpoint_size_ = indexer->checkpoint_size();
 
         try {
             reader_ = std::make_unique<Reader>(indexer->get_indexer_ptr());
@@ -215,15 +211,14 @@ class DFTracerReader {
 
         try {
             reader_ = std::make_unique<Reader>(gzip_path_, index_path_,
-                                               index_checkpoint_size_);
+                                               checkpoint_size_);
             is_open_ = true;
             max_bytes_ = static_cast<std::uint64_t>(reader_->get_max_bytes());
             num_lines_ = static_cast<std::uint64_t>(reader_->get_num_lines());
         } catch (const std::runtime_error &e) {
             throw std::runtime_error(
                 "Failed to create DFT reader for gzip: " + gzip_path_ +
-                " and index: " + index_path_ + " with checkpoint size: " +
-                std::to_string(index_checkpoint_size_) + "B - " + e.what());
+                " and index: " + index_path_ + " - " + e.what());
         }
     }
 
@@ -240,7 +235,7 @@ class DFTracerReader {
             }
             max_bytes_ = 0;
             num_lines_ = 0;
-            default_step_lines_ = constants::DEFAULT_STEP_SIZE_LINES;
+            default_step_lines_ = DEFAULT_STEP_SIZE_LINES;
         }
     }
 
@@ -270,6 +265,47 @@ class DFTracerReader {
             reader_->set_buffer_size(size);
         } catch (const std::runtime_error &e) {
             throw std::runtime_error("Failed to set buffer size: " +
+                                     std::string(e.what()));
+        }
+    }
+
+    void reset() {
+        ensure_open();
+        try {
+            reader_->reset();
+        } catch (const std::runtime_error &e) {
+            throw std::runtime_error("Failed to reset reader: " +
+                                     std::string(e.what()));
+        }
+    }
+
+    bool is_valid() {
+        if (!is_open_) {
+            return false;
+        }
+        try {
+            return reader_->is_valid();
+        } catch (const std::runtime_error &e) {
+            return false;
+        }
+    }
+
+    std::string get_gz_path() {
+        ensure_open();
+        try {
+            return reader_->get_gz_path();
+        } catch (const std::runtime_error &e) {
+            throw std::runtime_error("Failed to get gzip path: " +
+                                     std::string(e.what()));
+        }
+    }
+
+    std::string get_idx_path() {
+        ensure_open();
+        try {
+            return reader_->get_idx_path();
+        } catch (const std::runtime_error &e) {
+            throw std::runtime_error("Failed to get index path: " +
                                      std::string(e.what()));
         }
     }
@@ -489,9 +525,9 @@ auto dft_reader_range_impl(ReaderMode &reader, std::uint64_t start,
                            std::uint64_t step = 0) {
     if (step == 0) {
         if (mode == "lines") {
-            step = constants::DEFAULT_STEP_SIZE_LINES;
+            step = DEFAULT_STEP_SIZE_LINES;
         } else {
-            step = constants::DEFAULT_STEP_SIZE_BYTES;
+            step = DEFAULT_STEP_SIZE_BYTES;
         }
     }
 
@@ -524,21 +560,21 @@ auto dft_reader_range_impl(ReaderMode &reader, std::uint64_t start,
 DFTracerLineBytesRangeIterator dft_reader_range(
     DFTracerLineBytesReader &reader, std::uint64_t start, std::uint64_t end,
     const std::string &mode = "line_bytes",
-    std::uint64_t step = constants::DEFAULT_STEP_SIZE_BYTES) {
+    std::uint64_t step = DEFAULT_STEP_SIZE_BYTES) {
     return dft_reader_range_impl(reader, start, end, mode, step);
 }
 
 DFTracerBytesRangeIterator dft_reader_range(
     DFTracerBytesReader &reader, std::uint64_t start, std::uint64_t end,
     const std::string &mode = "bytes",
-    std::uint64_t step = constants::DEFAULT_STEP_SIZE_BYTES) {
+    std::uint64_t step = DEFAULT_STEP_SIZE_BYTES) {
     return dft_reader_range_impl(reader, start, end, mode, step);
 }
 
 DFTracerLinesRangeIterator dft_reader_range(
     DFTracerLinesReader &reader, std::uint64_t start, std::uint64_t end,
     const std::string &mode = "lines",
-    std::uint64_t step = constants::DEFAULT_STEP_SIZE_LINES) {
+    std::uint64_t step = DEFAULT_STEP_SIZE_LINES) {
     return dft_reader_range_impl(reader, start, end, mode, step);
 }
 
@@ -657,8 +693,18 @@ void register_reader(nb::module_ &m) {
              "Get the maximum byte position available in the file")
         .def("get_num_lines", &DFTracerBytesReader::get_num_lines,
              "Get the number of lines in the file")
+        .def("set_buffer_size", &DFTracerBytesReader::set_buffer_size, "size"_a,
+             "Set the buffer size for reading operations")
+        .def("reset", &DFTracerBytesReader::reset,
+             "Reset the reader to initial state")
+        .def("is_valid", &DFTracerBytesReader::is_valid,
+             "Check if the reader is valid")
+        .def("get_gz_path", &DFTracerBytesReader::get_gz_path,
+             "Get the gzip file path")
+        .def("get_idx_path", &DFTracerBytesReader::get_idx_path,
+             "Get the index file path")
         .def("iter", &DFTracerBytesReader::iter,
-             "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
+             "step"_a = DEFAULT_STEP_SIZE_BYTES,
              "Get iterator with optional step size")
         .def("__iter__", &DFTracerBytesReader::__iter__,
              nb::rv_policy::reference_internal, "Get iterator for the reader")
@@ -693,8 +739,18 @@ void register_reader(nb::module_ &m) {
              "Get the maximum byte position available in the file")
         .def("get_num_lines", &DFTracerLineBytesReader::get_num_lines,
              "Get the number of lines in the file")
+        .def("set_buffer_size", &DFTracerLineBytesReader::set_buffer_size,
+             "size"_a, "Set the buffer size for reading operations")
+        .def("reset", &DFTracerLineBytesReader::reset,
+             "Reset the reader to initial state")
+        .def("is_valid", &DFTracerLineBytesReader::is_valid,
+             "Check if the reader is valid")
+        .def("get_gz_path", &DFTracerLineBytesReader::get_gz_path,
+             "Get the gzip file path")
+        .def("get_idx_path", &DFTracerLineBytesReader::get_idx_path,
+             "Get the index file path")
         .def("iter", &DFTracerLineBytesReader::iter,
-             "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
+             "step"_a = DEFAULT_STEP_SIZE_BYTES,
              "Get iterator with optional step size")
         .def("__iter__", &DFTracerLineBytesReader::__iter__,
              nb::rv_policy::reference_internal, "Get iterator for the reader")
@@ -731,8 +787,18 @@ void register_reader(nb::module_ &m) {
              "Get the maximum byte position available in the file")
         .def("get_num_lines", &DFTracerLinesReader::get_num_lines,
              "Get the number of lines in the file")
+        .def("set_buffer_size", &DFTracerLinesReader::set_buffer_size, "size"_a,
+             "Set the buffer size for reading operations")
+        .def("reset", &DFTracerLinesReader::reset,
+             "Reset the reader to initial state")
+        .def("is_valid", &DFTracerLinesReader::is_valid,
+             "Check if the reader is valid")
+        .def("get_gz_path", &DFTracerLinesReader::get_gz_path,
+             "Get the gzip file path")
+        .def("get_idx_path", &DFTracerLinesReader::get_idx_path,
+             "Get the index file path")
         .def("iter", &DFTracerLinesReader::iter,
-             "step"_a = constants::DEFAULT_STEP_SIZE_LINES,
+             "step"_a = DEFAULT_STEP_SIZE_LINES,
              "Get iterator with optional step size")
         .def("__iter__", &DFTracerLinesReader::__iter__,
              nb::rv_policy::reference_internal, "Get iterator for the reader")
@@ -767,8 +833,18 @@ void register_reader(nb::module_ &m) {
              "Get the maximum byte position available in the file")
         .def("get_num_lines", &DFTracerJsonLinesReader::get_num_lines,
              "Get the number of lines in the file")
+        .def("set_buffer_size", &DFTracerJsonLinesReader::set_buffer_size,
+             "size"_a, "Set the buffer size for reading operations")
+        .def("reset", &DFTracerJsonLinesReader::reset,
+             "Reset the reader to initial state")
+        .def("is_valid", &DFTracerJsonLinesReader::is_valid,
+             "Check if the reader is valid")
+        .def("get_gz_path", &DFTracerJsonLinesReader::get_gz_path,
+             "Get the gzip file path")
+        .def("get_idx_path", &DFTracerJsonLinesReader::get_idx_path,
+             "Get the index file path")
         .def("iter", &DFTracerJsonLinesReader::iter,
-             "step"_a = constants::DEFAULT_STEP_SIZE_LINES,
+             "step"_a = DEFAULT_STEP_SIZE_LINES,
              "Get iterator with optional step size")
         .def("__iter__", &DFTracerJsonLinesReader::__iter__,
              nb::rv_policy::reference_internal, "Get iterator for the reader")
@@ -808,8 +884,18 @@ void register_reader(nb::module_ &m) {
              "Get the maximum byte position available in the file")
         .def("get_num_lines", &DFTracerJsonLinesBytesReader::get_num_lines,
              "Get the number of lines in the file")
+        .def("set_buffer_size", &DFTracerJsonLinesBytesReader::set_buffer_size,
+             "size"_a, "Set the buffer size for reading operations")
+        .def("reset", &DFTracerJsonLinesBytesReader::reset,
+             "Reset the reader to initial state")
+        .def("is_valid", &DFTracerJsonLinesBytesReader::is_valid,
+             "Check if the reader is valid")
+        .def("get_gz_path", &DFTracerJsonLinesBytesReader::get_gz_path,
+             "Get the gzip file path")
+        .def("get_idx_path", &DFTracerJsonLinesBytesReader::get_idx_path,
+             "Get the index file path")
         .def("iter", &DFTracerJsonLinesBytesReader::iter,
-             "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
+             "step"_a = DEFAULT_STEP_SIZE_BYTES,
              "Get iterator with optional step size")
         .def("__iter__", &DFTracerJsonLinesBytesReader::__iter__,
              nb::rv_policy::reference_internal, "Get iterator for the reader")
@@ -845,7 +931,7 @@ void register_reader(nb::module_ &m) {
               DFTracerLineBytesReader &, std::uint64_t, std::uint64_t,
               const std::string &, std::uint64_t)>(&dft_reader_range),
           "reader"_a, "start"_a, "end"_a, "mode"_a = "line_bytes",
-          "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
+          "step"_a = DEFAULT_STEP_SIZE_BYTES,
           "Create a range iterator with specified mode ('line_bytes', 'bytes', "
           "or 'lines')");
 
@@ -854,7 +940,7 @@ void register_reader(nb::module_ &m) {
               DFTracerBytesReader &, std::uint64_t, std::uint64_t,
               const std::string &, std::uint64_t)>(&dft_reader_range),
           "reader"_a, "start"_a, "end"_a, "mode"_a = "bytes",
-          "step"_a = constants::DEFAULT_STEP_SIZE_BYTES,
+          "step"_a = DEFAULT_STEP_SIZE_BYTES,
           "Create a range iterator with specified mode ('line_bytes', 'bytes', "
           "or 'lines')");
 
@@ -863,7 +949,7 @@ void register_reader(nb::module_ &m) {
               DFTracerLinesReader &, std::uint64_t, std::uint64_t,
               const std::string &, std::uint64_t)>(&dft_reader_range),
           "reader"_a, "start"_a, "end"_a, "mode"_a = "lines",
-          "step"_a = constants::DEFAULT_STEP_SIZE_LINES,
+          "step"_a = DEFAULT_STEP_SIZE_LINES,
           "Create a range iterator with specified mode ('line_bytes', 'bytes', "
           "or 'lines')");
 

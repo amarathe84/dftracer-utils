@@ -32,7 +32,7 @@ struct IndexerImplementor {
     void build();
     bool need_rebuild() const;
     bool is_valid() const;
-    bool index_exists() const;
+    bool exists() const;
 
     // Metadata
     std::size_t get_checkpoint_size() const;

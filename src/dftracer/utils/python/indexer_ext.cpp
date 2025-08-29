@@ -48,6 +48,15 @@ bool DFTracerIndexer::need_rebuild() const {
     }
 }
 
+bool DFTracerIndexer::exists() const {
+    try {
+        return indexer_->exists();
+    } catch (const std::runtime_error &e) {
+        throw std::runtime_error("Failed to check if index exists: " +
+                                 std::string(e.what()));
+    }
+}
+
 std::uint64_t DFTracerIndexer::get_max_bytes() const {
     try {
         return indexer_->get_max_bytes();
@@ -138,6 +147,8 @@ void register_indexer(nb::module_ &m) {
         .def("build", &DFTracerIndexer::build, "Build or rebuild the index")
         .def("need_rebuild", &DFTracerIndexer::need_rebuild,
              "Check if a rebuild is needed")
+        .def("exists", &DFTracerIndexer::exists,
+             "Check if the index file exists")
         .def("get_max_bytes", &DFTracerIndexer::get_max_bytes,
              "Get the maximum uncompressed bytes in the indexed file")
         .def("get_num_lines", &DFTracerIndexer::get_num_lines,

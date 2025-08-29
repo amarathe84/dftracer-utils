@@ -34,9 +34,12 @@ class TestDFTracerBytesReader:
         """Test bytes reader creation when index file doesn't exist - now auto-builds"""
         with Environment() as env:
             gz_file = env.create_test_gzip_file()
-            
+
+            indexer = dft_utils.DFTracerIndexer(gz_file)
+            indexer.build()
+
             # Reader should now auto-build index instead of failing
-            with dft_utils.DFTracerBytesReader(gz_file) as reader:
+            with dft_utils.DFTracerBytesReader(indexer) as reader:
                 assert reader.is_open
                 assert reader.get_max_bytes() > 0
                 # Verify index file was created
@@ -381,8 +384,11 @@ class TestDFTracerLineBytesReader:
         """Test line bytes reader creation"""
         with Environment() as env:
             gz_file = env.create_test_gzip_file()
-            
-            with dft_utils.DFTracerLineBytesReader(gz_file) as reader:
+
+            indexer = dft_utils.DFTracerIndexer(gz_file)
+            indexer.build()
+
+            with dft_utils.DFTracerLineBytesReader(indexer) as reader:
                 assert reader.is_open
                 assert reader.get_max_bytes() > 0
                 assert reader.gzip_path == gz_file
@@ -463,8 +469,11 @@ class TestDFTracerLinesReader:
         """Test lines reader creation"""
         with Environment() as env:
             gz_file = env.create_test_gzip_file()
-            
-            with dft_utils.DFTracerLinesReader(gz_file) as reader:
+
+            indexer = dft_utils.DFTracerIndexer(gz_file)
+            indexer.build()
+
+            with dft_utils.DFTracerLinesReader(indexer) as reader:
                 assert reader.is_open
                 assert reader.get_max_bytes() > 0
                 assert reader.get_num_lines() > 0
@@ -552,8 +561,11 @@ class TestDFTracerJsonLinesReader:
         """Test JSON lines reader creation"""
         with Environment() as env:
             gz_file = env.create_test_gzip_file()
+
+            indexer = dft_utils.DFTracerIndexer(gz_file)
+            indexer.build()
             
-            with dft_utils.DFTracerJsonLinesReader(gz_file) as reader:
+            with dft_utils.DFTracerJsonLinesReader(indexer) as reader:
                 assert reader.is_open
                 assert reader.get_max_bytes() > 0
                 assert reader.get_num_lines() > 0
@@ -742,8 +754,11 @@ class TestDFTracerJsonLinesBytesReader:
         """Test JSON lines bytes reader creation"""
         with Environment() as env:
             gz_file = env.create_test_gzip_file()
-            
-            with dft_utils.DFTracerJsonLinesBytesReader(gz_file) as reader:
+
+            indexer = dft_utils.DFTracerIndexer(gz_file)
+            indexer.build()
+
+            with dft_utils.DFTracerJsonLinesBytesReader(indexer) as reader:
                 assert reader.is_open
                 assert reader.get_max_bytes() > 0
                 assert reader.get_num_lines() > 0
