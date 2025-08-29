@@ -164,7 +164,7 @@ class ReaderInflater : public Inflater {
         alignas(
             DFTRACER_OPTIMAL_ALIGNMENT) unsigned char skip_buffer[BUFFER_SIZE];
         std::size_t remaining_skip = bytes_to_skip;
-        // std::size_t total_skipped = 0;
+        std::size_t total_skipped = 0;
 
         while (remaining_skip > 0) {
             std::size_t to_skip = std::min(remaining_skip, sizeof(skip_buffer));
@@ -184,7 +184,7 @@ class ReaderInflater : public Inflater {
             }
 
             remaining_skip -= skipped;
-            // total_skipped += skipped;
+            total_skipped += skipped;
         }
 
         DFTRACER_UTILS_LOG_DEBUG(
