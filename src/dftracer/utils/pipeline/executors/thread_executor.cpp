@@ -105,7 +105,6 @@ ThreadExecutor::ThreadExecutor()
                             max_threads_);
 }
 
-<<<<<<< HEAD
 ThreadExecutor::ThreadExecutor(size_t max_threads)
     : Executor(ExecutorType::THREAD),
       max_threads_(max_threads > 0 ? max_threads
@@ -121,12 +120,8 @@ ThreadExecutor::ThreadExecutor(size_t max_threads)
 
 ThreadExecutor::~ThreadExecutor() = default;
 
-std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input,
-                                 bool /* gather */) {
-=======
 std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input) {
     // gather parameter is ignored in thread executor (noop)
->>>>>>> 64dd536 (debug indexer)
     if (pipeline.empty()) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,
                             "Pipeline is empty");

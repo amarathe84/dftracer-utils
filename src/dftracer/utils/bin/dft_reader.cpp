@@ -99,9 +99,9 @@ int main(int argc, char **argv) {
     std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
     try {
-        Indexer indexer(gz_path, idx_path, checkpoint_size, force_rebuild);
 
         if (check_rebuild) {
+            Indexer indexer(gz_path, idx_path, checkpoint_size, force_rebuild);
             if (!indexer.need_rebuild()) {
                 DFTRACER_UTILS_LOG_DEBUG(
                     "Index is up to date, no rebuild needed");
@@ -109,7 +109,13 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (force_rebuild || !fs::exists(idx_path)) {
+        if (force_rebuild) {
+            if (fs::exists(idx_path)) {
+                DFTRACER_UTILS_LOG_DEBUG("Removing existing index: %s",
+                                         idx_path.c_str());
+                fs::remove(idx_path);
+            }
+            Indexer indexer(gz_path, idx_path, checkpoint_size, force_rebuild);
             DFTRACER_UTILS_LOG_INFO("Building index for file: %s",
                                     gz_path.c_str());
             indexer.build();

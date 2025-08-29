@@ -40,150 +40,117 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         DFTRACER_UTILS_LOG_DEBUG("Failed to initialize inflater");
         return false;
     }
+    
     std::size_t checkpoint_idx = 0;
-    std::size_t current_uc_offset = 0;  // Current uncompressed offset
-    std::size_t checkpoint_start_uc_offset =
-        0;  // Start of current checkpoint (uncompressed)
-    std::uint64_t total_lines = 0;  // Total lines processed
+    std::size_t current_uc_offset = 0;
+    std::uint64_t total_lines = 0;
+    std::size_t last_checkpoint_uc_offset = 0;
+    std::size_t total_input_bytes = 0;
+    
+    // Track total input bytes consumed for correct checkpoint positioning
+    // This follows zran.c approach: totin - strm.avail_in
+    auto get_input_position = [&]() -> std::size_t {
+        return total_input_bytes - inflater.stream.avail_in;
+    };
 
     while (true) {
-        DFTRACER_UTILS_LOG_INFO("Start inflating at uncompressed offset %zu",
-                                 current_uc_offset);
+        // Check if we're at proper block boundary (end of header or non-last deflate block)
+        // Following zran.c logic: (data_type & 0xc0) == 0x80
+        bool at_block_boundary = (inflater.stream.data_type & 0xc0) == 0x80;
+        bool need_checkpoint = (checkpoint_idx == 0) || 
+                              (current_uc_offset - last_checkpoint_uc_offset >= checkpoint_size);
+        
+        if (at_block_boundary && need_checkpoint) {
+            std::size_t input_pos = get_input_position();
+            
+            Checkpointer checkpointer(inflater, current_uc_offset);
+            
+            if (checkpointer.create(input_pos)) {
+                unsigned char *compressed_dict = nullptr;
+                std::size_t compressed_dict_size = 0;
+                
+                if (!checkpointer.compress(&compressed_dict, &compressed_dict_size) || !compressed_dict) {
+                    DFTRACER_UTILS_LOG_DEBUG("Failed to compress dictionary for checkpoint at uc_offset=%zu", current_uc_offset);
+                    continue; // Skip this checkpoint if compression fails
+                }
 
+                InsertCheckpointData ckpt_data;
+                ckpt_data.idx = checkpoint_idx;
+                ckpt_data.uc_offset = current_uc_offset;
+                ckpt_data.uc_size = 0; // Will be calculated later
+                ckpt_data.c_offset = input_pos;
+                ckpt_data.c_size = 0; // Will be calculated later
+                ckpt_data.bits = checkpointer.bits;
+                ckpt_data.compressed_dict = compressed_dict;
+                ckpt_data.compressed_dict_size = compressed_dict_size;
+                ckpt_data.num_lines = 0; // Will be accumulated
+
+                insert_checkpoint_record(db, file_id, ckpt_data);
+
+                if (compressed_dict) free(compressed_dict);
+                last_checkpoint_uc_offset = current_uc_offset;
+                checkpoint_idx++;
+
+                DFTRACER_UTILS_LOG_DEBUG("Checkpoint %zu created at uc_offset=%zu, c_offset=%zu, bits=%d",
+                                         checkpoint_idx - 1, current_uc_offset, input_pos, checkpointer.bits);
+            }
+        }
+
+        // Track input bytes for debugging (removed unused variable)
+        
+        // Now read and process data using block-aware method
         size_t bytes_read;
-        if (!inflater.read(fp, inflater.buffer, sizeof(inflater.buffer),
-                           bytes_read)) {
+        uint64_t lines_found;
+        if (!inflater.read_and_count_lines_with_blocks_track_input(fp, bytes_read, lines_found, total_input_bytes)) {
             DFTRACER_UTILS_LOG_DEBUG("Inflater read failed");
             break;
         }
-
-        DFTRACER_UTILS_LOG_DEBUG("Processed %zu bytes", bytes_read);
 
         if (bytes_read == 0) {
             DFTRACER_UTILS_LOG_DEBUG("End of file reached");
             break;
         }
-        std::uint64_t local_total_lines = 0;
 
-        // Count lines in this buffer
-        for (std::size_t i = 0; i < bytes_read; i++) {
-            if (inflater.buffer[i] == '\n') {
-                local_total_lines++;
-                total_lines++;
-            }
-        }
-
+        total_lines += lines_found;
         current_uc_offset += bytes_read;
-
-        std::size_t current_checkpoint_size =
-            current_uc_offset - checkpoint_start_uc_offset;
-        if (current_checkpoint_size >= checkpoint_size &&
-            (inflater.stream.data_type & 0xc0) ==
-                0x80 &&                        // At deflate block boundary
-            inflater.stream.avail_out == 0) {  // Output buffer is consumed
-            // Create checkpoint at current position
-            size_t checkpoint_uc_size =
-                current_uc_offset - checkpoint_start_uc_offset;
-            Checkpointer checkpointer(inflater, current_uc_offset);
-            DFTRACER_UTILS_LOG_DEBUG(
-                "Creating checkpoint %zu at UC offset %zu (size %zu), C offset "
-                "%zu",
-                checkpoint_idx, current_uc_offset, checkpoint_uc_size,
-                checkpointer.c_offset);
-            if (!checkpointer.create(fp)) {
-                DFTRACER_UTILS_LOG_DEBUG("Failed to create checkpoint");
-                continue;
-            }
-
-            DFTRACER_UTILS_LOG_DEBUG("Compressing checkpoint data");
-
-            unsigned char *compressed_dict = nullptr;
-            std::size_t compressed_dict_size = 0;
-            if (!checkpointer.compress(&compressed_dict,
-                                       &compressed_dict_size)) {
-                DFTRACER_UTILS_LOG_DEBUG("Failed to get compressed dictionary");
-                continue;
-            }
-
-            DFTRACER_UTILS_LOG_DEBUG(
-                "Inserting checkpoint record into database with compressed "
-                "checkpoint %p (%zu bytes)",
-                compressed_dict, compressed_dict_size);
-
-            InsertCheckpointData ckpt_data;
-            ckpt_data.idx = checkpoint_idx;
-            ckpt_data.uc_offset = current_uc_offset;
-            ckpt_data.uc_size = checkpoint_uc_size;
-            ckpt_data.c_offset = checkpointer.c_offset;
-            ckpt_data.c_size = checkpointer.c_offset;
-            ckpt_data.bits = checkpointer.bits;
-            ckpt_data.compressed_dict = compressed_dict;
-            ckpt_data.compressed_dict_size = compressed_dict_size;
-            ckpt_data.num_lines = local_total_lines;
-
-            insert_checkpoint_record(db, file_id, ckpt_data);
-
-            free(compressed_dict);
-            checkpoint_idx++;
-            checkpoint_start_uc_offset = current_uc_offset;
-        }
     }
 
-    // edge case: always create a final checkpoint for remaining data
-    if (current_uc_offset > checkpoint_start_uc_offset) {
-        size_t checkpoint_uc_size =
-            current_uc_offset - checkpoint_start_uc_offset;
-
-        // Create a special checkpoint for remaining data (might be without
-        // deflate boundary)
-        if (checkpoint_start_uc_offset == 0) {
-            DFTRACER_UTILS_LOG_DEBUG(
-                "Creating final checkpoint, case: no deflate boundary");
-            // InsertCheckpointData ckpt_data;
-            // ckpt_data.idx = checkpoint_idx;
-            // ckpt_data.uc_offset = checkpoint_start_uc_offset;
-            // ckpt_data.uc_size = checkpoint_uc_size;
-            // ckpt_data.c_offset = 0;
-            // ckpt_data.c_size = 0;
-            // ckpt_data.bits = 0;
-            // ckpt_data.compressed_dict = nullptr;
-            // ckpt_data.compressed_dict_size = 0;
-            // ckpt_data.num_lines = total_lines;
-            // insert_checkpoint_record(db, file_id, ckpt_data);
-        } else {
-            // create regular checkpoint with dictionary if possible
-            DFTRACER_UTILS_LOG_DEBUG(
-                "Creating final checkpoint, case: regular");
-            Checkpointer checkpointer(inflater, current_uc_offset);
-            if (!checkpointer.create(fp)) {
-                DFTRACER_UTILS_LOG_DEBUG("Failed to create final checkpoint");
-                return false;
-            }
-
+    // Create final checkpoint if needed (following zran approach)
+    if (current_uc_offset > last_checkpoint_uc_offset) {
+        std::size_t input_pos = get_input_position();
+        
+        // Create proper final checkpoint with dictionary (like zran does)
+        Checkpointer final_checkpointer(inflater, current_uc_offset);
+        
+        if (final_checkpointer.create(input_pos)) {
             unsigned char *compressed_dict = nullptr;
             std::size_t compressed_dict_size = 0;
-
-            if (!checkpointer.compress(&compressed_dict,
-                                       &compressed_dict_size)) {
-                DFTRACER_UTILS_LOG_DEBUG("Failed to get compressed dictionary");
-                return false;
+            
+            if (final_checkpointer.compress(&compressed_dict, &compressed_dict_size) && compressed_dict) {
+                InsertCheckpointData ckpt_data;
+                ckpt_data.idx = checkpoint_idx;
+                ckpt_data.uc_offset = current_uc_offset;  // Use current_uc_offset for final checkpoint
+                ckpt_data.uc_size = 0;
+                ckpt_data.c_offset = input_pos;
+                ckpt_data.c_size = 0;
+                ckpt_data.bits = final_checkpointer.bits;
+                ckpt_data.compressed_dict = compressed_dict;
+                ckpt_data.compressed_dict_size = compressed_dict_size;
+                ckpt_data.num_lines = total_lines;
+                
+                insert_checkpoint_record(db, file_id, ckpt_data);
+                
+                if (compressed_dict) free(compressed_dict);
+                checkpoint_idx++;
+                
+                DFTRACER_UTILS_LOG_DEBUG("Final checkpoint %zu created at uc_offset=%zu, c_offset=%zu",
+                                         checkpoint_idx - 1, current_uc_offset, input_pos);
+            } else {
+                DFTRACER_UTILS_LOG_DEBUG("Failed to create final checkpoint - dictionary compression failed");
             }
-
-            InsertCheckpointData ckpt_data;
-            ckpt_data.idx = checkpoint_idx;
-            ckpt_data.uc_offset = checkpoint_start_uc_offset;
-            ckpt_data.uc_size = checkpoint_uc_size;
-            ckpt_data.c_offset = checkpointer.c_offset;
-            ckpt_data.c_size = checkpointer.c_offset;
-            ckpt_data.bits = checkpointer.bits;
-            ckpt_data.compressed_dict = compressed_dict;
-            ckpt_data.compressed_dict_size = compressed_dict_size;
-            ckpt_data.num_lines = total_lines;
-            insert_checkpoint_record(db, file_id, ckpt_data);
-
-            free(compressed_dict);
+        } else {
+            DFTRACER_UTILS_LOG_DEBUG("Failed to create final checkpoint - not at valid block boundary");
         }
-        checkpoint_idx++;
     }
 
     total_lines_out = total_lines;
@@ -407,11 +374,13 @@ std::uint64_t IndexerImplementor::get_num_lines() const {
 }
 
 int IndexerImplementor::get_file_id() const {
+    DFTRACER_UTILS_LOG_DEBUG("get_file_id called: cached_file_id=%d", cached_file_id);
     if (cached_file_id != -1) {
         return cached_file_id;
     }
 
     cached_file_id = find_file_id(gz_path);
+    DFTRACER_UTILS_LOG_DEBUG("get_file_id: found file_id=%d for path=%s", cached_file_id, gz_path.c_str());
     return cached_file_id;
 }
 
@@ -421,7 +390,9 @@ int IndexerImplementor::find_file_id(const std::string &path) const {
 
 bool IndexerImplementor::find_checkpoint(std::size_t target_offset,
                                          IndexCheckpoint &checkpoint) const {
-    return query_checkpoint(db, target_offset, cached_file_id, checkpoint);
+    // Ensure file_id is populated before querying checkpoints
+    int file_id = get_file_id();
+    return query_checkpoint(db, target_offset, file_id, checkpoint);
 }
 
 std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints() const {

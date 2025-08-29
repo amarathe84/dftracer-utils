@@ -22,47 +22,51 @@ struct Checkpointer {
         std::memset(window, 0, sizeof(window));
     }
 
-    bool create(FILE *file) {
-        // Get precise compressed position: file position minus unprocessed
-        // input
-        size_t file_pos = static_cast<size_t>(ftello(file));
-        size_t absolute_c_offset = file_pos - inflater.stream.avail_in;
+    bool create() {
+        return create(c_offset);
+    }
 
-        // Store absolute file position (as in original zran)
-        c_offset = absolute_c_offset;
+    bool create(std::size_t compressed_offset) {
+        // Use the provided compressed offset (calculated correctly by caller)
+        c_offset = compressed_offset;
 
         // Get bit offset from zlib state (following zran approach)
         bits = inflater.stream.data_type & 7;
 
         // Try to get the sliding window dictionary from zlib
         // This contains the last 32KB of uncompressed data
-        // Only attempt this when the zlib state is stable
         unsigned have = 0;
-        if ((inflater.stream.data_type & 0xc0) == 0x80 &&
-            inflater.stream.avail_out == 0 &&
-            inflateGetDictionary(&inflater.stream, window, &have) == Z_OK &&
-            have > 0) {
-            // Got dictionary successfully
-            if (have < constants::indexer::ZLIB_WINDOW_SIZE) {
-                // If less than 32KB available, right-align and pad with zeros
-                std::memmove(
-                    window + (constants::indexer::ZLIB_WINDOW_SIZE - have),
-                    window, have);
-                std::memset(window, 0,
-                            constants::indexer::ZLIB_WINDOW_SIZE - have);
-            }
-
+        
+        // Check if we're at proper deflate block boundary (end of header or non-last block)
+        // Following zran.c logic: (data_type & 0xc0) == 0x80
+        if ((inflater.stream.data_type & 0xc0) != 0x80) {
             DFTRACER_UTILS_LOG_DEBUG(
-                "Created checkpoint: uc_offset=%zu, c_offset=%zu, bits=%d, "
-                "dict_size=%u",
-                uc_offset, c_offset, bits, have);
-            return true;
+                "Cannot create checkpoint: not at proper deflate block boundary (data_type=0x%x)", 
+                inflater.stream.data_type);
+            return false;
+        }
+        
+        if (inflateGetDictionary(&inflater.stream, window, &have) != Z_OK) {
+            DFTRACER_UTILS_LOG_DEBUG(
+                "Could not get dictionary for checkpoint at offset %zu (data_type=0x%x)", 
+                uc_offset, inflater.stream.data_type);
+            return false;
         }
 
-        // If we can't get dictionary from zlib, this checkpoint won't work
+        // If less than 32KB available, right-align and pad with zeros
+        if (have < constants::indexer::ZLIB_WINDOW_SIZE) {
+            std::memmove(
+                window + (constants::indexer::ZLIB_WINDOW_SIZE - have),
+                window, have);
+            std::memset(window, 0,
+                        constants::indexer::ZLIB_WINDOW_SIZE - have);
+        }
+
         DFTRACER_UTILS_LOG_DEBUG(
-            "Could not get dictionary for checkpoint at offset %zu", uc_offset);
-        return false;
+            "Created checkpoint: uc_offset=%zu, c_offset=%zu, bits=%d, "
+            "dict_size=%u, data_type=0x%x",
+            uc_offset, c_offset, bits, have, inflater.stream.data_type);
+        return true;
     }
 
     bool compress(unsigned char **compressed,
