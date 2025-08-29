@@ -13,8 +13,9 @@ add_library(testing_utilities STATIC
     testing_utilities.cpp
 )
 target_link_libraries(testing_utilities
-    PRIVATE
+    PUBLIC
     dftracer_utils
+    PRIVATE
     doctest::doctest
     ghc_filesystem
 )
@@ -32,7 +33,6 @@ add_executable(test_reader
 )
 target_link_libraries(test_reader
     PRIVATE
-    dftracer_utils
     doctest::doctest
     testing_utilities
 )
@@ -55,7 +55,6 @@ add_executable(test_reader_c
 )
 target_link_libraries(test_reader_c
     PRIVATE
-    dftracer_utils
     unity_lib
     testing_utilities
 )
@@ -75,7 +74,6 @@ add_executable(test_reader_robustness
 )
 target_link_libraries(test_reader_robustness
     PRIVATE
-    dftracer_utils
     doctest::doctest
     testing_utilities
 )
