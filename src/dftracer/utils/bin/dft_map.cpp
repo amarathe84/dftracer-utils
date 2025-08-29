@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (trace_paths.empty()) {
-        DFTRACER_UTILS_LOG_ERROR("No trace files specified");
+        DFTRACER_UTILS_LOG_ERROR("No trace files specified", "");
         std::cerr << program;
         return 1;
     }
@@ -110,8 +110,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    DFTRACER_UTILS_LOG_INFO("=== DFTracer High-Level Metrics Computation ===");
-    DFTRACER_UTILS_LOG_INFO("Configuration:");
+    DFTRACER_UTILS_LOG_INFO("=== DFTracer High-Level Metrics Computation ===",
+                            "");
+    DFTRACER_UTILS_LOG_INFO("Configuration:", "");
     DFTRACER_UTILS_LOG_INFO(
         "  Checkpoint size: %.1f MB",
         static_cast<float>(checkpoint_size) / (1024 * 1024));

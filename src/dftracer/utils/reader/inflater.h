@@ -75,12 +75,12 @@ class ReaderInflater : public Inflater {
                                       checkpoint.dict_compressed.size(), window,
                                       &window_size)) {
             DFTRACER_UTILS_LOG_ERROR(
-                "Failed to decompress checkpoint dictionary");
+                "Failed to decompress checkpoint dictionary", "");
             return false;
         }
 
         if (!set_dictionary(window, window_size)) {
-            DFTRACER_UTILS_LOG_ERROR("Failed to set dictionary");
+            DFTRACER_UTILS_LOG_ERROR("Failed to set dictionary", "");
             return false;
         }
 
@@ -89,7 +89,7 @@ class ReaderInflater : public Inflater {
             int ch = fgetc(file);
             if (ch == EOF) {
                 DFTRACER_UTILS_LOG_ERROR(
-                    "Failed to read byte at checkpoint position");
+                    "Failed to read byte at checkpoint position", "");
                 return false;
             }
 
@@ -99,7 +99,7 @@ class ReaderInflater : public Inflater {
                 checkpoint.bits, prime_value, ch);
 
             if (!prime(checkpoint.bits, prime_value)) {
-                DFTRACER_UTILS_LOG_ERROR("inflatePrime failed");
+                DFTRACER_UTILS_LOG_ERROR("inflatePrime failed", "");
                 return false;
             }
         }
@@ -111,7 +111,7 @@ class ReaderInflater : public Inflater {
             return false;
         }
 
-        DFTRACER_UTILS_LOG_DEBUG("Checkpoint restoration successful");
+        DFTRACER_UTILS_LOG_DEBUG("Checkpoint restoration successful", "");
         return true;
     }
 

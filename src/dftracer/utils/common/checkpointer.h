@@ -73,7 +73,7 @@ struct Checkpointer {
         std::memset(&zs, 0, sizeof(zs));
 
         if (deflateInit(&zs, Z_BEST_COMPRESSION) != Z_OK) {
-            DFTRACER_UTILS_LOG_DEBUG("Failed to initialize zlib");
+            DFTRACER_UTILS_LOG_DEBUG("Failed to initialize zlib", "");
             return false;
         }
 
@@ -82,7 +82,7 @@ struct Checkpointer {
         *compressed = static_cast<unsigned char *>(malloc(max_compressed));
         if (!*compressed) {
             DFTRACER_UTILS_LOG_DEBUG(
-                "Failed to allocate memory for compressed data");
+                "Failed to allocate memory for compressed data", "");
             deflateEnd(&zs);
             return false;
         }
@@ -114,7 +114,7 @@ struct Checkpointer {
         std::memset(&zs, 0, sizeof(zs));
 
         if (inflateInit(&zs) != Z_OK) {
-            DFTRACER_UTILS_LOG_DEBUG("Failed to initialize zlib");
+            DFTRACER_UTILS_LOG_DEBUG("Failed to initialize zlib", "");
             return false;
         }
 

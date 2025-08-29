@@ -20,7 +20,7 @@ static void init_schema(const SqliteDatabase &db) {
         sqlite3_free(errmsg);
         throw IndexerError(IndexerError::DATABASE_ERROR, error);
     }
-    DFTRACER_UTILS_LOG_DEBUG("Schema init succeeded");
+    DFTRACER_UTILS_LOG_DEBUG("Schema init succeeded", "");
 }
 
 static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
@@ -28,16 +28,16 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                            std::uint64_t &total_lines_out,
                            std::uint64_t &total_uc_size_out) {
     if (fseeko(fp, 0, SEEK_SET) != 0) {
-        DFTRACER_UTILS_LOG_INFO("Failed to seek to beginning of file");
+        DFTRACER_UTILS_LOG_INFO("Failed to seek to beginning of file", "");
         return false;
     }
 
-    DFTRACER_UTILS_LOG_DEBUG("Starting to process chunks");
+    DFTRACER_UTILS_LOG_DEBUG("Starting to process chunks", "");
 
     IndexerInflater inflater;
     if (!inflater.initialize(fp, 0,
                              constants::indexer::ZLIB_GZIP_WINDOW_BITS)) {
-        DFTRACER_UTILS_LOG_DEBUG("Failed to initialize inflater");
+        DFTRACER_UTILS_LOG_DEBUG("Failed to initialize inflater", "");
         return false;
     }
 
@@ -100,12 +100,12 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         // Now read and process data using the new IndexerInflater API
         IndexerInflaterResult result;
         if (!inflater.read(fp, result)) {
-            DFTRACER_UTILS_LOG_DEBUG("Inflater read failed");
+            DFTRACER_UTILS_LOG_DEBUG("Inflater read failed", "");
             break;
         }
 
         if (result.bytes_read == 0) {
-            DFTRACER_UTILS_LOG_DEBUG("End of file reached");
+            DFTRACER_UTILS_LOG_DEBUG("End of file reached", "");
             break;
         }
 
@@ -152,12 +152,14 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
             } else {
                 DFTRACER_UTILS_LOG_DEBUG(
                     "Failed to create final checkpoint - dictionary "
-                    "compression failed");
+                    "compression failed",
+                    "");
             }
         } else {
             DFTRACER_UTILS_LOG_DEBUG(
                 "Failed to create final checkpoint - not at valid block "
-                "boundary");
+                "boundary",
+                "");
         }
     }
 
@@ -182,7 +184,8 @@ static bool build_index(const SqliteDatabase &db, int file_id,
 
     try {
         if (!delete_file_record(db, file_id)) {
-            DFTRACER_UTILS_LOG_DEBUG("Failed to delete existing file record");
+            DFTRACER_UTILS_LOG_DEBUG("Failed to delete existing file record",
+                                     "");
             goto failure;
         }
 
@@ -335,7 +338,8 @@ bool IndexerImplementor::exists() const { return fs::exists(idx_path); }
 bool IndexerImplementor::need_rebuild() const {
     if (is_valid()) return false;
     if (!query_schema_validity(db)) {
-        DFTRACER_UTILS_LOG_WARN("Index schema is invalid, rebuilding index.");
+        DFTRACER_UTILS_LOG_WARN("Index schema is invalid, rebuilding index.",
+                                "");
         return true;
     }
 

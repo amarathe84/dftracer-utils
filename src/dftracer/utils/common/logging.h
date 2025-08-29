@@ -128,39 +128,14 @@ inline std::string dftracer_utils_macro_get_time() {
 
 // Trace macros
 #if DFTRACER_UTILS_LOGGER_TRACE_ENABLED
-// Macro to choose between simple and format versions for TRACE
-#define DFTRACER_UTILS_LOG_TRACE_CHOOSE(count) \
-    DFTRACER_UTILS_LOG_TRACE_CHOOSE_(count)
-#define DFTRACER_UTILS_LOG_TRACE_CHOOSE_(count) DFTRACER_UTILS_LOG_TRACE_##count
-
-#define DFTRACER_UTILS_LOG_TRACE_1(message)                                \
-    DFTRACER_UTILS_INTERNAL_TRACE_SIMPLE(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_TRACE, message)
-#define DFTRACER_UTILS_LOG_TRACE_2(format, ...)                       \
+#define DFTRACER_LOG_TRACE()                                        \
+    DFTRACER_UTILS_INTERNAL_TRACE(__FILE__, __LINE__, __FUNCTION__, \
+                                  DFTRACER_UTILS_LOGGER_NAME,       \
+                                  CPP_LOGGER_TRACE);
+#define DFTRACER_UTILS_LOG_TRACE_FORMAT(format, ...)                  \
     DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
         __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
         CPP_LOGGER_TRACE, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_TRACE_3(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_TRACE, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_TRACE_4(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_TRACE, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_TRACE_5(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_TRACE, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_TRACE(...)                                          \
-    DFTRACER_UTILS_LOG_TRACE_CHOOSE(DFTRACER_UTILS_GET_ARG_COUNT(__VA_ARGS__)) \
-    (__VA_ARGS__)
-
-#define DFTRACER_UTILS_LOG_TRACE_FORMAT(...)                               \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_TRACE, __VA_ARGS__)
 #else
 #define DFTRACER_UTILS_LOG_TRACE(...)
 #define DFTRACER_UTILS_LOG_TRACE_FORMAT(...)
@@ -168,136 +143,40 @@ inline std::string dftracer_utils_macro_get_time() {
 
 // Debug macros
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
-// Macro to choose between simple and format versions
-#define DFTRACER_UTILS_LOG_DEBUG_CHOOSE(count) \
-    DFTRACER_UTILS_LOG_DEBUG_CHOOSE_(count)
-#define DFTRACER_UTILS_LOG_DEBUG_CHOOSE_(count) DFTRACER_UTILS_LOG_DEBUG_##count
-
-#define DFTRACER_UTILS_LOG_DEBUG_1(message)                                \
-    DFTRACER_UTILS_INTERNAL_TRACE_SIMPLE(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_DEBUG, message)
-#define DFTRACER_UTILS_LOG_DEBUG_2(format, ...)                       \
+#define DFTRACER_UTILS_LOG_DEBUG(format, ...)                         \
     DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
         __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_DEBUG, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_DEBUG_3(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_DEBUG, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_DEBUG_4(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_DEBUG, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_DEBUG_5(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_DEBUG, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_DEBUG_6(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_DEBUG, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_DEBUG(...)                                          \
-    DFTRACER_UTILS_LOG_DEBUG_CHOOSE(DFTRACER_UTILS_GET_ARG_COUNT(__VA_ARGS__)) \
-    (__VA_ARGS__)
+        CPP_LOGGER_DEBUG, format, ##__VA_ARGS__)
 #else
 #define DFTRACER_UTILS_LOG_DEBUG(...)
 #endif
 
 #if DFTRACER_UTILS_LOGGER_INFO_ENABLED
 // Info macros
-#define DFTRACER_UTILS_LOG_INFO_1(message)                                 \
-    DFTRACER_UTILS_INTERNAL_TRACE_SIMPLE(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_INFO, message)
-#define DFTRACER_UTILS_LOG_INFO_2(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_INFO, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_INFO_3(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_INFO, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_INFO_4(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_INFO, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_INFO_5(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_INFO, format, __VA_ARGS__)
-
-#define DFTRACER_UTILS_LOG_INFO_CHOOSE(count) \
-    DFTRACER_UTILS_LOG_INFO_CHOOSE_(count)
-#define DFTRACER_UTILS_LOG_INFO_CHOOSE_(count) DFTRACER_UTILS_LOG_INFO_##count
-#define DFTRACER_UTILS_LOG_INFO(...)                                          \
-    DFTRACER_UTILS_LOG_INFO_CHOOSE(DFTRACER_UTILS_GET_ARG_COUNT(__VA_ARGS__)) \
-    (__VA_ARGS__)
+#define DFTRACER_UTILS_LOG_INFO(format, ...)                          \
+    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
+        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
+        CPP_LOGGER_INFO, format, ##__VA_ARGS__)
 #else
 #define DFTRACER_UTILS_LOG_INFO(...)
 #endif
 
 // Warning macros
 #if DFTRACER_UTILS_LOGGER_WARN_ENABLED
-#define DFTRACER_UTILS_LOG_WARN_1(message)                                 \
-    DFTRACER_UTILS_INTERNAL_TRACE_SIMPLE(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_WARN, message)
-#define DFTRACER_UTILS_LOG_WARN_2(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_WARN, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_WARN_3(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_WARN, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_WARN_4(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_WARN, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_WARN_5(format, ...)                             \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_WARN, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_WARN_CHOOSE(count) \
-    DFTRACER_UTILS_LOG_WARN_CHOOSE_(count)
-#define DFTRACER_UTILS_LOG_WARN_CHOOSE_(count) DFTRACER_UTILS_LOG_WARN_##count
-#define DFTRACER_UTILS_LOG_WARN(...)                                          \
-    DFTRACER_UTILS_LOG_WARN_CHOOSE(DFTRACER_UTILS_GET_ARG_COUNT(__VA_ARGS__)) \
-    (__VA_ARGS__)
+#define DFTRACER_UTILS_LOG_WARN(format, ...)                          \
+    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
+        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
+        CPP_LOGGER_WARN, format, ##__VA_ARGS__)
 #else
 #define DFTRACER_UTILS_LOG_WARN(...)
 #endif
 
 // Error macros
 #if DFTRACER_UTILS_LOGGER_ERROR_ENABLED
-#define DFTRACER_UTILS_LOG_ERROR_1(message)                                \
-    DFTRACER_UTILS_INTERNAL_TRACE_SIMPLE(__FILE__, __LINE__, __FUNCTION__, \
-                                         DFTRACER_UTILS_LOGGER_NAME,       \
-                                         CPP_LOGGER_ERROR, message)
-#define DFTRACER_UTILS_LOG_ERROR_2(format, ...)                       \
+#define DFTRACER_UTILS_LOG_ERROR(format, ...)                         \
     DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
         __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_ERROR, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_ERROR_3(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_ERROR, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_ERROR_4(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_ERROR, format, __VA_ARGS__)
-#define DFTRACER_UTILS_LOG_ERROR_5(format, ...)                       \
-    DFTRACER_UTILS_INTERNAL_TRACE_FORMAT(                             \
-        __FILE__, __LINE__, __FUNCTION__, DFTRACER_UTILS_LOGGER_NAME, \
-        CPP_LOGGER_ERROR, format, __VA_ARGS__)
-
-#define DFTRACER_UTILS_LOG_ERROR_CHOOSE(count) \
-    DFTRACER_UTILS_LOG_ERROR_CHOOSE_(count)
-#define DFTRACER_UTILS_LOG_ERROR_CHOOSE_(count) DFTRACER_UTILS_LOG_ERROR_##count
-#define DFTRACER_UTILS_LOG_ERROR(...)                                          \
-    DFTRACER_UTILS_LOG_ERROR_CHOOSE(DFTRACER_UTILS_GET_ARG_COUNT(__VA_ARGS__)) \
-    (__VA_ARGS__)
+        CPP_LOGGER_ERROR, format, ##__VA_ARGS__)
 #else
 #define DFTRACER_UTILS_LOG_ERROR(...)
 #endif

@@ -128,7 +128,6 @@ int main(int argc, char **argv) {
     if (start != -1) {
         try {
             Reader reader(gz_path, idx_path);
-            DFTRACER_UTILS_LOG_DEBUG("Here");
 
             if (read_mode.find("bytes") == std::string::npos) {
                 std::size_t end_line = static_cast<std::size_t>(end);
