@@ -334,7 +334,8 @@ double _get_double_field_impl(const JsonDoc& doc, const std::string& key) {
 }
 
 template <typename JsonDoc>
-std::uint64_t _get_uint64_field_impl(const JsonDoc& doc, const std::string& key) {
+std::uint64_t _get_uint64_field_impl(const JsonDoc& doc,
+                                     const std::string& key) {
     if (!doc.is_object()) return 0;
 
     auto obj_result = doc.get_object();
@@ -412,7 +413,8 @@ double get_double_field(const JsonDocument& doc, const std::string& key) {
     return _get_double_field_impl(doc, key);
 }
 
-std::uint64_t get_uint64_field(const JsonDocument& doc, const std::string& key) {
+std::uint64_t get_uint64_field(const JsonDocument& doc,
+                               const std::string& key) {
     return _get_uint64_field_impl(doc, key);
 }
 
@@ -432,7 +434,7 @@ double get_double_field_owned(const OwnedJsonDocument& doc,
 }
 
 std::uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc,
-                                const std::string& key) {
+                                     const std::string& key) {
     return _get_uint64_field_impl(doc, key);
 }
 

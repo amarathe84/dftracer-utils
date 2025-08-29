@@ -3,6 +3,7 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
+#include <dftracer/utils/utils/timer.h>
 
 #include <algorithm>
 #include <argparse/argparse.hpp>
@@ -137,10 +138,14 @@ int main(int argc, char **argv) {
 
                 DFTRACER_UTILS_LOG_DEBUG("Reading lines from %lld to %zu",
                                          (long long)start, end_line);
-
-                auto lines =
-                    reader.read_lines(static_cast<size_t>(start), end_line);
-                fwrite(lines.data(), 1, lines.size(), stdout);
+                reader.set_buffer_size(read_buffer_size);
+                auto lines = reader.read_lines(static_cast<std::size_t>(start),
+                                               end_line);
+                {
+                    Timer timer("Writing output to stdout", true, true);
+                    setvbuf(stdout, NULL, _IOFBF, 1 << 20);
+                    fwrite(lines.data(), 1, lines.size(), stdout);
+                }
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
                 std::size_t line_count = static_cast<std::size_t>(
                     std::count(lines.begin(), lines.end(), '\n'));
@@ -163,7 +168,9 @@ int main(int argc, char **argv) {
                                          read_buffer_size);
                 auto buffer = std::make_unique<char[]>(read_buffer_size);
                 std::size_t bytes_written;
+#if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
                 std::size_t total_bytes = 0;
+#endif
 
                 while ((bytes_written =
                             read_mode == "bytes"
@@ -173,7 +180,9 @@ int main(int argc, char **argv) {
                                       start_bytes_, end_bytes_, buffer.get(),
                                       read_buffer_size)) > 0) {
                     fwrite(buffer.get(), 1, bytes_written, stdout);
+#if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
                     total_bytes += bytes_written;
+#endif
                 }
 
                 DFTRACER_UTILS_LOG_DEBUG(

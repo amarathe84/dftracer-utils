@@ -46,7 +46,7 @@ void dft_reader_reset(dft_reader_handle_t reader);
 namespace dftracer::utils {
 
 class Indexer;
-class ReaderImplementor;
+struct ReaderImplementor;
 
 class Reader {
    public:

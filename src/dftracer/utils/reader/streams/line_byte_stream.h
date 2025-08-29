@@ -6,6 +6,7 @@
 #include <dftracer/utils/reader/streams/stream.h>
 
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 class LineByteStream : public Stream {
@@ -21,7 +22,10 @@ class LineByteStream : public Stream {
     size_t actual_start_bytes_;
 
    public:
-    LineByteStream() : Stream(), actual_start_bytes_(0) {}
+    LineByteStream() : Stream(), actual_start_bytes_(0) {
+        partial_line_buffer_.reserve(1 * 1024 * 1024);
+        temp_buffer_.reserve(1 * 1024 * 1024);
+    }
 
     virtual void initialize(const std::string &gz_path, std::size_t start_bytes,
                             std::size_t end_bytes, Indexer &indexer) override {
@@ -96,7 +100,7 @@ class LineByteStream : public Stream {
         // Prepare temp buffer
         ensure_temp_buffer_size(buffer_size);
 
-        size_t available_buffer_space = buffer_size;
+        std::size_t available_buffer_space = buffer_size;
         if (!partial_line_buffer_.empty()) {
             if (partial_line_buffer_.size() > buffer_size) {
                 throw ReaderError(
@@ -109,11 +113,11 @@ class LineByteStream : public Stream {
         }
 
         // Read data
-        size_t max_bytes_to_read = target_end_bytes_ - current_position_;
-        size_t bytes_to_read =
+        std::size_t max_bytes_to_read = target_end_bytes_ - current_position_;
+        std::size_t bytes_to_read =
             std::min(max_bytes_to_read, available_buffer_space);
 
-        size_t bytes_read = 0;
+        std::size_t bytes_read = 0;
         if (bytes_to_read > 0) {
             bool status = inflater_.read(
                 file_handle_,
@@ -127,14 +131,14 @@ class LineByteStream : public Stream {
             }
         }
 
-        DFTRACER_UTILS_LOG_TRACE_FORMAT(
+        DFTRACER_UTILS_LOG_DEBUG(
             "Read %zu bytes from compressed stream, partial_buffer_size=%zu, "
             "current_position=%zu, target_end=%zu",
             bytes_read, partial_line_buffer_.size(), current_position_,
             target_end_bytes_);
 
-        size_t total_data_size = partial_line_buffer_.size() + bytes_read;
-        size_t adjusted_size = apply_range_and_boundary_limits(
+        std::size_t total_data_size = partial_line_buffer_.size() + bytes_read;
+        std::size_t adjusted_size = apply_range_and_boundary_limits(
             temp_buffer_.data(), total_data_size);
 
         current_position_ += bytes_read;

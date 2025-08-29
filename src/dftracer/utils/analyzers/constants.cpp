@@ -1,8 +1,8 @@
 #include "dftracer/utils/analyzers/constants.h"
 
+#include <cstdint>
 #include <limits>
 #include <string>
-#include <cstdint>
 
 namespace dftracer::utils::analyzers::constants {
 std::ostream& operator<<(std::ostream& os, const IOCategory& io_cat) {

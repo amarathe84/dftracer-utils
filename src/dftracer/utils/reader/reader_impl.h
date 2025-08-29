@@ -7,7 +7,9 @@
 #include <dftracer/utils/utils/json.h>
 
 #include <cstdint>
+#include <sstream>
 #include <string>
+#include <string_view>
 
 namespace dftracer::utils {
 class Indexer;
@@ -62,10 +64,11 @@ struct ReaderImplementor {
    private:
     std::string read_lines_optimized(std::size_t start_line,
                                      std::size_t end_line);
-    std::string extract_lines_from_chunk(const std::string &chunk_data,
+    std::size_t extract_lines_from_chunk(std::string_view chunk_data,
                                          std::size_t target_start_line,
                                          std::size_t target_end_line,
-                                         std::size_t chunk_first_line);
+                                         std::size_t chunk_first_line,
+                                         std::size_t &start_offset);
 
    private:
     bool is_indexer_initialized_internally;

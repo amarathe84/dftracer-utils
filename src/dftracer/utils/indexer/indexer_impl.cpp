@@ -354,8 +354,7 @@ bool IndexerImplementor::exists() const { return fs::exists(idx_path); }
 bool IndexerImplementor::need_rebuild() const {
     if (is_valid()) return false;
     if (!query_schema_validity(db)) {
-        DFTRACER_UTILS_LOG_WARN("Index schema is invalid, rebuilding index.",
-                                "");
+        DFTRACER_UTILS_LOG_WARN("Index schema is invalid, rebuilding index.");
         return true;
     }
 
@@ -429,13 +428,29 @@ bool IndexerImplementor::find_checkpoint(std::size_t target_offset,
 }
 
 std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints() const {
-    return query_checkpoints(db, cached_file_id);
+    if (cached_checkpoints.empty()) {
+        int file_id = get_file_id();
+        cached_checkpoints = query_checkpoints(db, file_id);
+    }
+    return cached_checkpoints;
 }
 
 std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints_for_line_range(
     std::uint64_t start_line, std::uint64_t end_line) const {
-    return query_checkpoints_for_line_range(db, cached_file_id, start_line,
-                                            end_line);
+    // Ensure file_id is populated before querying checkpoints
+    int file_id = get_file_id();
+    DFTRACER_UTILS_LOG_DEBUG(
+        "get_checkpoints_for_line_range: file_id=%d, start_line=%llu, "
+        "end_line=%llu",
+        file_id, start_line, end_line);
+
+    auto checkpoints =
+        query_checkpoints_for_line_range(db, file_id, start_line, end_line);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "get_checkpoints_for_line_range: found %zu checkpoints",
+        checkpoints.size());
+
+    return checkpoints;
 }
 
 }  // namespace dftracer::utils

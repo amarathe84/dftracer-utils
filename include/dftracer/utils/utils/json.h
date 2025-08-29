@@ -3,13 +3,13 @@
 
 #include <simdjson.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <iosfwd>
 #include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <cstdint>
 
 namespace dftracer::utils::json {
 
@@ -101,7 +101,7 @@ std::string get_string_field_owned(const OwnedJsonDocument& doc,
 double get_double_field_owned(const OwnedJsonDocument& doc,
                               const std::string& key);
 std::uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc,
-                                const std::string& key);
+                                     const std::string& key);
 std::string get_args_string_field_owned(const OwnedJsonDocument& doc,
                                         const std::string& key);
 

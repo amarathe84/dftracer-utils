@@ -12,10 +12,10 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <unordered_map>
-#include <cstdint>
 
 namespace dftracer::utils::analyzers {
 using namespace dftracer::utils::json;
@@ -24,7 +24,7 @@ using namespace dftracer::utils::pipeline;
 namespace helpers {
 std::uint64_t calc_time_range(std::uint64_t time, double time_granularity);
 std::string hlms_to_csv(const std::vector<HighLevelMetrics>& hlms,
-       bool header = true);
+                        bool header = true);
 arrow::Status hlms_to_parquet(const std::vector<HighLevelMetrics>& hlms,
                               const std::string& output_path);
 arrow::Result<std::vector<HighLevelMetrics>> hlms_from_parquet(
@@ -383,7 +383,8 @@ inline auto postread_trace(Context& ctx, BagType&& events,
             .compute(ctx);
 
     // Compute epoch spans from all collected events
-    std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>> epoch_spans;
+    std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>>
+        epoch_spans;
     std::map<std::uint64_t, std::vector<EpochSpanEntry>> epoch_groups;
 
     for (const auto& record : all_epoch_events) {

@@ -181,9 +181,12 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
                 static_cast<std::uint64_t>(checkpoint.checkpoint_idx);
             temp_ckpts[i].uc_offset =
                 static_cast<std::uint64_t>(checkpoint.uc_offset);
-            temp_ckpts[i].uc_size = static_cast<std::uint64_t>(checkpoint.uc_size);
-            temp_ckpts[i].c_offset = static_cast<std::uint64_t>(checkpoint.c_offset);
-            temp_ckpts[i].c_size = static_cast<std::uint64_t>(checkpoint.c_size);
+            temp_ckpts[i].uc_size =
+                static_cast<std::uint64_t>(checkpoint.uc_size);
+            temp_ckpts[i].c_offset =
+                static_cast<std::uint64_t>(checkpoint.c_offset);
+            temp_ckpts[i].c_size =
+                static_cast<std::uint64_t>(checkpoint.c_size);
             temp_ckpts[i].bits = checkpoint.bits;
             temp_ckpts[i].dict_size = checkpoint.dict_compressed.size();
             temp_ckpts[i].num_lines =

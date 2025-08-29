@@ -56,6 +56,7 @@ set(DFTRACER_UTILS_SOURCES
 
   # Utilities
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/timer.cpp
 
   # Pipeline
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/error.cpp
