@@ -28,7 +28,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                            std::uint64_t &total_lines_out,
                            std::uint64_t &total_uc_size_out) {
     if (fseeko(fp, 0, SEEK_SET) != 0) {
-        DFTRACER_UTILS_LOG_DEBUG("Failed to seek to beginning of file");
+        DFTRACER_UTILS_LOG_INFO("Failed to seek to beginning of file");
         return false;
     }
 
@@ -47,7 +47,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
     std::uint64_t total_lines = 0;  // Total lines processed
 
     while (true) {
-        DFTRACER_UTILS_LOG_DEBUG("Start inflating at uncompressed offset %zu",
+        DFTRACER_UTILS_LOG_INFO("Start inflating at uncompressed offset %zu",
                                  current_uc_offset);
 
         size_t bytes_read;

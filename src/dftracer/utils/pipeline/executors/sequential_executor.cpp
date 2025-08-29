@@ -8,8 +8,7 @@ namespace dftracer::utils {
 
 SequentialExecutor::SequentialExecutor() : Executor(ExecutorType::SEQUENTIAL) {}
 
-std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input,
-                                     bool gather) {
+std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input) {
     // gather parameter is ignored in sequential executor (noop)
     if (pipeline.empty()) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,

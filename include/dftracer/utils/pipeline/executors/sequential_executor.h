@@ -14,8 +14,7 @@ class SequentialExecutor : public Executor {
     SequentialExecutor(SequentialExecutor&&) = default;
     SequentialExecutor& operator=(SequentialExecutor&&) = default;
 
-    std::any execute(const Pipeline& pipeline, std::any input,
-                     bool gather = true) override;
+    std::any execute(const Pipeline& pipeline, std::any input) override;
 };
 
 }  // namespace dftracer::utils

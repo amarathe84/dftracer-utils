@@ -14,8 +14,7 @@ class Executor {
 
    public:
     virtual ~Executor() = default;
-    virtual std::any execute(const Pipeline& pipeline, std::any input,
-                             bool gather = true) = 0;
+    virtual std::any execute(const Pipeline& pipeline, std::any input) = 0;
     inline ExecutorType type() const { return type_; }
 
    public:
