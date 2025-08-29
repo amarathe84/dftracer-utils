@@ -20,6 +20,8 @@ class IndexCheckpoint:
     bits: int
     dict_compressed: bytes
     num_lines: int
+    first_line_num: int
+    last_line_num: int
 
 class DFTracerIndexer:
     """DFTracer indexer for creating and managing gzip file indices."""
@@ -64,6 +66,10 @@ class DFTracerIndexer:
 
     def find_checkpoint(self, target_offset: int) -> Optional[IndexCheckpoint]:
         """Find checkpoint for target offset."""
+        ...
+
+    def get_checkpoints_for_line_range(self, start_line: int, end_line: int) -> List[IndexCheckpoint]:
+        """Get checkpoints that cover the specified line range."""
         ...
     
     def gz_path(self) -> str:

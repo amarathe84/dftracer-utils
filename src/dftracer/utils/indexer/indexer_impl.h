@@ -45,8 +45,8 @@ struct IndexerImplementor {
     bool find_checkpoint(size_t target_offset,
                          IndexCheckpoint &checkpoint) const;
     std::vector<IndexCheckpoint> get_checkpoints() const;
-    std::vector<IndexCheckpoint> get_checkpoints_for_line_range(std::uint64_t start_line,
-                                                                std::uint64_t end_line) const;
+    std::vector<IndexCheckpoint> get_checkpoints_for_line_range(
+        std::uint64_t start_line, std::uint64_t end_line) const;
 };
 
 }  // namespace dftracer::utils

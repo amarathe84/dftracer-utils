@@ -63,7 +63,7 @@ class ReaderInflater : public Inflater {
         reset();
         if (!initialize_stream(-15)) {
             DFTRACER_UTILS_LOG_ERROR(
-                "Failed to initialize inflater in raw mode");
+                "Failed to initialize inflater in raw mode", "");
             return false;
         }
 
@@ -107,7 +107,8 @@ class ReaderInflater : public Inflater {
         // Prime with initial input
         if (!read_input(file)) {
             DFTRACER_UTILS_LOG_ERROR(
-                "Failed to read initial input after checkpoint restoration");
+                "Failed to read initial input after checkpoint restoration",
+                "");
             return false;
         }
 

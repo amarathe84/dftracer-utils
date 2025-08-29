@@ -105,7 +105,8 @@ int main(int argc, char* argv[]) {
     // Validate checkpoint arguments
     if (checkpoint && checkpoint_dir.empty()) {
         DFTRACER_UTILS_LOG_ERROR(
-            "--checkpoint-dir must be specified when --checkpoint is enabled");
+            "--checkpoint-dir must be specified when --checkpoint is enabled",
+            "");
         std::cerr << program;
         return 1;
     }
@@ -115,7 +116,7 @@ int main(int argc, char* argv[]) {
     DFTRACER_UTILS_LOG_INFO("Configuration:", "");
     DFTRACER_UTILS_LOG_INFO(
         "  Checkpoint size: %.1f MB",
-        static_cast<float>(checkpoint_size) / (1024 * 1024));
+        static_cast<double>(checkpoint_size) / (1024 * 1024));
     DFTRACER_UTILS_LOG_INFO("  Force rebuild: %s",
                             force_rebuild ? "true" : "false");
     DFTRACER_UTILS_LOG_INFO("  Time granularity: %.1f µs", time_granularity);

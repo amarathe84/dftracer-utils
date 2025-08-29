@@ -68,7 +68,8 @@ class ByteStream : public Stream {
         if (!result || bytes_read == 0) {
             DFTRACER_UTILS_LOG_DEBUG(
                 "ByteStream::stream - marking as finished due to read failure "
-                "or 0 bytes");
+                "or 0 bytes",
+                "");
             is_finished_ = true;
             return 0;
         }

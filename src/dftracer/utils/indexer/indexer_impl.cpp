@@ -44,7 +44,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
     std::size_t checkpoint_idx = 0;
     std::size_t current_uc_offset = 0;
     std::uint64_t total_lines = 0;
-    std::uint64_t current_line_number = 1; // 1-based line numbering
+    std::uint64_t current_line_number = 1;  // 1-based line numbering
     std::size_t last_checkpoint_uc_offset = 0;
     std::uint64_t last_checkpoint_line_number = 1;
 
@@ -84,8 +84,12 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                 ckpt_data.compressed_dict = compressed_dict;
                 ckpt_data.compressed_dict_size = compressed_dict_size;
                 ckpt_data.first_line_num = last_checkpoint_line_number;
-                ckpt_data.last_line_num = current_line_number - 1; // Current line is the end of this checkpoint
-                ckpt_data.num_lines = (current_line_number - 1) - last_checkpoint_line_number + 1; // Number of lines in this checkpoint
+                ckpt_data.last_line_num =
+                    current_line_number -
+                    1;  // Current line is the end of this checkpoint
+                ckpt_data.num_lines = (current_line_number - 1) -
+                                      last_checkpoint_line_number +
+                                      1;  // Number of lines in this checkpoint
 
                 insert_checkpoint_record(db, file_id, ckpt_data);
 
@@ -145,8 +149,12 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                 ckpt_data.compressed_dict = compressed_dict;
                 ckpt_data.compressed_dict_size = compressed_dict_size;
                 ckpt_data.first_line_num = last_checkpoint_line_number;
-                ckpt_data.last_line_num = current_line_number - 1; // -1 because current_line_number is next line to be processed
-                ckpt_data.num_lines = (current_line_number - 1) - last_checkpoint_line_number + 1; // Number of lines in this final checkpoint
+                ckpt_data.last_line_num =
+                    current_line_number - 1;  // -1 because current_line_number
+                                              // is next line to be processed
+                ckpt_data.num_lines =
+                    (current_line_number - 1) - last_checkpoint_line_number +
+                    1;  // Number of lines in this final checkpoint
 
                 insert_checkpoint_record(db, file_id, ckpt_data);
 
@@ -379,8 +387,8 @@ bool IndexerImplementor::need_rebuild() const {
         }
     }
 
-    DFTRACER_UTILS_LOG_DEBUG(
-        "Index rebuild not needed: file content unchanged", "");
+    DFTRACER_UTILS_LOG_DEBUG("Index rebuild not needed: file content unchanged",
+                             "");
     return false;
 }
 
@@ -424,9 +432,10 @@ std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints() const {
     return query_checkpoints(db, cached_file_id);
 }
 
-std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints_for_line_range(std::uint64_t start_line,
-                                                                                std::uint64_t end_line) const {
-    return query_checkpoints_for_line_range(db, cached_file_id, start_line, end_line);
+std::vector<IndexCheckpoint> IndexerImplementor::get_checkpoints_for_line_range(
+    std::uint64_t start_line, std::uint64_t end_line) const {
+    return query_checkpoints_for_line_range(db, cached_file_id, start_line,
+                                            end_line);
 }
 
 }  // namespace dftracer::utils

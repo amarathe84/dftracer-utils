@@ -143,7 +143,8 @@ class LineByteStream : public Stream {
             DFTRACER_UTILS_LOG_ERROR(
                 "No complete line found, need to read more data, try "
                 "increasing the "
-                "end bytes");
+                "end bytes",
+                "");
             is_finished_ = true;
             return 0;
         }

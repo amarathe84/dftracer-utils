@@ -203,7 +203,8 @@ int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
                 }
                 free(temp_ckpts);
                 DFTRACER_UTILS_LOG_ERROR(
-                    "Failed to allocate memory for checkpoint dictionary data");
+                    "Failed to allocate memory for checkpoint dictionary data",
+                    "");
                 *checkpoints = nullptr;
                 return -1;
             }

@@ -37,6 +37,8 @@ class DFTracerIndexer {
     std::vector<IndexCheckpoint> get_checkpoints() const;
     std::optional<IndexCheckpoint> find_checkpoint(
         std::size_t target_offset) const;
+    std::vector<IndexCheckpoint> get_checkpoints_for_line_range(
+        std::uint64_t start_line, std::uint64_t end_line) const;
 
     std::string gz_path() const;
     std::string idx_path() const;

@@ -109,6 +109,16 @@ std::optional<IndexCheckpoint> DFTracerIndexer::find_checkpoint(
     }
 }
 
+std::vector<IndexCheckpoint> DFTracerIndexer::get_checkpoints_for_line_range(
+    std::uint64_t start_line, std::uint64_t end_line) const {
+    try {
+        return indexer_->get_checkpoints_for_line_range(start_line, end_line);
+    } catch (const std::runtime_error &e) {
+        throw std::runtime_error("Failed to get checkpoints for line range: " +
+                                 std::string(e.what()));
+    }
+}
+
 std::string DFTracerIndexer::gz_path() const { return gz_path_; }
 
 std::string DFTracerIndexer::idx_path() const { return idx_path_; }
@@ -162,6 +172,10 @@ void register_indexer(nb::module_ &m) {
             "target_offset"_a,
             "Find the best checkpoint for a given uncompressed offset, returns "
             "IndexCheckpoint or None")
+        .def("get_checkpoints_for_line_range",
+             &DFTracerIndexer::get_checkpoints_for_line_range, "start_line"_a,
+             "end_line"_a,
+             "Get checkpoints that cover the specified line range")
         .def_prop_ro("gz_path", &DFTracerIndexer::gz_path,
                      "Path to the gzip file")
         .def_prop_ro("idx_path", &DFTracerIndexer::idx_path,

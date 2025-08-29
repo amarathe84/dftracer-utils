@@ -50,10 +50,9 @@ bool query_checkpoint(const SqliteDatabase &db, size_t target_offset,
                       int file_id, IndexCheckpoint &checkpoint);
 std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
                                                int file_id);
-std::vector<IndexCheckpoint> query_checkpoints_for_line_range(const SqliteDatabase &db, 
-                                                              int file_id,
-                                                              std::uint64_t start_line,
-                                                              std::uint64_t end_line);
+std::vector<IndexCheckpoint> query_checkpoints_for_line_range(
+    const SqliteDatabase &db, int file_id, std::uint64_t start_line,
+    std::uint64_t end_line);
 std::size_t query_checkpoint_size(const SqliteDatabase &db, int file_id);
 
 }  // namespace dftracer::utils
