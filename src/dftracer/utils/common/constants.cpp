@@ -9,7 +9,7 @@ const char *SQL_SCHEMA = R"(
       logical_name TEXT UNIQUE NOT NULL,
       byte_size INTEGER NOT NULL,
       mtime_unix INTEGER NOT NULL,
-      sha256_hex TEXT NOT NULL
+      hash TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS checkpoints (

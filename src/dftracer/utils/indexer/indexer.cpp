@@ -6,7 +6,6 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/indexer/indexer_impl.h>
 #include <dftracer/utils/utils/filesystem.h>
-#include <picosha2.h>
 #include <sqlite3.h>
 #include <zlib.h>
 

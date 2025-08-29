@@ -3,19 +3,27 @@ set(CPM_SOURCE_CACHE "${CMAKE_SOURCE_DIR}/.cpmsource")
 
 function(need_cpplogger)
   if(NOT cpplogger_ADDED)
+    # CPMAddPackage(
+    #   NAME cpplogger
+    #   GITHUB_REPOSITORY hariharan-devarajan/cpp-logger
+    #   VERSION 0.0.4
+    #   GIT_TAG v0.0.4
+    #   DOWNLOAD_ONLY YES
+    # )
     CPMAddPackage(
       NAME cpplogger
-      GITHUB_REPOSITORY hariharan-devarajan/cpp-logger
-      VERSION 0.0.4
-      GIT_TAG v0.0.4
-      DOWNLOAD_ONLY YES
+      GITHUB_REPOSITORY rayandrew/cpp-logger
+      # VERSION 0.0.4
+      GIT_TAG 965707aa8b2431fe0a78afd5346e3704e820492d
+      # DOWNLOAD_ONLY YES
     )
-    set(_cmakelists "${cpplogger_SOURCE_DIR}/CMakeLists.txt")
-    file(READ "${_cmakelists}" _contents)
-    string(REPLACE "CMAKE_SOURCE_DIR" "CMAKE_CURRENT_SOURCE_DIR" _contents "${_contents}")
-    file(WRITE "${_cmakelists}" "${_contents}")
-    set(CPP_LOGGER_LIBDIR_AS_LIB "${cpplogger_BINARY_DIR}/libcpp_logger.a")
-    add_subdirectory("${cpplogger_SOURCE_DIR}" "${cpplogger_BINARY_DIR}")
+
+    # set(_cmakelists "${cpplogger_SOURCE_DIR}/CMakeLists.txt")
+    # file(READ "${_cmakelists}" _contents)
+    # string(REPLACE "CMAKE_SOURCE_DIR" "CMAKE_CURRENT_SOURCE_DIR" _contents "${_contents}")
+    # file(WRITE "${_cmakelists}" "${_contents}")
+    # set(CPP_LOGGER_LIBDIR_AS_LIB "${cpplogger_BINARY_DIR}/libcpp_logger.a")
+    # add_subdirectory("${cpplogger_SOURCE_DIR}" "${cpplogger_BINARY_DIR}")
   endif()
 endfunction()
 
@@ -405,6 +413,19 @@ function(link_zlib TARGET_NAME LIBRARY_TYPE)
       target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
       message(STATUS "Linked ${TARGET_NAME} to system ZLIB::ZLIB")
     endif()
+  endif()
+endfunction()
+
+function(need_xxhash)
+  if(NOT xxhash_ADDED)
+    CPMAddPackage(
+      NAME xxhash 
+      GITHUB_REPOSITORY Cyan4973/xxHash
+      GIT_TAG v0.8.3
+      OPTIONS 
+        "XXHASH_BUILD_XXHSUM OFF"
+      SOURCE_SUBDIR cmake_unofficial
+    )
   endif()
 endfunction()
 

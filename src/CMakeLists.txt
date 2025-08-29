@@ -11,7 +11,7 @@ need_zlib()
 need_sqlite3()
 need_argparse()
 need_ghc_filesystem()
-need_picosha2()
+need_xxhash()
 need_simdjson()
 need_cpplogger()
 find_package(Threads REQUIRED)
@@ -87,7 +87,7 @@ set_target_properties(dftracer_utils PROPERTIES
     OUTPUT_NAME dftracer_utils
 )
 target_link_libraries(dftracer_utils 
-    PRIVATE picosha2
+    PRIVATE xxHash::xxhash
     PUBLIC ghc_filesystem simdjson::simdjson_static cpp-logger Threads::Threads
 )
 add_mpi_deps_if_needed(dftracer_utils)
@@ -127,7 +127,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_link_libraries(dftracer_utils_shared 
-    PRIVATE picosha2
+    PRIVATE xxHash::xxhash
     PUBLIC ghc_filesystem simdjson::simdjson cpp-logger Threads::Threads
 )
 add_mpi_deps_if_needed(dftracer_utils_shared)
@@ -207,7 +207,7 @@ endif()
 
 add_executable(dft_reader ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_reader.cpp)
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader PRIVATE dftracer_utils argparse::argparse ghc_filesystem picosha2 simdjson::simdjson)
+target_link_libraries(dft_reader PRIVATE dftracer_utils argparse::argparse ghc_filesystem xxHash::xxhash simdjson::simdjson)
 
 # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_reader STATIC)
@@ -241,7 +241,7 @@ target_link_libraries(dft_map PRIVATE
   dftracer_utils
   argparse::argparse
   ghc_filesystem
-  picosha2
+  xxHash::xxhash
   simdjson::simdjson
 )
 # add_mpi_deps_if_needed(dft_map)
@@ -335,8 +335,8 @@ endif()
 if(TARGET ghc_filesystem)
     list(APPEND INSTALLABLE_TARGETS ghc_filesystem)
 endif()
-if(TARGET picosha2)
-    list(APPEND INSTALLABLE_TARGETS picosha2)
+if(TARGET xxhash)
+    list(APPEND INSTALLABLE_TARGETS xxhash)
 endif()
 if (TARGET simdjson)
     list(APPEND INSTALLABLE_TARGETS simdjson)

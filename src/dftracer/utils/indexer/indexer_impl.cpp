@@ -298,14 +298,14 @@ void IndexerImplementor::build() {
             "Failed to get file size for: " + gz_path + ", got size: 0");
     }
 
-    std::string sha256 = calculate_file_sha256(gz_path);
-    if (sha256.empty()) {
+    std::string hash = calculate_file_hash(gz_path);
+    if (hash.empty()) {
         throw IndexerError(IndexerError::Type::FILE_ERROR,
-                           "Failed to calculate SHA256 for: " + gz_path);
+                           "Failed to calculate hash for: " + gz_path);
     }
 
     time_t mod_time = get_file_modification_time(gz_path);
-    insert_file_record(db, gz_path_logical_path, bytes, mod_time, sha256,
+    insert_file_record(db, gz_path_logical_path, bytes, mod_time, hash,
                        cached_file_id);
 
     if (cached_file_id == -1) {
@@ -339,9 +339,9 @@ bool IndexerImplementor::need_rebuild() const {
         return true;
     }
 
-    std::string stored_sha256;
+    std::string stored_hash;
     time_t stored_mtime;
-    if (query_stored_file_info(db, gz_path_logical_path, stored_sha256,
+    if (query_stored_file_info(db, gz_path_logical_path, stored_hash,
                                stored_mtime)) {
         // quick check using modification time as optimization
         // time_t current_mtime = get_file_mtime(indexer->gz_path);
@@ -352,17 +352,17 @@ bool IndexerImplementor::need_rebuild() const {
         //     time changed"); return 1;
         // }
 
-        std::string current_sha256 = calculate_file_sha256(gz_path);
-        if (current_sha256.empty()) {
+        std::string current_hash = calculate_file_hash(gz_path);
+        if (current_hash.empty()) {
             throw IndexerError(IndexerError::FILE_ERROR,
-                               "Failed to calculate SHA256 for " + gz_path);
+                               "Failed to calculate hash for " + gz_path);
         }
 
-        if (current_sha256 != stored_sha256) {
+        if (current_hash != stored_hash) {
             DFTRACER_UTILS_LOG_DEBUG(
-                "Index rebuild needed: file SHA256 changed (%s vs %s)",
-                (current_sha256.substr(0, 16) + "...").c_str(),
-                (stored_sha256.substr(0, 16) + "...").c_str());
+                "Index rebuild needed: file hash changed (%s vs %s)",
+                (current_hash.substr(0, 16) + "...").c_str(),
+                (stored_hash.substr(0, 16) + "...").c_str());
             return true;
         }
     }

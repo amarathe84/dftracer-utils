@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstdio>
 #include <string>
 
 namespace dftracer::utils {
@@ -56,23 +57,28 @@ inline std::string dftracer_utils_macro_get_time() {
 
 #if defined(DFTRACER_UTILS_LOGGER_LEVEL_TRACE) && \
     (DFTRACER_UTILS_LOGGER_LEVEL_TRACE == 1)
-#define DFTRACER_UTILS_LOGGER_INIT() \
-    cpp_logger_clog_level(CPP_LOGGER_TRACE, DFTRACER_UTILS_LOGGER_NAME);
+#define DFTRACER_UTILS_LOGGER_INIT()                                         \
+    cpp_logger_clog_level_file(CPP_LOGGER_TRACE, DFTRACER_UTILS_LOGGER_NAME, \
+                               stderr);
 #elif defined(DFTRACER_UTILS_LOGGER_LEVEL_DEBUG) && \
     (DFTRACER_UTILS_LOGGER_LEVEL_DEBUG == 1)
-#define DFTRACER_UTILS_LOGGER_INIT() \
-    cpp_logger_clog_level(CPP_LOGGER_DEBUG, DFTRACER_UTILS_LOGGER_NAME);
+#define DFTRACER_UTILS_LOGGER_INIT()                                         \
+    cpp_logger_clog_level_file(CPP_LOGGER_DEBUG, DFTRACER_UTILS_LOGGER_NAME, \
+                               stderr);
 #elif defined(DFTRACER_UTILS_LOGGER_LEVEL_INFO) && \
     (DFTRACER_UTILS_LOGGER_LEVEL_INFO == 1)
-#define DFTRACER_UTILS_LOGGER_INIT() \
-    cpp_logger_clog_level(CPP_LOGGER_INFO, DFTRACER_UTILS_LOGGER_NAME);
+#define DFTRACER_UTILS_LOGGER_INIT()                                        \
+    cpp_logger_clog_level_file(CPP_LOGGER_INFO, DFTRACER_UTILS_LOGGER_NAME, \
+                               stderr);
 #elif defined(DFTRACER_UTILS_LOGGER_LEVEL_WARN) && \
     (DFTRACER_UTILS_LOGGER_LEVEL_WARN == 1)
-#define DFTRACER_UTILS_LOGGER_INIT() \
-    cpp_logger_clog_level(CPP_LOGGER_WARN, DFTRACER_UTILS_LOGGER_NAME);
+#define DFTRACER_UTILS_LOGGER_INIT()                                        \
+    cpp_logger_clog_level_file(CPP_LOGGER_WARN, DFTRACER_UTILS_LOGGER_NAME, \
+                               stderr);
 #else
-#define DFTRACER_UTILS_LOGGER_INIT() \
-    cpp_logger_clog_level(CPP_LOGGER_ERROR, DFTRACER_UTILS_LOGGER_NAME);
+#define DFTRACER_UTILS_LOGGER_INIT()                                         \
+    cpp_logger_clog_level_file(CPP_LOGGER_ERROR, DFTRACER_UTILS_LOGGER_NAME, \
+                               stderr);
 #endif
 
 #define DFTRACER_UTILS_LOGGER_LEVEL(level) \

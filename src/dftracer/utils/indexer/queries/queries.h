@@ -20,7 +20,7 @@ void insert_file_metadata_record(const SqliteDatabase &db, int file_id,
                                  std::uint64_t total_uc_size);
 bool query_stored_file_info(const SqliteDatabase &db,
                             const std::string &gz_path,
-                            std::string &stored_sha256, time_t &stored_mtime);
+                            std::string &stored_hash, time_t &stored_mtime);
 
 struct InsertCheckpointData {
     std::uint64_t idx;
