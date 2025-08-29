@@ -3,27 +3,13 @@ set(CPM_SOURCE_CACHE "${CMAKE_SOURCE_DIR}/.cpmsource")
 
 function(need_cpplogger)
   if(NOT cpplogger_ADDED)
-    # CPMAddPackage(
-    #   NAME cpplogger
-    #   GITHUB_REPOSITORY hariharan-devarajan/cpp-logger
-    #   VERSION 0.0.4
-    #   GIT_TAG v0.0.4
-    #   DOWNLOAD_ONLY YES
-    # )
     CPMAddPackage(
       NAME cpplogger
-      GITHUB_REPOSITORY rayandrew/cpp-logger
+      GITHUB_REPOSITORY hariharan-devarajan/cpp-logger
       # VERSION 0.0.4
-      GIT_TAG 965707aa8b2431fe0a78afd5346e3704e820492d
-      # DOWNLOAD_ONLY YES
+      # GIT_TAG v0.0.4
+      GIT_TAG e7e73bb331449b7dc44536539414a22985039aa9
     )
-
-    # set(_cmakelists "${cpplogger_SOURCE_DIR}/CMakeLists.txt")
-    # file(READ "${_cmakelists}" _contents)
-    # string(REPLACE "CMAKE_SOURCE_DIR" "CMAKE_CURRENT_SOURCE_DIR" _contents "${_contents}")
-    # file(WRITE "${_cmakelists}" "${_contents}")
-    # set(CPP_LOGGER_LIBDIR_AS_LIB "${cpplogger_BINARY_DIR}/libcpp_logger.a")
-    # add_subdirectory("${cpplogger_SOURCE_DIR}" "${cpplogger_BINARY_DIR}")
   endif()
 endfunction()
 
