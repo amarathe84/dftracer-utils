@@ -46,8 +46,8 @@ time_t get_file_modification_time(const std::string &file_path) {
 
 std::string calculate_file_sha256(const std::string &file_path) {
     // Use much larger buffer for better I/O performance on large files
-    constexpr size_t HASH_BUFFER_SIZE = 1024 * 1024; // 1MB buffer
-    
+    constexpr size_t HASH_BUFFER_SIZE = 1024 * 1024;  // 1MB buffer
+
     std::ifstream file(file_path, std::ios::binary);
     if (!file.is_open()) {
         DFTRACER_UTILS_LOG_ERROR("Cannot open file for SHA256 calculation: %s",

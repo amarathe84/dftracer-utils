@@ -62,6 +62,20 @@ int dft_indexer_need_rebuild(dft_indexer_handle_t indexer) {
     }
 }
 
+int dft_indexer_index_exists(dft_indexer_handle_t indexer) {
+    if (validate_handle(indexer)) {
+        return -1;
+    }
+
+    try {
+        return cast_indexer(indexer)->index_exists() ? 1 : 0;
+    } catch (const std::exception &e) {
+        DFTRACER_UTILS_LOG_ERROR("Failed to check if index exists: %s",
+                                 e.what());
+        return -1;
+    }
+}
+
 uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer) {
     if (validate_handle(indexer)) {
         return 0;

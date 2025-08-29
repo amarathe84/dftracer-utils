@@ -40,6 +40,8 @@ void Indexer::build() const { p_impl_->build(); }
 
 bool Indexer::need_rebuild() const { return p_impl_->need_rebuild(); }
 
+bool Indexer::index_exists() const { return p_impl_->index_exists(); }
+
 const std::string &Indexer::get_gz_path() const { return p_impl_->gz_path; }
 
 const std::string &Indexer::get_idx_path() const { return p_impl_->idx_path; }

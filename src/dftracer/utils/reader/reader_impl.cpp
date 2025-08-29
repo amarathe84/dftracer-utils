@@ -43,8 +43,9 @@ ReaderImplementor::ReaderImplementor(const std::string &gz_path_,
       default_buffer_size(DEFAULT_READER_BUFFER_SIZE) {
     try {
         indexer = new Indexer(gz_path, idx_path, index_ckpt_size);
-        // Don't automatically check for rebuild in reader - assume index is valid
-        // Rebuild should be an explicit user action via dft_reader or indexer API
+        // Don't automatically check for rebuild in reader - assume index is
+        // valid Rebuild should be an explicit user action via dft_reader or
+        // indexer API
         is_open = true;
         is_indexer_initialized_internally = true;
 

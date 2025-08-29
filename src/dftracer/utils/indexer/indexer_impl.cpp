@@ -235,13 +235,6 @@ IndexerImplementor::IndexerImplementor(const std::string &gz_path_,
                            "ckpt_size must be greater than 0");
     }
 
-    auto new_ckpt_size = determine_checkpoint_size(ckpt_size, gz_path);
-    if (new_ckpt_size != ckpt_size) {
-        DFTRACER_UTILS_LOG_DEBUG("Adjusted checkpoint size from %zu to %zu",
-                                 ckpt_size, new_ckpt_size);
-        ckpt_size = new_ckpt_size;
-    }
-
     open();
 }
 
@@ -269,6 +262,14 @@ void IndexerImplementor::build() {
             DFTRACER_UTILS_LOG_DEBUG(
                 "Index file exists but schema is invalid, rebuilding.");
         }
+    }
+
+    // Now calculate optimal checkpoint size for building the index
+    auto new_ckpt_size = determine_checkpoint_size(ckpt_size, gz_path);
+    if (new_ckpt_size != ckpt_size) {
+        DFTRACER_UTILS_LOG_DEBUG("Adjusted checkpoint size from %zu to %zu",
+                                 ckpt_size, new_ckpt_size);
+        ckpt_size = new_ckpt_size;
     }
 
     DFTRACER_UTILS_LOG_DEBUG(
@@ -328,6 +329,8 @@ void IndexerImplementor::build() {
 }
 
 bool IndexerImplementor::is_valid() const { return cached_is_valid; }
+
+bool IndexerImplementor::index_exists() const { return fs::exists(idx_path); }
 
 bool IndexerImplementor::need_rebuild() const {
     if (is_valid()) return false;

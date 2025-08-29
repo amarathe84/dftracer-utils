@@ -30,6 +30,7 @@ class Indexer {
     Indexer &operator=(Indexer &&other) noexcept;
     void build() const;
     bool need_rebuild() const;
+    bool index_exists() const;
 
     // Metadata
     const std::string &get_idx_path() const;
@@ -64,6 +65,7 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
                                         int force_rebuild);
 int dft_indexer_build(dft_indexer_handle_t indexer);
 int dft_indexer_need_rebuild(dft_indexer_handle_t indexer);
+int dft_indexer_index_exists(dft_indexer_handle_t indexer);
 uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer);
 uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer);
 int dft_indexer_find_file_id(dft_indexer_handle_t indexer, const char *gz_path);
