@@ -18,54 +18,55 @@ namespace dftracer::utils {
  * Provides core zlib operations and common functionality.
  */
 class Inflater {
-public:
+   public:
     static constexpr std::size_t BUFFER_SIZE = 65536;
-    
+
     // Core stream and buffer access
     z_stream stream;
     alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char out_buffer[BUFFER_SIZE];
     alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char in_buffer[BUFFER_SIZE];
 
-protected:
+   protected:
     int window_bits_;
-    
-public:
+
+   public:
     Inflater() : window_bits_(constants::indexer::ZLIB_GZIP_WINDOW_BITS) {
         std::memset(&stream, 0, sizeof(stream));
         std::memset(out_buffer, 0, sizeof(out_buffer));
         std::memset(in_buffer, 0, sizeof(in_buffer));
     }
 
-    virtual ~Inflater() { 
-        inflateEnd(&stream); 
-    }
+    virtual ~Inflater() { inflateEnd(&stream); }
 
     // Core zlib operations
     bool initialize_stream(int window_bits) {
         window_bits_ = window_bits;
         std::memset(&stream, 0, sizeof(stream));
-        
+
         if (inflateInit2(&stream, window_bits_) != Z_OK) {
-            DFTRACER_UTILS_LOG_ERROR("Failed to initialize inflater with window_bits=%d", window_bits_);
+            DFTRACER_UTILS_LOG_ERROR(
+                "Failed to initialize inflater with window_bits=%d",
+                window_bits_);
             return false;
         }
-        
+
         // Reset stream input state
         stream.avail_in = 0;
         stream.next_in = nullptr;
-        
+
         return true;
     }
-    
+
     void reset() {
         inflateEnd(&stream);
         std::memset(&stream, 0, sizeof(stream));
     }
-    
+
     bool set_dictionary(const unsigned char* dict, std::size_t dict_size) {
-        return inflateSetDictionary(&stream, dict, static_cast<uInt>(dict_size)) == Z_OK;
+        return inflateSetDictionary(&stream, dict,
+                                    static_cast<uInt>(dict_size)) == Z_OK;
     }
-    
+
     bool prime(int bits, int value) {
         return inflatePrime(&stream, bits, value) == Z_OK;
     }
@@ -73,22 +74,24 @@ public:
     // Stream type detection (from original implementation)
     int detect_stream_type(FILE* file, std::uint64_t offset = 0) {
         if (fseeko(file, static_cast<off_t>(offset), SEEK_SET) != 0) {
-            return constants::indexer::ZLIB_GZIP_WINDOW_BITS; // Default to GZIP
+            return constants::indexer::ZLIB_GZIP_WINDOW_BITS;  // Default to
+                                                               // GZIP
         }
-        
+
         int first_byte = fgetc(file);
-        fseeko(file, static_cast<off_t>(offset), SEEK_SET); // Seek back
-        
+        fseeko(file, static_cast<off_t>(offset), SEEK_SET);  // Seek back
+
         if (first_byte == EOF) {
-            return constants::indexer::ZLIB_GZIP_WINDOW_BITS; // Default to GZIP
+            return constants::indexer::ZLIB_GZIP_WINDOW_BITS;  // Default to
+                                                               // GZIP
         }
-        
+
         if (first_byte == 0x1f) {
-            return constants::indexer::ZLIB_GZIP_WINDOW_BITS; // GZIP (15+16)
+            return constants::indexer::ZLIB_GZIP_WINDOW_BITS;  // GZIP (15+16)
         } else if ((first_byte & 0xf) == 8) {
-            return 15; // ZLIB
+            return 15;  // ZLIB
         } else {
-            return -15; // RAW deflate
+            return -15;  // RAW deflate
         }
     }
 
@@ -100,44 +103,45 @@ public:
             stream.avail_in = static_cast<uInt>(n);
             return true;
         } else if (std::ferror(file)) {
-            DFTRACER_UTILS_LOG_DEBUG("Error reading from file: %s", std::strerror(errno));
+            DFTRACER_UTILS_LOG_DEBUG("Error reading from file: %s",
+                                     std::strerror(errno));
             return false;
         }
-        return true; // EOF is not an error
+        return true;  // EOF is not an error
     }
-    
+
     std::size_t get_output(unsigned char* buf, std::size_t len) {
         std::size_t available = sizeof(out_buffer) - stream.avail_out;
         std::size_t to_copy = std::min(len, available);
         std::memcpy(buf, out_buffer, to_copy);
-        
+
         // Shift remaining data
         if (to_copy < available) {
             std::memmove(out_buffer, out_buffer + to_copy, available - to_copy);
         }
-        
+
         return to_copy;
     }
 
     // Basic inflation result enum
-    enum InflateResult { 
-        SUCCESS, 
-        END_OF_STREAM, 
-        ERROR, 
-        NEED_INPUT, 
-        NEED_OUTPUT 
+    enum InflateResult {
+        SUCCESS,
+        END_OF_STREAM,
+        ERROR,
+        NEED_INPUT,
+        NEED_OUTPUT
     };
-    
+
     InflateResult inflate_chunk(int flush_mode = Z_NO_FLUSH) {
         if (stream.avail_in == 0) {
             return NEED_INPUT;
         }
-        
+
         stream.next_out = out_buffer;
         stream.avail_out = sizeof(out_buffer);
-        
+
         int ret = inflate(&stream, flush_mode);
-        
+
         switch (ret) {
             case Z_OK:
                 return SUCCESS;
@@ -146,8 +150,9 @@ public:
             case Z_BUF_ERROR:
                 return stream.avail_in == 0 ? NEED_INPUT : NEED_OUTPUT;
             default:
-                DFTRACER_UTILS_LOG_DEBUG("inflate() failed with error: %d (%s)", 
-                                         ret, stream.msg ? stream.msg : "no message");
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "inflate() failed with error: %d (%s)", ret,
+                    stream.msg ? stream.msg : "no message");
                 return ERROR;
         }
     }
@@ -160,6 +165,6 @@ public:
     std::size_t get_avail_out() const { return stream.avail_out; }
 };
 
-} // namespace dftracer::utils
+}  // namespace dftracer::utils
 
-#endif // DFTRACER_UTILS_COMMON_INFLATER_H
+#endif  // DFTRACER_UTILS_COMMON_INFLATER_H

@@ -99,7 +99,6 @@ int main(int argc, char **argv) {
     std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
     try {
-
         if (check_rebuild) {
             Indexer indexer(gz_path, idx_path, checkpoint_size, force_rebuild);
             if (!indexer.need_rebuild()) {

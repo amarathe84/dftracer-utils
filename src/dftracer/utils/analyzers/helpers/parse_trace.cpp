@@ -5,8 +5,7 @@
 using namespace dftracer::utils::json;
 using namespace dftracer::utils::analyzers;
 
-Trace parse_trace(
-    const dftracer::utils::json::JsonDocument& doc) {
+Trace parse_trace(const dftracer::utils::json::JsonDocument& doc) {
     Trace trace = {};
     trace.is_valid = false;
 
@@ -129,8 +128,7 @@ Trace parse_trace(
                     }
                 }
 
-                std::string offset_str =
-                    get_args_string_field(doc, "offset");
+                std::string offset_str = get_args_string_field(doc, "offset");
                 if (!offset_str.empty()) {
                     try {
                         trace.offset = std::stoull(offset_str);
@@ -177,9 +175,7 @@ Trace parse_trace(
     return trace;
 }
 
-
-Trace parse_trace_owned(
-    const dftracer::utils::json::OwnedJsonDocument& doc) {
+Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
     Trace trace = {};
     trace.is_valid = false;
 
@@ -203,11 +199,10 @@ Trace parse_trace_owned(
         // Extract cat field
         std::string cat = get_string_field_owned(doc, "cat");
         if (cat.empty()) {
-          return trace;
+            return trace;
         } else {
-          std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
+            std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
             trace.cat = cat;
-
         }
 
         // Extract pid and tid

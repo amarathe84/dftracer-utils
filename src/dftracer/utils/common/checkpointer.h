@@ -22,9 +22,7 @@ struct Checkpointer {
         std::memset(window, 0, sizeof(window));
     }
 
-    bool create() {
-        return create(c_offset);
-    }
+    bool create() { return create(c_offset); }
 
     bool create(std::size_t compressed_offset) {
         // Use the provided compressed offset (calculated correctly by caller)
@@ -36,30 +34,30 @@ struct Checkpointer {
         // Try to get the sliding window dictionary from zlib
         // This contains the last 32KB of uncompressed data
         unsigned have = 0;
-        
-        // Check if we're at proper deflate block boundary (end of header or non-last block)
-        // Following zran.c logic: (data_type & 0xc0) == 0x80
+
+        // Check if we're at proper deflate block boundary (end of header or
+        // non-last block) Following zran.c logic: (data_type & 0xc0) == 0x80
         if ((inflater.stream.data_type & 0xc0) != 0x80) {
             DFTRACER_UTILS_LOG_DEBUG(
-                "Cannot create checkpoint: not at proper deflate block boundary (data_type=0x%x)", 
+                "Cannot create checkpoint: not at proper deflate block "
+                "boundary (data_type=0x%x)",
                 inflater.stream.data_type);
             return false;
         }
-        
+
         if (inflateGetDictionary(&inflater.stream, window, &have) != Z_OK) {
             DFTRACER_UTILS_LOG_DEBUG(
-                "Could not get dictionary for checkpoint at offset %zu (data_type=0x%x)", 
+                "Could not get dictionary for checkpoint at offset %zu "
+                "(data_type=0x%x)",
                 uc_offset, inflater.stream.data_type);
             return false;
         }
 
         // If less than 32KB available, right-align and pad with zeros
         if (have < constants::indexer::ZLIB_WINDOW_SIZE) {
-            std::memmove(
-                window + (constants::indexer::ZLIB_WINDOW_SIZE - have),
-                window, have);
-            std::memset(window, 0,
-                        constants::indexer::ZLIB_WINDOW_SIZE - have);
+            std::memmove(window + (constants::indexer::ZLIB_WINDOW_SIZE - have),
+                         window, have);
+            std::memset(window, 0, constants::indexer::ZLIB_WINDOW_SIZE - have);
         }
 
         DFTRACER_UTILS_LOG_DEBUG(

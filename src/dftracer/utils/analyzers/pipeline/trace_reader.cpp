@@ -40,7 +40,7 @@ Pipeline TraceReader::build() {
 
     // Query every chunk to do the serial part
     // Set of tasks
-    // - 
+    // -
 
     // Create individual metadata tasks for each trace file (source tasks, no
     // dependencies)
@@ -171,7 +171,9 @@ Pipeline TraceReader::build() {
                             continue;
                         }
 
-                        DFTRACER_UTILS_LOG_INFO("Parsed trace: %s, duration %f", record.func_name.c_str(), record.duration);
+                        DFTRACER_UTILS_LOG_INFO("Parsed trace: %s, duration %f",
+                                                record.func_name.c_str(),
+                                                record.duration);
                         valid_records.push_back(std::move(record));
                     } catch (const std::exception& e) {
                         // noop

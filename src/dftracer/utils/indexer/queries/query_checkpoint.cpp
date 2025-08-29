@@ -7,17 +7,21 @@ namespace dftracer::utils {
 
 bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,
                       int file_id, IndexCheckpoint& checkpoint) {
-    DFTRACER_UTILS_LOG_DEBUG("query_checkpoint called: target_offset=%zu, file_id=%d", target_offset, file_id);
-    
+    DFTRACER_UTILS_LOG_DEBUG(
+        "query_checkpoint called: target_offset=%zu, file_id=%d", target_offset,
+        file_id);
+
     // For target offset 0, always decompress from beginning of file (no
     // checkpoint)
     if (target_offset == 0) {
-        DFTRACER_UTILS_LOG_DEBUG("query_checkpoint: target_offset is 0, returning false");
+        DFTRACER_UTILS_LOG_DEBUG(
+            "query_checkpoint: target_offset is 0, returning false");
         return false;
     }
 
     if (file_id == -1) {
-        DFTRACER_UTILS_LOG_DEBUG("query_checkpoint: file_id is -1, returning false");
+        DFTRACER_UTILS_LOG_DEBUG(
+            "query_checkpoint: file_id is -1, returning false");
         return false;
     }
 
@@ -52,11 +56,17 @@ bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,
         checkpoint.num_lines =
             static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 7));
         found = true;
-        
-        DFTRACER_UTILS_LOG_DEBUG("query_checkpoint: found checkpoint idx=%llu, uc_offset=%llu, c_offset=%llu, bits=%d",
-                                 checkpoint.checkpoint_idx, checkpoint.uc_offset, checkpoint.c_offset, checkpoint.bits);
+
+        DFTRACER_UTILS_LOG_DEBUG(
+            "query_checkpoint: found checkpoint idx=%llu, uc_offset=%llu, "
+            "c_offset=%llu, bits=%d",
+            checkpoint.checkpoint_idx, checkpoint.uc_offset,
+            checkpoint.c_offset, checkpoint.bits);
     } else {
-        DFTRACER_UTILS_LOG_DEBUG("query_checkpoint: no checkpoint found for target_offset=%zu, file_id=%d", target_offset, file_id);
+        DFTRACER_UTILS_LOG_DEBUG(
+            "query_checkpoint: no checkpoint found for target_offset=%zu, "
+            "file_id=%d",
+            target_offset, file_id);
     }
 
     return found;

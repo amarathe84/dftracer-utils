@@ -1,8 +1,8 @@
 #ifndef DFTRACER_UTILS_PIPELINE_TASKS_TYPED_TASK_H
 #define DFTRACER_UTILS_PIPELINE_TASKS_TYPED_TASK_H
 
-#include <dftracer/utils/pipeline/tasks/task.h>
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/pipeline/tasks/task.h>
 
 #include <typeindex>
 

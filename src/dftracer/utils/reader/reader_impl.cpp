@@ -155,25 +155,31 @@ std::size_t ReaderImplementor::read(std::size_t start_bytes,
     validate_parameters(buffer, buffer_size, start_bytes, end_bytes,
                         indexer->get_max_bytes());
 
-    DFTRACER_UTILS_LOG_DEBUG("ReaderImplementor::read - request: start_bytes=%zu, end_bytes=%zu, buffer_size=%zu", 
-                             start_bytes, end_bytes, buffer_size);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "ReaderImplementor::read - request: start_bytes=%zu, end_bytes=%zu, "
+        "buffer_size=%zu",
+        start_bytes, end_bytes, buffer_size);
 
     if (stream_factory->needs_new_byte_stream(byte_stream.get(), gz_path,
                                               start_bytes, end_bytes)) {
-        DFTRACER_UTILS_LOG_DEBUG("ReaderImplementor::read - creating new byte stream");
+        DFTRACER_UTILS_LOG_DEBUG(
+            "ReaderImplementor::read - creating new byte stream");
         byte_stream =
             stream_factory->create_byte_stream(gz_path, start_bytes, end_bytes);
     } else {
-        DFTRACER_UTILS_LOG_DEBUG("ReaderImplementor::read - reusing existing byte stream");
+        DFTRACER_UTILS_LOG_DEBUG(
+            "ReaderImplementor::read - reusing existing byte stream");
     }
 
     if (byte_stream->is_finished()) {
-        DFTRACER_UTILS_LOG_DEBUG("ReaderImplementor::read - stream is finished");
+        DFTRACER_UTILS_LOG_DEBUG(
+            "ReaderImplementor::read - stream is finished");
         return 0;
     }
 
     std::size_t result = byte_stream->stream(buffer, buffer_size);
-    DFTRACER_UTILS_LOG_DEBUG("ReaderImplementor::read - returned %zu bytes", result);
+    DFTRACER_UTILS_LOG_DEBUG("ReaderImplementor::read - returned %zu bytes",
+                             result);
     return result;
 }
 

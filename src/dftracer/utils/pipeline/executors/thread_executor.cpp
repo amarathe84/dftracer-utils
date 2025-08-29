@@ -54,8 +54,9 @@ ThreadPool::ThreadPool(size_t threads) : stop_(false), active_tasks_(0) {
                         return;
                     }
                     if (!this->stop_) {
-                        this->condition_.wait(
-                            lock, [this] { return this->stop_ || this->active_tasks_ > 0; });
+                        this->condition_.wait(lock, [this] {
+                            return this->stop_ || this->active_tasks_ > 0;
+                        });
                     }
                 }
             }
@@ -98,8 +99,7 @@ void ThreadPool::wait_for_tasks() {
 ThreadExecutor::ThreadExecutor()
     : Executor(ExecutorType::THREAD),
       max_threads_(std::thread::hardware_concurrency()),
-      pool_(std::make_unique<ThreadPool>(
-          max_threads_ > 0 ? max_threads_ : 2)) {
+      pool_(std::make_unique<ThreadPool>(max_threads_ > 0 ? max_threads_ : 2)) {
     if (max_threads_ == 0) max_threads_ = 2;
     DFTRACER_UTILS_LOG_INFO("ThreadExecutor initialized with max_threads = %zu",
                             max_threads_);
@@ -109,8 +109,7 @@ ThreadExecutor::ThreadExecutor(size_t max_threads)
     : Executor(ExecutorType::THREAD),
       max_threads_(max_threads > 0 ? max_threads
                                    : std::thread::hardware_concurrency()),
-      pool_(std::make_unique<ThreadPool>(
-          max_threads_ > 0 ? max_threads_ : 2)) {
+      pool_(std::make_unique<ThreadPool>(max_threads_ > 0 ? max_threads_ : 2)) {
     if (max_threads_ == 0) {
         max_threads_ = 2;
     }
@@ -149,8 +148,7 @@ std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input) {
         }
     }
 
-    auto schedule_task =
-        [&](TaskIndex task_id, const auto& self) -> void {
+    auto schedule_task = [&](TaskIndex task_id, const auto& self) -> void {
         pool_->enqueue([&, task_id, self]() {
             std::any task_input;
             auto& dependencies = pipeline.get_task_dependencies(task_id);

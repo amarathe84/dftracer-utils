@@ -45,7 +45,7 @@ struct Trace {
     std::unordered_map<std::string, std::string> view_fields;
     BinFields bin_fields;
 
-    bool is_valid; // set manually after parsing, to reduce using optional
+    bool is_valid;  // set manually after parsing, to reduce using optional
 };
 
 }  // namespace dftracer::utils::analyzers

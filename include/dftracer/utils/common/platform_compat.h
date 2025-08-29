@@ -39,21 +39,21 @@
 
 // Memory alignment constants for optimal performance
 #ifdef __APPLE__
-    // Apple Silicon (M1/M2/M3) has 128-byte cache lines for optimal performance
-    constexpr size_t DFTRACER_CACHE_LINE_SIZE = 128;
-    constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 128;
+// Apple Silicon (M1/M2/M3) has 128-byte cache lines for optimal performance
+constexpr size_t DFTRACER_CACHE_LINE_SIZE = 128;
+constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 128;
 #elif defined(__x86_64__) || defined(_M_X64)
-    // x86_64 systems typically have 64-byte cache lines
-    constexpr size_t DFTRACER_CACHE_LINE_SIZE = 64;
-    constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 64;
+// x86_64 systems typically have 64-byte cache lines
+constexpr size_t DFTRACER_CACHE_LINE_SIZE = 64;
+constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 64;
 #elif defined(__aarch64__) && !defined(__APPLE__)
-    // ARM64 Linux systems typically have 64-byte cache lines
-    constexpr size_t DFTRACER_CACHE_LINE_SIZE = 64;
-    constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 64;
+// ARM64 Linux systems typically have 64-byte cache lines
+constexpr size_t DFTRACER_CACHE_LINE_SIZE = 64;
+constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 64;
 #else
-    // Conservative default for other architectures
-    constexpr size_t DFTRACER_CACHE_LINE_SIZE = 64;
-    constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 64;
+// Conservative default for other architectures
+constexpr size_t DFTRACER_CACHE_LINE_SIZE = 64;
+constexpr size_t DFTRACER_OPTIMAL_ALIGNMENT = 64;
 #endif
 
 // Convenience macro for aligned buffer declarations

@@ -2,10 +2,10 @@
 #define DFTRACER_UTILS_READER_STREAMS_STREAM_H
 
 #include <dftracer/utils/common/checkpointer.h>
-#include <dftracer/utils/reader/inflater.h>
 #include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/error.h>
+#include <dftracer/utils/reader/inflater.h>
 
 #ifdef __linux__
 #include <fcntl.h>

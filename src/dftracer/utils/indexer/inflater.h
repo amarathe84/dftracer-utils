@@ -1,8 +1,8 @@
 #ifndef DFTRACER_UTILS_INDEXER_INFLATER_H
 #define DFTRACER_UTILS_INDEXER_INFLATER_H
 
-#include <dftracer/utils/common/inflater.h>
 #include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/common/inflater.h>
 #include <dftracer/utils/common/logging.h>
 
 namespace dftracer::utils {
@@ -22,31 +22,32 @@ struct IndexerInflaterResult {
  * Handles block boundary detection, line counting, and input byte tracking.
  */
 class IndexerInflater : public Inflater {
-private:
+   private:
     std::size_t total_input_bytes_;
 
-public:
+   public:
     IndexerInflater() : total_input_bytes_(0) {}
 
     /**
      * Initialize for indexing with auto-detection or specified window bits
      */
-    bool initialize(FILE* file, std::uint64_t file_offset = 0, 
-                   int window_bits = 0) {
+    bool initialize(FILE* file, std::uint64_t file_offset = 0,
+                    int window_bits = 0) {
         if (window_bits == 0) {
             window_bits = detect_stream_type(file, file_offset);
         }
-        
+
         if (!initialize_stream(window_bits)) {
             return false;
         }
-        
+
         // Seek to starting position
         if (fseeko(file, static_cast<off_t>(file_offset), SEEK_SET) != 0) {
-            DFTRACER_UTILS_LOG_ERROR("Failed to seek to offset %llu", file_offset);
+            DFTRACER_UTILS_LOG_ERROR("Failed to seek to offset %llu",
+                                     file_offset);
             return false;
         }
-        
+
         total_input_bytes_ = 0;
         return true;
     }
@@ -57,7 +58,7 @@ public:
      */
     bool read(FILE* file, IndexerInflaterResult& result) {
         result = {0, 0, false, 0};
-        
+
         stream.next_out = out_buffer;
         stream.avail_out = sizeof(out_buffer);
 
@@ -67,29 +68,32 @@ public:
                 std::size_t n = ::fread(in_buffer, 1, sizeof(in_buffer), file);
                 if (n == 0) {
                     if (std::ferror(file)) {
-                        DFTRACER_UTILS_LOG_DEBUG("File read error during indexing: %s", 
-                                                std::strerror(errno));
-                        return false; // Return error
+                        DFTRACER_UTILS_LOG_DEBUG(
+                            "File read error during indexing: %s",
+                            std::strerror(errno));
+                        return false;  // Return error
                     }
-                    break; // EOF
+                    break;  // EOF
                 }
                 stream.next_in = in_buffer;
                 stream.avail_in = static_cast<uInt>(n);
                 total_input_bytes_ += n;
             }
-            
+
             int ret = inflate(&stream, Z_BLOCK);
-            
+
             if (ret == Z_STREAM_END) {
                 break;
             }
             if (ret != Z_OK) {
-                DFTRACER_UTILS_LOG_DEBUG("Inflate error during indexing: %d (%s)", 
-                                         ret, stream.msg ? stream.msg : "no message");
+                DFTRACER_UTILS_LOG_DEBUG(
+                    "Inflate error during indexing: %d (%s)", ret,
+                    stream.msg ? stream.msg : "no message");
                 return false;
             }
-            
-            // Check for proper block boundary (end of header or non-last deflate block)
+
+            // Check for proper block boundary (end of header or non-last
+            // deflate block)
             if ((stream.data_type & 0xc0) == 0x80) {
                 result.at_block_boundary = true;
                 // Continue processing - don't break immediately
@@ -99,7 +103,7 @@ public:
         result.bytes_read = sizeof(out_buffer) - stream.avail_out;
         result.lines_found = count_lines(out_buffer, result.bytes_read);
         result.input_bytes_consumed = total_input_bytes_ - stream.avail_in;
-        
+
         return true;
     }
 
@@ -120,15 +124,14 @@ public:
     /**
      * Reset the input byte counter (useful when restarting from a checkpoint)
      */
-    void reset_input_counter() {
-        total_input_bytes_ = 0;
-    }
+    void reset_input_counter() { total_input_bytes_ = 0; }
 
-private:
+   private:
     /**
      * Count newlines in the given data buffer
      */
-    std::uint64_t count_lines(const unsigned char* data, std::size_t size) const {
+    std::uint64_t count_lines(const unsigned char* data,
+                              std::size_t size) const {
         std::uint64_t lines = 0;
         for (std::size_t i = 0; i < size; i++) {
             if (data[i] == '\n') {
@@ -139,6 +142,6 @@ private:
     }
 };
 
-} // namespace dftracer::utils
+}  // namespace dftracer::utils
 
-#endif // DFTRACER_UTILS_INDEXER_INFLATER_H
+#endif  // DFTRACER_UTILS_INDEXER_INFLATER_H
