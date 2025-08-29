@@ -16,7 +16,6 @@ target_link_libraries(testing_utilities
     PRIVATE
     dftracer_utils
     doctest::doctest
-    dftracer_zlib
     ghc_filesystem
 )
 
