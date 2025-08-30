@@ -1,6 +1,8 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/reader/reader.h>
 
+#include <cstring>
+
 using namespace dftracer::utils;
 
 static Reader *cast_reader(dft_reader_handle_t reader) {

@@ -5,7 +5,6 @@
 #include <dftracer/utils/pipeline/executors/sequential_executor.h>
 #include <dftracer/utils/pipeline/executors/thread_executor.h>
 #include <dftracer/utils/reader/reader.h>
-#include <dftracer/utils/utils/json.h>
 
 #include <argparse/argparse.hpp>
 #include <iostream>

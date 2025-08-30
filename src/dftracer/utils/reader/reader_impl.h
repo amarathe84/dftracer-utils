@@ -4,7 +4,6 @@
 #include <dftracer/utils/reader/streams/byte_stream.h>
 #include <dftracer/utils/reader/streams/factory.h>
 #include <dftracer/utils/reader/streams/line_byte_stream.h>
-#include <dftracer/utils/utils/json.h>
 
 #include <cstdint>
 #include <sstream>

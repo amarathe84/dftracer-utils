@@ -34,7 +34,6 @@ void dft_reader_reset(dft_reader_handle_t reader);
 }  // extern "C"
 
 #include <dftracer/utils/common/constants.h>
-#include <dftracer/utils/utils/json.h>
 
 #include <cstddef>
 #include <cstdint>

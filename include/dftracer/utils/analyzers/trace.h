@@ -1,8 +1,6 @@
 #ifndef DFTRACER_UTILS_ANALYZERS_TRACE_RECORD_H
 #define DFTRACER_UTILS_ANALYZERS_TRACE_RECORD_H
 
-#include <dftracer/utils/utils/json.h>
-
 #include <memory>
 #include <optional>
 #include <string>
