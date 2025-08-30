@@ -11,8 +11,8 @@
 
 class LineByteStream : public Stream {
    private:
-    static constexpr std::size_t SEARCH_BUFFER_SIZE = 4096;
-    static constexpr std::size_t LINE_SEARCH_LOOKBACK = 1536;
+    static constexpr std::size_t SEARCH_BUFFER_SIZE = 2048;
+    static constexpr std::size_t LINE_SEARCH_LOOKBACK = 512;
 
     std::vector<char> partial_line_buffer_;
     std::vector<char> temp_buffer_;  // Reusable temp buffer
@@ -39,10 +39,8 @@ class LineByteStream : public Stream {
             return target_start;
         }
 
-        std::size_t extended_lookback =
-            LINE_SEARCH_LOOKBACK + 1024;  // 1536 + 1024 = 2560
-        std::size_t search_start = (target_start >= extended_lookback)
-                                       ? target_start - extended_lookback
+        std::size_t search_start = (target_start >= LINE_SEARCH_LOOKBACK)
+                                       ? target_start - LINE_SEARCH_LOOKBACK
                                        : current_pos;
 
         if (search_start > current_pos) {
@@ -62,6 +60,10 @@ class LineByteStream : public Stream {
                      i--) {
                     if (i == 0 || search_buffer[i - 1] == '\n') {
                         actual_start = current_pos + static_cast<size_t>(i);
+                        DFTRACER_UTILS_LOG_DEBUG(
+                            "Found JSON line start at position %zu (requested "
+                            "%zu)",
+                            actual_start, target_start);
                         break;
                     }
                 }
@@ -126,13 +128,24 @@ class LineByteStream : public Stream {
             }
         }
 
+        DFTRACER_UTILS_LOG_DEBUG(
+            "Read %zu bytes from compressed stream, partial_buffer_size=%zu, "
+            "current_position=%zu, target_end=%zu",
+            bytes_read, partial_line_buffer_.size(), current_position_,
+            target_end_bytes_);
+
         std::size_t total_data_size = partial_line_buffer_.size() + bytes_read;
-        std::size_t adjusted_size =
-            adjust_to_boundary(temp_buffer_.data(), total_data_size);
+        std::size_t adjusted_size = apply_range_and_boundary_limits(
+            temp_buffer_.data(), total_data_size);
 
         current_position_ += bytes_read;
 
         if (adjusted_size == 0) {
+            DFTRACER_UTILS_LOG_ERROR(
+                "No complete line found, need to read more data, try "
+                "increasing the "
+                "end bytes",
+                "");
             is_finished_ = true;
             return 0;
         }
@@ -183,6 +196,32 @@ class LineByteStream : public Stream {
             return 0;
         }
         return buffer_size;
+    }
+
+    std::size_t apply_range_and_boundary_limits(char *buffer,
+                                                std::size_t total_data_size) {
+        std::size_t adjusted_size;
+        std::size_t original_range_size = target_end_bytes_ - start_bytes_;
+
+        if (current_position_ < actual_start_bytes_) {
+            DFTRACER_UTILS_LOG_ERROR(
+                "Invalid state: current_position_ %zu < "
+                "actual_start_bytes_ %zu",
+                current_position_, actual_start_bytes_);
+            throw ReaderError(ReaderError::READ_ERROR,
+                              "Invalid internal position state detected");
+        }
+        std::size_t bytes_already_returned =
+            current_position_ - actual_start_bytes_;
+        std::size_t max_allowed_return =
+            (bytes_already_returned < original_range_size)
+                ? (original_range_size - bytes_already_returned)
+                : 0;
+
+        std::size_t limited_data_size =
+            std::min(total_data_size, max_allowed_return);
+        adjusted_size = adjust_to_boundary(buffer, limited_data_size);
+        return adjusted_size;
     }
 };
 
