@@ -117,77 +117,80 @@ Pipeline TraceReader::build() {
 
     std::vector<TaskIndex> load_indices;
 
-    for (size_t i = 0; i < chunks_indices.size(); ++i) {
-        auto load_task = Tasks::flatmap<WorkInfo, json::OwnedJsonDocuments>(
-            [](const WorkInfo& work) -> std::vector<json::OwnedJsonDocuments> {
-                auto thread_id = std::this_thread::get_id();
+    // for (size_t i = 0; i < chunks_indices.size(); ++i) {
+    //     auto load_task = Tasks::flatmap<WorkInfo, json::OwnedJsonDocuments>(
+    //         [](const WorkInfo& work) -> std::vector<json::OwnedJsonDocuments>
+    //         {
+    //             auto thread_id = std::this_thread::get_id();
 
-                // Skip empty work items
-                if (work.path.empty()) {
-                    return {};
-                }
+    //             // Skip empty work items
+    //             if (work.path.empty()) {
+    //                 return {};
+    //             }
 
-                DFTRACER_UTILS_LOG_DEBUG(
-                    "[Thread %zu] Loading work item: %s [%zu-%zu]",
-                    std::hash<std::thread::id>{}(thread_id), work.path.c_str(),
-                    work.start, work.end);
-                std::vector<json::OwnedJsonDocuments> results;
+    //             DFTRACER_UTILS_LOG_DEBUG(
+    //                 "[Thread %zu] Loading work item: %s [%zu-%zu]",
+    //                 std::hash<std::thread::id>{}(thread_id),
+    //                 work.path.c_str(), work.start, work.end);
+    //             std::vector<json::OwnedJsonDocuments> results;
 
-                try {
-                    Reader reader(work.path, work.path + ".idx");
-                    auto docs = reader.read_json_lines_bytes_owned(work.start,
-                                                                   work.end);
-                    DFTRACER_UTILS_LOG_INFO(
-                        "[Thread %zu] Loaded %zu documents from %s",
-                        std::hash<std::thread::id>{}(thread_id), docs.size(),
-                        work.path.c_str());
-                    results.push_back(std::move(docs));
-                } catch (const std::exception& e) {
-                    // noop
-                }
+    //             try {
+    //                 Reader reader(work.path, work.path + ".idx");
+    //                 auto docs =
+    //                 reader.read_json_lines_bytes_owned(work.start,
+    //                                                                work.end);
+    //                 DFTRACER_UTILS_LOG_INFO(
+    //                     "[Thread %zu] Loaded %zu documents from %s",
+    //                     std::hash<std::thread::id>{}(thread_id), docs.size(),
+    //                     work.path.c_str());
+    //                 results.push_back(std::move(docs));
+    //             } catch (const std::exception& e) {
+    //                 // noop
+    //             }
 
-                return results;
-            });
+    //             return results;
+    //         });
 
-        auto load_idx = pipeline.add_task(std::move(load_task));
-        load_indices.push_back(load_idx);
+    //     auto load_idx = pipeline.add_task(std::move(load_task));
+    //     load_indices.push_back(load_idx);
 
-        pipeline.add_dependency(chunks_indices[i], load_idx);
-    }
+    //     pipeline.add_dependency(chunks_indices[i], load_idx);
+    // }
 
     std::vector<TaskIndex> parse_indices;
 
-    for (size_t i = 0; i < load_indices.size(); ++i) {
-        auto parse_task = Tasks::flatmap<json::OwnedJsonDocuments, Trace>(
-            [](const json::OwnedJsonDocuments& documents)
-                -> std::vector<Trace> {
-                std::vector<Trace> valid_records;
+    // for (size_t i = 0; i < load_indices.size(); ++i) {
+    //     auto parse_task = Tasks::flatmap<json::OwnedJsonDocuments, Trace>(
+    //         [](const json::OwnedJsonDocuments& documents)
+    //             -> std::vector<Trace> {
+    //             std::vector<Trace> valid_records;
 
-                for (const auto& doc : documents) {
-                    try {
-                        auto record = parse_trace_owned(doc);
+    //             for (const auto& doc : documents) {
+    //                 try {
+    //                     auto record = parse_trace_owned(doc);
 
-                        if (!record.is_valid) {
-                            continue;
-                        }
+    //                     if (!record.is_valid) {
+    //                         continue;
+    //                     }
 
-                        DFTRACER_UTILS_LOG_INFO("Parsed trace: %s, duration %f",
-                                                record.func_name.c_str(),
-                                                record.duration);
-                        valid_records.push_back(std::move(record));
-                    } catch (const std::exception& e) {
-                        // noop
-                    }
-                }
+    //                     DFTRACER_UTILS_LOG_INFO("Parsed trace: %s, duration
+    //                     %f",
+    //                                             record.func_name.c_str(),
+    //                                             record.duration);
+    //                     valid_records.push_back(std::move(record));
+    //                 } catch (const std::exception& e) {
+    //                     // noop
+    //                 }
+    //             }
 
-                return valid_records;
-            });
+    //             return valid_records;
+    //         });
 
-        auto parse_idx = pipeline.add_task(std::move(parse_task));
-        parse_indices.push_back(parse_idx);
+    //     auto parse_idx = pipeline.add_task(std::move(parse_task));
+    //     parse_indices.push_back(parse_idx);
 
-        pipeline.add_dependency(load_indices[i], parse_idx);
-    }
+    //     pipeline.add_dependency(load_indices[i], parse_idx);
+    // }
 
     return pipeline;
 }

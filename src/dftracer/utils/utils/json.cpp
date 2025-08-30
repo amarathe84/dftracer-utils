@@ -7,178 +7,14 @@ namespace dftracer::utils::json {
 
 namespace {
 
-size_t find_last_newline(const char* data, size_t n) {
-    for (size_t i = n; i > 0; --i) {
+std::size_t find_last_newline(const char* data, std::size_t n) {
+    for (std::size_t i = n; i > 0; --i) {
         char c = data[i - 1];
         if (c == '\n' || c == '\r') return i;
     }
     return 0;
 }
-
 }  // anonymous namespace
-
-// Thread-local DOM parser for better performance
-thread_local simdjson::dom::parser tl_parser;
-
-// ========================================
-// OwnedJsonDocument Implementation
-// ========================================
-
-void OwnedJsonDocument::ensure_parsed() const {
-    if (!parsed_) {
-        auto result = tl_parser.parse(data_.data(), data_.size());
-        if (!result.error()) {
-            element_ = result.value();
-            parsed_ = true;
-        }
-    }
-}
-
-// Constructors
-OwnedJsonDocument::OwnedJsonDocument() : parsed_(false) {}
-
-OwnedJsonDocument::OwnedJsonDocument(std::string json_data)
-    : data_(std::move(json_data)), parsed_(false) {}
-
-OwnedJsonDocument::OwnedJsonDocument(const char* json_data, size_t size)
-    : data_(json_data, size), parsed_(false) {}
-
-OwnedJsonDocument::OwnedJsonDocument(const simdjson::dom::element& element)
-    : element_(element), parsed_(true) {
-    data_ = simdjson::minify(element);
-}
-
-// Copy constructor
-OwnedJsonDocument::OwnedJsonDocument(const OwnedJsonDocument& other)
-    : data_(other.data_), parsed_(false) {}
-
-// Move constructor
-OwnedJsonDocument::OwnedJsonDocument(OwnedJsonDocument&& other) noexcept
-    : data_(std::move(other.data_)), parsed_(false) {}
-
-// Assignment operators
-OwnedJsonDocument& OwnedJsonDocument::operator=(
-    const OwnedJsonDocument& other) {
-    if (this != &other) {
-        data_ = other.data_;
-        parsed_ = false;
-    }
-    return *this;
-}
-
-OwnedJsonDocument& OwnedJsonDocument::operator=(
-    OwnedJsonDocument&& other) noexcept {
-    if (this != &other) {
-        data_ = std::move(other.data_);
-        parsed_ = false;
-    }
-    return *this;
-}
-
-// Type checking methods
-bool OwnedJsonDocument::is_object() const {
-    ensure_parsed();
-    return parsed_ && element_.is_object();
-}
-
-bool OwnedJsonDocument::is_array() const {
-    ensure_parsed();
-    return parsed_ && element_.is_array();
-}
-
-bool OwnedJsonDocument::is_string() const {
-    ensure_parsed();
-    return parsed_ && element_.is_string();
-}
-
-bool OwnedJsonDocument::is_int64() const {
-    ensure_parsed();
-    return parsed_ && element_.is_int64();
-}
-
-bool OwnedJsonDocument::is_uint64() const {
-    ensure_parsed();
-    return parsed_ && element_.is_uint64();
-}
-
-bool OwnedJsonDocument::is_double() const {
-    ensure_parsed();
-    return parsed_ && element_.is_double();
-}
-
-bool OwnedJsonDocument::is_bool() const {
-    ensure_parsed();
-    return parsed_ && element_.is_bool();
-}
-
-bool OwnedJsonDocument::is_null() const {
-    ensure_parsed();
-    return parsed_ && element_.is_null();
-}
-
-simdjson::dom::element_type OwnedJsonDocument::type() const {
-    return element_.type();
-}
-
-// Value extraction methods
-simdjson::simdjson_result<simdjson::dom::object> OwnedJsonDocument::get_object()
-    const {
-    ensure_parsed();
-    return element_.get_object();
-}
-
-simdjson::simdjson_result<simdjson::dom::array> OwnedJsonDocument::get_array()
-    const {
-    ensure_parsed();
-    return element_.get_array();
-}
-
-simdjson::simdjson_result<std::string_view> OwnedJsonDocument::get_string()
-    const {
-    ensure_parsed();
-    return element_.get_string();
-}
-
-simdjson::simdjson_result<int64_t> OwnedJsonDocument::get_int64() const {
-    ensure_parsed();
-    return element_.get_int64();
-}
-
-simdjson::simdjson_result<std::uint64_t> OwnedJsonDocument::get_uint64() const {
-    ensure_parsed();
-    return element_.get_uint64();
-}
-
-simdjson::simdjson_result<double> OwnedJsonDocument::get_double() const {
-    ensure_parsed();
-    return element_.get_double();
-}
-
-simdjson::simdjson_result<bool> OwnedJsonDocument::get_bool() const {
-    ensure_parsed();
-    return element_.get_bool();
-}
-
-const simdjson::dom::element& OwnedJsonDocument::get_element() const {
-    ensure_parsed();
-    return element_;
-}
-
-// Utility methods
-bool OwnedJsonDocument::is_valid() const {
-    ensure_parsed();
-    return parsed_;
-}
-
-const std::string& OwnedJsonDocument::raw_data() const { return data_; }
-
-std::string OwnedJsonDocument::minify() const {
-    ensure_parsed();
-    if (parsed_) {
-        return simdjson::minify(element_);
-    }
-    return data_;  // Return raw data if parsing failed
-}
 
 std::ostream& operator<<(std::ostream& os, const JsonDocument& doc) {
     os << simdjson::minify(doc);
@@ -186,36 +22,23 @@ std::ostream& operator<<(std::ostream& os, const JsonDocument& doc) {
 }
 
 std::ostream& operator<<(std::ostream& os, const JsonDocuments& docs) {
-    for (size_t i = 0; i < docs.size(); ++i) {
+    for (std::size_t i = 0; i < docs.size(); ++i) {
         if (i > 0) os << "\n";
         dftracer::utils::json::operator<<(os, docs[i]);
     }
     return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const OwnedJsonDocument& doc) {
-    os << doc.minify();
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const OwnedJsonDocuments& docs) {
-    for (size_t i = 0; i < docs.size(); ++i) {
-        if (i > 0) os << "\n";
-        dftracer::utils::json::operator<<(os, docs[i]);
-    }
-    return os;
-}
-
-template <typename JsonDocs>
-JsonDocs _parse_json_lines_impl(const char* data, size_t size) {
-    JsonDocs out;
+JsonDocuments parse_json_lines(JsonParser& parser, const char* data,
+                               std::size_t size) {
+    JsonDocuments out;
 
     // Quick estimation for better memory allocation
-    size_t estimated_lines = size / 80 + 16;
+    std::size_t estimated_lines = size / 80 + 16;
     out.reserve(estimated_lines);
 
     // Trim trailing partial line
-    size_t parse_len = find_last_newline(data, size);
+    std::size_t parse_len = find_last_newline(data, size);
     if (parse_len == 0) parse_len = size;
 
     const char* start = data;
@@ -228,15 +51,11 @@ JsonDocs _parse_json_lines_impl(const char* data, size_t size) {
         }
 
         if (line_end > start) {
-            size_t line_size = static_cast<size_t>(line_end - start);
+            std::size_t line_size = static_cast<std::size_t>(line_end - start);
 
-            if constexpr (std::is_same_v<JsonDocs, OwnedJsonDocuments>) {
-                out.emplace_back(start, line_size);
-            } else {
-                auto el = tl_parser.parse(start, line_size);
-                if (!el.error()) {
-                    out.emplace_back(std::move(el.value()));
-                }
+            auto el = parser.parse(start, line_size);
+            if (!el.error()) {
+                out.emplace_back(std::move(el.value()));
             }
         }
 
@@ -250,28 +69,16 @@ JsonDocs _parse_json_lines_impl(const char* data, size_t size) {
     return out;
 }
 
-JsonDocuments parse_json_lines(const char* data, size_t size) {
-    return _parse_json_lines_impl<JsonDocuments>(data, size);
-}
-
-OwnedJsonDocuments parse_json_lines_owned(const char* data, size_t size) {
-    return _parse_json_lines_impl<OwnedJsonDocuments>(data, size);
-}
-
-JsonDocument parse_json(const char* data, size_t size) {
-    auto doc = tl_parser.parse(data, size);
+JsonDocument parse_json(JsonParser& parser, const char* data,
+                        std::size_t size) {
+    auto doc = parser.parse(data, size);
     if (doc.error()) {
         return JsonDocument();
     }
     return doc.value();
 }
 
-OwnedJsonDocument parse_json_owned(const char* data, size_t size) {
-    return OwnedJsonDocument(data, size);
-}
-
-template <typename JsonDoc>
-std::string _get_string_field_impl(const JsonDoc& doc, const std::string& key) {
+std::string get_string_field(const JsonDocument& doc, const std::string& key) {
     if (!doc.is_object()) return "";
 
     auto obj_result = doc.get_object();
@@ -292,8 +99,7 @@ std::string _get_string_field_impl(const JsonDoc& doc, const std::string& key) {
     return "";
 }
 
-template <typename JsonDoc>
-double _get_double_field_impl(const JsonDoc& doc, const std::string& key) {
+double get_double_field(const JsonDocument& doc, const std::string& key) {
     if (!doc.is_object()) return 0.0;
 
     auto obj_result = doc.get_object();
@@ -333,9 +139,8 @@ double _get_double_field_impl(const JsonDoc& doc, const std::string& key) {
     return 0.0;
 }
 
-template <typename JsonDoc>
-std::uint64_t _get_uint64_field_impl(const JsonDoc& doc,
-                                     const std::string& key) {
+std::uint64_t get_uint64_field(const JsonDocument& doc,
+                               const std::string& key) {
     if (!doc.is_object()) return 0;
 
     auto obj_result = doc.get_object();
@@ -375,9 +180,8 @@ std::uint64_t _get_uint64_field_impl(const JsonDoc& doc,
     return 0;
 }
 
-template <typename JsonDoc>
-std::string _get_args_string_field_impl(const JsonDoc& doc,
-                                        const std::string& key) {
+std::string get_args_string_field(const JsonDocument& doc,
+                                  const std::string& key) {
     if (!doc.is_object()) return "";
 
     auto obj_result = doc.get_object();
@@ -404,43 +208,4 @@ std::string _get_args_string_field_impl(const JsonDoc& doc,
     }
     return "";
 }
-
-std::string get_string_field(const JsonDocument& doc, const std::string& key) {
-    return _get_string_field_impl(doc, key);
-}
-
-double get_double_field(const JsonDocument& doc, const std::string& key) {
-    return _get_double_field_impl(doc, key);
-}
-
-std::uint64_t get_uint64_field(const JsonDocument& doc,
-                               const std::string& key) {
-    return _get_uint64_field_impl(doc, key);
-}
-
-std::string get_args_string_field(const JsonDocument& doc,
-                                  const std::string& key) {
-    return _get_args_string_field_impl(doc, key);
-}
-
-std::string get_string_field_owned(const OwnedJsonDocument& doc,
-                                   const std::string& key) {
-    return _get_string_field_impl(doc, key);
-}
-
-double get_double_field_owned(const OwnedJsonDocument& doc,
-                              const std::string& key) {
-    return _get_double_field_impl(doc, key);
-}
-
-std::uint64_t get_uint64_field_owned(const OwnedJsonDocument& doc,
-                                     const std::string& key) {
-    return _get_uint64_field_impl(doc, key);
-}
-
-std::string get_args_string_field_owned(const OwnedJsonDocument& doc,
-                                        const std::string& key) {
-    return _get_args_string_field_impl(doc, key);
-}
-
 }  // namespace dftracer::utils::json

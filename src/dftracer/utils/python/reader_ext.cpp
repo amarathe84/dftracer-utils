@@ -362,12 +362,19 @@ class DFTracerReader {
 
             std::size_t bytes_read;
             if constexpr (Mode == DFTracerReaderMode::JsonLines) {
-                auto json_objects = reader_->read_json_lines_owned(start, end);
-                result = convert_jsondocs(json_objects);
+                // Use read_lines to get string data, then convert to JSON in
+                // Python layer
+                std::string line_buffer = reader_->read_lines(start, end);
+                result = convert_jsondocs(line_buffer);
             } else if constexpr (Mode == DFTracerReaderMode::JsonLinesBytes) {
-                auto json_objects =
-                    reader_->read_json_lines_bytes_owned(start, end);
-                result = convert_jsondocs(json_objects);
+                // Use read_line_bytes to get string data, then convert to JSON
+                // in Python layer
+                std::string line_buffer;
+                while ((bytes_read = reader_->read_line_bytes(
+                            start, end, buffer.data(), buffer.size())) > 0) {
+                    line_buffer.append(buffer.data(), bytes_read);
+                }
+                result = convert_jsondocs(line_buffer);
             } else if constexpr (Mode == DFTracerReaderMode::Bytes) {
                 while ((bytes_read = reader_->read(start, end, buffer.data(),
                                                    buffer.size())) > 0) {
@@ -909,7 +916,8 @@ void register_reader(nb::module_ &m) {
              "Get current default step")
         .def("read", &DFTracerJsonLinesBytesReader::read, "start"_a, "end"_a,
              "Read a range from the gzip file and return as Python list of "
-             "dictionaries")
+             "dictionaries",
+             nb::rv_policy::take_ownership)
         .def("open", &DFTracerJsonLinesBytesReader::open,
              "Open the index database")
         .def("close", &DFTracerJsonLinesBytesReader::close,

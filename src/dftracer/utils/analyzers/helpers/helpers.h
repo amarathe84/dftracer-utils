@@ -22,7 +22,5 @@ std::size_t get_num_size_bins();
 void set_size_bins(dftracer::utils::analyzers::Trace& trace);
 dftracer::utils::analyzers::Trace parse_trace(
     const dftracer::utils::json::JsonDocument& doc);
-dftracer::utils::analyzers::Trace parse_trace_owned(
-    const dftracer::utils::json::OwnedJsonDocument& doc);
 
 #endif  // DFTRACER_UTILS_ANALYZERS_HELPERS_HELPERS_H

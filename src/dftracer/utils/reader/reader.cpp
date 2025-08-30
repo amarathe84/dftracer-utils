@@ -45,26 +45,6 @@ std::string Reader::read_lines(std::size_t start, std::size_t end) {
     return p_impl_->read_lines(start, end);
 }
 
-dftracer::utils::json::JsonDocuments Reader::read_json_lines(std::size_t start,
-                                                             std::size_t end) {
-    return p_impl_->read_json_lines(start, end);
-}
-
-dftracer::utils::json::OwnedJsonDocuments Reader::read_json_lines_owned(
-    std::size_t start, std::size_t end) {
-    return p_impl_->read_json_lines_owned(start, end);
-}
-
-dftracer::utils::json::JsonDocuments Reader::read_json_lines_bytes(
-    std::size_t start_bytes, std::size_t end_bytes) {
-    return p_impl_->read_json_lines_bytes(start_bytes, end_bytes);
-}
-
-dftracer::utils::json::OwnedJsonDocuments Reader::read_json_lines_bytes_owned(
-    std::size_t start_bytes, std::size_t end_bytes) {
-    return p_impl_->read_json_lines_bytes_owned(start_bytes, end_bytes);
-}
-
 void Reader::set_buffer_size(std::size_t size) {
     p_impl_->set_buffer_size(size);
 }

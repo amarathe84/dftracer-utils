@@ -93,32 +93,6 @@ class Reader {
     std::string read_lines(std::size_t start, std::size_t end);
 
     /**
-     * Read complete lines from gzip file and parse as JSON Lines
-     */
-    dftracer::utils::json::JsonDocuments read_json_lines(std::size_t start,
-                                                         std::size_t end);
-
-    /**
-     * Read complete lines from gzip file and parse as JSON Lines (owned)
-     */
-    dftracer::utils::json::OwnedJsonDocuments read_json_lines_owned(
-        std::size_t start, std::size_t end);
-
-    /**
-     * Read bytes from gzip file and parse as JSON Lines
-     * Returns parsed JSON objects from complete lines only.
-     */
-    dftracer::utils::json::JsonDocuments read_json_lines_bytes(
-        std::size_t start_bytes, std::size_t end_bytes);
-
-    /**
-     * Read bytes from gzip file and parse as JSON Lines (owned)
-     * Returns parsed JSON objects from complete lines only
-     */
-    dftracer::utils::json::OwnedJsonDocuments read_json_lines_bytes_owned(
-        std::size_t start_bytes, std::size_t end_bytes);
-
-    /**
      * Set default reader buffer size in bytes
      */
     void set_buffer_size(std::size_t size);

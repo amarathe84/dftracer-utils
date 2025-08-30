@@ -175,7 +175,7 @@ Trace parse_trace(const dftracer::utils::json::JsonDocument& doc) {
     return trace;
 }
 
-Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
+Trace parse_trace_owned(const dftracer::utils::json::JsonDocument& doc) {
     Trace trace = {};
     trace.is_valid = false;
 
@@ -184,8 +184,8 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
             return trace;
         }
 
-        std::string func_name = get_string_field_owned(doc, "name");
-        std::string phase = get_string_field_owned(doc, "ph");
+        std::string func_name = get_string_field(doc, "name");
+        std::string phase = get_string_field(doc, "ph");
 
         if (func_name.empty()) {
             return trace;
@@ -197,7 +197,7 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
         trace.func_name = func_name;
 
         // Extract cat field
-        std::string cat = get_string_field_owned(doc, "cat");
+        std::string cat = get_string_field(doc, "cat");
         if (cat.empty()) {
             return trace;
         } else {
@@ -206,42 +206,42 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
         }
 
         // Extract pid and tid
-        trace.pid = get_uint64_field_owned(doc, "pid");
-        trace.tid = get_uint64_field_owned(doc, "tid");
+        trace.pid = get_uint64_field(doc, "pid");
+        trace.tid = get_uint64_field(doc, "tid");
 
         // Extract hhash from args if available
-        trace.hhash = get_args_string_field_owned(doc, "hhash");
+        trace.hhash = get_args_string_field(doc, "hhash");
 
         // Handle metadata events (phase == "M")
         if (phase == "M") {
             if (func_name == "FH") {
                 trace.type = TraceType::FileHash;
-                trace.func_name = get_args_string_field_owned(doc, "name");
-                trace.fhash = get_args_string_field_owned(doc, "value");
+                trace.func_name = get_args_string_field(doc, "name");
+                trace.fhash = get_args_string_field(doc, "value");
             } else if (func_name == "HH") {
                 trace.type = TraceType::HostHash;
-                trace.func_name = get_args_string_field_owned(doc, "name");
-                trace.hhash = get_args_string_field_owned(doc, "value");
+                trace.func_name = get_args_string_field(doc, "name");
+                trace.hhash = get_args_string_field(doc, "value");
             } else if (func_name == "SH") {
                 trace.type = TraceType::StringHash;
-                trace.func_name = get_args_string_field_owned(doc, "name");
-                trace.fhash = get_args_string_field_owned(doc, "value");
+                trace.func_name = get_args_string_field(doc, "name");
+                trace.fhash = get_args_string_field(doc, "value");
             } else if (func_name == "PR") {
                 trace.type = TraceType::ProcessMetadata;
-                trace.func_name = get_args_string_field_owned(doc, "name");
-                trace.fhash = get_args_string_field_owned(doc, "value");
+                trace.func_name = get_args_string_field(doc, "name");
+                trace.fhash = get_args_string_field(doc, "value");
             } else {
                 trace.type = TraceType::OtherMetadata;
-                trace.func_name = get_args_string_field_owned(doc, "name");
-                trace.fhash = get_args_string_field_owned(doc, "value");
+                trace.func_name = get_args_string_field(doc, "name");
+                trace.fhash = get_args_string_field(doc, "value");
             }
         } else {
             // Regular event (type = 0)
             trace.type = TraceType::Regular;
 
             // Extract duration and timestamp
-            trace.duration = get_double_field_owned(doc, "dur");
-            trace.time_start = get_uint64_field_owned(doc, "ts");
+            trace.duration = get_double_field(doc, "dur");
+            trace.time_start = get_uint64_field(doc, "ts");
             trace.time_end =
                 trace.time_start + static_cast<uint64_t>(trace.duration);
             trace.count = 1;
@@ -250,7 +250,7 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
             trace.time_range = 0;
 
             // Extract IO-related fields
-            trace.fhash = get_args_string_field_owned(doc, "fhash");
+            trace.fhash = get_args_string_field(doc, "fhash");
 
             if (trace.cat == "posix" || trace.cat == "stdio") {
                 trace.io_cat = derive_io_cat(func_name);
@@ -297,8 +297,7 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
                     }
                 }
 
-                std::string offset_str =
-                    get_args_string_field_owned(doc, "offset");
+                std::string offset_str = get_args_string_field(doc, "offset");
                 if (!offset_str.empty()) {
                     try {
                         trace.offset = std::stoull(offset_str);
@@ -311,7 +310,7 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
 
                 // Extract image_id for non-POSIX events
                 std::string image_idx_str =
-                    get_args_string_field_owned(doc, "image_idx");
+                    get_args_string_field(doc, "image_idx");
                 if (!image_idx_str.empty()) {
                     try {
                         trace.image_id = std::stoull(image_idx_str);
@@ -324,7 +323,7 @@ Trace parse_trace_owned(const dftracer::utils::json::OwnedJsonDocument& doc) {
             trace.acc_pat = "0";
 
             // Extract epoch from args if available
-            std::string epoch_str = get_args_string_field_owned(doc, "epoch");
+            std::string epoch_str = get_args_string_field(doc, "epoch");
             if (!epoch_str.empty()) {
                 try {
                     trace.epoch = std::stoull(epoch_str);

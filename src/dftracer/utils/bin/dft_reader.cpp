@@ -172,17 +172,26 @@ int main(int argc, char **argv) {
                 std::size_t total_bytes = 0;
 #endif
 
-                while ((bytes_written =
-                            read_mode == "bytes"
-                                ? reader.read(start_bytes_, end_bytes_,
-                                              buffer.get(), read_buffer_size)
-                                : reader.read_line_bytes(
-                                      start_bytes_, end_bytes_, buffer.get(),
-                                      read_buffer_size)) > 0) {
-                    fwrite(buffer.get(), 1, bytes_written, stdout);
+                {
+                    Timer timer("Reading total + writing", true, true);
+                    Timer timer_chunk("Reading chunk data");
+                    timer_chunk.start();
+                    while (
+                        (bytes_written =
+                             read_mode == "bytes"
+                                 ? reader.read(start_bytes_, end_bytes_,
+                                               buffer.get(), read_buffer_size)
+                                 : reader.read_line_bytes(
+                                       start_bytes_, end_bytes_, buffer.get(),
+                                       read_buffer_size)) > 0) {
+                        timer_chunk.stop();
+                        printf("Time taken to read %zu bytes: %f ms\n",
+                               bytes_written, timer_chunk.elapsed());
+                        fwrite(buffer.get(), 1, bytes_written, stdout);
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
-                    total_bytes += bytes_written;
+                        total_bytes += bytes_written;
 #endif
+                    }
                 }
 
                 DFTRACER_UTILS_LOG_DEBUG(
