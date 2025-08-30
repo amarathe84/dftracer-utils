@@ -1,6 +1,7 @@
-#ifndef DFTRACER_UTILS_ANALYZERS_TRACE_RECORD_H
-#define DFTRACER_UTILS_ANALYZERS_TRACE_RECORD_H
+#ifndef DFTRACER_UTILS_ANALYZERS_TRACE_H
+#define DFTRACER_UTILS_ANALYZERS_TRACE_H
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -19,6 +20,7 @@ enum class TraceType {
 };
 
 typedef std::unordered_map<std::string, std::int32_t> BinFields;
+typedef std::unordered_map<std::string, std::string> ViewFields;
 
 struct Trace {
     std::string cat;
@@ -38,14 +40,15 @@ struct Trace {
     std::uint64_t image_id;
     TraceType type;
 
-    std::int64_t size = -1;    // -1 means NaN or unknown
-    std::int64_t offset = -1;  // -1 means NaN or unknown
-    std::unordered_map<std::string, std::string> view_fields;
+    ViewFields view_fields;
     BinFields bin_fields;
 
-    bool is_valid;  // set manually after parsing, to reduce using optional
+    std::int64_t size = -1;    // -1 means NaN or unknown
+    std::int64_t offset = -1;  // -1 means NaN or unknown
+    bool is_valid =
+        false;  // set manually after parsing, to reduce using optional
 };
 
 }  // namespace dftracer::utils::analyzers
 
-#endif  // DFTRACER_UTILS_ANALYZERS_TRACE_RECORD_H
+#endif  // DFTRACER_UTILS_ANALYZERS_TRACE_H
