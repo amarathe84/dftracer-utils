@@ -53,7 +53,9 @@ JsonDocuments parse_json_lines(JsonParser& parser, const char* data,
         if (line_end > start) {
             std::size_t line_size = static_cast<std::size_t>(line_end - start);
 
-            auto el = parser.parse(start, line_size);
+            // Create a fresh parser for each line to avoid buffer reuse issues
+            JsonParser line_parser;
+            auto el = line_parser.parse(start, line_size);
             if (!el.error()) {
                 out.emplace_back(std::move(el.value()));
             }

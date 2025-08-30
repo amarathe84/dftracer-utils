@@ -126,6 +126,7 @@ class DFTracerReader {
     std::uint64_t num_lines_;
     std::uint64_t default_step_;
     std::uint64_t default_step_lines_;
+    std::size_t buffer_size_ = 1 * 1024 * 1024;  // 1MB
 
    public:
     using ReturnType = std::conditional_t<
@@ -263,6 +264,7 @@ class DFTracerReader {
         ensure_open();
         try {
             reader_->set_buffer_size(size);
+            buffer_size_ = size;
         } catch (const std::runtime_error &e) {
             throw std::runtime_error("Failed to set buffer size: " +
                                      std::string(e.what()));
@@ -357,8 +359,6 @@ class DFTracerReader {
         ensure_open();
         try {
             ReturnType result;
-            const std::size_t buffer_size = 64 * 1024;
-            std::vector<char> buffer(buffer_size);
 
             std::size_t bytes_read;
             if constexpr (Mode == DFTracerReaderMode::JsonLines) {
@@ -369,19 +369,24 @@ class DFTracerReader {
             } else if constexpr (Mode == DFTracerReaderMode::JsonLinesBytes) {
                 // Use read_line_bytes to get string data, then convert to JSON
                 // in Python layer
+                std::vector<char> buffer(buffer_size_);
                 std::string line_buffer;
+                line_buffer.reserve(static_cast<std::size_t>((end - start) * 1.2));
                 while ((bytes_read = reader_->read_line_bytes(
                             start, end, buffer.data(), buffer.size())) > 0) {
                     line_buffer.append(buffer.data(), bytes_read);
                 }
                 result = convert_jsondocs(line_buffer);
             } else if constexpr (Mode == DFTracerReaderMode::Bytes) {
+                std::vector<char> buffer(buffer_size_);
                 while ((bytes_read = reader_->read(start, end, buffer.data(),
                                                    buffer.size())) > 0) {
                     result.append(buffer.data(), bytes_read);
                 }
             } else if constexpr (Mode == DFTracerReaderMode::LineBytes) {
+                std::vector<char> buffer(buffer_size_);
                 std::string line_buffer;
+                line_buffer.reserve(static_cast<std::size_t>((end - start) * 1.2));
                 while ((bytes_read = reader_->read_line_bytes(
                             start, end, buffer.data(), buffer.size())) > 0) {
                     line_buffer.append(buffer.data(), bytes_read);

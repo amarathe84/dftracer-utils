@@ -11,11 +11,8 @@
 
 class LineByteStream : public Stream {
    private:
-    static constexpr std::size_t SEARCH_BUFFER_SIZE = 2048;
-    static constexpr std::size_t LINE_SEARCH_LOOKBACK = 512;
-    static constexpr std::size_t SMALL_RANGE_THRESHOLD =
-        1 * 1024 * 1024;  // 1MB
-    static constexpr std::size_t LARGE_RANGE_LOG_THRESHOLD = 40000;
+    static constexpr std::size_t SEARCH_BUFFER_SIZE = 4096;
+    static constexpr std::size_t LINE_SEARCH_LOOKBACK = 1536;
 
     std::vector<char> partial_line_buffer_;
     std::vector<char> temp_buffer_;  // Reusable temp buffer
@@ -42,8 +39,9 @@ class LineByteStream : public Stream {
             return target_start;
         }
 
-        std::size_t search_start = (target_start >= LINE_SEARCH_LOOKBACK)
-                                       ? target_start - LINE_SEARCH_LOOKBACK
+        std::size_t extended_lookback = LINE_SEARCH_LOOKBACK + 1024;  // 1536 + 1024 = 2560
+        std::size_t search_start = (target_start >= extended_lookback)
+                                       ? target_start - extended_lookback
                                        : current_pos;
 
         if (search_start > current_pos) {
@@ -63,10 +61,6 @@ class LineByteStream : public Stream {
                      i--) {
                     if (i == 0 || search_buffer[i - 1] == '\n') {
                         actual_start = current_pos + static_cast<size_t>(i);
-                        DFTRACER_UTILS_LOG_DEBUG(
-                            "Found JSON line start at position %zu (requested "
-                            "%zu)",
-                            actual_start, target_start);
                         break;
                     }
                 }
@@ -131,24 +125,14 @@ class LineByteStream : public Stream {
             }
         }
 
-        DFTRACER_UTILS_LOG_DEBUG(
-            "Read %zu bytes from compressed stream, partial_buffer_size=%zu, "
-            "current_position=%zu, target_end=%zu",
-            bytes_read, partial_line_buffer_.size(), current_position_,
-            target_end_bytes_);
 
         std::size_t total_data_size = partial_line_buffer_.size() + bytes_read;
-        std::size_t adjusted_size = apply_range_and_boundary_limits(
+        std::size_t adjusted_size = adjust_to_boundary(
             temp_buffer_.data(), total_data_size);
 
         current_position_ += bytes_read;
 
         if (adjusted_size == 0) {
-            DFTRACER_UTILS_LOG_ERROR(
-                "No complete line found, need to read more data, try "
-                "increasing the "
-                "end bytes",
-                "");
             is_finished_ = true;
             return 0;
         }
@@ -156,14 +140,6 @@ class LineByteStream : public Stream {
         std::memcpy(buffer, temp_buffer_.data(), adjusted_size);
 
         update_partial_buffer(adjusted_size, total_data_size);
-
-        if ((target_end_bytes_ - start_bytes_) > LARGE_RANGE_LOG_THRESHOLD) {
-            DFTRACER_UTILS_LOG_DEBUG(
-                "Large range read: returning %zu bytes, current_pos=%zu, "
-                "target_end=%zu, range_size=%zu",
-                adjusted_size, current_position_, target_end_bytes_,
-                target_end_bytes_ - start_bytes_);
-        }
 
         return adjusted_size;
     }
@@ -207,39 +183,6 @@ class LineByteStream : public Stream {
             return 0;
         }
         return buffer_size;
-    }
-
-    std::size_t apply_range_and_boundary_limits(char *buffer,
-                                                std::size_t total_data_size) {
-        std::size_t adjusted_size;
-        std::size_t original_range_size = target_end_bytes_ - start_bytes_;
-
-        if (original_range_size < SMALL_RANGE_THRESHOLD) {
-            // Small range read - apply cumulative range limiting
-            if (current_position_ < actual_start_bytes_) {
-                DFTRACER_UTILS_LOG_ERROR(
-                    "Invalid state: current_position_ %zu < "
-                    "actual_start_bytes_ %zu",
-                    current_position_, actual_start_bytes_);
-                throw ReaderError(ReaderError::READ_ERROR,
-                                  "Invalid internal position state detected");
-            }
-            std::size_t bytes_already_returned =
-                current_position_ - actual_start_bytes_;
-            std::size_t max_allowed_return =
-                (bytes_already_returned < original_range_size)
-                    ? (original_range_size - bytes_already_returned)
-                    : 0;
-
-            std::size_t limited_data_size =
-                std::min(total_data_size, max_allowed_return);
-            adjusted_size = adjust_to_boundary(buffer, limited_data_size);
-        } else {
-            // Large range or full file read - no artificial limiting
-            adjusted_size = adjust_to_boundary(buffer, total_data_size);
-        }
-
-        return adjusted_size;
     }
 };
 
