@@ -39,7 +39,8 @@ class LineByteStream : public Stream {
             return target_start;
         }
 
-        std::size_t extended_lookback = LINE_SEARCH_LOOKBACK + 1024;  // 1536 + 1024 = 2560
+        std::size_t extended_lookback =
+            LINE_SEARCH_LOOKBACK + 1024;  // 1536 + 1024 = 2560
         std::size_t search_start = (target_start >= extended_lookback)
                                        ? target_start - extended_lookback
                                        : current_pos;
@@ -125,10 +126,9 @@ class LineByteStream : public Stream {
             }
         }
 
-
         std::size_t total_data_size = partial_line_buffer_.size() + bytes_read;
-        std::size_t adjusted_size = adjust_to_boundary(
-            temp_buffer_.data(), total_data_size);
+        std::size_t adjusted_size =
+            adjust_to_boundary(temp_buffer_.data(), total_data_size);
 
         current_position_ += bytes_read;
 

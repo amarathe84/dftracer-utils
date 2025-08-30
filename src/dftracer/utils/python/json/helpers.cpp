@@ -3,6 +3,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <simdjson.h>
+
 #include <sstream>
 
 namespace nb = nanobind;
@@ -22,7 +23,7 @@ nb::object convert_ondemand_value(simdjson::ondemand::value val) {
     if (type_result.error()) {
         return nb::none();
     }
-    
+
     switch (type_result.value()) {
         case simdjson::ondemand::json_type::null:
             return nb::none();
@@ -56,7 +57,7 @@ nb::object convert_ondemand_value(simdjson::ondemand::value val) {
         case simdjson::ondemand::json_type::array: {
             auto array_result = val.get_array();
             if (array_result.error()) return nb::none();
-            
+
             nb::list result;
             for (auto item : array_result.value()) {
                 // item.value() returns simdjson::ondemand::value directly
@@ -67,17 +68,18 @@ nb::object convert_ondemand_value(simdjson::ondemand::value val) {
         case simdjson::ondemand::json_type::object: {
             auto obj_result = val.get_object();
             if (obj_result.error()) return nb::none();
-            
+
             nb::dict result;
             for (auto field : obj_result.value()) {
                 // Use the unescaped_key() method on the field directly
                 auto key_result = field.unescaped_key();
                 auto val_result = field.value();
-                
+
                 if (!key_result.error() && !val_result.error()) {
                     std::string_view key_sv = key_result.value();
                     std::string key_str(key_sv);
-                    result[nb::cast(key_str)] = convert_ondemand_value(val_result.value());
+                    result[nb::cast(key_str)] =
+                        convert_ondemand_value(val_result.value());
                 }
             }
             return result;
@@ -94,20 +96,20 @@ nb::list convert_jsondocs(const std::string& json_docs) {
 
     nb::list result;
     simdjson::ondemand::parser parser;
-    
+
     // Process each line individually to avoid buffer sharing issues
     std::istringstream stream(json_docs);
     std::string line;
-    
+
     while (std::getline(stream, line)) {
         if (line.empty()) continue;
-        
+
         try {
             // Each iteration gets fresh parser state
             simdjson::padded_string padded_line(line);
             auto doc = parser.iterate(padded_line);
             auto obj_result = doc.get_value();
-            
+
             if (!obj_result.error()) {
                 result.append(convert_ondemand_value(obj_result.value()));
             }
@@ -116,7 +118,7 @@ nb::list convert_jsondocs(const std::string& json_docs) {
             continue;
         }
     }
-    
+
     return result;
 }
 

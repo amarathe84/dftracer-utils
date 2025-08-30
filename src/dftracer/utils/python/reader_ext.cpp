@@ -371,7 +371,8 @@ class DFTracerReader {
                 // in Python layer
                 std::vector<char> buffer(buffer_size_);
                 std::string line_buffer;
-                line_buffer.reserve(static_cast<std::size_t>((end - start) * 1.2));
+                line_buffer.reserve(
+                    static_cast<std::size_t>((end - start) * 1.2));
                 while ((bytes_read = reader_->read_line_bytes(
                             start, end, buffer.data(), buffer.size())) > 0) {
                     line_buffer.append(buffer.data(), bytes_read);
@@ -386,7 +387,8 @@ class DFTracerReader {
             } else if constexpr (Mode == DFTracerReaderMode::LineBytes) {
                 std::vector<char> buffer(buffer_size_);
                 std::string line_buffer;
-                line_buffer.reserve(static_cast<std::size_t>((end - start) * 1.2));
+                line_buffer.reserve(
+                    static_cast<std::size_t>((end - start) * 1.2));
                 while ((bytes_read = reader_->read_line_bytes(
                             start, end, buffer.data(), buffer.size())) > 0) {
                     line_buffer.append(buffer.data(), bytes_read);
