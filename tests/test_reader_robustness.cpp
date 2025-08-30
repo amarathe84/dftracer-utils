@@ -305,7 +305,7 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
         std::string stride_combined_content;
 
         for (std::size_t i = 0; i < 3; ++i) {
-            std::size_t start = (i == 0) ? 0 : (i * chunk_size + 1);
+            std::size_t start = i * chunk_size;
             std::size_t end = (i + 1) * chunk_size;
 
             std::string chunk_content;
@@ -521,7 +521,7 @@ TEST_CASE("Robustness - Boundary edge cases") {
 
         // Read several adjacent ranges
         for (std::size_t i = 0; i < 3 && (i * range_size < max_bytes); ++i) {
-            std::size_t start = (i == 0) ? 0 : (i * range_size + 1);
+            std::size_t start = i * range_size;
             std::size_t end = std::min((i + 1) * range_size, max_bytes);
 
             std::size_t bytes_written = 0;
@@ -691,7 +691,7 @@ TEST_CASE("Robustness - Complete file sequential read") {
 
             chunked_complete_content += chunk_content;
             chunked_total_lines += count_json_lines(chunk_content);
-            current_pos = end_pos + 1;
+            current_pos = end_pos;
         }
 
         // Get last line from chunked reading
