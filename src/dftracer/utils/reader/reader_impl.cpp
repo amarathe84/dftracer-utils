@@ -1,7 +1,7 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader_impl.h>
 #include <dftracer/utils/utils/timer.h>
-#include <dftracer/utils/reader/line_processors/string_line_processor.h>
+#include <dftracer/utils/reader/string_line_processor.h>
 
 #include <cstring>
 #include <string_view>
