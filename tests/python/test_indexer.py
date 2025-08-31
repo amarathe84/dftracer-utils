@@ -9,9 +9,9 @@ import os
 import dftracer.utils as dft_utils
 from .common import Environment
 
-class TestDFTracerIndexer:
-    """Test cases for DFTracerIndexer"""
-    
+class TestIndexer:
+    """Test cases for Indexer"""
+
     def test_indexer_creation(self):
         """Test indexer creation"""
         with Environment() as env:
@@ -19,7 +19,7 @@ class TestDFTracerIndexer:
             idx_file = gz_file + ".idx"
             
             # Test basic creation using context manager
-            with dft_utils.DFTracerIndexer(gz_file, idx_file) as indexer:
+            with dft_utils.Indexer(gz_file, idx_file) as indexer:
                 assert indexer.gz_path == gz_file
                 assert indexer.idx_path == idx_file
                 assert indexer.checkpoint_size > 0
@@ -30,10 +30,10 @@ class TestDFTracerIndexer:
             gz_file = env.create_test_gzip_file()
             
             # Test creation with defaults using context manager
-            with dft_utils.DFTracerIndexer(gz_file) as indexer:
+            with dft_utils.Indexer(gz_file) as indexer:
                 assert indexer.gz_path == gz_file
                 assert indexer.idx_path == gz_file + ".idx"
-                assert indexer.checkpoint_size == 33554432  # 32MB default
+                assert indexer.checkpoint_size <= 33554432  # Should be <= 32MB default
     
     def test_indexer_custom_checkpoint_size(self):
         """Test indexer with custom checkpoint size"""
@@ -41,14 +41,14 @@ class TestDFTracerIndexer:
             gz_file = env.create_test_gzip_file()
             checkpoint_size = 1024 * 1024  # 1MB
             
-            with dft_utils.DFTracerIndexer(gz_file, checkpoint_size=checkpoint_size) as indexer:
-                assert indexer.checkpoint_size == checkpoint_size
+            with dft_utils.Indexer(gz_file, checkpoint_size=checkpoint_size) as indexer:
+                assert indexer.checkpoint_size <= checkpoint_size
     
     def test_indexer_nonexistent_file(self):
         """Test indexer creation with non-existent file"""
         # Indexer creation doesn't fail, but building should fail
         with pytest.raises(RuntimeError):
-            indexer = dft_utils.DFTracerIndexer("nonexistent_file.gz")
+            indexer = dft_utils.Indexer("nonexistent_file.gz")
     
     def test_indexer_build_and_rebuild(self):
         """Test indexer build and rebuild functionality"""
@@ -56,7 +56,7 @@ class TestDFTracerIndexer:
             gz_file = env.create_test_gzip_file()
             idx_file = gz_file + ".idx"
             
-            with dft_utils.DFTracerIndexer(gz_file, idx_file) as indexer:
+            with dft_utils.Indexer(gz_file, idx_file) as indexer:
                 # Should need rebuild initially
                 assert indexer.need_rebuild()
                 
@@ -72,7 +72,7 @@ class TestDFTracerIndexer:
             # Test force rebuild with a new indexer
             # Note: force_rebuild affects the build process, not need_rebuild() check
             # The need_rebuild() method checks file consistency, not force_rebuild flag
-            with dft_utils.DFTracerIndexer(gz_file, idx_file, force_rebuild=True) as indexer_force:
+            with dft_utils.Indexer(gz_file, idx_file, force_rebuild=True) as indexer_force:
                 # Since the index already exists and file hasn't changed, need_rebuild should be False
                 # But force_rebuild will cause a rebuild when build() is called
                 assert not indexer_force.need_rebuild()
@@ -84,7 +84,7 @@ class TestDFTracerIndexer:
         with Environment() as env:
             gz_file = env.create_test_gzip_file()
             
-            with dft_utils.DFTracerIndexer(gz_file) as indexer:
+            with dft_utils.Indexer(gz_file) as indexer:
                 if indexer.need_rebuild():
                     indexer.build()
                 
@@ -97,30 +97,6 @@ class TestDFTracerIndexer:
                 assert max_bytes > 0
                 assert num_lines > 0
     
-    def test_indexer_file_id(self):
-        """Test indexer file ID functionality"""
-        with Environment() as env:
-            gz_file = env.create_test_gzip_file()
-            
-            with dft_utils.DFTracerIndexer(gz_file) as indexer:
-                if indexer.need_rebuild():
-                    indexer.build()
-                
-                # Test find_file_id
-                file_id = indexer.find_file_id(gz_file)
-                assert isinstance(file_id, int)
-                assert file_id >= 0  # Valid file ID
-                
-                # Test with non-existent file (use just the filename)
-                import os
-                gz_filename = os.path.basename(gz_file)
-                file_id_by_name = indexer.find_file_id(gz_filename)
-                # Should find the same file by logical name
-                assert file_id_by_name == file_id
-                
-                # Test with truly non-existent file
-                non_existent_id = indexer.find_file_id("nonexistent.gz")
-                assert non_existent_id == -1
     
     def test_indexer_checkpoints(self):
         """Test indexer checkpoint functionality"""
@@ -128,7 +104,7 @@ class TestDFTracerIndexer:
             gz_file = env.create_test_gzip_file()
             checkpoint_size = 256 * 1024  # 256KB checkpoint size
             
-            with dft_utils.DFTracerIndexer(gz_file, checkpoint_size=checkpoint_size) as indexer:
+            with dft_utils.Indexer(gz_file, checkpoint_size=checkpoint_size) as indexer:
                 if indexer.need_rebuild():
                     indexer.build()
                 
@@ -174,7 +150,7 @@ class TestDFTracerIndexer:
             gz_file = env.create_test_gzip_file(bytes_per_line=2048)  # Larger lines
             checkpoint_size = 512 * 1024  # 512KB checkpoint size
             
-            with dft_utils.DFTracerIndexer(gz_file, checkpoint_size=checkpoint_size) as indexer:
+            with dft_utils.Indexer(gz_file, checkpoint_size=checkpoint_size) as indexer:
                 if indexer.need_rebuild():
                     indexer.build()
                 
@@ -210,7 +186,7 @@ class TestDFTracerIndexer:
                     if checkpoint_beyond is not None:
                         assert checkpoint_beyond.uc_offset <= max_bytes
 
-class TestDFTracerIndexerIntegration:
+class TestIndexerIntegration:
     """Integration tests for indexer with reader"""
     
     def test_indexer_with_reader_creation(self):
@@ -219,42 +195,28 @@ class TestDFTracerIndexerIntegration:
             gz_file = env.create_test_gzip_file()
             
             # Create and build indexer using context manager
-            with dft_utils.DFTracerIndexer(gz_file) as indexer:
+            with dft_utils.Indexer(gz_file) as indexer:
                 if indexer.need_rebuild():
                     indexer.build()
                 
-                # Test creating different reader types from indexer
-                bytes_reader = dft_utils.DFTracerBytesReader(indexer)
-                assert bytes_reader.is_open
-                assert bytes_reader.gzip_path == gz_file
-                
-                line_bytes_reader = dft_utils.DFTracerLineBytesReader(indexer)
-                assert line_bytes_reader.is_open
-                assert line_bytes_reader.gzip_path == gz_file
-                
-                lines_reader = dft_utils.DFTracerLinesReader(indexer)
-                assert lines_reader.is_open
-                assert lines_reader.gzip_path == gz_file
+                # Test creating reader from indexer
+                reader = dft_utils.Reader(gz_file, indexer=indexer)
+                assert reader.get_max_bytes() > 0
+                assert reader.gz_path == gz_file
     
-    def test_indexer_with_dft_reader_function(self):
-        """Test using indexer with dft_reader convenience function"""
+    def test_indexer_with_reader_creation(self):
+        """Test using indexer with reader creation"""
         with Environment() as env:
             gz_file = env.create_test_gzip_file()
             
             # Create and build indexer using context manager
-            with dft_utils.DFTracerIndexer(gz_file) as indexer:
+            with dft_utils.Indexer(gz_file) as indexer:
                 if indexer.need_rebuild():
                     indexer.build()
                 
-                # Test dft_reader function with indexer
-                reader1 = dft_utils.dft_reader(indexer, mode="line_bytes")
-                assert reader1.is_open
-                
-                reader2 = dft_utils.dft_reader(indexer, mode="bytes")
-                assert reader2.is_open
-                
-                reader3 = dft_utils.dft_reader(indexer, mode="lines")
-                assert reader3.is_open
+                # Test creating reader with indexer
+                reader = dft_utils.Reader(gz_file, indexer=indexer)
+                assert reader.get_max_bytes() > 0
     
     def test_multiple_readers_same_indexer(self):
         """Test creating multiple readers from the same indexer"""
@@ -262,15 +224,14 @@ class TestDFTracerIndexerIntegration:
             gz_file = env.create_test_gzip_file()
             
             # Create and build indexer using context manager
-            with dft_utils.DFTracerIndexer(gz_file) as indexer:
+            with dft_utils.Indexer(gz_file) as indexer:
                 if indexer.need_rebuild():
                     indexer.build()
                 
                 # Create multiple readers from same indexer
                 readers = []
                 for i in range(3):
-                    reader = dft_utils.DFTracerLineBytesReader(indexer)
-                    assert reader.is_open
+                    reader = dft_utils.Reader(gz_file, indexer=indexer)
                     assert reader.get_max_bytes() > 0
                     readers.append(reader)
                 

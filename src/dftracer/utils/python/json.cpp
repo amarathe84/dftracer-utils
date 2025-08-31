@@ -3,19 +3,18 @@
 #include <cstring>
 #include <iostream>
 
-static void DFTracerJSON_dealloc(DFTracerJSONObject* self) {
+static void JSON_dealloc(JSONObject* self) {
     if (self->doc) {
         yyjson_doc_free(self->doc);
     }
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-static PyObject* DFTracerJSON_new(PyTypeObject* type, PyObject* args,
-                                  PyObject* kwds) {
-    // This won't be used for DFTracerJSON_from_data, but needed for regular
+static PyObject* JSON_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+    // This won't be used for JSON_from_data, but needed for regular
     // construction
-    DFTracerJSONObject* self;
-    self = (DFTracerJSONObject*)type->tp_alloc(type, 0);
+    JSONObject* self;
+    self = (JSONObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->doc = nullptr;
         self->parsed = false;
@@ -24,15 +23,14 @@ static PyObject* DFTracerJSON_new(PyTypeObject* type, PyObject* args,
     return (PyObject*)self;
 }
 
-static int DFTracerJSON_init(DFTracerJSONObject* self, PyObject* args,
-                             PyObject* kwds) {
+static int JSON_init(JSONObject* self, PyObject* args, PyObject* kwds) {
     const char* json_str;
     if (!PyArg_ParseTuple(args, "s", &json_str)) {
         return -1;
     }
 
     // For regular init, we can't use flexible array - would need to recreate
-    // object This is a limitation, but DFTracerJSON_from_data is the optimized
+    // object This is a limitation, but JSON_from_data is the optimized
     // path
     self->json_length = strlen(json_str);
     if (self->json_length > 0) {
@@ -43,7 +41,7 @@ static int DFTracerJSON_init(DFTracerJSONObject* self, PyObject* args,
     return 0;
 }
 
-static bool DFTracerJSON_ensure_parsed(DFTracerJSONObject* self) {
+static bool JSON_ensure_parsed(JSONObject* self) {
     if (!self->parsed && self->json_length > 0) {
         self->doc = yyjson_read(self->json_data, self->json_length, 0);
         self->parsed = true;
@@ -55,9 +53,8 @@ static bool DFTracerJSON_ensure_parsed(DFTracerJSONObject* self) {
     return self->doc != nullptr;
 }
 
-static PyObject* DFTracerJSON_contains(DFTracerJSONObject* self,
-                                       PyObject* key) {
-    if (!DFTracerJSON_ensure_parsed(self)) {
+static PyObject* JSON_contains(JSONObject* self, PyObject* key) {
+    if (!JSON_ensure_parsed(self)) {
         return NULL;
     }
 
@@ -84,9 +81,9 @@ static PyObject* DFTracerJSON_contains(DFTracerJSONObject* self,
     }
 }
 
-static int DFTracerJSON_contains_sq(PyObject* self_obj, PyObject* key) {
-    DFTracerJSONObject* self = (DFTracerJSONObject*)self_obj;
-    PyObject* result = DFTracerJSON_contains(self, key);
+static int JSON_contains_sq(PyObject* self_obj, PyObject* key) {
+    JSONObject* self = (JSONObject*)self_obj;
+    PyObject* result = JSON_contains(self, key);
     if (!result) {
         return -1;
     }
@@ -165,8 +162,8 @@ static PyObject* yyjson_val_to_python(yyjson_val* val) {
     Py_RETURN_NONE;
 }
 
-static PyObject* DFTracerJSON_getitem(DFTracerJSONObject* self, PyObject* key) {
-    if (!DFTracerJSON_ensure_parsed(self)) {
+static PyObject* JSON_getitem(JSONObject* self, PyObject* key) {
+    if (!JSON_ensure_parsed(self)) {
         return NULL;
     }
 
@@ -195,9 +192,8 @@ static PyObject* DFTracerJSON_getitem(DFTracerJSONObject* self, PyObject* key) {
     return yyjson_val_to_python(val);
 }
 
-static PyObject* DFTracerJSON_keys(DFTracerJSONObject* self,
-                                   PyObject* Py_UNUSED(ignored)) {
-    if (!DFTracerJSON_ensure_parsed(self)) {
+static PyObject* JSON_keys(JSONObject* self, PyObject* Py_UNUSED(ignored)) {
+    if (!JSON_ensure_parsed(self)) {
         return NULL;
     }
 
@@ -229,7 +225,7 @@ static PyObject* DFTracerJSON_keys(DFTracerJSONObject* self,
     return keys;
 }
 
-static PyObject* DFTracerJSON_get(DFTracerJSONObject* self, PyObject* args) {
+static PyObject* JSON_get(JSONObject* self, PyObject* args) {
     PyObject* key;
     PyObject* default_value = Py_None;
 
@@ -237,7 +233,7 @@ static PyObject* DFTracerJSON_get(DFTracerJSONObject* self, PyObject* args) {
         return NULL;
     }
 
-    if (!DFTracerJSON_ensure_parsed(self)) {
+    if (!JSON_ensure_parsed(self)) {
         return NULL;
     }
 
@@ -266,80 +262,79 @@ static PyObject* DFTracerJSON_get(DFTracerJSONObject* self, PyObject* args) {
     return yyjson_val_to_python(val);
 }
 
-static PyObject* DFTracerJSON_str(DFTracerJSONObject* self) {
+static PyObject* JSON_str(JSONObject* self) {
     if (self->json_length > 0) {
         return PyUnicode_FromStringAndSize(self->json_data, self->json_length);
     }
     return PyUnicode_FromString("{}");
 }
 
-static PyObject* DFTracerJSON_repr(DFTracerJSONObject* self) {
+static PyObject* JSON_repr(JSONObject* self) {
     if (self->json_length > 0) {
         PyObject* json_str =
             PyUnicode_FromStringAndSize(self->json_data, self->json_length);
         if (!json_str) return NULL;
-        PyObject* result = PyUnicode_FromFormat("DFTracerJSON(%U)", json_str);
+        PyObject* result = PyUnicode_FromFormat("JSON(%U)", json_str);
         Py_DECREF(json_str);
         return result;
     }
-    return PyUnicode_FromString("DFTracerJSON({})");
+    return PyUnicode_FromString("JSON({})");
 }
 
-PyMethodDef DFTracerJSON_methods[] = {
-    {"__contains__", (PyCFunction)DFTracerJSON_contains, METH_O,
-     "Check if key exists in JSON object"},
-    {"keys", (PyCFunction)DFTracerJSON_keys, METH_NOARGS,
-     "Get all keys from JSON object"},
-    {"get", (PyCFunction)DFTracerJSON_get, METH_VARARGS,
-     "Get value by key with optional default"},
-    {NULL}};
+PyMethodDef JSON_methods[] = {{"__contains__", (PyCFunction)JSON_contains,
+                               METH_O, "Check if key exists in JSON object"},
+                              {"keys", (PyCFunction)JSON_keys, METH_NOARGS,
+                               "Get all keys from JSON object"},
+                              {"get", (PyCFunction)JSON_get, METH_VARARGS,
+                               "Get value by key with optional default"},
+                              {NULL}};
 
-PySequenceMethods DFTracerJSON_as_sequence = {
-    .sq_contains = DFTracerJSON_contains_sq,
+PySequenceMethods JSON_as_sequence = {
+    .sq_contains = JSON_contains_sq,
 };
 
-PyMappingMethods DFTracerJSON_as_mapping = {
-    .mp_subscript = (binaryfunc)DFTracerJSON_getitem,
+PyMappingMethods JSON_as_mapping = {
+    .mp_subscript = (binaryfunc)JSON_getitem,
 };
 
-PyTypeObject DFTracerJSONType = {
-    PyVarObject_HEAD_INIT(NULL, 0) "json.DFTracerJSON", /* tp_name */
-    sizeof(DFTracerJSONObject),                         /* tp_basicsize */
-    0,                                                  /* tp_itemsize */
-    (destructor)DFTracerJSON_dealloc,                   /* tp_dealloc */
-    0,                                        /* tp_vectorcall_offset */
-    0,                                        /* tp_getattr */
-    0,                                        /* tp_setattr */
-    0,                                        /* tp_as_async */
-    (reprfunc)DFTracerJSON_repr,              /* tp_repr */
-    0,                                        /* tp_as_number */
-    &DFTracerJSON_as_sequence,                /* tp_as_sequence */
-    &DFTracerJSON_as_mapping,                 /* tp_as_mapping */
-    0,                                        /* tp_hash */
-    0,                                        /* tp_call */
-    (reprfunc)DFTracerJSON_str,               /* tp_str */
-    0,                                        /* tp_getattro */
-    0,                                        /* tp_setattro */
-    0,                                        /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
-    "Lazy JSON object that parses on demand", /* tp_doc */
-    0,                                        /* tp_traverse */
-    0,                                        /* tp_clear */
-    0,                                        /* tp_richcompare */
-    0,                                        /* tp_weaklistoffset */
-    0,                                        /* tp_iter */
-    0,                                        /* tp_iternext */
-    DFTracerJSON_methods,                     /* tp_methods */
-    0,                                        /* tp_members */
-    0,                                        /* tp_getset */
-    0,                                        /* tp_base */
-    0,                                        /* tp_dict */
-    0,                                        /* tp_descr_get */
-    0,                                        /* tp_descr_set */
-    0,                                        /* tp_dictoffset */
-    (initproc)DFTracerJSON_init,              /* tp_init */
-    0,                                        /* tp_alloc */
-    DFTracerJSON_new,                         /* tp_new */
+PyTypeObject JSONType = {
+    PyVarObject_HEAD_INIT(NULL, 0) "json.JSON", /* tp_name */
+    sizeof(JSONObject),                         /* tp_basicsize */
+    0,                                          /* tp_itemsize */
+    (destructor)JSON_dealloc,                   /* tp_dealloc */
+    0,                                          /* tp_vectorcall_offset */
+    0,                                          /* tp_getattr */
+    0,                                          /* tp_setattr */
+    0,                                          /* tp_as_async */
+    (reprfunc)JSON_repr,                        /* tp_repr */
+    0,                                          /* tp_as_number */
+    &JSON_as_sequence,                          /* tp_as_sequence */
+    &JSON_as_mapping,                           /* tp_as_mapping */
+    0,                                          /* tp_hash */
+    0,                                          /* tp_call */
+    (reprfunc)JSON_str,                         /* tp_str */
+    0,                                          /* tp_getattro */
+    0,                                          /* tp_setattro */
+    0,                                          /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    "Lazy JSON object that parses on demand",   /* tp_doc */
+    0,                                          /* tp_traverse */
+    0,                                          /* tp_clear */
+    0,                                          /* tp_richcompare */
+    0,                                          /* tp_weaklistoffset */
+    0,                                          /* tp_iter */
+    0,                                          /* tp_iternext */
+    JSON_methods,                               /* tp_methods */
+    0,                                          /* tp_members */
+    0,                                          /* tp_getset */
+    0,                                          /* tp_base */
+    0,                                          /* tp_dict */
+    0,                                          /* tp_descr_get */
+    0,                                          /* tp_descr_set */
+    0,                                          /* tp_dictoffset */
+    (initproc)JSON_init,                        /* tp_init */
+    0,                                          /* tp_alloc */
+    JSON_new,                                   /* tp_new */
 };
 
 static PyModuleDef jsonmodule = {
@@ -352,15 +347,14 @@ static PyModuleDef jsonmodule = {
 PyMODINIT_FUNC PyInit_json(void) {
     PyObject* m;
 
-    if (PyType_Ready(&DFTracerJSONType) < 0) return NULL;
+    if (PyType_Ready(&JSONType) < 0) return NULL;
 
     m = PyModule_Create(&jsonmodule);
     if (m == NULL) return NULL;
 
-    Py_INCREF(&DFTracerJSONType);
-    if (PyModule_AddObject(m, "DFTracerJSON", (PyObject*)&DFTracerJSONType) <
-        0) {
-        Py_DECREF(&DFTracerJSONType);
+    Py_INCREF(&JSONType);
+    if (PyModule_AddObject(m, "JSON", (PyObject*)&JSONType) < 0) {
+        Py_DECREF(&JSONType);
         Py_DECREF(m);
         return NULL;
     }
@@ -368,17 +362,17 @@ PyMODINIT_FUNC PyInit_json(void) {
     return m;
 }
 
-PyObject* DFTracerJSON_from_data(const char* data, size_t length) {
+PyObject* JSON_from_data(const char* data, size_t length) {
     // Allocate object with extra space for the JSON data
-    DFTracerJSONObject* self = (DFTracerJSONObject*)PyObject_MALLOC(
-        sizeof(DFTracerJSONObject) + length + 1  // +1 for null terminator
+    JSONObject* self = (JSONObject*)PyObject_MALLOC(
+        sizeof(JSONObject) + length + 1  // +1 for null terminator
     );
     if (!self) {
         return PyErr_NoMemory();
     }
 
     // Initialize Python object
-    PyObject_INIT(self, &DFTracerJSONType);
+    PyObject_INIT(self, &JSONType);
 
     // Initialize fields
     self->doc = nullptr;

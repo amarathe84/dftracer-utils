@@ -1,6 +1,6 @@
 """Type stubs for dftracer_utils_ext module."""
 
-from typing import Optional, List, Dict, Any, Iterator
+from typing import Optional, List, Any, Iterator
 
 # ========== INDEXER ==========
 
@@ -14,8 +14,8 @@ class IndexCheckpoint:
     bits: int
     num_lines: int
 
-class DFTracerIndexer:
-    """DFTracer indexer for creating and managing gzip file indices."""
+class Indexer:
+    """Indexer for creating and managing gzip file indices."""
     
     def __init__(
         self, 
@@ -24,7 +24,7 @@ class DFTracerIndexer:
         checkpoint_size: int = 1048576,
         force_rebuild: bool = False
     ) -> None:
-        """Create a DFTracer indexer for a gzip file."""
+        """Create an indexer for a gzip file."""
         ...
     
     def build(self) -> None:
@@ -70,7 +70,7 @@ class DFTracerIndexer:
         """Get checkpoint size."""
         ...
     
-    def __enter__(self) -> 'DFTracerIndexer':
+    def __enter__(self) -> 'Indexer':
         """Enter the runtime context for the with statement."""
         ...
     
@@ -80,17 +80,17 @@ class DFTracerIndexer:
 
 # ========== READER ==========
 
-class DFTracerReader:
-    """DFTracer reader for reading from gzip files with zero-copy operations."""
+class Reader:
+    """Reader for reading from gzip files"""
     
     def __init__(
         self, 
         gz_path: str,
         idx_path: Optional[str] = None,
         checkpoint_size: int = 1048576,
-        indexer: Optional[DFTracerIndexer] = None
+        indexer: Optional[Indexer] = None
     ) -> None:
-        """Create a DFTracer reader."""
+        """Create a  reader."""
         ...
     
     def get_max_bytes(self) -> int:
@@ -117,12 +117,12 @@ class DFTracerReader:
         """Read line bytes and return as list[str]."""
         ...
         
-    def read_lines_json(self, start_line: int, end_line: int) -> List[Dict[str, Any]]:
-        """Read lines and parse as JSON, return as list[dict]."""
+    def read_lines_json(self, start_line: int, end_line: int) -> List[JSON]:
+        """Read lines and parse as JSON, return as list[JSON]."""
         ...
         
-    def read_line_bytes_json(self, start_bytes: int, end_bytes: int) -> List[Dict[str, Any]]:
-        """Read line bytes and parse as JSON, return as list[dict]."""
+    def read_line_bytes_json(self, start_bytes: int, end_bytes: int) -> List[JSON]:
+        """Read line bytes and parse as JSON, return as list[JSON]."""
         ...
     
     @property
@@ -150,10 +150,43 @@ class DFTracerReader:
         """Set internal buffer size for read operations."""
         ...
     
-    def __enter__(self) -> 'DFTracerReader':
+    def __enter__(self) -> 'Reader':
         """Enter the runtime context for the with statement."""
         ...
     
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the runtime context for the with statement."""
         ... 
+
+# ========== JSON ==========
+
+class JSON:
+    """Lazy JSON object that parses on demand using yyjson."""
+    
+    def __init__(self, json_str: str) -> None:
+        """Create a JSON object from a JSON string."""
+        ...
+    
+    def __contains__(self, key: str) -> bool:
+        """Check if key exists in JSON object."""
+        ...
+    
+    def __getitem__(self, key: str) -> Any:
+        """Get value by key, raises KeyError if not found."""
+        ...
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get value by key with optional default."""
+        ...
+    
+    def keys(self) -> List[str]:
+        """Get all keys from JSON object."""
+        ...
+    
+    def __str__(self) -> str:
+        """Return the original JSON string."""
+        ...
+    
+    def __repr__(self) -> str:
+        """Return string representation of the object."""
+        ...

@@ -1,83 +1,8 @@
 #include <dftracer/utils/python/indexer.h>
+#include <dftracer/utils/python/indexer_checkpoint.h>
 #include <structmember.h>
 
-// IndexCheckpoint Python object implementation
-static PyObject *IndexCheckpoint_new(PyTypeObject *type, PyObject *args,
-                                     PyObject *kwds) {
-    IndexCheckpointObject *self;
-    self = (IndexCheckpointObject *)type->tp_alloc(type, 0);
-    if (self != NULL) {
-        // Initialize checkpoint with zeros
-        memset(&self->checkpoint, 0, sizeof(dft_indexer_checkpoint_t));
-    }
-    return (PyObject *)self;
-}
-
-static PyMemberDef IndexCheckpoint_members[] = {
-    {"checkpoint_idx", T_ULONGLONG,
-     offsetof(IndexCheckpointObject, checkpoint.checkpoint_idx), 0,
-     "Checkpoint index"},
-    {"uc_offset", T_ULONGLONG,
-     offsetof(IndexCheckpointObject, checkpoint.uc_offset), 0,
-     "Uncompressed offset"},
-    {"uc_size", T_ULONGLONG,
-     offsetof(IndexCheckpointObject, checkpoint.uc_size), 0,
-     "Uncompressed size"},
-    {"c_offset", T_ULONGLONG,
-     offsetof(IndexCheckpointObject, checkpoint.c_offset), 0,
-     "Compressed offset"},
-    {"c_size", T_ULONGLONG, offsetof(IndexCheckpointObject, checkpoint.c_size),
-     0, "Compressed size"},
-    {"bits", T_UINT, offsetof(IndexCheckpointObject, checkpoint.bits), 0,
-     "Bit position"},
-    {"num_lines", T_ULONGLONG,
-     offsetof(IndexCheckpointObject, checkpoint.num_lines), 0,
-     "Number of lines in this chunk"},
-    {NULL} /* Sentinel */
-};
-
-PyTypeObject IndexCheckpointType = {
-    PyVarObject_HEAD_INIT(NULL, 0) "indexer.IndexCheckpoint", /* tp_name */
-    sizeof(IndexCheckpointObject),                            /* tp_basicsize */
-    0,                                                        /* tp_itemsize */
-    0,                                                        /* tp_dealloc */
-    0,                         /* tp_vectorcall_offset */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_as_async */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "IndexCheckpoint objects", /* tp_doc */
-    0,                         /* tp_traverse */
-    0,                         /* tp_clear */
-    0,                         /* tp_richcompare */
-    0,                         /* tp_weaklistoffset */
-    0,                         /* tp_iter */
-    0,                         /* tp_iternext */
-    0,                         /* tp_methods */
-    IndexCheckpoint_members,   /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    0,                         /* tp_init */
-    0,                         /* tp_alloc */
-    IndexCheckpoint_new,       /* tp_new */
-};
-
-// DFTracerIndexer Python object implementation
-static void DFTracerIndexer_dealloc(DFTracerIndexerObject *self) {
+static void Indexer_dealloc(IndexerObject *self) {
     if (self->handle) {
         dft_indexer_destroy(self->handle);
     }
@@ -86,10 +11,10 @@ static void DFTracerIndexer_dealloc(DFTracerIndexerObject *self) {
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-static PyObject *DFTracerIndexer_new(PyTypeObject *type, PyObject *args,
-                                     PyObject *kwds) {
-    DFTracerIndexerObject *self;
-    self = (DFTracerIndexerObject *)type->tp_alloc(type, 0);
+static PyObject *Indexer_new(PyTypeObject *type, PyObject *args,
+                             PyObject *kwds) {
+    IndexerObject *self;
+    self = (IndexerObject *)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->handle = NULL;
         self->gz_path = NULL;
@@ -99,8 +24,7 @@ static PyObject *DFTracerIndexer_new(PyTypeObject *type, PyObject *args,
     return (PyObject *)self;
 }
 
-static int DFTracerIndexer_init(DFTracerIndexerObject *self, PyObject *args,
-                                PyObject *kwds) {
+static int Indexer_init(IndexerObject *self, PyObject *args, PyObject *kwds) {
     static const char *kwlist[] = {"gz_path", "idx_path", "checkpoint_size",
                                    "force_rebuild", NULL};
     const char *gz_path;
@@ -114,7 +38,6 @@ static int DFTracerIndexer_init(DFTracerIndexerObject *self, PyObject *args,
         return -1;
     }
 
-    // Store string references
     self->gz_path = PyUnicode_FromString(gz_path);
     if (!self->gz_path) {
         return -1;
@@ -123,7 +46,6 @@ static int DFTracerIndexer_init(DFTracerIndexerObject *self, PyObject *args,
     if (idx_path) {
         self->idx_path = PyUnicode_FromString(idx_path);
     } else {
-        // Create default idx path
         PyObject *gz_path_obj = PyUnicode_FromString(gz_path);
         self->idx_path = PyUnicode_FromFormat("%U.idx", gz_path_obj);
         Py_DECREF(gz_path_obj);
@@ -136,13 +58,11 @@ static int DFTracerIndexer_init(DFTracerIndexerObject *self, PyObject *args,
 
     self->checkpoint_size = checkpoint_size;
 
-    // Get C strings
     const char *idx_path_str = PyUnicode_AsUTF8(self->idx_path);
     if (!idx_path_str) {
         return -1;
     }
 
-    // Create indexer handle
     self->handle = dft_indexer_create(gz_path, idx_path_str, checkpoint_size,
                                       force_rebuild);
     if (!self->handle) {
@@ -153,8 +73,8 @@ static int DFTracerIndexer_init(DFTracerIndexerObject *self, PyObject *args,
     return 0;
 }
 
-static PyObject *DFTracerIndexer_build(DFTracerIndexerObject *self,
-                                       PyObject *Py_UNUSED(ignored)) {
+static PyObject *Indexer_build(IndexerObject *self,
+                               PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Indexer not initialized");
         return NULL;
@@ -169,8 +89,8 @@ static PyObject *DFTracerIndexer_build(DFTracerIndexerObject *self,
     Py_RETURN_NONE;
 }
 
-static PyObject *DFTracerIndexer_need_rebuild(DFTracerIndexerObject *self,
-                                              PyObject *Py_UNUSED(ignored)) {
+static PyObject *Indexer_need_rebuild(IndexerObject *self,
+                                      PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Indexer not initialized");
         return NULL;
@@ -180,8 +100,8 @@ static PyObject *DFTracerIndexer_need_rebuild(DFTracerIndexerObject *self,
     return PyBool_FromLong(result);
 }
 
-static PyObject *DFTracerIndexer_exists(DFTracerIndexerObject *self,
-                                        PyObject *Py_UNUSED(ignored)) {
+static PyObject *Indexer_exists(IndexerObject *self,
+                                PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Indexer not initialized");
         return NULL;
@@ -191,8 +111,8 @@ static PyObject *DFTracerIndexer_exists(DFTracerIndexerObject *self,
     return PyBool_FromLong(result);
 }
 
-static PyObject *DFTracerIndexer_get_max_bytes(DFTracerIndexerObject *self,
-                                               PyObject *Py_UNUSED(ignored)) {
+static PyObject *Indexer_get_max_bytes(IndexerObject *self,
+                                       PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Indexer not initialized");
         return NULL;
@@ -202,8 +122,8 @@ static PyObject *DFTracerIndexer_get_max_bytes(DFTracerIndexerObject *self,
     return PyLong_FromUnsignedLongLong(result);
 }
 
-static PyObject *DFTracerIndexer_get_num_lines(DFTracerIndexerObject *self,
-                                               PyObject *Py_UNUSED(ignored)) {
+static PyObject *Indexer_get_num_lines(IndexerObject *self,
+                                       PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Indexer not initialized");
         return NULL;
@@ -213,8 +133,7 @@ static PyObject *DFTracerIndexer_get_num_lines(DFTracerIndexerObject *self,
     return PyLong_FromUnsignedLongLong(result);
 }
 
-static PyObject *DFTracerIndexer_find_checkpoint(DFTracerIndexerObject *self,
-                                                 PyObject *args) {
+static PyObject *Indexer_find_checkpoint(IndexerObject *self, PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Indexer not initialized");
         return NULL;
@@ -233,10 +152,10 @@ static PyObject *DFTracerIndexer_find_checkpoint(DFTracerIndexerObject *self,
         Py_RETURN_NONE;
     }
 
-    // Create IndexCheckpoint object
-    IndexCheckpointObject *cp_obj =
-        (IndexCheckpointObject *)IndexCheckpoint_new(&IndexCheckpointType, NULL,
-                                                     NULL);
+    // Create IndexerCheckpoint object
+    IndexerCheckpointObject *cp_obj =
+        (IndexerCheckpointObject *)IndexerCheckpoint_new(&IndexerCheckpointType,
+                                                         NULL, NULL);
     if (!cp_obj) {
         return NULL;
     }
@@ -245,8 +164,8 @@ static PyObject *DFTracerIndexer_find_checkpoint(DFTracerIndexerObject *self,
     return (PyObject *)cp_obj;
 }
 
-static PyObject *DFTracerIndexer_get_checkpoints(DFTracerIndexerObject *self,
-                                                 PyObject *Py_UNUSED(ignored)) {
+static PyObject *Indexer_get_checkpoints(IndexerObject *self,
+                                         PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Indexer not initialized");
         return NULL;
@@ -258,132 +177,128 @@ static PyObject *DFTracerIndexer_get_checkpoints(DFTracerIndexerObject *self,
     int result =
         dft_indexer_get_checkpoints(self->handle, &checkpoints, &count);
     if (result != 0 || !checkpoints) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to get checkpoints");
-        return NULL;
+        dft_indexer_free_checkpoints(checkpoints, count);
+        PyObject *list = PyList_New(0);
+        return list;
     }
 
     PyObject *list = PyList_New(count);
     if (!list) {
-        free(checkpoints);
+        dft_indexer_free_checkpoints(checkpoints, count);
         return NULL;
     }
 
     for (size_t i = 0; i < count; i++) {
-        IndexCheckpointObject *cp_obj =
-            (IndexCheckpointObject *)IndexCheckpoint_new(&IndexCheckpointType,
-                                                         NULL, NULL);
+        IndexerCheckpointObject *cp_obj =
+            (IndexerCheckpointObject *)IndexerCheckpoint_new(
+                &IndexerCheckpointType, NULL, NULL);
         if (!cp_obj) {
             Py_DECREF(list);
-            free(checkpoints);
+            dft_indexer_free_checkpoints(checkpoints, count);
             return NULL;
         }
         cp_obj->checkpoint = checkpoints[i];
         PyList_SetItem(list, i, (PyObject *)cp_obj);
     }
 
-    free(checkpoints);
+    dft_indexer_free_checkpoints(checkpoints, count);
     return list;
 }
 
-static PyObject *DFTracerIndexer_gz_path(DFTracerIndexerObject *self,
-                                         void *closure) {
+static PyObject *Indexer_gz_path(IndexerObject *self, void *closure) {
     Py_INCREF(self->gz_path);
     return self->gz_path;
 }
 
-static PyObject *DFTracerIndexer_idx_path(DFTracerIndexerObject *self,
-                                          void *closure) {
+static PyObject *Indexer_idx_path(IndexerObject *self, void *closure) {
     Py_INCREF(self->idx_path);
     return self->idx_path;
 }
 
-static PyObject *DFTracerIndexer_checkpoint_size(DFTracerIndexerObject *self,
-                                                 void *closure) {
+static PyObject *Indexer_checkpoint_size(IndexerObject *self, void *closure) {
     return PyLong_FromSize_t(self->checkpoint_size);
 }
 
-static PyObject *DFTracerIndexer_enter(DFTracerIndexerObject *self,
-                                       PyObject *Py_UNUSED(ignored)) {
+static PyObject *Indexer_enter(IndexerObject *self,
+                               PyObject *Py_UNUSED(ignored)) {
     Py_INCREF(self);
     return (PyObject *)self;
 }
 
-static PyObject *DFTracerIndexer_exit(DFTracerIndexerObject *self,
-                                      PyObject *args) {
+static PyObject *Indexer_exit(IndexerObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
-static PyMethodDef DFTracerIndexer_methods[] = {
-    {"build", (PyCFunction)DFTracerIndexer_build, METH_NOARGS,
+static PyMethodDef Indexer_methods[] = {
+    {"build", (PyCFunction)Indexer_build, METH_NOARGS,
      "Build or rebuild the index"},
-    {"need_rebuild", (PyCFunction)DFTracerIndexer_need_rebuild, METH_NOARGS,
+    {"need_rebuild", (PyCFunction)Indexer_need_rebuild, METH_NOARGS,
      "Check if a rebuild is needed"},
-    {"exists", (PyCFunction)DFTracerIndexer_exists, METH_NOARGS,
+    {"exists", (PyCFunction)Indexer_exists, METH_NOARGS,
      "Check if the index file exists"},
-    {"get_max_bytes", (PyCFunction)DFTracerIndexer_get_max_bytes, METH_NOARGS,
+    {"get_max_bytes", (PyCFunction)Indexer_get_max_bytes, METH_NOARGS,
      "Get the maximum uncompressed bytes in the indexed file"},
-    {"get_num_lines", (PyCFunction)DFTracerIndexer_get_num_lines, METH_NOARGS,
+    {"get_num_lines", (PyCFunction)Indexer_get_num_lines, METH_NOARGS,
      "Get the total number of lines in the indexed file"},
-    {"find_checkpoint", (PyCFunction)DFTracerIndexer_find_checkpoint,
-     METH_VARARGS, "Find the best checkpoint for a given uncompressed offset"},
-    {"get_checkpoints", (PyCFunction)DFTracerIndexer_get_checkpoints,
-     METH_NOARGS, "Get all checkpoints for this file as a list"},
+    {"find_checkpoint", (PyCFunction)Indexer_find_checkpoint, METH_VARARGS,
+     "Find the best checkpoint for a given uncompressed offset"},
+    {"get_checkpoints", (PyCFunction)Indexer_get_checkpoints, METH_NOARGS,
+     "Get all checkpoints for this file as a list"},
 
-    {"__enter__", (PyCFunction)DFTracerIndexer_enter, METH_NOARGS,
+    {"__enter__", (PyCFunction)Indexer_enter, METH_NOARGS,
      "Enter the runtime context for the with statement"},
-    {"__exit__", (PyCFunction)DFTracerIndexer_exit, METH_VARARGS,
+    {"__exit__", (PyCFunction)Indexer_exit, METH_VARARGS,
      "Exit the runtime context for the with statement"},
     {NULL} /* Sentinel */
 };
 
-static PyGetSetDef DFTracerIndexer_getsetters[] = {
-    {"gz_path", (getter)DFTracerIndexer_gz_path, NULL, "Path to the gzip file",
+static PyGetSetDef Indexer_getsetters[] = {
+    {"gz_path", (getter)Indexer_gz_path, NULL, "Path to the gzip file", NULL},
+    {"idx_path", (getter)Indexer_idx_path, NULL, "Path to the index file",
      NULL},
-    {"idx_path", (getter)DFTracerIndexer_idx_path, NULL,
-     "Path to the index file", NULL},
-    {"checkpoint_size", (getter)DFTracerIndexer_checkpoint_size, NULL,
+    {"checkpoint_size", (getter)Indexer_checkpoint_size, NULL,
      "Checkpoint size in bytes", NULL},
     {NULL} /* Sentinel */
 };
 
-PyTypeObject DFTracerIndexerType = {
-    PyVarObject_HEAD_INIT(NULL, 0) "indexer.DFTracerIndexer", /* tp_name */
-    sizeof(DFTracerIndexerObject),                            /* tp_basicsize */
-    0,                                                        /* tp_itemsize */
-    (destructor)DFTracerIndexer_dealloc,                      /* tp_dealloc */
-    0,                                        /* tp_vectorcall_offset */
-    0,                                        /* tp_getattr */
-    0,                                        /* tp_setattr */
-    0,                                        /* tp_as_async */
-    0,                                        /* tp_repr */
-    0,                                        /* tp_as_number */
-    0,                                        /* tp_as_sequence */
-    0,                                        /* tp_as_mapping */
-    0,                                        /* tp_hash */
-    0,                                        /* tp_call */
-    0,                                        /* tp_str */
-    0,                                        /* tp_getattro */
-    0,                                        /* tp_setattro */
-    0,                                        /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
-    "DFTracerIndexer objects",                /* tp_doc */
-    0,                                        /* tp_traverse */
-    0,                                        /* tp_clear */
-    0,                                        /* tp_richcompare */
-    0,                                        /* tp_weaklistoffset */
-    0,                                        /* tp_iter */
-    0,                                        /* tp_iternext */
-    DFTracerIndexer_methods,                  /* tp_methods */
-    0,                                        /* tp_members */
-    DFTracerIndexer_getsetters,               /* tp_getset */
-    0,                                        /* tp_base */
-    0,                                        /* tp_dict */
-    0,                                        /* tp_descr_get */
-    0,                                        /* tp_descr_set */
-    0,                                        /* tp_dictoffset */
-    (initproc)DFTracerIndexer_init,           /* tp_init */
-    0,                                        /* tp_alloc */
-    DFTracerIndexer_new,                      /* tp_new */
+PyTypeObject IndexerType = {
+    PyVarObject_HEAD_INIT(NULL, 0) "indexer.Indexer", /* tp_name */
+    sizeof(IndexerObject),                            /* tp_basicsize */
+    0,                                                /* tp_itemsize */
+    (destructor)Indexer_dealloc,                      /* tp_dealloc */
+    0,                                                /* tp_vectorcall_offset */
+    0,                                                /* tp_getattr */
+    0,                                                /* tp_setattr */
+    0,                                                /* tp_as_async */
+    0,                                                /* tp_repr */
+    0,                                                /* tp_as_number */
+    0,                                                /* tp_as_sequence */
+    0,                                                /* tp_as_mapping */
+    0,                                                /* tp_hash */
+    0,                                                /* tp_call */
+    0,                                                /* tp_str */
+    0,                                                /* tp_getattro */
+    0,                                                /* tp_setattro */
+    0,                                                /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,         /* tp_flags */
+    "DFTracerIndexer objects",                        /* tp_doc */
+    0,                                                /* tp_traverse */
+    0,                                                /* tp_clear */
+    0,                                                /* tp_richcompare */
+    0,                                                /* tp_weaklistoffset */
+    0,                                                /* tp_iter */
+    0,                                                /* tp_iternext */
+    Indexer_methods,                                  /* tp_methods */
+    0,                                                /* tp_members */
+    Indexer_getsetters,                               /* tp_getset */
+    0,                                                /* tp_base */
+    0,                                                /* tp_dict */
+    0,                                                /* tp_descr_get */
+    0,                                                /* tp_descr_set */
+    0,                                                /* tp_dictoffset */
+    (initproc)Indexer_init,                           /* tp_init */
+    0,                                                /* tp_alloc */
+    Indexer_new,                                      /* tp_new */
 };
 
 // Module definition
@@ -397,25 +312,24 @@ static PyModuleDef indexermodule = {
 PyMODINIT_FUNC PyInit_indexer(void) {
     PyObject *m;
 
-    if (PyType_Ready(&IndexCheckpointType) < 0) return NULL;
+    if (PyType_Ready(&IndexerCheckpointType) < 0) return NULL;
 
-    if (PyType_Ready(&DFTracerIndexerType) < 0) return NULL;
+    if (PyType_Ready(&IndexerType) < 0) return NULL;
 
     m = PyModule_Create(&indexermodule);
     if (m == NULL) return NULL;
 
-    Py_INCREF(&IndexCheckpointType);
-    if (PyModule_AddObject(m, "IndexCheckpoint",
-                           (PyObject *)&IndexCheckpointType) < 0) {
-        Py_DECREF(&IndexCheckpointType);
+    Py_INCREF(&IndexerCheckpointType);
+    if (PyModule_AddObject(m, "IndexerCheckpoint",
+                           (PyObject *)&IndexerCheckpointType) < 0) {
+        Py_DECREF(&IndexerCheckpointType);
         Py_DECREF(m);
         return NULL;
     }
 
-    Py_INCREF(&DFTracerIndexerType);
-    if (PyModule_AddObject(m, "DFTracerIndexer",
-                           (PyObject *)&DFTracerIndexerType) < 0) {
-        Py_DECREF(&DFTracerIndexerType);
+    Py_INCREF(&IndexerType);
+    if (PyModule_AddObject(m, "Indexer", (PyObject *)&IndexerType) < 0) {
+        Py_DECREF(&IndexerType);
         Py_DECREF(m);
         return NULL;
     }

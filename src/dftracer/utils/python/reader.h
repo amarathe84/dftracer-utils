@@ -5,19 +5,16 @@
 #include <dftracer/utils/python/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 
-// Python object wrapper for DFTracerReader
 typedef struct {
     PyObject_HEAD dft_reader_handle_t handle;
     PyObject *gz_path;
     PyObject *idx_path;
     size_t checkpoint_size;
     size_t buffer_size;
-} DFTracerReaderObject;
+} ReaderObject;
 
-// Type objects
-extern PyTypeObject DFTracerReaderType;
+extern PyTypeObject ReaderType;
 
-// Module initialization
 PyMODINIT_FUNC PyInit_reader(void);
 
 #endif

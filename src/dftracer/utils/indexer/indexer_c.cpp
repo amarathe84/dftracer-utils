@@ -35,7 +35,7 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
 }
 
 int dft_indexer_build(dft_indexer_handle_t indexer) {
-    if (validate_handle(indexer)) {
+    if (validate_handle(indexer) < 0) {
         return -1;
     }
 
@@ -63,7 +63,7 @@ int dft_indexer_need_rebuild(dft_indexer_handle_t indexer) {
 }
 
 int dft_indexer_exists(dft_indexer_handle_t indexer) {
-    if (validate_handle(indexer)) {
+    if (validate_handle(indexer) < 0) {
         return -1;
     }
 
@@ -77,7 +77,7 @@ int dft_indexer_exists(dft_indexer_handle_t indexer) {
 }
 
 uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer) {
-    if (validate_handle(indexer)) {
+    if (validate_handle(indexer) < 0) {
         return 0;
     }
 
@@ -90,7 +90,7 @@ uint64_t dft_indexer_get_max_bytes(dft_indexer_handle_t indexer) {
 }
 
 uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
-    if (validate_handle(indexer)) {
+    if (validate_handle(indexer) < 0) {
         return 0;
     }
 
@@ -104,7 +104,7 @@ uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
 
 int dft_indexer_find_file_id(dft_indexer_handle_t indexer,
                              const char *gz_path) {
-    if (validate_handle(indexer) || !gz_path) {
+    if (validate_handle(indexer) < 0 || !gz_path) {
         return -1;
     }
 
@@ -119,7 +119,7 @@ int dft_indexer_find_file_id(dft_indexer_handle_t indexer,
 int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
                                 size_t target_offset,
                                 dft_indexer_checkpoint_t *checkpoint) {
-    if (validate_handle(indexer) || !checkpoint) {
+    if (validate_handle(indexer) < 0 || !checkpoint) {
         return -1;
     }
 
@@ -153,7 +153,7 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
 int dft_indexer_get_checkpoints(dft_indexer_handle_t indexer,
                                 dft_indexer_checkpoint_t **checkpoints,
                                 size_t *count) {
-    if (validate_handle(indexer) || !count || !checkpoints) {
+    if (validate_handle(indexer) < 0) {
         return -1;
     }
 

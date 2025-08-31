@@ -2,35 +2,35 @@ from typing import Optional, Literal, Union
 
 from .dftracer_utils_ext import (
     # Core classes
-    DFTracerReader,  # noqa: F401
-    DFTracerIndexer,  # noqa: F401
-    IndexCheckpoint,  # noqa: F401
+    Reader,  # noqa: F401
+    Indexer,  # noqa: F401
+    IndexerCheckpoint,  # noqa: F401
 )
 
 def dft_reader(
-    gzip_path_or_indexer: Union[str, DFTracerIndexer], 
+    gzip_path_or_indexer: Union[str, Indexer], 
     index_path: Optional[str] = None
 ):
-    """Create a DFTracer reader.
+    """Create a  reader.
     
     Args:
-        gzip_path_or_indexer: Either a path to gzip file or a DFTracerIndexer instance
+        gzip_path_or_indexer: Either a path to gzip file or a Indexer instance
         index_path: Path to index file (ignored if indexer is provided)
         
     Returns:
-        DFTracerReader instance
+        Reader instance
     """
-    if isinstance(gzip_path_or_indexer, DFTracerIndexer):
+    if isinstance(gzip_path_or_indexer, Indexer):
         # Create reader from indexer
-        return DFTracerReader(gzip_path_or_indexer.gz_path, indexer=gzip_path_or_indexer)
+        return Reader(gzip_path_or_indexer.gz_path, indexer=gzip_path_or_indexer)
     else:
         # Create reader from paths
-        return DFTracerReader(gzip_path_or_indexer, index_path)
+        return Reader(gzip_path_or_indexer, index_path)
 
 __version__ = "1.0.0"
 __all__ = [
-    "DFTracerReader",
-    "DFTracerIndexer",
-    "IndexCheckpoint",
+    "Reader",
+    "Indexer",
+    "IndexerCheckpoint",
     "dft_reader",
 ]

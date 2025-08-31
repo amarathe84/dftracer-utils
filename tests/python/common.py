@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Common test utilities for DFTracer Python bindings tests
+Common test utilities for  Python bindings tests
 """
 
 import pytest
@@ -13,7 +13,7 @@ import dftracer.utils as dft_utils
 
 
 class Environment:
-    """Shared test environment manager for DFTracer tests"""
+    """Shared test environment manager for  tests"""
     
     def __init__(self, lines=100):
         self.lines = lines
@@ -170,7 +170,7 @@ class Environment:
         
         try:
             # Use the indexer API
-            indexer = dft_utils.DFTracerIndexer(gz_file_path, idx_file, checkpoint_size_bytes)
+            indexer = dft_utils.Indexer(gz_file_path, idx_file, checkpoint_size_bytes)
             if indexer.need_rebuild():
                 indexer.build()
             
@@ -186,7 +186,7 @@ class Environment:
             checkpoint_size_bytes = 32 * 1024 * 1024  # 32MB default
             
         try:
-            indexer = dft_utils.DFTracerIndexer(gz_file_path, checkpoint_size=checkpoint_size_bytes)
+            indexer = dft_utils.Indexer(gz_file_path, checkpoint_size=checkpoint_size_bytes)
             if indexer.need_rebuild():
                 indexer.build()
             return indexer

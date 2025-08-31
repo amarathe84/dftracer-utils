@@ -291,6 +291,8 @@ if (Python_FOUND)
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/dftracer_utils_ext.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer_checkpoint.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer_checkpoint.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/reader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/reader.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json.h

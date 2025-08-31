@@ -19,8 +19,8 @@ class PyLazyJSONLineProcessor : public dftracer::utils::LineProcessor {
     bool process(const char* data, std::size_t length) override {
         if (!result_list) return false;
 
-        // Create DFTracerJSON directly from raw data without string conversion
-        PyObject* json_obj = DFTracerJSON_from_data(data, length);
+        // Create JSON directly from raw data without string conversion
+        PyObject* json_obj = JSON_from_data(data, length);
         if (!json_obj) return false;
 
         int result = PyList_Append(result_list, json_obj);

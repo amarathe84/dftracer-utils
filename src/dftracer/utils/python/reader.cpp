@@ -9,7 +9,7 @@
 
 #include <cstring>
 
-static void DFTracerReader_dealloc(DFTracerReaderObject *self) {
+static void Reader_dealloc(ReaderObject *self) {
     if (self->handle) {
         dft_reader_destroy(self->handle);
     }
@@ -18,10 +18,10 @@ static void DFTracerReader_dealloc(DFTracerReaderObject *self) {
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-static PyObject *DFTracerReader_new(PyTypeObject *type, PyObject *args,
-                                    PyObject *kwds) {
-    DFTracerReaderObject *self;
-    self = (DFTracerReaderObject *)type->tp_alloc(type, 0);
+static PyObject *Reader_new(PyTypeObject *type, PyObject *args,
+                            PyObject *kwds) {
+    ReaderObject *self;
+    self = (ReaderObject *)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->handle = NULL;
         self->gz_path = NULL;
@@ -32,14 +32,13 @@ static PyObject *DFTracerReader_new(PyTypeObject *type, PyObject *args,
     return (PyObject *)self;
 }
 
-static int DFTracerReader_init(DFTracerReaderObject *self, PyObject *args,
-                               PyObject *kwds) {
+static int Reader_init(ReaderObject *self, PyObject *args, PyObject *kwds) {
     static const char *kwlist[] = {"gz_path", "idx_path", "checkpoint_size",
                                    "indexer", NULL};
     const char *gz_path;
     const char *idx_path = NULL;
     size_t checkpoint_size = 1024 * 1024;
-    DFTracerIndexerObject *indexer = NULL;
+    IndexerObject *indexer = NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|snO", (char **)kwlist,
                                      &gz_path, &idx_path, &checkpoint_size,
@@ -86,8 +85,8 @@ static int DFTracerReader_init(DFTracerReaderObject *self, PyObject *args,
     return 0;
 }
 
-static PyObject *DFTracerReader_get_max_bytes(DFTracerReaderObject *self,
-                                              PyObject *Py_UNUSED(ignored)) {
+static PyObject *Reader_get_max_bytes(ReaderObject *self,
+                                      PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -103,8 +102,8 @@ static PyObject *DFTracerReader_get_max_bytes(DFTracerReaderObject *self,
     return PyLong_FromSize_t(max_bytes);
 }
 
-static PyObject *DFTracerReader_get_num_lines(DFTracerReaderObject *self,
-                                              PyObject *Py_UNUSED(ignored)) {
+static PyObject *Reader_get_num_lines(ReaderObject *self,
+                                      PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -120,8 +119,8 @@ static PyObject *DFTracerReader_get_num_lines(DFTracerReaderObject *self,
     return PyLong_FromSize_t(num_lines);
 }
 
-static PyObject *DFTracerReader_reset(DFTracerReaderObject *self,
-                                      PyObject *Py_UNUSED(ignored)) {
+static PyObject *Reader_reset(ReaderObject *self,
+                              PyObject *Py_UNUSED(ignored)) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -131,8 +130,7 @@ static PyObject *DFTracerReader_reset(DFTracerReaderObject *self,
     Py_RETURN_NONE;
 }
 
-static PyObject *DFTracerReader_read_into_buffer(DFTracerReaderObject *self,
-                                                 PyObject *args) {
+static PyObject *Reader_read_into_buffer(ReaderObject *self, PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -164,8 +162,8 @@ static PyObject *DFTracerReader_read_into_buffer(DFTracerReaderObject *self,
     return PyLong_FromLong(bytes_read);
 }
 
-static PyObject *DFTracerReader_read_line_bytes_into_buffer(
-    DFTracerReaderObject *self, PyObject *args) {
+static PyObject *Reader_read_line_bytes_into_buffer(ReaderObject *self,
+                                                    PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -197,8 +195,8 @@ static PyObject *DFTracerReader_read_line_bytes_into_buffer(
     return PyLong_FromLong(bytes_read);
 }
 
-static PyObject *DFTracerReader_read_lines_into_buffer(
-    DFTracerReaderObject *self, PyObject *args) {
+static PyObject *Reader_read_lines_into_buffer(ReaderObject *self,
+                                               PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -232,8 +230,7 @@ static PyObject *DFTracerReader_read_lines_into_buffer(
     return PyLong_FromSize_t(bytes_written);
 }
 
-static PyObject *DFTracerReader_read(DFTracerReaderObject *self,
-                                     PyObject *args) {
+static PyObject *Reader_read(ReaderObject *self, PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -284,8 +281,7 @@ static PyObject *DFTracerReader_read(DFTracerReaderObject *self,
     return result;
 }
 
-static PyObject *DFTracerReader_read_lines(DFTracerReaderObject *self,
-                                           PyObject *args) {
+static PyObject *Reader_read_lines(ReaderObject *self, PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -318,8 +314,7 @@ static PyObject *DFTracerReader_read_lines(DFTracerReaderObject *self,
     }
 }
 
-static PyObject *DFTracerReader_read_line_bytes(DFTracerReaderObject *self,
-                                                PyObject *args) {
+static PyObject *Reader_read_line_bytes(ReaderObject *self, PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -343,8 +338,8 @@ static PyObject *DFTracerReader_read_line_bytes(DFTracerReaderObject *self,
     }
 }
 
-static PyObject *DFTracerReader_read_line_bytes_json(DFTracerReaderObject *self,
-                                                     PyObject *args) {
+static PyObject *Reader_read_line_bytes_json(ReaderObject *self,
+                                             PyObject *args) {
     if (!self->handle) {
         PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
         return NULL;
@@ -368,41 +363,69 @@ static PyObject *DFTracerReader_read_line_bytes_json(DFTracerReaderObject *self,
     }
 }
 
-static PyObject *DFTracerReader_gz_path(DFTracerReaderObject *self,
-                                        void *closure) {
+static PyObject *Reader_read_lines_json(ReaderObject *self, PyObject *args) {
+    if (!self->handle) {
+        PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
+        return NULL;
+    }
+
+    size_t start_line, end_line;
+    if (!PyArg_ParseTuple(args, "nn", &start_line, &end_line)) {
+        return NULL;
+    }
+
+    if (start_line < 1) {
+        PyErr_SetString(PyExc_ValueError,
+                        "start_line must be >= 1 (1-based indexing)");
+        return NULL;
+    }
+    if (end_line < start_line) {
+        PyErr_SetString(PyExc_ValueError, "end_line must be >= start_line");
+        return NULL;
+    }
+
+    try {
+        PyLazyJSONLineProcessor processor;
+        dftracer::utils::Reader *cpp_reader =
+            static_cast<dftracer::utils::Reader *>(self->handle);
+        cpp_reader->read_lines_with_processor(start_line, end_line, processor);
+        return processor.get_result();
+    } catch (const std::exception &e) {
+        PyErr_SetString(PyExc_RuntimeError, e.what());
+        return NULL;
+    }
+}
+
+static PyObject *Reader_gz_path(ReaderObject *self, void *closure) {
     Py_INCREF(self->gz_path);
     return self->gz_path;
 }
 
-static PyObject *DFTracerReader_idx_path(DFTracerReaderObject *self,
-                                         void *closure) {
+static PyObject *Reader_idx_path(ReaderObject *self, void *closure) {
     Py_INCREF(self->idx_path);
     return self->idx_path;
 }
 
-static PyObject *DFTracerReader_checkpoint_size(DFTracerReaderObject *self,
-                                                void *closure) {
+static PyObject *Reader_checkpoint_size(ReaderObject *self, void *closure) {
     return PyLong_FromSize_t(self->checkpoint_size);
 }
 
-static PyObject *DFTracerReader_buffer_size(DFTracerReaderObject *self,
-                                            void *closure) {
+static PyObject *Reader_buffer_size(ReaderObject *self, void *closure) {
     return PyLong_FromSize_t(self->buffer_size);
 }
 
-static PyObject *DFTracerReader_enter(DFTracerReaderObject *self,
-                                      PyObject *Py_UNUSED(ignored)) {
+static PyObject *Reader_enter(ReaderObject *self,
+                              PyObject *Py_UNUSED(ignored)) {
     Py_INCREF(self);
     return (PyObject *)self;
 }
 
-static PyObject *DFTracerReader_exit(DFTracerReaderObject *self,
-                                     PyObject *args) {
+static PyObject *Reader_exit(ReaderObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
-static int DFTracerReader_set_buffer_size(DFTracerReaderObject *self,
-                                          PyObject *value, void *closure) {
+static int Reader_set_buffer_size(ReaderObject *self, PyObject *value,
+                                  void *closure) {
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete buffer_size attribute");
         return -1;
@@ -427,82 +450,80 @@ static int DFTracerReader_set_buffer_size(DFTracerReaderObject *self,
     return 0;
 }
 
-static PyMethodDef DFTracerReader_methods[] = {
-    {"get_max_bytes", (PyCFunction)DFTracerReader_get_max_bytes, METH_NOARGS,
+static PyMethodDef Reader_methods[] = {
+    {"get_max_bytes", (PyCFunction)Reader_get_max_bytes, METH_NOARGS,
      "Get the maximum byte position available in the file"},
-    {"get_num_lines", (PyCFunction)DFTracerReader_get_num_lines, METH_NOARGS,
+    {"get_num_lines", (PyCFunction)Reader_get_num_lines, METH_NOARGS,
      "Get the total number of lines in the file"},
-    {"reset", (PyCFunction)DFTracerReader_reset, METH_NOARGS,
+    {"reset", (PyCFunction)Reader_reset, METH_NOARGS,
      "Reset the reader to initial state"},
 
-    {"read", (PyCFunction)DFTracerReader_read, METH_VARARGS,
+    {"read", (PyCFunction)Reader_read, METH_VARARGS,
      "Read raw bytes and return as bytes (start_bytes, end_bytes)"},
-    {"read_lines", (PyCFunction)DFTracerReader_read_lines, METH_VARARGS,
+    {"read_lines", (PyCFunction)Reader_read_lines, METH_VARARGS,
      "Read lines and return as list[str] (start_line, end_line)"},
-    {"read_line_bytes", (PyCFunction)DFTracerReader_read_line_bytes,
-     METH_VARARGS,
+    {"read_line_bytes", (PyCFunction)Reader_read_line_bytes, METH_VARARGS,
      "Read line bytes and return as list[str] (start_bytes, end_bytes)"},
-    {"read_line_bytes_json", (PyCFunction)DFTracerReader_read_line_bytes_json,
+    {"read_line_bytes_json", (PyCFunction)Reader_read_line_bytes_json,
      METH_VARARGS,
-     "Read line bytes and return as list[DFTracerJSON] (start_bytes, "
+     "Read line bytes and return as list[JSON] (start_bytes, "
      "end_bytes)"},
+    {"read_lines_json", (PyCFunction)Reader_read_lines_json, METH_VARARGS,
+     "Read lines and return as list[JSON] (start_line, end_line)"},
 
-    {"__enter__", (PyCFunction)DFTracerReader_enter, METH_NOARGS,
+    {"__enter__", (PyCFunction)Reader_enter, METH_NOARGS,
      "Enter the runtime context for the with statement"},
-    {"__exit__", (PyCFunction)DFTracerReader_exit, METH_VARARGS,
+    {"__exit__", (PyCFunction)Reader_exit, METH_VARARGS,
      "Exit the runtime context for the with statement"},
     {NULL}};
 
-static PyGetSetDef DFTracerReader_getsetters[] = {
-    {"gz_path", (getter)DFTracerReader_gz_path, NULL, "Path to the gzip file",
-     NULL},
-    {"idx_path", (getter)DFTracerReader_idx_path, NULL,
-     "Path to the index file", NULL},
-    {"checkpoint_size", (getter)DFTracerReader_checkpoint_size, NULL,
+static PyGetSetDef Reader_getsetters[] = {
+    {"gz_path", (getter)Reader_gz_path, NULL, "Path to the gzip file", NULL},
+    {"idx_path", (getter)Reader_idx_path, NULL, "Path to the index file", NULL},
+    {"checkpoint_size", (getter)Reader_checkpoint_size, NULL,
      "Checkpoint size in bytes", NULL},
-    {"buffer_size", (getter)DFTracerReader_buffer_size,
-     (setter)DFTracerReader_set_buffer_size,
+    {"buffer_size", (getter)Reader_buffer_size, (setter)Reader_set_buffer_size,
      "Internal buffer size for read operations", NULL},
     {NULL}};
 
-PyTypeObject DFTracerReaderType = {
-    PyVarObject_HEAD_INIT(NULL, 0) "reader.DFTracerReader", /* tp_name */
-    sizeof(DFTracerReaderObject),                           /* tp_basicsize */
-    0,                                                      /* tp_itemsize */
-    (destructor)DFTracerReader_dealloc,                     /* tp_dealloc */
-    0,                                        /* tp_vectorcall_offset */
-    0,                                        /* tp_getattr */
-    0,                                        /* tp_setattr */
-    0,                                        /* tp_as_async */
-    0,                                        /* tp_repr */
-    0,                                        /* tp_as_number */
-    0,                                        /* tp_as_sequence */
-    0,                                        /* tp_as_mapping */
-    0,                                        /* tp_hash */
-    0,                                        /* tp_call */
-    0,                                        /* tp_str */
-    0,                                        /* tp_getattro */
-    0,                                        /* tp_setattro */
-    0,                                        /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
-    "DFTracerReader objects with zero-copy buffer operations", /* tp_doc */
-    0,                                                         /* tp_traverse */
-    0,                                                         /* tp_clear */
-    0,                             /* tp_richcompare */
-    0,                             /* tp_weaklistoffset */
-    0,                             /* tp_iter */
-    0,                             /* tp_iternext */
-    DFTracerReader_methods,        /* tp_methods */
-    0,                             /* tp_members */
-    DFTracerReader_getsetters,     /* tp_getset */
-    0,                             /* tp_base */
-    0,                             /* tp_dict */
-    0,                             /* tp_descr_get */
-    0,                             /* tp_descr_set */
-    0,                             /* tp_dictoffset */
-    (initproc)DFTracerReader_init, /* tp_init */
-    0,                             /* tp_alloc */
-    DFTracerReader_new,            /* tp_new */
+PyTypeObject ReaderType = {
+    PyVarObject_HEAD_INIT(NULL, 0) "reader.Reader", /* tp_name */
+    sizeof(ReaderObject),                           /* tp_basicsize */
+    0,                                              /* tp_itemsize */
+    (destructor)Reader_dealloc,                     /* tp_dealloc */
+    0,                                              /* tp_vectorcall_offset */
+    0,                                              /* tp_getattr */
+    0,                                              /* tp_setattr */
+    0,                                              /* tp_as_async */
+    0,                                              /* tp_repr */
+    0,                                              /* tp_as_number */
+    0,                                              /* tp_as_sequence */
+    0,                                              /* tp_as_mapping */
+    0,                                              /* tp_hash */
+    0,                                              /* tp_call */
+    0,                                              /* tp_str */
+    0,                                              /* tp_getattro */
+    0,                                              /* tp_setattro */
+    0,                                              /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
+    "Reader objects with zero-copy buffer operations", /* tp_doc */
+    0,                                                 /* tp_traverse */
+    0,                                                 /* tp_clear */
+    0,                                                 /* tp_richcompare */
+    0,                                                 /* tp_weaklistoffset */
+    0,                                                 /* tp_iter */
+    0,                                                 /* tp_iternext */
+    Reader_methods,                                    /* tp_methods */
+    0,                                                 /* tp_members */
+    Reader_getsetters,                                 /* tp_getset */
+    0,                                                 /* tp_base */
+    0,                                                 /* tp_dict */
+    0,                                                 /* tp_descr_get */
+    0,                                                 /* tp_descr_set */
+    0,                                                 /* tp_dictoffset */
+    (initproc)Reader_init,                             /* tp_init */
+    0,                                                 /* tp_alloc */
+    Reader_new,                                        /* tp_new */
 };
 
 static PyObject *reader_create_buffer(PyObject *self, PyObject *args) {
@@ -522,7 +543,7 @@ static PyMethodDef reader_module_methods[] = {
 static PyModuleDef readermodule = {
     PyModuleDef_HEAD_INIT,
     .m_name = "reader",
-    .m_doc = "DFTracer reader module with zero-copy buffer operations",
+    .m_doc = " reader module with zero-copy buffer operations",
     .m_size = -1,
     .m_methods = reader_module_methods,
 };
@@ -530,15 +551,14 @@ static PyModuleDef readermodule = {
 PyMODINIT_FUNC PyInit_reader(void) {
     PyObject *m;
 
-    if (PyType_Ready(&DFTracerReaderType) < 0) return NULL;
+    if (PyType_Ready(&ReaderType) < 0) return NULL;
 
     m = PyModule_Create(&readermodule);
     if (m == NULL) return NULL;
 
-    Py_INCREF(&DFTracerReaderType);
-    if (PyModule_AddObject(m, "DFTracerReader",
-                           (PyObject *)&DFTracerReaderType) < 0) {
-        Py_DECREF(&DFTracerReaderType);
+    Py_INCREF(&ReaderType);
+    if (PyModule_AddObject(m, "Reader", (PyObject *)&ReaderType) < 0) {
+        Py_DECREF(&ReaderType);
         Py_DECREF(m);
         return NULL;
     }
