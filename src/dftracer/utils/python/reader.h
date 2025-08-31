@@ -15,6 +15,6 @@ typedef struct {
 
 extern PyTypeObject ReaderType;
 
-PyMODINIT_FUNC PyInit_reader(void);
+int init_reader(PyObject *m);
 
 #endif

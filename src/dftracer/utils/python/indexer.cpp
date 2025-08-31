@@ -301,38 +301,15 @@ PyTypeObject IndexerType = {
     Indexer_new,                                      /* tp_new */
 };
 
-// Module definition
-static PyModuleDef indexermodule = {
-    PyModuleDef_HEAD_INIT,
-    .m_name = "indexer",
-    .m_doc = "DFTracer indexer module",
-    .m_size = -1,
-};
-
-PyMODINIT_FUNC PyInit_indexer(void) {
-    PyObject *m;
-
-    if (PyType_Ready(&IndexerCheckpointType) < 0) return NULL;
-
-    if (PyType_Ready(&IndexerType) < 0) return NULL;
-
-    m = PyModule_Create(&indexermodule);
-    if (m == NULL) return NULL;
-
-    Py_INCREF(&IndexerCheckpointType);
-    if (PyModule_AddObject(m, "IndexerCheckpoint",
-                           (PyObject *)&IndexerCheckpointType) < 0) {
-        Py_DECREF(&IndexerCheckpointType);
-        Py_DECREF(m);
-        return NULL;
-    }
+int init_indexer(PyObject *m) {
+    if (PyType_Ready(&IndexerType) < 0) return -1;
 
     Py_INCREF(&IndexerType);
     if (PyModule_AddObject(m, "Indexer", (PyObject *)&IndexerType) < 0) {
         Py_DECREF(&IndexerType);
         Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
-    return m;
+    return 0;
 }

@@ -20,6 +20,8 @@ extern PyMethodDef JSON_methods[];
 extern PySequenceMethods JSON_as_sequence;
 extern PyMappingMethods JSON_as_mapping;
 
+int init_json(PyObject* m);
+
 PyObject* JSON_from_data(const char* data, size_t length);
 
 #endif  // DFTRACER_UTILS_PYTHON_JSON_H

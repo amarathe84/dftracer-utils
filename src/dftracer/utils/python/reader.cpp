@@ -526,42 +526,15 @@ PyTypeObject ReaderType = {
     Reader_new,                                        /* tp_new */
 };
 
-static PyObject *reader_create_buffer(PyObject *self, PyObject *args) {
-    size_t size;
-    if (!PyArg_ParseTuple(args, "n", &size)) {
-        return NULL;
-    }
-
-    return PyByteArray_FromStringAndSize(NULL, size);
-}
-
-static PyMethodDef reader_module_methods[] = {
-    {"create_buffer", reader_create_buffer, METH_VARARGS,
-     "Create a writable buffer of specified size for zero-copy operations"},
-    {NULL}};
-
-static PyModuleDef readermodule = {
-    PyModuleDef_HEAD_INIT,
-    .m_name = "reader",
-    .m_doc = " reader module with zero-copy buffer operations",
-    .m_size = -1,
-    .m_methods = reader_module_methods,
-};
-
-PyMODINIT_FUNC PyInit_reader(void) {
-    PyObject *m;
-
-    if (PyType_Ready(&ReaderType) < 0) return NULL;
-
-    m = PyModule_Create(&readermodule);
-    if (m == NULL) return NULL;
+int init_reader(PyObject *m) {
+    if (PyType_Ready(&ReaderType) < 0) return -1;
 
     Py_INCREF(&ReaderType);
     if (PyModule_AddObject(m, "Reader", (PyObject *)&ReaderType) < 0) {
         Py_DECREF(&ReaderType);
         Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
-    return m;
+    return 0;
 }

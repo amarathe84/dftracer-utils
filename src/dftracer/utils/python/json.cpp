@@ -11,8 +11,6 @@ static void JSON_dealloc(JSONObject* self) {
 }
 
 static PyObject* JSON_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
-    // This won't be used for JSON_from_data, but needed for regular
-    // construction
     JSONObject* self;
     self = (JSONObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
@@ -29,9 +27,6 @@ static int JSON_init(JSONObject* self, PyObject* args, PyObject* kwds) {
         return -1;
     }
 
-    // For regular init, we can't use flexible array - would need to recreate
-    // object This is a limitation, but JSON_from_data is the optimized
-    // path
     self->json_length = strlen(json_str);
     if (self->json_length > 0) {
         std::memcpy(self->json_data, json_str, self->json_length);
@@ -102,6 +97,8 @@ static PyObject* yyjson_val_to_python(yyjson_val* val) {
         } else {
             Py_RETURN_FALSE;
         }
+    } else if (yyjson_is_uint(val)) {
+        return PyLong_FromUnsignedLongLong(yyjson_get_uint(val));
     } else if (yyjson_is_int(val)) {
         return PyLong_FromLongLong(yyjson_get_int(val));
     } else if (yyjson_is_real(val)) {
@@ -337,51 +334,34 @@ PyTypeObject JSONType = {
     JSON_new,                                   /* tp_new */
 };
 
-static PyModuleDef jsonmodule = {
-    PyModuleDef_HEAD_INIT,
-    .m_name = "json",
-    .m_doc = "Lazy JSON parsing module using yyjson",
-    .m_size = -1,
-};
-
-PyMODINIT_FUNC PyInit_json(void) {
-    PyObject* m;
-
-    if (PyType_Ready(&JSONType) < 0) return NULL;
-
-    m = PyModule_Create(&jsonmodule);
-    if (m == NULL) return NULL;
+int init_json(PyObject* m) {
+    if (PyType_Ready(&JSONType) < 0) return -1;
 
     Py_INCREF(&JSONType);
     if (PyModule_AddObject(m, "JSON", (PyObject*)&JSONType) < 0) {
         Py_DECREF(&JSONType);
         Py_DECREF(m);
-        return NULL;
+        return -1;
     }
 
-    return m;
+    return 0;
 }
 
 PyObject* JSON_from_data(const char* data, size_t length) {
-    // Allocate object with extra space for the JSON data
-    JSONObject* self = (JSONObject*)PyObject_MALLOC(
-        sizeof(JSONObject) + length + 1  // +1 for null terminator
-    );
+    JSONObject* self =
+        (JSONObject*)PyObject_MALLOC(sizeof(JSONObject) + length + 1);
     if (!self) {
         return PyErr_NoMemory();
     }
 
-    // Initialize Python object
     PyObject_INIT(self, &JSONType);
 
-    // Initialize fields
     self->doc = nullptr;
     self->parsed = false;
     self->json_length = length;
 
-    // Copy data directly into the object
     std::memcpy(self->json_data, data, length);
-    self->json_data[length] = '\0';  // Null terminate for safety
+    self->json_data[length] = '\0';
 
     return (PyObject*)self;
 }

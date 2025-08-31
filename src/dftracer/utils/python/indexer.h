@@ -12,6 +12,6 @@ typedef struct {
 
 extern PyTypeObject IndexerType;
 
-PyMODINIT_FUNC PyInit_indexer(void);
+int init_indexer(PyObject *m);
 
 #endif

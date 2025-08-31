@@ -13,4 +13,6 @@ PyObject *IndexerCheckpoint_new(PyTypeObject *type, PyObject *args,
 
 extern PyTypeObject IndexerCheckpointType;
 
+int init_indexer_checkpoint(PyObject *m);
+
 #endif  // DFTRACER_UTILS_PYTHON_INDEXER_CHECKPOINT_H

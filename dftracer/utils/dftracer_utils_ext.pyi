@@ -1,10 +1,10 @@
 """Type stubs for dftracer_utils_ext module."""
 
-from typing import Optional, List, Any, Iterator
+from typing import Optional, List, Any
 
 # ========== INDEXER ==========
 
-class IndexCheckpoint:
+class IndexerCheckpoint:
     """Information about a checkpoint in the index."""
     checkpoint_idx: int
     uc_offset: int
@@ -47,11 +47,11 @@ class Indexer:
         """Get number of lines."""
         ...
 
-    def get_checkpoints(self) -> List[IndexCheckpoint]:
+    def get_checkpoints(self) -> List[IndexerCheckpoint]:
         """Get all checkpoints."""
         ...
 
-    def find_checkpoint(self, target_offset: int) -> Optional[IndexCheckpoint]:
+    def find_checkpoint(self, target_offset: int) -> Optional[IndexerCheckpoint]:
         """Find checkpoint for target offset."""
         ...
     

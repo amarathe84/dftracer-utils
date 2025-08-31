@@ -104,3 +104,17 @@ PyTypeObject IndexerCheckpointType = {
     0,                               /* tp_alloc */
     IndexerCheckpoint_new,           /* tp_new */
 };
+
+int init_indexer_checkpoint(PyObject *m) {
+    if (PyType_Ready(&IndexerCheckpointType) < 0) return -1;
+
+    Py_INCREF(&IndexerCheckpointType);
+    if (PyModule_AddObject(m, "IndexerCheckpoint",
+                           (PyObject *)&IndexerCheckpointType) < 0) {
+        Py_DECREF(&IndexerCheckpointType);
+        Py_DECREF(m);
+        return -1;
+    }
+
+    return 0;
+}
