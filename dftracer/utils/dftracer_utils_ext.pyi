@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Dict, Any
 
-# ========== INDEXER FUNCTIONALITY ==========
+# ========== INDEXER ==========
 
 class IndexCheckpoint:
     """Information about a checkpoint in the index."""
@@ -69,8 +69,16 @@ class DFTracerIndexer:
     def checkpoint_size(self) -> int:
         """Get checkpoint size."""
         ...
+    
+    def __enter__(self) -> 'DFTracerIndexer':
+        """Enter the runtime context for the with statement."""
+        ...
+    
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the runtime context for the with statement."""
+        ...
 
-# ========== READER FUNCTIONALITY ==========
+# ========== READER ==========
 
 class DFTracerReader:
     """DFTracer reader for reading from gzip files with zero-copy operations."""
@@ -140,4 +148,12 @@ class DFTracerReader:
     @buffer_size.setter
     def buffer_size(self, size: int) -> None:
         """Set internal buffer size for read operations."""
+        ...
+    
+    def __enter__(self) -> 'DFTracerReader':
+        """Enter the runtime context for the with statement."""
+        ...
+    
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the runtime context for the with statement."""
         ...

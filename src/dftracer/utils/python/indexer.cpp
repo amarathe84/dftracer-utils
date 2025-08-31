@@ -302,6 +302,17 @@ static PyObject *DFTracerIndexer_checkpoint_size(DFTracerIndexerObject *self,
     return PyLong_FromSize_t(self->checkpoint_size);
 }
 
+static PyObject *DFTracerIndexer_enter(DFTracerIndexerObject *self,
+                                       PyObject *Py_UNUSED(ignored)) {
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *DFTracerIndexer_exit(DFTracerIndexerObject *self,
+                                      PyObject *args) {
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef DFTracerIndexer_methods[] = {
     {"build", (PyCFunction)DFTracerIndexer_build, METH_NOARGS,
      "Build or rebuild the index"},
@@ -317,6 +328,11 @@ static PyMethodDef DFTracerIndexer_methods[] = {
      METH_VARARGS, "Find the best checkpoint for a given uncompressed offset"},
     {"get_checkpoints", (PyCFunction)DFTracerIndexer_get_checkpoints,
      METH_NOARGS, "Get all checkpoints for this file as a list"},
+
+    {"__enter__", (PyCFunction)DFTracerIndexer_enter, METH_NOARGS,
+     "Enter the runtime context for the with statement"},
+    {"__exit__", (PyCFunction)DFTracerIndexer_exit, METH_VARARGS,
+     "Exit the runtime context for the with statement"},
     {NULL} /* Sentinel */
 };
 

@@ -390,6 +390,17 @@ static PyObject *DFTracerReader_buffer_size(DFTracerReaderObject *self,
     return PyLong_FromSize_t(self->buffer_size);
 }
 
+static PyObject *DFTracerReader_enter(DFTracerReaderObject *self,
+                                      PyObject *Py_UNUSED(ignored)) {
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *DFTracerReader_exit(DFTracerReaderObject *self,
+                                     PyObject *args) {
+    Py_RETURN_NONE;
+}
+
 static int DFTracerReader_set_buffer_size(DFTracerReaderObject *self,
                                           PyObject *value, void *closure) {
     if (value == NULL) {
@@ -435,6 +446,11 @@ static PyMethodDef DFTracerReader_methods[] = {
      METH_VARARGS,
      "Read line bytes and return as list[DFTracerJSON] (start_bytes, "
      "end_bytes)"},
+
+    {"__enter__", (PyCFunction)DFTracerReader_enter, METH_NOARGS,
+     "Enter the runtime context for the with statement"},
+    {"__exit__", (PyCFunction)DFTracerReader_exit, METH_VARARGS,
+     "Exit the runtime context for the with statement"},
     {NULL}};
 
 static PyGetSetDef DFTracerReader_getsetters[] = {
