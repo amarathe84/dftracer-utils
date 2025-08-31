@@ -15,7 +15,7 @@ struct Checkpointer {
     std::size_t c_offset;
     int bits;
     Inflater &inflater;
-    alignas(64) unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
+    unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
 
     Checkpointer(Inflater &in, std::size_t uc_offset_ = 0)
         : uc_offset(uc_offset_), c_offset(0), bits(0), inflater(in) {

@@ -23,8 +23,8 @@ class Inflater {
 
     // Core stream and buffer access
     z_stream stream;
-    alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char out_buffer[BUFFER_SIZE];
-    alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char in_buffer[BUFFER_SIZE];
+    unsigned char out_buffer[BUFFER_SIZE];
+    unsigned char in_buffer[BUFFER_SIZE];
 
    protected:
     int window_bits_;

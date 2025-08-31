@@ -270,76 +270,23 @@ install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # Python binding
 ##########################################
 
-# if (SKBUILD)
-#   if (CMAKE_VERSION VERSION_LESS 3.18)
-#     set(DEV_MODULE Development)
-#   else()
-#     set(DEV_MODULE Development.Module)
-#   endif()
+if (CMAKE_VERSION VERSION_LESS 3.18)
+  set(DEV_MODULE Development)
+else()
+  set(DEV_MODULE Development.Module)
+endif()
 
-#   find_package(Python 3.8 
-#     REQUIRED COMPONENTS Interpreter ${DEV_MODULE}
-#     OPTIONAL_COMPONENTS Development.SABIModule)
+find_package(Python 3.8 
+  COMPONENTS Interpreter ${DEV_MODULE}
+  OPTIONAL_COMPONENTS Development.SABIModule)
 
-#   execute_process(
-#     COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-#     OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
-#   find_package(nanobind CONFIG REQUIRED)
+if (Python_FOUND)
+  # if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  #   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  #   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+  # endif()
 
-#   if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-#     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
-#     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-#   endif()
-
-#   set(PYTHON_BINDINGS_SOURCES
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/dftracer_utils_ext.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer_ext.h
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer_ext.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/reader_ext.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/utils_ext.cpp
-
-#     # json
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/helpers.h
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json/helpers.cpp
-#   )
-
-#   if (APPLE)
-#     nanobind_add_module(
-#       dftracer_utils_ext
-#       NB_STATIC STABLE_ABI
-#       ${PYTHON_BINDINGS_SOURCES}
-#     )
-#   else()
-#     nanobind_add_module(
-#       dftracer_utils_ext
-#       NB_STATIC STABLE_ABI LTO
-#       ${PYTHON_BINDINGS_SOURCES}
-#     )
-#   endif()
-
-#   target_link_libraries(dftracer_utils_ext PRIVATE dftracer_utils::shared)
-#   target_add_rpath(dftracer_utils_ext)
-#   install(TARGETS dftracer_utils_ext LIBRARY DESTINATION dftracer/utils)
-# endif()
-
-# Python C API bindings (new approach)
-if (SKBUILD)
-  if (CMAKE_VERSION VERSION_LESS 3.18)
-    set(DEV_MODULE Development)
-  else()
-    set(DEV_MODULE Development.Module)
-  endif()
-
-  find_package(Python 3.8 
-    REQUIRED COMPONENTS Interpreter ${DEV_MODULE}
-    OPTIONAL_COMPONENTS Development.SABIModule)
-
-  if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-  endif()
-
-  # Python C API bindings - Combined module
+  # Python C API binding sources
   add_library(dftracer_utils_ext MODULE
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/dftracer_utils_ext.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer.cpp
@@ -352,7 +299,6 @@ if (SKBUILD)
   
   target_include_directories(dftracer_utils_ext PRIVATE
     ${Python_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include
   )
   
   target_link_libraries(dftracer_utils_ext PRIVATE 

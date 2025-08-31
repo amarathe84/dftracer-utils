@@ -1,6 +1,6 @@
 """Type stubs for dftracer_utils_ext module."""
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Iterator
 
 # ========== INDEXER ==========
 
@@ -76,7 +76,7 @@ class DFTracerIndexer:
     
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the runtime context for the with statement."""
-        ...
+        ... 
 
 # ========== READER ==========
 
@@ -156,4 +156,4 @@ class DFTracerReader:
     
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the runtime context for the with statement."""
-        ...
+        ... 
