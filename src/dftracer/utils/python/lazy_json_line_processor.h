@@ -19,9 +19,17 @@ class PyLazyJSONLineProcessor : public dftracer::utils::LineProcessor {
     bool process(const char* data, std::size_t length) override {
         if (!result_list) return false;
 
-        // Create JSON directly from raw data without string conversion
-        PyObject* json_obj = JSON_from_data(data, length);
-        if (!json_obj) return false;
+        const char* trimmed;
+        std::size_t trimmed_length;
+        if (!trim_and_validate(data, length, trimmed, trimmed_length)) {
+            return true;
+        }
+
+        PyObject* json_obj = JSON_from_data(trimmed, trimmed_length);
+        if (!json_obj) {
+            PyErr_Clear();
+            return true;
+        }
 
         int result = PyList_Append(result_list, json_obj);
         Py_DECREF(json_obj);
@@ -42,6 +50,32 @@ class PyLazyJSONLineProcessor : public dftracer::utils::LineProcessor {
     }
 
    private:
+    bool trim_and_validate(const char* data, std::size_t length,
+                           const char*& start, std::size_t& trimmed_length) {
+        start = data;
+        const char* end = data + length - 1;
+
+        while (start <= end && (*start == ' ' || *start == '\t' ||
+                                *start == '\n' || *start == '\r')) {
+            start++;
+        }
+        while (end >= start &&
+               (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) {
+            end--;
+        }
+
+        trimmed_length = (end >= start) ? (end - start + 1) : 0;
+
+        if (trimmed_length == 0 ||
+            (trimmed_length == 1 && (*start == '[' || *start == '{' ||
+                                     *start == ']' || *start == '}'))) {
+            // Invalid/incomplete JSON
+            return false;
+        }
+
+        return true;
+    }
+
     PyObject* result_list;
 };
 

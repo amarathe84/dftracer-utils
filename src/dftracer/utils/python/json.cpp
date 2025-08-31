@@ -39,11 +39,11 @@ static int JSON_init(JSONObject* self, PyObject* args, PyObject* kwds) {
 static bool JSON_ensure_parsed(JSONObject* self) {
     if (!self->parsed && self->json_length > 0) {
         self->doc = yyjson_read(self->json_data, self->json_length, 0);
-        self->parsed = true;
         if (!self->doc) {
             PyErr_SetString(PyExc_ValueError, "Failed to parse JSON");
             return false;
         }
+        self->parsed = true;
     }
     return self->doc != nullptr;
 }
