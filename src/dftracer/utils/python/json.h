@@ -8,9 +8,10 @@
 
 typedef struct {
     PyObject_HEAD
-    std::string* json_string;
     mutable yyjson_doc* doc;
     mutable bool parsed;
+    size_t json_length;
+    char json_data[];  // Flexible array member - data stored inline
 } DFTracerJSONObject;
 
 extern PyTypeObject DFTracerJSONType;
@@ -32,7 +33,6 @@ extern PyMethodDef DFTracerJSON_methods[];
 extern PySequenceMethods DFTracerJSON_as_sequence;
 extern PyMappingMethods DFTracerJSON_as_mapping;
 
-// Helper function to create DFTracerJSON from raw data without string conversion
 PyObject* DFTracerJSON_from_data(const char* data, size_t length);
 
 #endif // DFTRACER_UTILS_PYTHON_JSON_H

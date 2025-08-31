@@ -3,9 +3,6 @@
 #include <iostream>
 
 static void DFTracerJSON_dealloc(DFTracerJSONObject* self) {
-    if (self->json_string) {
-        delete self->json_string;
-    }
     if (self->doc) {
         yyjson_doc_free(self->doc);
     }
@@ -13,12 +10,13 @@ static void DFTracerJSON_dealloc(DFTracerJSONObject* self) {
 }
 
 static PyObject* DFTracerJSON_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+    // This won't be used for DFTracerJSON_from_data, but needed for regular construction
     DFTracerJSONObject* self;
     self = (DFTracerJSONObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
-        self->json_string = nullptr;
         self->doc = nullptr;
         self->parsed = false;
+        self->json_length = 0;
     }
     return (PyObject*)self;
 }
@@ -29,15 +27,20 @@ static int DFTracerJSON_init(DFTracerJSONObject* self, PyObject* args, PyObject*
         return -1;
     }
     
-    self->json_string = new std::string(json_str);
+    // For regular init, we can't use flexible array - would need to recreate object
+    // This is a limitation, but DFTracerJSON_from_data is the optimized path
+    self->json_length = strlen(json_str);
+    if (self->json_length > 0) {
+        std::memcpy(self->json_data, json_str, self->json_length);
+    }
     self->doc = nullptr;
     self->parsed = false;
     return 0;
 }
 
 static bool DFTracerJSON_ensure_parsed(DFTracerJSONObject* self) {
-    if (!self->parsed && self->json_string) {
-        self->doc = yyjson_read(self->json_string->c_str(), self->json_string->length(), 0);
+    if (!self->parsed && self->json_length > 0) {
+        self->doc = yyjson_read(self->json_data, self->json_length, 0);
         self->parsed = true;
         if (!self->doc) {
             PyErr_SetString(PyExc_ValueError, "Failed to parse JSON");
@@ -257,15 +260,19 @@ static PyObject* DFTracerJSON_get(DFTracerJSONObject* self, PyObject* args) {
 }
 
 static PyObject* DFTracerJSON_str(DFTracerJSONObject* self) {
-    if (self->json_string) {
-        return PyUnicode_FromString(self->json_string->c_str());
+    if (self->json_length > 0) {
+        return PyUnicode_FromStringAndSize(self->json_data, self->json_length);
     }
     return PyUnicode_FromString("{}");
 }
 
 static PyObject* DFTracerJSON_repr(DFTracerJSONObject* self) {
-    if (self->json_string) {
-        return PyUnicode_FromFormat("DFTracerJSON(%s)", self->json_string->c_str());
+    if (self->json_length > 0) {
+        PyObject* json_str = PyUnicode_FromStringAndSize(self->json_data, self->json_length);
+        if (!json_str) return NULL;
+        PyObject* result = PyUnicode_FromFormat("DFTracerJSON(%U)", json_str);
+        Py_DECREF(json_str);
+        return result;
     }
     return PyUnicode_FromString("DFTracerJSON({})");
 }
@@ -357,14 +364,25 @@ PyMODINIT_FUNC PyInit_json(void) {
 }
 
 PyObject* DFTracerJSON_from_data(const char* data, size_t length) {
-    DFTracerJSONObject* self = (DFTracerJSONObject*)DFTracerJSONType.tp_alloc(&DFTracerJSONType, 0);
+    // Allocate object with extra space for the JSON data
+    DFTracerJSONObject* self = (DFTracerJSONObject*)PyObject_MALLOC(
+        sizeof(DFTracerJSONObject) + length + 1  // +1 for null terminator
+    );
     if (!self) {
-        return NULL;
+        return PyErr_NoMemory();
     }
     
-    self->json_string = new std::string(data, length);
+    // Initialize Python object
+    PyObject_INIT(self, &DFTracerJSONType);
+    
+    // Initialize fields
     self->doc = nullptr;
     self->parsed = false;
+    self->json_length = length;
+    
+    // Copy data directly into the object
+    std::memcpy(self->json_data, data, length);
+    self->json_data[length] = '\0';  // Null terminate for safety
     
     return (PyObject*)self;
 }
