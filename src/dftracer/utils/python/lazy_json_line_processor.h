@@ -21,20 +21,8 @@ public:
     bool process(const char* data, std::size_t length) override {
         if (!result_list) return false;
         
-        PyObject* json_str = PyUnicode_FromStringAndSize(data, length);
-        if (!json_str) return false;
-        
-        PyObject* args = PyTuple_New(1);
-        if (!args) {
-            Py_DECREF(json_str);
-            return false;
-        }
-        
-        PyTuple_SetItem(args, 0, json_str);
-        
-        PyObject* json_obj = PyObject_CallObject((PyObject*)&DFTracerJSONType, args);
-        Py_DECREF(args);
-        
+        // Create DFTracerJSON directly from raw data without string conversion
+        PyObject* json_obj = DFTracerJSON_from_data(data, length);
         if (!json_obj) return false;
         
         int result = PyList_Append(result_list, json_obj);

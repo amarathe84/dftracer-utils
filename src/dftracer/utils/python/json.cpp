@@ -355,3 +355,16 @@ PyMODINIT_FUNC PyInit_json(void) {
     
     return m;
 }
+
+PyObject* DFTracerJSON_from_data(const char* data, size_t length) {
+    DFTracerJSONObject* self = (DFTracerJSONObject*)DFTracerJSONType.tp_alloc(&DFTracerJSONType, 0);
+    if (!self) {
+        return NULL;
+    }
+    
+    self->json_string = new std::string(data, length);
+    self->doc = nullptr;
+    self->parsed = false;
+    
+    return (PyObject*)self;
+}
