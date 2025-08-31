@@ -1,8 +1,8 @@
 #include <Python.h>
-#include <dftracer/utils/python/pylist_line_processor.h>
-#include <dftracer/utils/python/reader.h>
 #include <dftracer/utils/python/json.h>
 #include <dftracer/utils/python/lazy_json_line_processor.h>
+#include <dftracer/utils/python/pylist_line_processor.h>
+#include <dftracer/utils/python/reader.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/timer.h>
 #include <structmember.h>
@@ -433,7 +433,8 @@ static PyMethodDef DFTracerReader_methods[] = {
      "Read line bytes and return as list[str] (start_bytes, end_bytes)"},
     {"read_line_bytes_json", (PyCFunction)DFTracerReader_read_line_bytes_json,
      METH_VARARGS,
-     "Read line bytes and return as list[DFTracerJSON] (start_bytes, end_bytes)"},
+     "Read line bytes and return as list[DFTracerJSON] (start_bytes, "
+     "end_bytes)"},
     {NULL}};
 
 static PyGetSetDef DFTracerReader_getsetters[] = {

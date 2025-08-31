@@ -2,35 +2,33 @@
 #define DFTRACER_UTILS_PYTHON_LAZY_JSON_LINE_PROCESSOR_H
 
 #include <Python.h>
-#include <dftracer/utils/reader/line_processor.h>
 #include <dftracer/utils/python/json.h>
+#include <dftracer/utils/reader/line_processor.h>
 
 class PyLazyJSONLineProcessor : public dftracer::utils::LineProcessor {
-public:
+   public:
     PyLazyJSONLineProcessor() : result_list(nullptr) {
         result_list = PyList_New(0);
         if (!result_list) {
             PyErr_NoMemory();
         }
     }
-    
-    ~PyLazyJSONLineProcessor() {
-        Py_XDECREF(result_list);
-    }
-    
+
+    ~PyLazyJSONLineProcessor() { Py_XDECREF(result_list); }
+
     bool process(const char* data, std::size_t length) override {
         if (!result_list) return false;
-        
+
         // Create DFTracerJSON directly from raw data without string conversion
         PyObject* json_obj = DFTracerJSON_from_data(data, length);
         if (!json_obj) return false;
-        
+
         int result = PyList_Append(result_list, json_obj);
         Py_DECREF(json_obj);
-        
+
         return result == 0;
     }
-    
+
     PyObject* get_result() {
         if (!result_list) {
             Py_RETURN_NONE;
@@ -38,13 +36,13 @@ public:
         Py_INCREF(result_list);
         return result_list;
     }
-    
+
     std::size_t size() const {
         return result_list ? PyList_Size(result_list) : 0;
     }
-    
-private:
+
+   private:
     PyObject* result_list;
 };
 
-#endif // DFTRACER_UTILS_PYTHON_LAZY_JSON_LINE_PROCESSOR_H
+#endif  // DFTRACER_UTILS_PYTHON_LAZY_JSON_LINE_PROCESSOR_H

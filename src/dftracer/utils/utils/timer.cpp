@@ -49,10 +49,14 @@ void Timer::stop() {
 }
 
 std::int64_t Timer::elapsed() const {
-  if (running_) {
-        return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start_time).count();
+    if (running_) {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+                   Clock::now() - start_time)
+            .count();
     } else {
-        return std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(end_time -
+                                                                    start_time)
+            .count();
     }
 }
 

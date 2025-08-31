@@ -1,8 +1,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <dftracer/utils/python/indexer.h>
-#include <dftracer/utils/python/reader.h>
 #include <dftracer/utils/python/json.h>
+#include <dftracer/utils/python/reader.h>
 
 static PyModuleDef dftracer_utils_module = {
     PyModuleDef_HEAD_INIT,
@@ -19,7 +19,7 @@ PyMODINIT_FUNC PyInit_dftracer_utils_ext(void) {
     if (PyType_Ready(&DFTracerIndexerType) < 0) return NULL;
 
     if (PyType_Ready(&DFTracerReaderType) < 0) return NULL;
-    
+
     if (PyType_Ready(&DFTracerJSONType) < 0) return NULL;
 
     m = PyModule_Create(&dftracer_utils_module);

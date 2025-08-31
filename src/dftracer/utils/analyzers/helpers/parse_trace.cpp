@@ -104,7 +104,8 @@ Trace parse_trace(const dftracer::utils::json::JsonDocument& doc) {
     //                                     if (arg_field.value.is_uint64()) {
     //                                         ret_value =
     //                                             arg_field.value.get_uint64();
-    //                                     } else if (arg_field.value.is_int64()) {
+    //                                     } else if
+    //                                     (arg_field.value.is_int64()) {
     //                                         int64_t signed_ret =
     //                                             arg_field.value.get_int64();
     //                                         if (signed_ret > 0) {
@@ -128,8 +129,8 @@ Trace parse_trace(const dftracer::utils::json::JsonDocument& doc) {
     //                 }
     //             }
 
-    //             std::string offset_str = get_args_string_field(doc, "offset");
-    //             if (!offset_str.empty()) {
+    //             std::string offset_str = get_args_string_field(doc,
+    //             "offset"); if (!offset_str.empty()) {
     //                 try {
     //                     trace.offset = std::stoull(offset_str);
     //                 } catch (...) {
@@ -273,7 +274,8 @@ Trace parse_trace_owned(const dftracer::utils::json::JsonDocument& doc) {
     //                                     if (arg_field.value.is_uint64()) {
     //                                         ret_value =
     //                                             arg_field.value.get_uint64();
-    //                                     } else if (arg_field.value.is_int64()) {
+    //                                     } else if
+    //                                     (arg_field.value.is_int64()) {
     //                                         int64_t signed_ret =
     //                                             arg_field.value.get_int64();
     //                                         if (signed_ret > 0) {
@@ -297,8 +299,8 @@ Trace parse_trace_owned(const dftracer::utils::json::JsonDocument& doc) {
     //                 }
     //             }
 
-    //             std::string offset_str = get_args_string_field(doc, "offset");
-    //             if (!offset_str.empty()) {
+    //             std::string offset_str = get_args_string_field(doc,
+    //             "offset"); if (!offset_str.empty()) {
     //                 try {
     //                     trace.offset = std::stoull(offset_str);
     //                 } catch (...) {
