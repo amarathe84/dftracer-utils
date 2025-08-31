@@ -16,7 +16,7 @@ class LineByteStream : public Stream {
 
     std::vector<char> partial_line_buffer_;
     std::vector<char> temp_buffer_;  // Reusable temp buffer
-    size_t actual_start_bytes_;
+    std::size_t actual_start_bytes_;
 
    public:
     LineByteStream() : Stream(), actual_start_bytes_(0) {
@@ -51,15 +51,15 @@ class LineByteStream : public Stream {
         // Use stack allocation for small search buffer
         alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char
             search_buffer[SEARCH_BUFFER_SIZE];
-        size_t search_bytes;
+        std::size_t search_bytes;
         if (inflater_.read(file_handle_, search_buffer,
                            sizeof(search_buffer) - 1, search_bytes)) {
-            size_t relative_target = target_start - current_pos;
+            std::size_t relative_target = target_start - current_pos;
             if (relative_target < search_bytes) {
                 for (int64_t i = static_cast<int64_t>(relative_target); i >= 0;
                      i--) {
                     if (i == 0 || search_buffer[i - 1] == '\n') {
-                        actual_start = current_pos + static_cast<size_t>(i);
+                        actual_start = current_pos + static_cast<std::size_t>(i);
                         DFTRACER_UTILS_LOG_DEBUG(
                             "Found JSON line start at position %zu (requested "
                             "%zu)",

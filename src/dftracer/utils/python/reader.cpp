@@ -1,4 +1,3 @@
-#define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <dftracer/utils/reader/reader.h>
 #include <structmember.h>
@@ -331,89 +330,15 @@ DFTracerReader_read_line_bytes(DFTracerReaderObject *self, PyObject *args)
         return NULL;
     }
 
-    // Create Python list for result
-    PyObject* lines_list = PyList_New(0);
-    if (!lines_list) {
+    try {
+        PyListLineProcessor processor;
+        dftracer::utils::Reader *cpp_reader = static_cast<dftracer::utils::Reader*>(self->handle);
+        cpp_reader->read_line_bytes_with_processor(start_bytes, end_bytes, processor);
+        return processor.get_result();
+    } catch (const std::exception& e) {
+        PyErr_SetString(PyExc_RuntimeError, e.what());
         return NULL;
     }
-
-    size_t buffer_size = self->buffer_size;
-    char *buffer = (char*)PyMem_RawMalloc(buffer_size);
-    if (!buffer) {
-        Py_DECREF(lines_list);
-        return PyErr_NoMemory();
-    }
-
-    // Stream read line bytes and split into lines
-    int bytes_read;
-    std::string line_accumulator;
-    
-    while ((bytes_read = dft_reader_read_line_bytes(self->handle, start_bytes, end_bytes, 
-                                                    buffer, buffer_size)) > 0) {
-        
-        // Process buffer content to extract lines
-        size_t pos = 0;
-        while (pos < bytes_read) {
-            const char* newline_ptr = static_cast<const char*>(
-                std::memchr(buffer + pos, '\n', bytes_read - pos)
-            );
-            
-            if (newline_ptr != nullptr) {
-                // Found complete line
-                size_t line_length = newline_ptr - (buffer + pos);
-                
-                // Build complete line (accumulator + current segment)
-                PyObject* py_line;
-                if (!line_accumulator.empty()) {
-                    line_accumulator.append(buffer + pos, line_length);
-                    py_line = PyUnicode_FromStringAndSize(
-                        line_accumulator.c_str(), line_accumulator.length()
-                    );
-                    line_accumulator.clear();
-                } else {
-                    py_line = PyUnicode_FromStringAndSize(buffer + pos, line_length);
-                }
-                
-                if (!py_line || PyList_Append(lines_list, py_line) < 0) {
-                    Py_XDECREF(py_line);
-                    Py_DECREF(lines_list);
-                    PyMem_RawFree(buffer);
-                    return NULL;
-                }
-                Py_DECREF(py_line);
-                
-                pos = (newline_ptr - buffer) + 1;
-            } else {
-                // Partial line - accumulate for next buffer
-                line_accumulator.append(buffer + pos, bytes_read - pos);
-                break;
-            }
-        }
-    }
-    
-    // Handle final line if no trailing newline
-    if (!line_accumulator.empty()) {
-        PyObject* py_line = PyUnicode_FromStringAndSize(
-            line_accumulator.c_str(), line_accumulator.length()
-        );
-        if (!py_line || PyList_Append(lines_list, py_line) < 0) {
-            Py_XDECREF(py_line);
-            Py_DECREF(lines_list);
-            PyMem_RawFree(buffer);
-            return NULL;
-        }
-        Py_DECREF(py_line);
-    }
-
-    PyMem_RawFree(buffer);
-    
-    if (bytes_read < 0) {
-        Py_DECREF(lines_list);
-        PyErr_SetString(PyExc_RuntimeError, "Failed to read line bytes data");
-        return NULL;
-    }
-
-    return lines_list;
 }
 
 

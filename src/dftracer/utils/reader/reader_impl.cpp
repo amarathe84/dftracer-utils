@@ -6,10 +6,11 @@
 #include <cstring>
 #include <string_view>
 #include <cstdio>
+#include <limits>
 
-static void validate_parameters(const char *buffer, size_t buffer_size,
-                                size_t start_bytes, size_t end_bytes,
-                                size_t max_bytes = SIZE_MAX) {
+static void validate_parameters(const char *buffer, std::size_t buffer_size,
+                                std::size_t start_bytes, std::size_t end_bytes,
+                                std::size_t max_bytes = std::numeric_limits<std::size_t>::max()) {
     if (!buffer || buffer_size == 0) {
         throw ReaderError(ReaderError::INVALID_ARGUMENT,
                           "Invalid buffer parameters");
@@ -108,72 +109,6 @@ void ReaderImplementor::reset() {
     }
 }
 
-std::size_t ReaderImplementor::extract_lines_from_chunk(
-    std::string_view chunk_data, std::size_t target_start_line,
-    std::size_t target_end_line, std::size_t chunk_first_line,
-    std::size_t &start_offset) {
-    const char *data = chunk_data.data();
-    std::size_t data_size = chunk_data.size();
-
-    if (target_start_line > target_end_line || chunk_data.empty()) {
-        start_offset = 0;
-        return 0;
-    }
-
-    std::size_t current_line = chunk_first_line;
-    std::size_t pos = 0;
-    start_offset = 0;
-    std::size_t end_pos = 0;
-    bool found_start = false;
-
-    // Single pass to find both start and end positions
-    while (pos < data_size && current_line <= target_end_line) {
-        const char *newline_ptr = static_cast<const char *>(
-            std::memchr(data + pos, '\n', data_size - pos));
-
-        if (current_line == target_start_line && !found_start) {
-            start_offset = pos;
-            found_start = true;
-        }
-
-        if (newline_ptr != nullptr) {
-            std::size_t newline_pos = newline_ptr - data;
-            if (current_line == target_end_line) {
-                end_pos = newline_pos + 1;
-                break;
-            }
-            pos = newline_pos + 1;
-            current_line++;
-        } else {
-            // Handle final line without newline
-            if (current_line == target_end_line) {
-                end_pos = data_size;
-            }
-            break;
-        }
-    }
-
-    if (!found_start || end_pos <= start_offset) {
-        start_offset = 0;
-        return 0;
-    }
-
-    return end_pos - start_offset;
-}
-
-std::string ReaderImplementor::read_lines_optimized(std::size_t start_line,
-                                                    std::size_t end_line) {
-    check_reader_state(is_open, indexer);
-
-    std::string result;
-    StringLineProcessor processor(result);
-    
-    // Reuse the streaming processor logic!
-    read_lines_with_processor(start_line, end_line, processor);
-    
-    return result;
-}
-
 std::size_t ReaderImplementor::read(std::size_t start_bytes,
                                     std::size_t end_bytes, char *buffer,
                                     std::size_t buffer_size) {
@@ -252,7 +187,10 @@ std::string ReaderImplementor::read_lines(size_t start_line, size_t end_line) {
                                  std::to_string(total_lines) + ")");
     }
 
-    return read_lines_optimized(start_line, end_line);
+    std::string result;
+    StringLineProcessor processor(result);
+    read_lines_with_processor(start_line, end_line, processor);
+    return result;
 }
 
 void ReaderImplementor::read_lines_with_processor(std::size_t start_line, std::size_t end_line,
@@ -273,20 +211,15 @@ void ReaderImplementor::read_lines_with_processor(std::size_t start_line, std::s
                                  std::to_string(total_lines) + ")");
     }
 
-    // Initialize processor
     processor.begin(start_line, end_line);
 
-    // Local reusable buffer - your approach!
-    constexpr std::size_t BUFFER_SIZE = 1024 * 1024; // 1MB
-    std::vector<char> process_buffer(BUFFER_SIZE);
+    std::vector<char> process_buffer(default_buffer_size);
     std::size_t buffer_usage = 0;
 
-    // Get checkpoints for the line range
     std::vector<IndexCheckpoint> checkpoints = 
         indexer->get_checkpoints_for_line_range(start_line, end_line);
 
     if (checkpoints.empty()) {
-        // Fallback: stream from beginning for early lines
         std::size_t max_bytes = indexer->get_max_bytes();
         line_byte_stream = stream_factory->create_line_stream(gz_path, 0, max_bytes);
         
@@ -296,34 +229,29 @@ void ReaderImplementor::read_lines_with_processor(std::size_t start_line, std::s
         while (!line_byte_stream->is_finished() && current_line <= end_line) {
             std::size_t bytes_read = line_byte_stream->stream(
                 process_buffer.data() + buffer_usage, 
-                BUFFER_SIZE - buffer_usage
+                default_buffer_size - buffer_usage
             );
             if (bytes_read == 0) break;
             
             buffer_usage += bytes_read;
             
-            // Process lines in buffer
             process_lines(
                 process_buffer.data(), buffer_usage, 
                 current_line, start_line, end_line,
                 line_accumulator, processor
             );
             
-            // Reset buffer usage counter - no .clear() needed!
             buffer_usage = 0;
         }
     } else {
-        // Use the OLD working approach: single big read from prev checkpoint to end
         std::uint64_t total_start_offset = 0;
         std::uint64_t total_end_offset = 0;  
         std::uint64_t first_line_in_data = 1;
 
         if (checkpoints[0].checkpoint_idx == 0) {
-            // first checkpoint: read from beginning
             total_start_offset = 0;
             first_line_in_data = 1;
         } else {
-            // Find the previous checkpoint for the starting position (OLD LOGIC)
             auto all_checkpoints = indexer->get_checkpoints();
             for (const auto &prev_ckpt : all_checkpoints) {
                 if (prev_ckpt.checkpoint_idx == checkpoints[0].checkpoint_idx - 1) {
@@ -334,11 +262,9 @@ void ReaderImplementor::read_lines_with_processor(std::size_t start_line, std::s
             }
         }
 
-        // End offset is the end of the last checkpoint (OLD LOGIC)
         const auto &last_checkpoint = checkpoints.back();
         total_end_offset = last_checkpoint.uc_offset + last_checkpoint.uc_size;
 
-        // Single big read operation (like old implementation)
         std::size_t total_bytes = static_cast<std::size_t>(total_end_offset - total_start_offset);
         std::vector<char> read_buffer(total_bytes);
         
@@ -346,7 +272,6 @@ void ReaderImplementor::read_lines_with_processor(std::size_t start_line, std::s
                                      read_buffer.data(), total_bytes);
         
         if (bytes_read > 0) {
-            // Process the entire chunk with our line processor
             std::string line_accumulator;
             std::size_t current_line = first_line_in_data;
             
@@ -356,11 +281,71 @@ void ReaderImplementor::read_lines_with_processor(std::size_t start_line, std::s
         }
     }
 
-    // Finalize processor
     processor.end();
 }
 
-// Helper function to process lines within buffer
+void ReaderImplementor::read_line_bytes_with_processor(std::size_t start_bytes, std::size_t end_bytes,
+                                                      LineProcessor& processor) {
+    check_reader_state(is_open, indexer);
+
+    if (end_bytes > indexer->get_max_bytes()) {
+        end_bytes = indexer->get_max_bytes();
+    }
+
+    if (start_bytes >= end_bytes) {
+        return;
+    }
+
+    processor.begin(start_bytes, end_bytes);
+
+    std::vector<char> process_buffer(default_buffer_size);
+    std::size_t buffer_usage = 0;
+    std::string line_accumulator;
+    
+    if (stream_factory->needs_new_line_stream(line_byte_stream.get(), gz_path, start_bytes, end_bytes)) {
+        line_byte_stream = stream_factory->create_line_stream(gz_path, start_bytes, end_bytes);
+    }
+    
+    while (!line_byte_stream->is_finished()) {
+        std::size_t bytes_read = line_byte_stream->stream(
+            process_buffer.data() + buffer_usage, 
+            default_buffer_size - buffer_usage
+        );
+        if (bytes_read == 0) break;
+        
+        buffer_usage += bytes_read;
+        
+        // Reused the optimized process_lines function
+        // dummy current line and start line should always be 1 here since
+        // we are processing the entire buffer as a single logical line
+        std::size_t dummy_current_line = 1;
+        static constexpr std::size_t dummy_start_line = 1;
+        static constexpr std::size_t dummy_end_line = std::numeric_limits<std::size_t>::max();
+
+        std::size_t processed = process_lines(
+            process_buffer.data(), buffer_usage,
+            dummy_current_line, dummy_start_line, dummy_end_line,
+            line_accumulator, processor
+        );
+        
+        // Move unprocessed data to beginning of buffer
+        if (processed < buffer_usage) {
+            std::memmove(process_buffer.data(), process_buffer.data() + processed, 
+                        buffer_usage - processed);
+            buffer_usage -= processed;
+        } else {
+            buffer_usage = 0;
+        }
+    }
+    
+    // Process any remaining data in line_accumulator
+    if (!line_accumulator.empty()) {
+        processor.process(line_accumulator.c_str(), line_accumulator.length());
+    }
+
+    processor.end();
+}
+
 std::size_t ReaderImplementor::process_lines(
     const char* buffer_data, std::size_t buffer_size,
     std::size_t& current_line, std::size_t start_line, std::size_t end_line,

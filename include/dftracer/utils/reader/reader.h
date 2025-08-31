@@ -106,6 +106,15 @@ class Reader {
                                   LineProcessor& processor);
 
     /**
+     * Read complete lines from byte range using callback processor (zero-copy)
+     * @param start_bytes Starting byte position
+     * @param end_bytes Ending byte position
+     * @param processor LineProcessor implementation for handling lines
+     */
+    void read_line_bytes_with_processor(std::size_t start_bytes, std::size_t end_bytes,
+                                       LineProcessor& processor);
+
+    /**
      * Set default reader buffer size in bytes
      */
     void set_buffer_size(std::size_t size);

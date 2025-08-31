@@ -4,6 +4,7 @@
 #include <Python.h>
 #include <dftracer/utils/reader/line_processor.h>
 #include <cstdio>
+#include <dftracer/utils/utils/timer.h>
 
 class PyListLineProcessor : public dftracer::utils::LineProcessor {
    private:

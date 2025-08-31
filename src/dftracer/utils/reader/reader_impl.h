@@ -38,6 +38,8 @@ struct ReaderImplementor {
     std::string read_lines(std::size_t start_line, std::size_t end_line);
     void read_lines_with_processor(std::size_t start_line, std::size_t end_line,
                                   LineProcessor& processor);
+    void read_line_bytes_with_processor(std::size_t start_bytes, std::size_t end_bytes,
+                                       LineProcessor& processor);
 
     void reset();
     inline bool is_valid() const { return is_open && indexer != nullptr; }
@@ -46,13 +48,6 @@ struct ReaderImplementor {
     inline void set_buffer_size(std::size_t size) { default_buffer_size = size; }
 
    private:
-    std::string read_lines_optimized(std::size_t start_line,
-                                     std::size_t end_line);
-    std::size_t extract_lines_from_chunk(std::string_view chunk_data,
-                                         std::size_t target_start_line,
-                                         std::size_t target_end_line,
-                                         std::size_t chunk_first_line,
-                                         std::size_t &start_offset);
     std::size_t process_lines(const char* buffer_data, std::size_t buffer_size,
                              std::size_t& current_line, std::size_t start_line, 
                              std::size_t end_line, std::string& line_accumulator,

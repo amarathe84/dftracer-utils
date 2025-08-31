@@ -50,6 +50,11 @@ void Reader::read_lines_with_processor(std::size_t start, std::size_t end,
     p_impl_->read_lines_with_processor(start, end, processor);
 }
 
+void Reader::read_line_bytes_with_processor(std::size_t start_bytes, std::size_t end_bytes,
+                                           LineProcessor& processor) {
+    p_impl_->read_line_bytes_with_processor(start_bytes, end_bytes, processor);
+}
+
 void Reader::set_buffer_size(std::size_t size) {
     p_impl_->set_buffer_size(size);
 }

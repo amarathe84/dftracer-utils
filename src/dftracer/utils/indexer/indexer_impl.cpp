@@ -392,15 +392,24 @@ bool IndexerImplementor::need_rebuild() const {
 }
 
 std::uint64_t IndexerImplementor::get_max_bytes() const {
-    return query_max_bytes(db, gz_path_logical_path);
+    if (cached_max_bytes == 0) {
+        cached_max_bytes = query_max_bytes(db, gz_path_logical_path);
+    }
+    return cached_max_bytes;
 }
 
 std::size_t IndexerImplementor::get_checkpoint_size() const {
-    return query_checkpoint_size(db, cached_file_id);
+    if (cached_checkpoint_size == 0) {
+        cached_checkpoint_size = query_checkpoint_size(db, cached_file_id);
+    }
+    return cached_checkpoint_size;
 }
 
 std::uint64_t IndexerImplementor::get_num_lines() const {
-    return query_num_lines(db, gz_path_logical_path);
+    if (cached_num_lines == 0) {
+        cached_num_lines = query_num_lines(db, gz_path_logical_path);
+    }
+    return cached_num_lines;
 }
 
 int IndexerImplementor::get_file_id() const {
