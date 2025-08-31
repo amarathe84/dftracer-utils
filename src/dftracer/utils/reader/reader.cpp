@@ -45,6 +45,11 @@ std::string Reader::read_lines(std::size_t start, std::size_t end) {
     return p_impl_->read_lines(start, end);
 }
 
+void Reader::read_lines_with_processor(std::size_t start, std::size_t end, 
+                                      LineProcessor& processor) {
+    p_impl_->read_lines_with_processor(start, end, processor);
+}
+
 void Reader::set_buffer_size(std::size_t size) {
     p_impl_->set_buffer_size(size);
 }

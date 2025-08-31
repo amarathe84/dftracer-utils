@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_READER_READER_H
 
 #include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/reader/line_processor.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,10 @@ int dft_reader_read_line_bytes(dft_reader_handle_t reader, size_t start_bytes,
 int dft_reader_read_lines(dft_reader_handle_t reader, size_t start_line,
                           size_t end_line, char *buffer, size_t buffer_size,
                           size_t *bytes_written);
+int dft_reader_read_lines_with_processor(dft_reader_handle_t reader, 
+                                        size_t start_line, size_t end_line,
+                                        dft_line_processor_callback_t callback,
+                                        void *user_data);
 void dft_reader_reset(dft_reader_handle_t reader);
 #ifdef __cplusplus
 }  // extern "C"
@@ -90,6 +95,15 @@ class Reader {
      * Read complete lines from the gzip file and return as a string
      */
     std::string read_lines(std::size_t start, std::size_t end);
+
+    /**
+     * Read complete lines from the gzip file using callback processor (zero-copy)
+     * @param start Starting line number (1-based)
+     * @param end Ending line number (1-based) 
+     * @param processor LineProcessor implementation for handling lines
+     */
+    void read_lines_with_processor(std::size_t start, std::size_t end, 
+                                  LineProcessor& processor);
 
     /**
      * Set default reader buffer size in bytes
