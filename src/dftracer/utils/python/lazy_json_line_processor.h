@@ -1,0 +1,62 @@
+#ifndef DFTRACER_UTILS_PYTHON_LAZY_JSON_LINE_PROCESSOR_H
+#define DFTRACER_UTILS_PYTHON_LAZY_JSON_LINE_PROCESSOR_H
+
+#include <Python.h>
+#include <dftracer/utils/reader/line_processor.h>
+#include <dftracer/utils/python/json.h>
+
+class PyLazyJSONLineProcessor : public dftracer::utils::LineProcessor {
+public:
+    PyLazyJSONLineProcessor() : result_list(nullptr) {
+        result_list = PyList_New(0);
+        if (!result_list) {
+            PyErr_NoMemory();
+        }
+    }
+    
+    ~PyLazyJSONLineProcessor() {
+        Py_XDECREF(result_list);
+    }
+    
+    bool process(const char* data, std::size_t length) override {
+        if (!result_list) return false;
+        
+        PyObject* json_str = PyUnicode_FromStringAndSize(data, length);
+        if (!json_str) return false;
+        
+        PyObject* args = PyTuple_New(1);
+        if (!args) {
+            Py_DECREF(json_str);
+            return false;
+        }
+        
+        PyTuple_SetItem(args, 0, json_str);
+        
+        PyObject* json_obj = PyObject_CallObject((PyObject*)&DFTracerJSONType, args);
+        Py_DECREF(args);
+        
+        if (!json_obj) return false;
+        
+        int result = PyList_Append(result_list, json_obj);
+        Py_DECREF(json_obj);
+        
+        return result == 0;
+    }
+    
+    PyObject* get_result() {
+        if (!result_list) {
+            Py_RETURN_NONE;
+        }
+        Py_INCREF(result_list);
+        return result_list;
+    }
+    
+    std::size_t size() const {
+        return result_list ? PyList_Size(result_list) : 0;
+    }
+    
+private:
+    PyObject* result_list;
+};
+
+#endif // DFTRACER_UTILS_PYTHON_LAZY_JSON_LINE_PROCESSOR_H

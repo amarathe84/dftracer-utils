@@ -14,6 +14,7 @@ need_ghc_filesystem()
 need_xxhash()
 need_simdjson()
 need_cpplogger()
+need_yyjson()
 find_package(Threads REQUIRED)
 
 ##########################################
@@ -55,7 +56,7 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/error.cpp
 
   # Utilities
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
+  # ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/json.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/timer.cpp
 
   # Pipeline
@@ -89,7 +90,7 @@ set_target_properties(dftracer_utils PROPERTIES
 )
 target_link_libraries(dftracer_utils 
     PRIVATE xxHash::xxhash
-    PUBLIC ghc_filesystem simdjson::simdjson_static cpp-logger Threads::Threads
+    PUBLIC ghc_filesystem simdjson::simdjson_static cpp-logger Threads::Threads yyjson
 )
 add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
@@ -129,7 +130,7 @@ set_target_properties(dftracer_utils_shared PROPERTIES
 )
 target_link_libraries(dftracer_utils_shared 
     PRIVATE xxHash::xxhash
-    PUBLIC ghc_filesystem simdjson::simdjson cpp-logger Threads::Threads
+    PUBLIC ghc_filesystem simdjson::simdjson cpp-logger Threads::Threads yyjson
 )
 add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
@@ -208,7 +209,7 @@ endif()
 
 add_executable(dft_reader ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_reader.cpp)
 set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader PRIVATE dftracer_utils argparse::argparse ghc_filesystem xxHash::xxhash simdjson::simdjson)
+target_link_libraries(dft_reader PRIVATE dftracer_utils argparse::argparse ghc_filesystem xxHash::xxhash simdjson::simdjson yyjson)
 
 # Link SQLite3, zlib, and Arrow for executable (treat as static since it's an executable)
 link_sqlite3(dft_reader STATIC)
@@ -244,6 +245,7 @@ target_link_libraries(dft_map PRIVATE
   ghc_filesystem
   xxHash::xxhash
   simdjson::simdjson
+  yyjson
 )
 # add_mpi_deps_if_needed(dft_map)
 
@@ -344,6 +346,8 @@ if (SKBUILD)
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/indexer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/reader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/reader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/python/json.cpp
   )
   
   target_include_directories(dftracer_utils_ext PRIVATE
@@ -390,6 +394,9 @@ if (TARGET simdjson)
 endif()
 if (TARGET simdjson_static)
     list(APPEND INSTALLABLE_TARGETS simdjson_static)
+endif()
+if (TARGET yyjson)
+    list(APPEND INSTALLABLE_TARGETS yyjson)
 endif()
 if (TARGET dftracer_zlib)
   list(APPEND INSTALLABLE_TARGETS dftracer_zlib)

@@ -23,16 +23,15 @@ Timer::~Timer() {
     stop();
     if (verbose_) {
         if (name_.empty()) {
-            printf("Elapsed time: %.3f ms\n", elapsed());
-            // DFTRACER_UTILS_LOG_INFO("Elapsed time: %.3f ms", elapsed());
-            // DFTRACER_UTILS_LOG_DEBUG("Elapsed time: %.3f ms", elapsed());
+            printf("Elapsed time: %lld ns\n", elapsed());
+            // DFTRACER_UTILS_LOG_INFO("Elapsed time: %lld ns", elapsed());
+            // DFTRACER_UTILS_LOG_DEBUG("Elapsed time: %lld ns", elapsed());
         } else {
-            printf("[%s] Elapsed time: %.3f ms\n", name_.c_str(), elapsed());
-            // DFTRACER_UTILS_LOG_INFO("[%s] Elapsed time: %.3f ms",
-            // name_.c_str(),
-            //                         elapsed());
-            // DFTRACER_UTILS_LOG_DEBUG("[%s] Elapsed time: %.3f ms",
-            //                         name_.c_str(), elapsed());
+            printf("[%s] Elapsed time: %lld ns\n", name_.c_str(), elapsed());
+            // DFTRACER_UTILS_LOG_INFO("[%s] Elapsed time: %lld ns",
+            // name_.c_str(), elapsed());
+            // DFTRACER_UTILS_LOG_DEBUG("[%s] Elapsed time: %lld ns",
+            // name_.c_str(), elapsed());
         }
     }
 }
@@ -49,14 +48,11 @@ void Timer::stop() {
     }
 }
 
-double Timer::elapsed() const {
-    if (running_) {
-        return std::chrono::duration<double, std::milli>(Clock::now() -
-                                                         start_time)
-            .count();
+std::int64_t Timer::elapsed() const {
+  if (running_) {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start_time).count();
     } else {
-        return std::chrono::duration<double, std::milli>(end_time - start_time)
-            .count();
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     }
 }
 

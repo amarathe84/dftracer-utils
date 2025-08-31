@@ -4,6 +4,7 @@
 #include <chrono>
 #include <string>
 #include <unordered_map>
+#include <cstdint>
 
 namespace dftracer::utils {
 
@@ -15,7 +16,29 @@ class Timer {
     ~Timer();
     void start();
     void stop();
-    double elapsed() const;
+    std::int64_t elapsed() const;
+
+    inline const std::string& name() const { return name_; }
+    inline bool is_running() const { return running_; }
+    inline bool is_stopped() const { return !running_; }
+    inline bool is_verbose() const { return verbose_; }
+
+    inline Timer& reset() {
+        start_time = Clock::now();
+        end_time = Clock::time_point();
+        running_ = false;
+        return *this;
+    }
+
+    inline Timer& set_name(const std::string& name) {
+        name_ = name;
+        return *this;
+    }
+
+    inline Timer& set_verbose(bool verbose) {
+        verbose_ = verbose;
+        return *this;
+    }
 
    private:
     bool verbose_ = false;

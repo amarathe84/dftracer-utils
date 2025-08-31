@@ -1,7 +1,10 @@
 #include <Python.h>
 #include <dftracer/utils/python/pylist_line_processor.h>
 #include <dftracer/utils/python/reader.h>
+#include <dftracer/utils/python/json.h>
+#include <dftracer/utils/python/lazy_json_line_processor.h>
 #include <dftracer/utils/reader/reader.h>
+#include <dftracer/utils/utils/timer.h>
 #include <structmember.h>
 
 #include <cstring>
@@ -340,6 +343,31 @@ static PyObject *DFTracerReader_read_line_bytes(DFTracerReaderObject *self,
     }
 }
 
+static PyObject *DFTracerReader_read_line_bytes_json(DFTracerReaderObject *self,
+                                                     PyObject *args) {
+    if (!self->handle) {
+        PyErr_SetString(PyExc_RuntimeError, "Reader not initialized");
+        return NULL;
+    }
+
+    size_t start_bytes, end_bytes;
+    if (!PyArg_ParseTuple(args, "nn", &start_bytes, &end_bytes)) {
+        return NULL;
+    }
+
+    try {
+        PyLazyJSONLineProcessor processor;
+        dftracer::utils::Reader *cpp_reader =
+            static_cast<dftracer::utils::Reader *>(self->handle);
+        cpp_reader->read_line_bytes_with_processor(start_bytes, end_bytes,
+                                                   processor);
+        return processor.get_result();
+    } catch (const std::exception &e) {
+        PyErr_SetString(PyExc_RuntimeError, e.what());
+        return NULL;
+    }
+}
+
 static PyObject *DFTracerReader_gz_path(DFTracerReaderObject *self,
                                         void *closure) {
     Py_INCREF(self->gz_path);
@@ -399,10 +427,13 @@ static PyMethodDef DFTracerReader_methods[] = {
     {"read", (PyCFunction)DFTracerReader_read, METH_VARARGS,
      "Read raw bytes and return as bytes (start_bytes, end_bytes)"},
     {"read_lines", (PyCFunction)DFTracerReader_read_lines, METH_VARARGS,
-     "Zero-copy read lines and return as list[str] (start_line, end_line)"},
+     "Read lines and return as list[str] (start_line, end_line)"},
     {"read_line_bytes", (PyCFunction)DFTracerReader_read_line_bytes,
      METH_VARARGS,
      "Read line bytes and return as list[str] (start_bytes, end_bytes)"},
+    {"read_line_bytes_json", (PyCFunction)DFTracerReader_read_line_bytes_json,
+     METH_VARARGS,
+     "Read line bytes and return as list[DFTracerJSON] (start_bytes, end_bytes)"},
     {NULL}};
 
 static PyGetSetDef DFTracerReader_getsetters[] = {

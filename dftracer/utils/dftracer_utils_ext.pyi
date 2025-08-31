@@ -1,6 +1,6 @@
 """Type stubs for dftracer_utils_ext module."""
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 # ========== INDEXER FUNCTIONALITY ==========
 
@@ -107,6 +107,14 @@ class DFTracerReader:
         
     def read_line_bytes(self, start_bytes: int, end_bytes: int) -> List[str]:
         """Read line bytes and return as list[str]."""
+        ...
+        
+    def read_lines_json(self, start_line: int, end_line: int) -> List[Dict[str, Any]]:
+        """Read lines and parse as JSON, return as list[dict]."""
+        ...
+        
+    def read_line_bytes_json(self, start_bytes: int, end_bytes: int) -> List[Dict[str, Any]]:
+        """Read line bytes and parse as JSON, return as list[dict]."""
         ...
     
     @property

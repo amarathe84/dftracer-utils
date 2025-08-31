@@ -102,6 +102,7 @@ build_with_coverage() {
         -DCMAKE_BUILD_TYPE=Debug \
         -DDFTRACER_UTILS_TESTS=ON \
         -DDFTRACER_UTILS_COVERAGE=ON \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_INSTALL_PREFIX="$(pwd)/install"
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
     

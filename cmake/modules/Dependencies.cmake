@@ -50,7 +50,19 @@ function(need_simdjson)
         "SIMDJSON_BUILD_STATIC_LIB ON"
         "BUILD_SHARED_LIBS ON"
         "SIMDJSON_DISABLE_DEPRECATED_API ON"
-        "SIMDJSON_EXCEPTIONS ON"
+        "SIMDJSON_EXCEPTIONS OFF"
+      FORCE YES
+    )
+  endif()
+endfunction()
+
+function(need_yyjson)
+  if(NOT yyjson_ADDED)
+    CPMAddPackage(
+      NAME yyjson
+      GITHUB_REPOSITORY ibireme/yyjson
+      VERSION 0.12.0
+      GIT_TAG 0.12.0
       FORCE YES
     )
   endif()

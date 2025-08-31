@@ -6,6 +6,7 @@
 #include <dftracer/utils/utils/timer.h>
 
 #include <cstdio>
+#include <stdexcept>
 
 class PyListLineProcessor : public dftracer::utils::LineProcessor {
    private:
@@ -14,6 +15,7 @@ class PyListLineProcessor : public dftracer::utils::LineProcessor {
    public:
     PyListLineProcessor() : py_list_(PyList_New(0)) {
         if (!py_list_) {
+            PyErr_SetString(PyExc_MemoryError, "Failed to create Python list");
             throw std::runtime_error("Failed to create Python list");
         }
     }
