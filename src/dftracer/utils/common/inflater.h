@@ -79,7 +79,7 @@ class Inflater {
         }
 
         int first_byte = fgetc(file);
-        fseeko(file, static_cast<off_t>(offset), SEEK_SET);  // Seek back
+        fseeko(file, static_cast<off_t>(offset), SEEK_SET);    // Seek back
 
         if (first_byte == EOF) {
             return constants::indexer::ZLIB_GZIP_WINDOW_BITS;  // Default to
@@ -89,9 +89,9 @@ class Inflater {
         if (first_byte == 0x1f) {
             return constants::indexer::ZLIB_GZIP_WINDOW_BITS;  // GZIP (15+16)
         } else if ((first_byte & 0xf) == 8) {
-            return 15;  // ZLIB
+            return 15;                                         // ZLIB
         } else {
-            return -15;  // RAW deflate
+            return -15;                                        // RAW deflate
         }
     }
 

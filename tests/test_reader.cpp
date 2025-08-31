@@ -596,7 +596,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
         CHECK(last_brace <
               content.length() - 1);  // '}' should not be the last character
         CHECK(content[last_brace + 1] ==
-              '\n');  // Should be followed by newline
+              '\n');                  // Should be followed by newline
     }
 
     SUBCASE("Output should not cut off in middle of JSON") {

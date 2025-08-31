@@ -22,7 +22,7 @@ class Pipeline {
     std::vector<std::vector<TaskIndex>>
         dependencies_;  // who depends on this task
     std::vector<std::vector<TaskIndex>>
-        dependents_;  // who this task depends on
+        dependents_;    // who this task depends on
     std::unordered_map<TaskIndex, std::any> task_outputs_;
     std::unordered_map<TaskIndex, std::atomic<bool>> task_completed_;
     std::unordered_map<TaskIndex, int> dependency_count_;

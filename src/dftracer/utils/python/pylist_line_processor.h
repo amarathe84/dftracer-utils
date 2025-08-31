@@ -3,8 +3,9 @@
 
 #include <Python.h>
 #include <dftracer/utils/reader/line_processor.h>
-#include <cstdio>
 #include <dftracer/utils/utils/timer.h>
+
+#include <cstdio>
 
 class PyListLineProcessor : public dftracer::utils::LineProcessor {
    private:
@@ -17,9 +18,7 @@ class PyListLineProcessor : public dftracer::utils::LineProcessor {
         }
     }
 
-    ~PyListLineProcessor() {
-        Py_XDECREF(py_list_);
-    }
+    ~PyListLineProcessor() { Py_XDECREF(py_list_); }
 
     bool process(const char* data, std::size_t length) override {
         PyObject* py_line = PyUnicode_FromStringAndSize(data, length);
@@ -39,9 +38,7 @@ class PyListLineProcessor : public dftracer::utils::LineProcessor {
         return py_list_;
     }
 
-    std::size_t size() const {
-        return py_list_ ? PyList_Size(py_list_) : 0;
-    }
+    std::size_t size() const { return py_list_ ? PyList_Size(py_list_) : 0; }
 };
 
 #endif  // DFTRACER_UTILS_PYTHON_PYLIST_LINE_PROCESSOR_H

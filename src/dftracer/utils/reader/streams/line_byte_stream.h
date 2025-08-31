@@ -59,7 +59,8 @@ class LineByteStream : public Stream {
                 for (int64_t i = static_cast<int64_t>(relative_target); i >= 0;
                      i--) {
                     if (i == 0 || search_buffer[i - 1] == '\n') {
-                        actual_start = current_pos + static_cast<std::size_t>(i);
+                        actual_start =
+                            current_pos + static_cast<std::size_t>(i);
                         DFTRACER_UTILS_LOG_DEBUG(
                             "Found JSON line start at position %zu (requested "
                             "%zu)",

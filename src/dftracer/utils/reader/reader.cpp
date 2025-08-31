@@ -45,13 +45,14 @@ std::string Reader::read_lines(std::size_t start, std::size_t end) {
     return p_impl_->read_lines(start, end);
 }
 
-void Reader::read_lines_with_processor(std::size_t start, std::size_t end, 
-                                      LineProcessor& processor) {
+void Reader::read_lines_with_processor(std::size_t start, std::size_t end,
+                                       LineProcessor &processor) {
     p_impl_->read_lines_with_processor(start, end, processor);
 }
 
-void Reader::read_line_bytes_with_processor(std::size_t start_bytes, std::size_t end_bytes,
-                                           LineProcessor& processor) {
+void Reader::read_line_bytes_with_processor(std::size_t start_bytes,
+                                            std::size_t end_bytes,
+                                            LineProcessor &processor) {
     p_impl_->read_line_bytes_with_processor(start_bytes, end_bytes, processor);
 }
 

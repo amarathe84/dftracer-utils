@@ -112,7 +112,7 @@ static std::size_t align_up(std::size_t x, std::size_t a) {
 // Calculate optimal checkpoint size that divides uncompressed size evenly
 static std::size_t choose_divisible_checkpoint(
     std::size_t U, std::size_t S,
-    std::size_t window,  // lower bound + multiple
+    std::size_t window,                   // lower bound + multiple
     std::size_t max_chk, std::size_t max_parts) {
     if (window == 0) window = 32u << 10;  // safety
     if (U == 0) {

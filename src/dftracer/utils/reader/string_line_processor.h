@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_READER_STRING_LINE_PROCESSOR_H
 
 #include <dftracer/utils/reader/line_processor.h>
+
 #include <string>
 
 namespace dftracer::utils {

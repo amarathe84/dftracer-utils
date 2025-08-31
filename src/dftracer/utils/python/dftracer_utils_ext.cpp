@@ -10,40 +10,37 @@ static PyModuleDef dftracer_utils_module = {
     .m_size = -1,
 };
 
-PyMODINIT_FUNC
-PyInit_dftracer_utils_ext(void)
-{
+PyMODINIT_FUNC PyInit_dftracer_utils_ext(void) {
     PyObject *m;
 
-    if (PyType_Ready(&IndexCheckpointType) < 0)
-        return NULL;
+    if (PyType_Ready(&IndexCheckpointType) < 0) return NULL;
 
-    if (PyType_Ready(&DFTracerIndexerType) < 0)
-        return NULL;
+    if (PyType_Ready(&DFTracerIndexerType) < 0) return NULL;
 
-    if (PyType_Ready(&DFTracerReaderType) < 0)
-        return NULL;
+    if (PyType_Ready(&DFTracerReaderType) < 0) return NULL;
 
     m = PyModule_Create(&dftracer_utils_module);
-    if (m == NULL)
-        return NULL;
+    if (m == NULL) return NULL;
 
     Py_INCREF(&IndexCheckpointType);
-    if (PyModule_AddObject(m, "IndexCheckpoint", (PyObject *)&IndexCheckpointType) < 0) {
+    if (PyModule_AddObject(m, "IndexCheckpoint",
+                           (PyObject *)&IndexCheckpointType) < 0) {
         Py_DECREF(&IndexCheckpointType);
         Py_DECREF(m);
         return NULL;
     }
 
     Py_INCREF(&DFTracerIndexerType);
-    if (PyModule_AddObject(m, "DFTracerIndexer", (PyObject *)&DFTracerIndexerType) < 0) {
+    if (PyModule_AddObject(m, "DFTracerIndexer",
+                           (PyObject *)&DFTracerIndexerType) < 0) {
         Py_DECREF(&DFTracerIndexerType);
         Py_DECREF(m);
         return NULL;
     }
 
     Py_INCREF(&DFTracerReaderType);
-    if (PyModule_AddObject(m, "DFTracerReader", (PyObject *)&DFTracerReaderType) < 0) {
+    if (PyModule_AddObject(m, "DFTracerReader",
+                           (PyObject *)&DFTracerReaderType) < 0) {
         Py_DECREF(&DFTracerReaderType);
         Py_DECREF(m);
         return NULL;

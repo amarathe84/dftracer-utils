@@ -79,7 +79,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                 ckpt_data.uc_offset = current_uc_offset;
                 ckpt_data.uc_size = 0;  // Will be calculated later
                 ckpt_data.c_offset = input_pos;
-                ckpt_data.c_size = 0;  // Will be calculated later
+                ckpt_data.c_size = 0;   // Will be calculated later
                 ckpt_data.bits = checkpointer.bits;
                 ckpt_data.compressed_dict = compressed_dict;
                 ckpt_data.compressed_dict_size = compressed_dict_size;

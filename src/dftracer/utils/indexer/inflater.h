@@ -73,7 +73,7 @@ class IndexerInflater : public Inflater {
                             std::strerror(errno));
                         return false;  // Return error
                     }
-                    break;  // EOF
+                    break;             // EOF
                 }
                 stream.next_in = in_buffer;
                 stream.avail_in = static_cast<uInt>(n);

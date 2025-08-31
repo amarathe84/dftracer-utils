@@ -28,7 +28,8 @@ class LineProcessor {
      * @param start_line Starting line number (1-based)
      * @param end_line Ending line number (1-based)
      */
-    virtual void begin([[maybe_unused]] std::size_t start_line, [[maybe_unused]] std::size_t end_line) {}
+    virtual void begin([[maybe_unused]] std::size_t start_line,
+                       [[maybe_unused]] std::size_t end_line) {}
 
     /**
      * Called after processing completes.
@@ -53,7 +54,7 @@ class CLineProcessor : public LineProcessor {
     bool process(const char* data, std::size_t length) override {
         // Convert C++ call to C callback
         int result = callback_(data, length, user_data_);
-        return result != 0; // Non-zero means continue
+        return result != 0;  // Non-zero means continue
     }
 };
 
@@ -71,7 +72,8 @@ extern "C" {
  * @param user_data User-provided data pointer
  * @return Non-zero to continue processing, 0 to stop early
  */
-typedef int (*dft_line_processor_callback_t)(const char* data, size_t length, void* user_data);
+typedef int (*dft_line_processor_callback_t)(const char* data, size_t length,
+                                             void* user_data);
 
 #ifdef __cplusplus
 }  // extern "C"

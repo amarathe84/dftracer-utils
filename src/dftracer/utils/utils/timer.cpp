@@ -23,12 +23,13 @@ Timer::~Timer() {
     stop();
     if (verbose_) {
         if (name_.empty()) {
-          printf("Elapsed time: %.3f ms\n", elapsed());
+            printf("Elapsed time: %.3f ms\n", elapsed());
             // DFTRACER_UTILS_LOG_INFO("Elapsed time: %.3f ms", elapsed());
             // DFTRACER_UTILS_LOG_DEBUG("Elapsed time: %.3f ms", elapsed());
         } else {
-          printf("[%s] Elapsed time: %.3f ms\n", name_.c_str(), elapsed());
-            // DFTRACER_UTILS_LOG_INFO("[%s] Elapsed time: %.3f ms", name_.c_str(),
+            printf("[%s] Elapsed time: %.3f ms\n", name_.c_str(), elapsed());
+            // DFTRACER_UTILS_LOG_INFO("[%s] Elapsed time: %.3f ms",
+            // name_.c_str(),
             //                         elapsed());
             // DFTRACER_UTILS_LOG_DEBUG("[%s] Elapsed time: %.3f ms",
             //                         name_.c_str(), elapsed());
