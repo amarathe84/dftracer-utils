@@ -7,6 +7,7 @@
 #include <dftracer/utils/utils/timer.h>
 #include <structmember.h>
 
+#include <cstdint>
 #include <cstring>
 
 static void Reader_dealloc(ReaderObject *self) {
@@ -37,7 +38,7 @@ static int Reader_init(ReaderObject *self, PyObject *args, PyObject *kwds) {
                                    "indexer", NULL};
     const char *gz_path;
     const char *idx_path = NULL;
-    size_t checkpoint_size = 1024 * 1024;
+    std::size_t checkpoint_size = 1024 * 1024;
     IndexerObject *indexer = NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|snO", (char **)kwlist,
@@ -92,7 +93,7 @@ static PyObject *Reader_get_max_bytes(ReaderObject *self,
         return NULL;
     }
 
-    size_t max_bytes;
+    std::size_t max_bytes;
     int result = dft_reader_get_max_bytes(self->handle, &max_bytes);
     if (result != 0) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to get max bytes");
@@ -109,7 +110,7 @@ static PyObject *Reader_get_num_lines(ReaderObject *self,
         return NULL;
     }
 
-    size_t num_lines;
+    std::size_t num_lines;
     int result = dft_reader_get_num_lines(self->handle, &num_lines);
     if (result != 0) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to get num lines");
@@ -136,7 +137,7 @@ static PyObject *Reader_read_into_buffer(ReaderObject *self, PyObject *args) {
         return NULL;
     }
 
-    size_t start_bytes, end_bytes;
+    std::size_t start_bytes, end_bytes;
     Py_buffer buffer;
 
     if (!PyArg_ParseTuple(args, "nny*", &start_bytes, &end_bytes, &buffer)) {
@@ -169,7 +170,7 @@ static PyObject *Reader_read_line_bytes_into_buffer(ReaderObject *self,
         return NULL;
     }
 
-    size_t start_bytes, end_bytes;
+    std::size_t start_bytes, end_bytes;
     Py_buffer buffer;
 
     if (!PyArg_ParseTuple(args, "nny*", &start_bytes, &end_bytes, &buffer)) {
@@ -202,7 +203,7 @@ static PyObject *Reader_read_lines_into_buffer(ReaderObject *self,
         return NULL;
     }
 
-    size_t start_line, end_line;
+    std::size_t start_line, end_line;
     Py_buffer buffer;
 
     if (!PyArg_ParseTuple(args, "nny*", &start_line, &end_line, &buffer)) {
@@ -216,7 +217,7 @@ static PyObject *Reader_read_lines_into_buffer(ReaderObject *self,
         return NULL;
     }
 
-    size_t bytes_written;
+    std::size_t bytes_written;
     int result =
         dft_reader_read_lines(self->handle, start_line, end_line,
                               (char *)buffer.buf, buffer.len, &bytes_written);
@@ -236,12 +237,12 @@ static PyObject *Reader_read(ReaderObject *self, PyObject *args) {
         return NULL;
     }
 
-    size_t start_bytes, end_bytes;
+    std::size_t start_bytes, end_bytes;
     if (!PyArg_ParseTuple(args, "nn", &start_bytes, &end_bytes)) {
         return NULL;
     }
 
-    size_t buffer_size = self->buffer_size;
+    std::size_t buffer_size = self->buffer_size;
     char *buffer = (char *)PyMem_RawMalloc(buffer_size);
     if (!buffer) {
         return PyErr_NoMemory();
@@ -287,7 +288,7 @@ static PyObject *Reader_read_lines(ReaderObject *self, PyObject *args) {
         return NULL;
     }
 
-    size_t start_line, end_line;
+    std::size_t start_line, end_line;
     if (!PyArg_ParseTuple(args, "nn", &start_line, &end_line)) {
         return NULL;
     }
@@ -320,7 +321,7 @@ static PyObject *Reader_read_line_bytes(ReaderObject *self, PyObject *args) {
         return NULL;
     }
 
-    size_t start_bytes, end_bytes;
+    std::size_t start_bytes, end_bytes;
     if (!PyArg_ParseTuple(args, "nn", &start_bytes, &end_bytes)) {
         return NULL;
     }
@@ -345,7 +346,7 @@ static PyObject *Reader_read_line_bytes_json(ReaderObject *self,
         return NULL;
     }
 
-    size_t start_bytes, end_bytes;
+    std::size_t start_bytes, end_bytes;
     if (!PyArg_ParseTuple(args, "nn", &start_bytes, &end_bytes)) {
         return NULL;
     }
@@ -369,7 +370,7 @@ static PyObject *Reader_read_lines_json(ReaderObject *self, PyObject *args) {
         return NULL;
     }
 
-    size_t start_line, end_line;
+    std::size_t start_line, end_line;
     if (!PyArg_ParseTuple(args, "nn", &start_line, &end_line)) {
         return NULL;
     }
@@ -436,7 +437,7 @@ static int Reader_set_buffer_size(ReaderObject *self, PyObject *value,
         return -1;
     }
 
-    size_t new_size = PyLong_AsSize_t(value);
+    std::size_t new_size = PyLong_AsSize_t(value);
     if (PyErr_Occurred()) {
         return -1;
     }

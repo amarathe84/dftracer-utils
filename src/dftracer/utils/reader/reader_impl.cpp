@@ -298,9 +298,8 @@ void ReaderImplementor::read_line_bytes_with_processor(
 
     processor.begin(start_bytes, end_bytes);
 
-    std::vector<char> process_buffer(default_buffer_size);
-    std::size_t buffer_usage = 0;
-    std::string line_accumulator;
+    // Use the same approach as read_line_bytes to ensure consistency
+    std::vector<char> buffer(default_buffer_size);
 
     if (stream_factory->needs_new_line_stream(line_byte_stream.get(), gz_path,
                                               start_bytes, end_bytes)) {
@@ -308,34 +307,41 @@ void ReaderImplementor::read_line_bytes_with_processor(
             stream_factory->create_line_stream(gz_path, start_bytes, end_bytes);
     }
 
+    std::string line_accumulator;
+
     while (!line_byte_stream->is_finished()) {
         std::size_t bytes_read =
-            line_byte_stream->stream(process_buffer.data() + buffer_usage,
-                                     default_buffer_size - buffer_usage);
+            line_byte_stream->stream(buffer.data(), buffer.size());
         if (bytes_read == 0) break;
 
-        buffer_usage += bytes_read;
+        // Process the buffer line by line
+        std::size_t pos = 0;
+        while (pos < bytes_read) {
+            const char *newline_ptr = static_cast<const char *>(
+                std::memchr(buffer.data() + pos, '\n', bytes_read - pos));
 
-        // Reused the optimized process_lines function
-        // dummy current line and start line should always be 1 here since
-        // we are processing the entire buffer as a single logical line
-        std::size_t dummy_current_line = 1;
-        static constexpr std::size_t dummy_start_line = 1;
-        static constexpr std::size_t dummy_end_line =
-            std::numeric_limits<std::size_t>::max();
+            if (newline_ptr != nullptr) {
+                // Found complete line
+                std::size_t newline_pos = newline_ptr - buffer.data();
 
-        std::size_t processed = process_lines(
-            process_buffer.data(), buffer_usage, dummy_current_line,
-            dummy_start_line, dummy_end_line, line_accumulator, processor);
+                if (!line_accumulator.empty()) {
+                    // Complete a partial line from previous buffer
+                    line_accumulator.append(buffer.data() + pos,
+                                            newline_pos - pos);
+                    processor.process(line_accumulator.c_str(),
+                                      line_accumulator.length());
+                    line_accumulator.clear();
+                } else {
+                    // Process complete line directly
+                    processor.process(buffer.data() + pos, newline_pos - pos);
+                }
 
-        // Move unprocessed data to beginning of buffer
-        if (processed < buffer_usage) {
-            std::memmove(process_buffer.data(),
-                         process_buffer.data() + processed,
-                         buffer_usage - processed);
-            buffer_usage -= processed;
-        } else {
-            buffer_usage = 0;
+                pos = newline_pos + 1;
+            } else {
+                // No newline found, accumulate remaining data
+                line_accumulator.append(buffer.data() + pos, bytes_read - pos);
+                break;
+            }
         }
     }
 

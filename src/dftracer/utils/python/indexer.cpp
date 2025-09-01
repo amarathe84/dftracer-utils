@@ -139,7 +139,7 @@ static PyObject *Indexer_find_checkpoint(IndexerObject *self, PyObject *args) {
         return NULL;
     }
 
-    size_t target_offset;
+    std::size_t target_offset;
     if (!PyArg_ParseTuple(args, "n", &target_offset)) {
         return NULL;
     }
@@ -172,7 +172,7 @@ static PyObject *Indexer_get_checkpoints(IndexerObject *self,
     }
 
     dft_indexer_checkpoint_t *checkpoints = NULL;
-    size_t count = 0;
+    std::size_t count = 0;
 
     int result =
         dft_indexer_get_checkpoints(self->handle, &checkpoints, &count);
@@ -188,7 +188,7 @@ static PyObject *Indexer_get_checkpoints(IndexerObject *self,
         return NULL;
     }
 
-    for (size_t i = 0; i < count; i++) {
+    for (std::size_t i = 0; i < count; i++) {
         IndexerCheckpointObject *cp_obj =
             (IndexerCheckpointObject *)IndexerCheckpoint_new(
                 &IndexerCheckpointType, NULL, NULL);

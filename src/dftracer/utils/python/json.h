@@ -4,13 +4,14 @@
 #include <Python.h>
 #include <yyjson.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
 typedef struct {
     PyObject_HEAD mutable yyjson_doc* doc;
     mutable bool parsed;
-    size_t json_length;
+    std::size_t json_length;
     char json_data[];  // Flexible array member - data stored inline
 } JSONObject;
 

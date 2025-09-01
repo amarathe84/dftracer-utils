@@ -35,6 +35,7 @@ class LineByteStream : public Stream {
         std::size_t current_pos = checkpoint_.uc_offset;
         std::size_t actual_start = target_start;
 
+        // If target is at the start of the file, no adjustment needed
         if (target_start <= current_pos) {
             return target_start;
         }
@@ -55,15 +56,13 @@ class LineByteStream : public Stream {
                            sizeof(search_buffer) - 1, search_bytes)) {
             std::size_t relative_target = target_start - current_pos;
             if (relative_target < search_bytes) {
+                // Always use backward search to find line start
+                // This ensures we start at the beginning of a complete line
                 for (int64_t i = static_cast<int64_t>(relative_target); i >= 0;
                      i--) {
                     if (i == 0 || search_buffer[i - 1] == '\n') {
                         actual_start =
                             current_pos + static_cast<std::size_t>(i);
-                        DFTRACER_UTILS_LOG_DEBUG(
-                            "Found JSON line start at position %zu (requested "
-                            "%zu)",
-                            actual_start, target_start);
                         break;
                     }
                 }
@@ -94,7 +93,6 @@ class LineByteStream : public Stream {
             return 0;
         }
 
-        // Prepare temp buffer
         ensure_temp_buffer_size(buffer_size);
 
         std::size_t available_buffer_space = buffer_size;
@@ -109,7 +107,7 @@ class LineByteStream : public Stream {
             available_buffer_space -= partial_line_buffer_.size();
         }
 
-        // Read data
+        // Read data - initially try to stay within target bounds
         std::size_t max_bytes_to_read = target_end_bytes_ - current_position_;
         std::size_t bytes_to_read =
             std::min(max_bytes_to_read, available_buffer_space);
@@ -128,13 +126,14 @@ class LineByteStream : public Stream {
             }
         }
 
+        std::size_t total_data_size = partial_line_buffer_.size() + bytes_read;
+
         DFTRACER_UTILS_LOG_DEBUG(
             "Read %zu bytes from compressed stream, partial_buffer_size=%zu, "
-            "current_position=%zu, target_end=%zu",
+            "current_position=%zu, target_end=%zu, total_data_size=%zu",
             bytes_read, partial_line_buffer_.size(), current_position_,
-            target_end_bytes_);
+            target_end_bytes_, total_data_size);
 
-        std::size_t total_data_size = partial_line_buffer_.size() + bytes_read;
         std::size_t adjusted_size = apply_range_and_boundary_limits(
             temp_buffer_.data(), total_data_size);
 
@@ -186,22 +185,25 @@ class LineByteStream : public Stream {
     }
 
     std::size_t adjust_to_boundary(char *buffer, std::size_t buffer_size) {
+        // Look for the last newline in the buffer
         for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i >= 0; i--) {
             if (buffer[i] == '\n') {
                 return static_cast<std::size_t>(i) + 1;
             }
         }
 
-        if (!is_finished_) {
-            return 0;
+        // If we're at EOF or this is the final chunk, return all data
+        if (is_finished_ || current_position_ >= target_end_bytes_) {
+            return buffer_size;
         }
-        return buffer_size;
+
+        // Otherwise, we need more data to complete the line
+        return 0;
     }
 
     std::size_t apply_range_and_boundary_limits(char *buffer,
                                                 std::size_t total_data_size) {
         std::size_t adjusted_size;
-        std::size_t original_range_size = target_end_bytes_ - start_bytes_;
 
         if (current_position_ < actual_start_bytes_) {
             DFTRACER_UTILS_LOG_ERROR(
@@ -211,12 +213,25 @@ class LineByteStream : public Stream {
             throw ReaderError(ReaderError::READ_ERROR,
                               "Invalid internal position state detected");
         }
+
+        // Calculate how much data we've already returned from this chunk
         std::size_t bytes_already_returned =
             current_position_ - actual_start_bytes_;
-        std::size_t max_allowed_return =
-            (bytes_already_returned < original_range_size)
-                ? (original_range_size - bytes_already_returned)
-                : 0;
+
+        // The maximum data this chunk should return is limited by the original
+        // chunk boundary We stop at target_end_bytes_ to prevent overlaps with
+        // the next chunk
+        std::size_t max_position_allowed = target_end_bytes_;
+        std::size_t max_allowed_return = 0;
+
+        if (actual_start_bytes_ < max_position_allowed) {
+            std::size_t total_range_for_chunk =
+                max_position_allowed - actual_start_bytes_;
+            max_allowed_return =
+                (bytes_already_returned < total_range_for_chunk)
+                    ? (total_range_for_chunk - bytes_already_returned)
+                    : 0;
+        }
 
         std::size_t limited_data_size =
             std::min(total_data_size, max_allowed_return);

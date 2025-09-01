@@ -106,7 +106,7 @@ static PyObject* yyjson_val_to_python(yyjson_val* val) {
     } else if (yyjson_is_str(val)) {
         return PyUnicode_FromString(yyjson_get_str(val));
     } else if (yyjson_is_arr(val)) {
-        size_t idx, max;
+        std::size_t idx, max;
         yyjson_val* item;
         PyObject* list = PyList_New(0);
         if (!list) return NULL;
@@ -126,7 +126,7 @@ static PyObject* yyjson_val_to_python(yyjson_val* val) {
         }
         return list;
     } else if (yyjson_is_obj(val)) {
-        size_t idx, max;
+        std::size_t idx, max;
         yyjson_val *key_val, *val_val;
         PyObject* dict = PyDict_New();
         if (!dict) return NULL;
@@ -202,7 +202,7 @@ static PyObject* JSON_keys(JSONObject* self, PyObject* Py_UNUSED(ignored)) {
     PyObject* keys = PyList_New(0);
     if (!keys) return NULL;
 
-    size_t idx, max;
+    std::size_t idx, max;
     yyjson_val *key_val, *val_val;
     yyjson_obj_foreach(root, idx, max, key_val, val_val) {
         const char* key_str = yyjson_get_str(key_val);
@@ -257,6 +257,19 @@ static PyObject* JSON_get(JSONObject* self, PyObject* args) {
     }
 
     return yyjson_val_to_python(val);
+}
+
+static PyObject* JSON_iter(JSONObject* self) {
+    if (!JSON_ensure_parsed(self)) {
+        return NULL;
+    }
+
+    yyjson_val* root = yyjson_doc_get_root(self->doc);
+    if (!yyjson_is_obj(root)) {
+        return PyObject_GetIter(PyList_New(0));
+    }
+
+    return PyObject_GetIter(JSON_keys(self, NULL));
 }
 
 static PyObject* JSON_str(JSONObject* self) {
@@ -319,7 +332,7 @@ PyTypeObject JSONType = {
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
-    0,                                          /* tp_iter */
+    (getiterfunc)JSON_iter,                     /* tp_iter */
     0,                                          /* tp_iternext */
     JSON_methods,                               /* tp_methods */
     0,                                          /* tp_members */

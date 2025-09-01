@@ -5,12 +5,14 @@
 #include <dftracer/utils/python/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 
+#include <cstdint>
+
 typedef struct {
     PyObject_HEAD dft_reader_handle_t handle;
     PyObject *gz_path;
     PyObject *idx_path;
-    size_t checkpoint_size;
-    size_t buffer_size;
+    std::size_t checkpoint_size;
+    std::size_t buffer_size;
 } ReaderObject;
 
 extern PyTypeObject ReaderType;
