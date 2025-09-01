@@ -252,49 +252,49 @@ else()
     endif()
 endif()
 
-# SIMDJSON dependency
-find_library(SIMDJSON_LIBRARY_BUNDLED
-    NAMES simdjson libsimdjson
+# YYJSON dependency
+find_library(YYJSON_LIBRARY_BUNDLED
+    NAMES yyjson libyyjson
     PATHS \${_IMPORT_PREFIX}/lib
     NO_DEFAULT_PATH
 )
 
-if(SIMDJSON_LIBRARY_BUNDLED)
-    # Found simdjson that was built with this package
-    find_path(SIMDJSON_INCLUDE_DIR_BUNDLED
-        NAMES simdjson.h
+if(YYJSON_LIBRARY_BUNDLED)
+    # Found yyjson that was built with this package
+    find_path(YYJSON_INCLUDE_DIR_BUNDLED
+        NAMES yyjson.h
         PATHS \${_IMPORT_PREFIX}/include
         NO_DEFAULT_PATH
     )
     
-    if(SIMDJSON_INCLUDE_DIR_BUNDLED)
+    if(YYJSON_INCLUDE_DIR_BUNDLED)
         # Create shared target if not exists
-        if(NOT TARGET simdjson::simdjson)
-            add_library(simdjson::simdjson UNKNOWN IMPORTED)
-            set_target_properties(simdjson::simdjson PROPERTIES
-                IMPORTED_LOCATION \"\${SIMDJSON_LIBRARY_BUNDLED}\"
-                INTERFACE_INCLUDE_DIRECTORIES \"\${SIMDJSON_INCLUDE_DIR_BUNDLED}\"
+        if(NOT TARGET yyjson::yyjson)
+            add_library(yyjson::yyjson UNKNOWN IMPORTED)
+            set_target_properties(yyjson::yyjson PROPERTIES
+                IMPORTED_LOCATION \"\${YYJSON_LIBRARY_BUNDLED}\"
+                INTERFACE_INCLUDE_DIRECTORIES \"\${YYJSON_INCLUDE_DIR_BUNDLED}\"
             )
         endif()
         
         # Also look for static version
-        find_library(SIMDJSON_STATIC_LIBRARY_BUNDLED
-            NAMES simdjson_static libsimdjson_static
+        find_library(YYJSON_STATIC_LIBRARY_BUNDLED
+            NAMES yyjson_static libyyjson_static
             PATHS \${_IMPORT_PREFIX}/lib
             NO_DEFAULT_PATH
         )
         
-        if(SIMDJSON_STATIC_LIBRARY_BUNDLED AND NOT TARGET simdjson::simdjson_static)
-            add_library(simdjson::simdjson_static UNKNOWN IMPORTED)
-            set_target_properties(simdjson::simdjson_static PROPERTIES
-                IMPORTED_LOCATION \"\${SIMDJSON_STATIC_LIBRARY_BUNDLED}\"
-                INTERFACE_INCLUDE_DIRECTORIES \"\${SIMDJSON_INCLUDE_DIR_BUNDLED}\"
+        if(YYJSON_STATIC_LIBRARY_BUNDLED AND NOT TARGET yyjson::yyjson_static)
+            add_library(yyjson::yyjson_static UNKNOWN IMPORTED)
+            set_target_properties(yyjson::yyjson_static PROPERTIES
+                IMPORTED_LOCATION \"\${YYJSON_STATIC_LIBRARY_BUNDLED}\"
+                INTERFACE_INCLUDE_DIRECTORIES \"\${YYJSON_INCLUDE_DIR_BUNDLED}\"
             )
         endif()
     endif()
 else()
-    # Try to find system simdjson
-    find_dependency(simdjson QUIET)
+    # Try to find system yyjson
+    find_dependency(yyjson QUIET)
 endif()
 
 # GHC_FILESYSTEM dependency (header-only)

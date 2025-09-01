@@ -6,7 +6,6 @@
 #include <dftracer/utils/analyzers/trace.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/pipeline/pipeline.h>
-#include <dftracer/utils/utils/json.h>
 
 #include <memory>
 #include <optional>

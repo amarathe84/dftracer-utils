@@ -13,18 +13,13 @@
 
 namespace dftracer::utils {
 
-/**
- * Base class for all inflater implementations.
- * Provides core zlib operations and common functionality.
- */
 class Inflater {
    public:
     static constexpr std::size_t BUFFER_SIZE = 65536;
 
-    // Core stream and buffer access
     z_stream stream;
-    unsigned char out_buffer[BUFFER_SIZE];
-    unsigned char in_buffer[BUFFER_SIZE];
+    alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char out_buffer[BUFFER_SIZE];
+    alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char in_buffer[BUFFER_SIZE];
 
    protected:
     int window_bits_;
@@ -38,7 +33,6 @@ class Inflater {
 
     virtual ~Inflater() { inflateEnd(&stream); }
 
-    // Core zlib operations
     bool initialize_stream(int window_bits) {
         window_bits_ = window_bits;
         std::memset(&stream, 0, sizeof(stream));
@@ -50,7 +44,6 @@ class Inflater {
             return false;
         }
 
-        // Reset stream input state
         stream.avail_in = 0;
         stream.next_in = nullptr;
 
@@ -71,7 +64,6 @@ class Inflater {
         return inflatePrime(&stream, bits, value) == Z_OK;
     }
 
-    // Stream type detection (from original implementation)
     int detect_stream_type(FILE* file, std::uint64_t offset = 0) {
         if (fseeko(file, static_cast<off_t>(offset), SEEK_SET) != 0) {
             return constants::indexer::ZLIB_GZIP_WINDOW_BITS;  // Default to
@@ -95,7 +87,6 @@ class Inflater {
         }
     }
 
-    // File I/O helpers
     bool read_input(FILE* file) {
         std::size_t n = ::fread(in_buffer, 1, sizeof(in_buffer), file);
         if (n > 0) {
@@ -123,7 +114,6 @@ class Inflater {
         return to_copy;
     }
 
-    // Basic inflation result enum
     enum InflateResult {
         SUCCESS,
         END_OF_STREAM,
@@ -157,7 +147,6 @@ class Inflater {
         }
     }
 
-    // State queries
     bool needs_input() const { return stream.avail_in == 0; }
     bool has_output() const { return stream.avail_out < sizeof(out_buffer); }
     int get_data_type() const { return stream.data_type; }

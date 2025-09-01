@@ -2,7 +2,6 @@
 #define DFTRACER_UTILS_ANALYZERS_HELPERS_HELPERS_H
 
 #include <dftracer/utils/analyzers/trace.h>
-#include <dftracer/utils/utils/json.h>
 
 #include <cstdint>
 #include <string>
@@ -20,7 +19,7 @@ bool should_ignore_event(const std::string& func_name);
 std::size_t get_size_bin_index(std::uint64_t size);
 std::size_t get_num_size_bins();
 void set_size_bins(dftracer::utils::analyzers::Trace& trace);
-dftracer::utils::analyzers::Trace parse_trace(
-    const dftracer::utils::json::JsonDocument& doc);
+// dftracer::utils::analyzers::Trace parse_trace(
+//     const dftracer::utils::json::JsonDocument& doc);
 
 #endif  // DFTRACER_UTILS_ANALYZERS_HELPERS_HELPERS_H

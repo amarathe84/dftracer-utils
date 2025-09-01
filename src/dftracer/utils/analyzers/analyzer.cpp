@@ -14,7 +14,6 @@
 #include <sstream>
 #include <stdexcept>
 
-using namespace dftracer::utils::json;
 
 namespace dftracer::utils::analyzers {
 

@@ -40,22 +40,6 @@ function(need_ghc_filesystem)
   endif()
 endfunction()
 
-function(need_simdjson)
-  if(NOT simdjson_ADDED)
-    CPMAddPackage(
-      NAME simdjson
-      GITHUB_REPOSITORY simdjson/simdjson
-      VERSION 3.13.0
-      OPTIONS
-        "SIMDJSON_BUILD_STATIC_LIB ON"
-        "BUILD_SHARED_LIBS ON"
-        "SIMDJSON_DISABLE_DEPRECATED_API ON"
-        "SIMDJSON_EXCEPTIONS OFF"
-      FORCE YES
-    )
-  endif()
-endfunction()
-
 function(need_yyjson)
   if(NOT yyjson_ADDED)
     CPMAddPackage(
