@@ -7,7 +7,7 @@ typedef struct {
     PyObject_HEAD dft_indexer_handle_t handle;
     PyObject *gz_path;
     PyObject *idx_path;
-    size_t checkpoint_size;
+    std::uint64_t checkpoint_size;
 } IndexerObject;
 
 extern PyTypeObject IndexerType;

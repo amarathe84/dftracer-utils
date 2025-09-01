@@ -29,7 +29,7 @@ static int Indexer_init(IndexerObject *self, PyObject *args, PyObject *kwds) {
                                    "force_rebuild", NULL};
     const char *gz_path;
     const char *idx_path = NULL;
-    size_t checkpoint_size = 1024 * 1024;  // Default 1MB
+    std::uint64_t checkpoint_size = 1024 * 1024;  // Default 1MB
     int force_rebuild = 0;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|snp", (char **)kwlist,
@@ -216,7 +216,7 @@ static PyObject *Indexer_idx_path(IndexerObject *self, void *closure) {
 }
 
 static PyObject *Indexer_checkpoint_size(IndexerObject *self, void *closure) {
-    return PyLong_FromSize_t(self->checkpoint_size);
+    return PyLong_FromUnsignedLongLong(self->checkpoint_size);
 }
 
 static PyObject *Indexer_enter(IndexerObject *self,

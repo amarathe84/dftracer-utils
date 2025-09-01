@@ -63,7 +63,7 @@ extern "C" {
 typedef void *dft_indexer_handle_t;
 dft_indexer_handle_t dft_indexer_create(const char *gz_path,
                                         const char *idx_path,
-                                        size_t checkpoint_size,
+                                        uint64_t checkpoint_size,
                                         int force_rebuild);
 int dft_indexer_build(dft_indexer_handle_t indexer);
 int dft_indexer_need_rebuild(dft_indexer_handle_t indexer);

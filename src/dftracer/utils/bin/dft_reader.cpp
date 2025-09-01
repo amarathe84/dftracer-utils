@@ -3,7 +3,6 @@
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 #include <dftracer/utils/utils/filesystem.h>
-#include <dftracer/utils/utils/timer.h>
 
 #include <algorithm>
 #include <argparse/argparse.hpp>
@@ -141,11 +140,7 @@ int main(int argc, char **argv) {
                 reader.set_buffer_size(read_buffer_size);
                 auto lines = reader.read_lines(static_cast<std::size_t>(start),
                                                end_line);
-                {
-                    Timer timer("Writing output to stdout", true, true);
-                    setvbuf(stdout, NULL, _IOFBF, 1 << 20);
-                    fwrite(lines.data(), 1, lines.size(), stdout);
-                }
+                fwrite(lines.data(), 1, lines.size(), stdout);
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
                 std::size_t line_count = static_cast<std::size_t>(
                     std::count(lines.begin(), lines.end(), '\n'));
@@ -173,9 +168,6 @@ int main(int argc, char **argv) {
 #endif
 
                 {
-                    Timer timer("Reading total + writing", true, true);
-                    Timer timer_chunk("Reading chunk data");
-                    timer_chunk.start();
                     while (
                         (bytes_written =
                              read_mode == "bytes"
@@ -184,9 +176,6 @@ int main(int argc, char **argv) {
                                  : reader.read_line_bytes(
                                        start_bytes_, end_bytes_, buffer.get(),
                                        read_buffer_size)) > 0) {
-                        timer_chunk.stop();
-                        printf("Time taken to read %zu bytes: %f ms\n",
-                               bytes_written, timer_chunk.elapsed());
                         fwrite(buffer.get(), 1, bytes_written, stdout);
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
                         total_bytes += bytes_written;
