@@ -231,14 +231,17 @@ failure:
 
 IndexerImplementor::IndexerImplementor(const std::string &gz_path_,
                                        const std::string &idx_path_,
-                                       std::size_t ckpt_size_, bool force_)
+                                       std::uint64_t ckpt_size_, bool force_)
     : gz_path(gz_path_),
       gz_path_logical_path(get_logical_path(gz_path)),
       idx_path(idx_path_),
       ckpt_size(ckpt_size_),
       force_rebuild(force_),
       cached_is_valid(false),
-      cached_file_id(-1) {
+      cached_file_id(-1),
+      cached_max_bytes(0),
+      cached_num_lines(0),
+      cached_checkpoint_size(0) {
     if (gz_path.empty()) {
         throw IndexerError(IndexerError::Type::INVALID_ARGUMENT,
                            "gz_path must not be empty");
@@ -398,7 +401,7 @@ std::uint64_t IndexerImplementor::get_max_bytes() const {
     return cached_max_bytes;
 }
 
-std::size_t IndexerImplementor::get_checkpoint_size() const {
+std::uint64_t IndexerImplementor::get_checkpoint_size() const {
     if (cached_checkpoint_size == 0) {
         cached_checkpoint_size = query_checkpoint_size(db, cached_file_id);
     }

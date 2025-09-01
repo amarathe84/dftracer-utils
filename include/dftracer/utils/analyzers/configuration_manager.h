@@ -17,7 +17,7 @@ class AnalyzerConfigManager {
     AnalyzerConfigManager(
         double time_granularity = DEFAULT_TIME_GRANULARITY,
         bool checkpoint = false, const std::string& checkpoint_dir = "",
-        std::size_t checkpoint_size = indexer::DEFAULT_CHECKPOINT_SIZE,
+        std::uint64_t checkpoint_size = indexer::DEFAULT_CHECKPOINT_SIZE,
         double time_resolution = DEFAULT_TIME_RESOLUTION)
         : time_granularity_(time_granularity),
           checkpoint_(checkpoint),
@@ -42,7 +42,7 @@ class AnalyzerConfigManager {
     inline static AnalyzerConfigManager create(
         double time_granularity = DEFAULT_TIME_GRANULARITY,
         bool checkpoint = false, const std::string& checkpoint_dir = "",
-        std::size_t checkpoint_size = indexer::DEFAULT_CHECKPOINT_SIZE,
+        std::uint64_t checkpoint_size = indexer::DEFAULT_CHECKPOINT_SIZE,
         double time_resolution = DEFAULT_TIME_RESOLUTION) {
         return AnalyzerConfigManager(time_granularity, checkpoint,
                                      checkpoint_dir, checkpoint_size,

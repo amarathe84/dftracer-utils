@@ -18,10 +18,10 @@ namespace dftracer::utils {
 struct IndexerImplementor;
 class Indexer {
    public:
-    static constexpr std::size_t DEFAULT_CHECKPOINT_SIZE =
+    static constexpr std::uint64_t DEFAULT_CHECKPOINT_SIZE =
         constants::indexer::DEFAULT_CHECKPOINT_SIZE;
     Indexer(const std::string &gz_path, const std::string &idx_path,
-            size_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE,
+            std::uint64_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE,
             bool force = false);
     ~Indexer();
     Indexer(const Indexer &) = delete;
@@ -35,7 +35,7 @@ class Indexer {
     // Metadata
     const std::string &get_idx_path() const;
     const std::string &get_gz_path() const;
-    std::size_t get_checkpoint_size() const;
+    std::uint64_t get_checkpoint_size() const;
     std::uint64_t get_max_bytes() const;
     std::uint64_t get_num_lines() const;
     int get_file_id() const;

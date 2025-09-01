@@ -31,9 +31,9 @@ struct InsertCheckpointData {
     int bits;
     const void *compressed_dict;
     std::size_t compressed_dict_size;
-    uint64_t num_lines;
-    uint64_t first_line_num;
-    uint64_t last_line_num;
+    std::uint64_t num_lines;
+    std::uint64_t first_line_num;
+    std::uint64_t last_line_num;
 };
 void insert_checkpoint_record(const SqliteDatabase &db, int file_id,
                               const InsertCheckpointData &data);
@@ -53,7 +53,7 @@ std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
 std::vector<IndexCheckpoint> query_checkpoints_for_line_range(
     const SqliteDatabase &db, int file_id, std::uint64_t start_line,
     std::uint64_t end_line);
-std::size_t query_checkpoint_size(const SqliteDatabase &db, int file_id);
+std::uint64_t query_checkpoint_size(const SqliteDatabase &db, int file_id);
 
 }  // namespace dftracer::utils
 

@@ -16,7 +16,7 @@ using namespace dftracer::utils;
 
 int main(int argc, char* argv[]) {
     DFTRACER_UTILS_LOGGER_INIT();
-    size_t default_checkpoint_size = Indexer::DEFAULT_CHECKPOINT_SIZE;
+    std::uint64_t default_checkpoint_size = Indexer::DEFAULT_CHECKPOINT_SIZE;
     auto default_checkpoint_size_str =
         std::to_string(default_checkpoint_size) + " B (" +
         std::to_string(default_checkpoint_size / (1024 * 1024)) + " MB)";
@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
     program.add_argument("-c", "--checkpoint-size")
         .help("Checkpoint size for indexing in bytes (default: " +
               default_checkpoint_size_str + ")")
-        .scan<'d', size_t>()
+        .scan<'d', std::uint64_t>()
         .default_value(default_checkpoint_size);
 
     program.add_argument("-f", "--force-rebuild")
@@ -77,7 +77,8 @@ int main(int argc, char* argv[]) {
     }
 
     auto trace_paths = program.get<std::vector<std::string>>("files");
-    size_t checkpoint_size = program.get<size_t>("--checkpoint-size");
+    std::uint64_t checkpoint_size =
+        program.get<std::uint64_t>("--checkpoint-size");
     bool force_rebuild = program.get<bool>("--force-rebuild");
     std::string view_types_str = program.get<std::string>("--view-types");
     double time_granularity = program.get<double>("--time-granularity");

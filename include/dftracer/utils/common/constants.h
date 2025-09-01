@@ -10,7 +10,7 @@ namespace dftracer::utils::constants {
 namespace indexer {
 static constexpr std::size_t ZLIB_WINDOW_SIZE = 32768;
 static constexpr int ZLIB_GZIP_WINDOW_BITS = 31;  // 15 + 16 for gzip format
-static constexpr std::size_t DEFAULT_CHECKPOINT_SIZE =
+static constexpr std::uint64_t DEFAULT_CHECKPOINT_SIZE =
     32 * 1024 * 1024;                             // 32MB
 extern const char *SQL_SCHEMA;
 }  // namespace indexer

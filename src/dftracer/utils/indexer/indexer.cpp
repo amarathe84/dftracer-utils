@@ -20,7 +20,7 @@
 namespace dftracer::utils {
 
 Indexer::Indexer(const std::string &gz_path, const std::string &idx_path,
-                 size_t ckpt_size, bool force_rebuild)
+                 std::uint64_t ckpt_size, bool force_rebuild)
     : p_impl_(new IndexerImplementor(gz_path, idx_path, ckpt_size,
                                      force_rebuild)) {}
 
@@ -45,13 +45,17 @@ const std::string &Indexer::get_gz_path() const { return p_impl_->gz_path; }
 
 const std::string &Indexer::get_idx_path() const { return p_impl_->idx_path; }
 
-std::size_t Indexer::get_checkpoint_size() const {
+std::uint64_t Indexer::get_checkpoint_size() const {
     return p_impl_->get_checkpoint_size();
 }
 
-uint64_t Indexer::get_max_bytes() const { return p_impl_->get_max_bytes(); }
+std::uint64_t Indexer::get_max_bytes() const {
+    return p_impl_->get_max_bytes();
+}
 
-uint64_t Indexer::get_num_lines() const { return p_impl_->get_num_lines(); }
+std::uint64_t Indexer::get_num_lines() const {
+    return p_impl_->get_num_lines();
+}
 
 int Indexer::find_file_id(const std::string &gz_path) const {
     return p_impl_->find_file_id(gz_path);

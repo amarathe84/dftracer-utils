@@ -18,7 +18,7 @@ struct IndexerImplementor {
     std::string gz_path;
     std::string gz_path_logical_path;
     std::string idx_path;
-    std::size_t ckpt_size;
+    std::uint64_t ckpt_size;
     bool force_rebuild;
     SqliteDatabase db;
 
@@ -27,11 +27,11 @@ struct IndexerImplementor {
     mutable int cached_file_id;
     mutable std::uint64_t cached_max_bytes;
     mutable std::uint64_t cached_num_lines;
-    mutable std::size_t cached_checkpoint_size;
+    mutable std::uint64_t cached_checkpoint_size;
     mutable std::vector<IndexCheckpoint> cached_checkpoints;
 
     IndexerImplementor(const std::string &gz_path, const std::string &idx_path,
-                       std::size_t ckpt_size, bool force_rebuild);
+                       std::uint64_t ckpt_size, bool force_rebuild);
 
     void open();
     void close();
@@ -41,7 +41,7 @@ struct IndexerImplementor {
     bool exists() const;
 
     // Metadata
-    std::size_t get_checkpoint_size() const;
+    std::uint64_t get_checkpoint_size() const;
     std::uint64_t get_max_bytes() const;
     std::uint64_t get_num_lines() const;
     int get_file_id() const;
