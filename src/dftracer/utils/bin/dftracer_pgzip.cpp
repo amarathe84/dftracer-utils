@@ -226,10 +226,11 @@ int main(int argc, char** argv) {
             total_original_size += result.original_size;
             total_compressed_size += result.compressed_size;
             if (verbose) {
-                double ratio = total_original_size > 0
-                                   ? (double)result.compressed_size /
-                                         static_cast<double>(result.original_size) * 100.0
-                                   : 0.0;
+                double ratio =
+                    total_original_size > 0
+                        ? (double)result.compressed_size /
+                              static_cast<double>(result.original_size) * 100.0
+                        : 0.0;
                 DFTRACER_UTILS_LOG_INFO(
                     "Compressed %s: %zu -> %zu bytes (%.1f%%)",
                     fs::path(result.file_path).filename().c_str(),
@@ -241,10 +242,11 @@ int main(int argc, char** argv) {
         }
     }
 
-    double overall_ratio =
-        total_original_size > 0
-            ? static_cast<double>(total_compressed_size) / static_cast<double>(total_original_size) * 100.0
-            : 0.0;
+    double overall_ratio = total_original_size > 0
+                               ? static_cast<double>(total_compressed_size) /
+                                     static_cast<double>(total_original_size) *
+                                     100.0
+                               : 0.0;
 
     printf("Gzip Completed. Processed %zu/%zu files in %.2f ms\n", successful,
            results.size(), duration.count());

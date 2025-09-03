@@ -1,6 +1,7 @@
 #ifndef DFTRACER_UTILS_ANALYZERS_TRACE_H
 #define DFTRACER_UTILS_ANALYZERS_TRACE_H
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>

@@ -1,5 +1,6 @@
 #include "dftracer/utils/analyzers/constants.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>

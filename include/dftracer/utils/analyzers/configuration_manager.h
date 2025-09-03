@@ -5,6 +5,7 @@
 #include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/utils/filesystem.h>
 
+#include <cstddef>
 #include <cstdint>
 
 namespace dftracer::utils::analyzers {

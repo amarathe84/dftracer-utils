@@ -3,6 +3,7 @@
 
 #include <dftracer/utils/analyzers/trace.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 

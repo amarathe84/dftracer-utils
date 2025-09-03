@@ -5,6 +5,7 @@
 #include <dftracer/utils/common/platform_compat.h>
 #include <dftracer/utils/reader/streams/stream.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <vector>

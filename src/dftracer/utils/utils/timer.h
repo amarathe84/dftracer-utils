@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_UTILS_TIMER_H
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>

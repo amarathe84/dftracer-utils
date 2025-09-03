@@ -3,6 +3,7 @@
 
 #include <dftracer/utils/pipeline/executors/executor.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <future>
 #include <memory>

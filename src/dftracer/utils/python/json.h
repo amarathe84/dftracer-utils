@@ -4,6 +4,7 @@
 #include <Python.h>
 #include <yyjson.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>

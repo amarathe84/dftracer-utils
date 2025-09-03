@@ -4,6 +4,7 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/reader/streams/stream.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 

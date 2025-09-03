@@ -3,6 +3,7 @@
 
 #include <dftracer/utils/common/constants.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 

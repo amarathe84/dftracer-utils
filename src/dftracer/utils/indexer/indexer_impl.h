@@ -9,6 +9,7 @@
 #include <dftracer/utils/utils/filesystem.h>
 #include <sqlite3.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 

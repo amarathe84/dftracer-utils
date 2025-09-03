@@ -1,7 +1,7 @@
 #ifndef DFTRACER_UTILS_UTILS_STRING_H
 #define DFTRACER_UTILS_UTILS_STRING_H
 
-#include <cstdint>
+#include <cstddef>
 
 namespace dftracer::utils {
 bool json_trim_and_validate(const char* data, std::size_t length,

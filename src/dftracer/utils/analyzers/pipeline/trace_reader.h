@@ -4,6 +4,7 @@
 #include <dftracer/utils/analyzers/trace.h>
 #include <dftracer/utils/pipeline/pipeline.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>

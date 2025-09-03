@@ -6,6 +6,7 @@
 #include <dftracer/utils/reader/streams/factory.h>
 #include <dftracer/utils/reader/streams/line_byte_stream.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <sstream>
 #include <string>

@@ -5,6 +5,7 @@
 #include <dftracer/utils/python/indexer.h>
 #include <dftracer/utils/reader/reader.h>
 
+#include <cstddef>
 #include <cstdint>
 
 typedef struct {

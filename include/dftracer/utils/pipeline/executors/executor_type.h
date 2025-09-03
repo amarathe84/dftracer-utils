@@ -1,6 +1,7 @@
 #ifndef DFTRACER_UTILS_PIPELINE_EXECUTORS_EXECUTOR_TYPE_H
 #define DFTRACER_UTILS_PIPELINE_EXECUTORS_EXECUTOR_TYPE_H
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 

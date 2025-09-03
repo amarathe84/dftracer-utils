@@ -7,6 +7,7 @@
 #include <dftracer/utils/utils/timer.h>
 #include <structmember.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 

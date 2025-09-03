@@ -5,6 +5,7 @@
 #include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/sqlite/database.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <ctime>
 
