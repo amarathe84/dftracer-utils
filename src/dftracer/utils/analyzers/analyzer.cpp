@@ -14,7 +14,6 @@
 #include <sstream>
 #include <stdexcept>
 
-
 namespace dftracer::utils::analyzers {
 
 namespace helpers {

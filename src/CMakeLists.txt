@@ -91,7 +91,6 @@ target_link_libraries(dftracer_utils
     PRIVATE xxHash::xxhash
     PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson
 )
-add_mpi_deps_if_needed(dftracer_utils)
 target_add_rpath(dftracer_utils)
 add_stdfs_if_needed(dftracer_utils)
 
@@ -131,7 +130,6 @@ target_link_libraries(dftracer_utils_shared
     PRIVATE xxHash::xxhash
     PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson
 )
-add_mpi_deps_if_needed(dftracer_utils_shared)
 target_add_rpath(dftracer_utils_shared)
 add_stdfs_if_needed(dftracer_utils_shared)
 
@@ -245,7 +243,6 @@ target_link_libraries(dft_map PRIVATE
   xxHash::xxhash
   yyjson
 )
-# add_mpi_deps_if_needed(dft_map)
 
 link_sqlite3(dft_map STATIC)
 link_zlib(dft_map STATIC)
@@ -276,6 +273,8 @@ set(TEMPORARY_BINARIES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/type_transform_example.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/work_stealing_test.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/deterministic_test.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/multi_dependency_example.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/complex_multi_dependency_example.cpp
 )
 
 foreach(bin ${TEMPORARY_BINARIES})
@@ -312,8 +311,6 @@ install(TARGETS ${bin_exec} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 
 endforeach()
-
-# add_mpi_deps_if_needed(dft_map)
 
 ##########################################
 # Python binding

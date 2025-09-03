@@ -50,7 +50,8 @@ class LineByteStream : public Stream {
         }
 
         // Use stack allocation for small search buffer
-        alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char search_buffer[SEARCH_BUFFER_SIZE];
+        alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char
+            search_buffer[SEARCH_BUFFER_SIZE];
         std::size_t search_bytes;
         if (inflater_.read(file_handle_, search_buffer,
                            sizeof(search_buffer) - 1, search_bytes)) {

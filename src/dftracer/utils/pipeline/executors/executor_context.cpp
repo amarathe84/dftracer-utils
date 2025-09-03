@@ -1,3 +1,4 @@
+#include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/executors/executor_context.h>
 #include <dftracer/utils/pipeline/pipeline.h>
 
@@ -6,115 +7,109 @@ namespace dftracer::utils {
 // Unified task access methods
 Task* ExecutorContext::get_task(TaskIndex index) const {
     if (index < pipeline_->size()) {
-        // Static task from pipeline
         return pipeline_->get_task(index);
     } else {
-        // Dynamic task
         return get_dynamic_task(index);
     }
 }
 
-const std::vector<TaskIndex>& ExecutorContext::get_task_dependencies(TaskIndex index) const {
+const std::vector<TaskIndex>& ExecutorContext::get_task_dependencies(
+    TaskIndex index) const {
     if (index < pipeline_->size()) {
-        // Static task dependencies from pipeline
         return pipeline_->get_task_dependencies(index);
     } else {
-        // Dynamic task dependencies
         return get_dynamic_dependencies(index);
     }
 }
 
-const std::vector<TaskIndex>& ExecutorContext::get_task_dependents(TaskIndex index) const {
+const std::vector<TaskIndex>& ExecutorContext::get_task_dependents(
+    TaskIndex index) const {
     if (index < pipeline_->size()) {
-        // Static task dependents from pipeline
         return pipeline_->get_task_dependents(index);
     } else {
-        // Dynamic task dependents
         return get_dynamic_dependents(index);
     }
 }
 
-TaskIndex ExecutorContext::add_dynamic_task(std::unique_ptr<Task> task, TaskIndex depends_on) {
-    // Dynamic task IDs start right after static tasks
+TaskIndex ExecutorContext::add_dynamic_task(std::unique_ptr<Task> task,
+                                            TaskIndex depends_on) {
     TaskIndex task_id = pipeline_->size() + dynamic_tasks_.size();
-    
-    // Add task
+
     dynamic_tasks_.push_back(std::move(task));
-    
-    // Ensure dependency vectors are sized correctly
-    while (dynamic_dependencies_.size() <= static_cast<size_t>(task_id - pipeline_->size())) {
+
+    while (dynamic_dependencies_.size() <=
+           static_cast<size_t>(task_id - pipeline_->size())) {
         dynamic_dependencies_.emplace_back();
         dynamic_dependents_.emplace_back();
     }
-    
-    // Add dependency if specified
+
     if (depends_on >= 0) {
         add_dynamic_dependency(depends_on, task_id);
     }
-    
-    // Initialize execution state
+
     task_completed_[task_id] = false;
     dependency_count_[task_id] = (depends_on >= 0) ? 1 : 0;
-    
+
     return task_id;
 }
 
 void ExecutorContext::add_dynamic_dependency(TaskIndex from, TaskIndex to) {
-    // Only handle dependencies where at least one task is dynamic
     if (from < pipeline_->size() && to < pipeline_->size()) {
-        // Both static - this shouldn't happen in normal usage, but ignore
         return;
     }
-    
-    // Calculate indices for dynamic task vectors
-    size_t from_idx = (from >= pipeline_->size()) ? static_cast<size_t>(from - pipeline_->size()) : 0;
-    size_t to_idx = (to >= pipeline_->size()) ? static_cast<size_t>(to - pipeline_->size()) : 0;
-    
-    // Ensure vectors are sized correctly for dynamic tasks
+
+    size_t from_idx = (from >= pipeline_->size())
+                          ? static_cast<size_t>(from - pipeline_->size())
+                          : 0;
+    size_t to_idx = (to >= pipeline_->size())
+                        ? static_cast<size_t>(to - pipeline_->size())
+                        : 0;
+
     if (from >= pipeline_->size()) {
         while (dynamic_dependents_.size() <= from_idx) {
             dynamic_dependents_.emplace_back();
         }
         dynamic_dependents_[from_idx].push_back(to);
     }
-    
+
     if (to >= pipeline_->size()) {
         while (dynamic_dependencies_.size() <= to_idx) {
             dynamic_dependencies_.emplace_back();
         }
         dynamic_dependencies_[to_idx].push_back(from);
     }
-    
-    // Update dependency count
+
     dependency_count_[to]++;
 }
 
 Task* ExecutorContext::get_dynamic_task(TaskIndex index) const {
-    if (index < pipeline_->size()) return nullptr;  // Not a dynamic task
-    
+    if (index < pipeline_->size()) return nullptr;
+
     size_t task_idx = static_cast<size_t>(index - pipeline_->size());
     if (task_idx >= dynamic_tasks_.size()) return nullptr;
-    
+
     return dynamic_tasks_[task_idx].get();
 }
 
-const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependencies(TaskIndex index) const {
+const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependencies(
+    TaskIndex index) const {
     static const std::vector<TaskIndex> empty;
     if (index < pipeline_->size()) return empty;
-    
+
     size_t task_idx = static_cast<size_t>(index - pipeline_->size());
     if (task_idx >= dynamic_dependencies_.size()) return empty;
-    
+
     return dynamic_dependencies_[task_idx];
 }
 
-const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependents(TaskIndex index) const {
+const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependents(
+    TaskIndex index) const {
     static const std::vector<TaskIndex> empty;
     if (index < pipeline_->size()) return empty;
-    
+
     size_t task_idx = static_cast<size_t>(index - pipeline_->size());
     if (task_idx >= dynamic_dependents_.size()) return empty;
-    
+
     return dynamic_dependents_[task_idx];
 }
 
@@ -156,11 +151,68 @@ void ExecutorContext::reset() {
     dynamic_tasks_.clear();
     dynamic_dependencies_.clear();
     dynamic_dependents_.clear();
-    
+
     // Clear all execution state
     task_outputs_.clear();
     task_completed_.clear();
     dependency_count_.clear();
 }
 
-} // namespace dftracer::utils
+bool ExecutorContext::validate() const {
+    // Check if pipeline is empty
+    if (is_empty()) {
+        DFTRACER_UTILS_LOG_ERROR("Pipeline is empty");
+        return false;
+    }
+
+    // Check for cycles
+    if (has_cycles()) {
+        DFTRACER_UTILS_LOG_ERROR("Pipeline contains cycles");
+        return false;
+    }
+
+    // Validate types with executor-aware logic
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline_->size()); ++i) {
+        const auto& task_dependencies = get_task_dependencies(i);
+
+        if (task_dependencies.empty()) {
+            // No dependencies - entry task (input comes from pipeline input)
+            continue;
+        } else if (task_dependencies.size() == 1) {
+            // Single dependency - direct output-to-input connection
+            TaskIndex dep = task_dependencies[0];
+            Task* dep_task = get_task(dep);
+            Task* current_task = get_task(i);
+
+            if (dep_task->get_output_type() != current_task->get_input_type()) {
+                DFTRACER_UTILS_LOG_ERROR(
+                    "Type mismatch between task %d (output: %s) and task %d "
+                    "(expected input: %s)",
+                    dep, dep_task->get_output_type().name(), i,
+                    current_task->get_input_type().name());
+                return false;
+            }
+        } else {
+            // Multiple dependencies - executor combines into
+            // std::vector<std::any> Task must expect std::vector<std::any> as
+            // input
+            Task* current_task = get_task(i);
+            if (current_task->get_input_type() !=
+                typeid(std::vector<std::any>)) {
+                DFTRACER_UTILS_LOG_ERROR(
+                    "Task %d has %zu dependencies but expects input type %s "
+                    "instead of std::vector<std::any>",
+                    i, task_dependencies.size(),
+                    current_task->get_input_type().name());
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool ExecutorContext::is_empty() const { return pipeline_->empty(); }
+
+bool ExecutorContext::has_cycles() const { return pipeline_->has_cycles(); }
+
+}  // namespace dftracer::utils

@@ -88,6 +88,28 @@ endif()
 add_test(NAME test_reader_robustness COMMAND test_reader_robustness)
 
 #+++++++++++++++++++++++++++++++++++++++++
+# Test Pipeline
+#+++++++++++++++++++++++++++++++++++++++++
+
+add_executable(test_pipeline
+    test_pipeline.cpp
+)
+target_link_libraries(test_pipeline
+    PRIVATE
+    doctest::doctest
+    testing_utilities
+)
+target_set_warnings(test_pipeline)
+
+# Apply coverage flags if enabled
+if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_pipeline PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+    target_link_libraries(test_pipeline PRIVATE --coverage)
+endif()
+
+add_test(NAME test_pipeline COMMAND test_pipeline)
+
+#+++++++++++++++++++++++++++++++++++++++++
 # Python Tests (SKBUILD only)
 #+++++++++++++++++++++++++++++++++++++++++
 

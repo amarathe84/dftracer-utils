@@ -171,7 +171,8 @@ std::size_t ReaderImplementor::read_line_bytes(std::size_t start_bytes,
     return line_byte_stream->stream(buffer, buffer_size);
 }
 
-std::string ReaderImplementor::read_lines(std::size_t start_line, std::size_t end_line) {
+std::string ReaderImplementor::read_lines(std::size_t start_line,
+                                          std::size_t end_line) {
     check_reader_state(is_open, indexer);
 
     if (start_line == 0 || end_line == 0) {

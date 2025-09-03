@@ -1,8 +1,8 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/error.h>
+#include <dftracer/utils/pipeline/executors/executor_context.h>
 #include <dftracer/utils/pipeline/executors/scheduler/thread_scheduler.h>
 #include <dftracer/utils/pipeline/executors/thread_executor.h>
-#include <dftracer/utils/pipeline/executors/executor_context.h>
 
 #include <any>
 #include <atomic>
@@ -38,32 +38,10 @@ ThreadExecutor::ThreadExecutor(size_t max_threads)
 ThreadExecutor::~ThreadExecutor() = default;
 
 std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input) {
-    // Validate pipeline
-    if (pipeline.empty()) {
-        throw PipelineError(PipelineError::VALIDATION_ERROR,
-                            "Pipeline is empty");
-    }
-    if (!pipeline.validate_types()) {
-        throw PipelineError(PipelineError::TYPE_MISMATCH_ERROR,
-                            "Pipeline type validation failed");
-    }
-    if (pipeline.has_cycles()) {
-        throw PipelineError(PipelineError::VALIDATION_ERROR,
-                            "Pipeline contains cycles");
-    }
-    
-    // Create thread scheduler instance
     ThreadScheduler scheduler;
-    
-    // Initialize the scheduler with the number of threads
     scheduler.initialize(max_threads_);
-    
-    // Execute the pipeline using the scheduler (scheduler will create ExecutionContext internally)
     std::any result = scheduler.execute(pipeline, input);
-    
-    // Shutdown the scheduler when done
     scheduler.shutdown();
-    
     return result;
 }
 

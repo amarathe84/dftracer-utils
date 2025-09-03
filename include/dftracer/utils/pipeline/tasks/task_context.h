@@ -4,11 +4,11 @@
 #include <dftracer/utils/common/typedefs.h>
 #include <dftracer/utils/pipeline/executors/executor_context.h>
 
-#include <functional>
-#include <typeindex>
-#include <memory>
 #include <any>
+#include <functional>
+#include <memory>
 #include <stdexcept>
+#include <typeindex>
 
 namespace dftracer::utils {
 
@@ -16,7 +16,7 @@ class Task;
 class TaskContext;
 class Scheduler;
 
-template<typename T>
+template <typename T>
 struct Input {
     T value;
     explicit Input(T val) : value(std::move(val)) {}
@@ -27,38 +27,45 @@ struct DependsOn {
     explicit DependsOn(TaskIndex task_id) : id(task_id) {}
 };
 
-
-template<typename I, typename O>
+template <typename I, typename O>
 class FunctionTask;
-template<typename I, typename O>
+template <typename I, typename O>
 std::unique_ptr<FunctionTask<I, O>> make_task(
     std::function<O(I, TaskContext&)> func);
 
-
 class TaskContext {
-private:
+   private:
     Scheduler* scheduler_;
     ExecutorContext* execution_context_;
     TaskIndex current_task_id_;
-    
-public:
-    TaskContext(Scheduler* scheduler, ExecutorContext* execution_context, TaskIndex current_task_id)
-        : scheduler_(scheduler), execution_context_(execution_context), current_task_id_(current_task_id) {}
-    
-    template<typename I, typename O>
-    TaskIndex emit(std::function<O(I, TaskContext&)> func, const Input<I>& input) {
+
+   public:
+    TaskContext(Scheduler* scheduler, ExecutorContext* execution_context,
+                TaskIndex current_task_id)
+        : scheduler_(scheduler),
+          execution_context_(execution_context),
+          current_task_id_(current_task_id) {}
+
+    template <typename I, typename O>
+    TaskIndex emit(std::function<O(I, TaskContext&)> func,
+                   const Input<I>& input) {
         auto task = make_task<I, O>(std::move(func));
-        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), -1);
+        TaskIndex task_id =
+            execution_context_->add_dynamic_task(std::move(task), -1);
         schedule(task_id, std::move(input.value), -1);
         return task_id;
     }
-    
-    template<typename I, typename O>
-    TaskIndex emit(std::function<O(I, TaskContext&)> func, DependsOn depends_on) {
+
+    template <typename I, typename O>
+    TaskIndex emit(std::function<O(I, TaskContext&)> func,
+                   DependsOn depends_on) {
         auto task = make_task<I, O>(std::move(func));
         if (depends_on.id >= 0) {
             Task* dep_task = execution_context_->get_task(depends_on.id);
-            if (dep_task && dep_task->get_output_type() != task->get_input_type()) {
+            // Allow std::any input type to accept any dependency output
+            // (flexible type handling)
+            if (dep_task && task->get_input_type() != typeid(std::any) &&
+                dep_task->get_output_type() != task->get_input_type()) {
                 throw std::invalid_argument(
                     "Type mismatch: dependency output type " +
                     std::string(dep_task->get_output_type().name()) +
@@ -66,29 +73,34 @@ public:
                     std::string(task->get_input_type().name()));
             }
         }
-        
-        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), depends_on.id);
-        schedule(task_id, std::any{}, depends_on.id);
+
+        TaskIndex task_id = execution_context_->add_dynamic_task(
+            std::move(task), depends_on.id);
+        // Don't schedule dependent tasks immediately - they will be handled by
+        // scheduler's dependency resolution
         return task_id;
     }
-    
-    template<typename I, typename O>
-    TaskIndex emit(std::function<O(I, TaskContext&)> func, const Input<I>& input, DependsOn depends_on) {
+
+    template <typename I, typename O>
+    TaskIndex emit(std::function<O(I, TaskContext&)> func,
+                   const Input<I>& input, DependsOn depends_on) {
         auto task = make_task<I, O>(std::move(func));
-        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), depends_on.id);
+        TaskIndex task_id = execution_context_->add_dynamic_task(
+            std::move(task), depends_on.id);
         schedule(task_id, std::move(input.value), depends_on.id);
         return task_id;
     }
 
     TaskIndex current() const { return current_task_id_; }
     void add_dependency(TaskIndex from, TaskIndex to);
-    ExecutorContext* get_execution_context() const { return execution_context_; }
+    ExecutorContext* get_execution_context() const {
+        return execution_context_;
+    }
 
-private:    
+   private:
     void schedule(TaskIndex task_id, std::any input, TaskIndex depends_on);
-    
 };
 
-} // namespace dftracer::utils
+}  // namespace dftracer::utils
 
-#endif // DFTRACER_UTILS_PIPELINE_TASKS_TASK_CONTEXT_H
+#endif  // DFTRACER_UTILS_PIPELINE_TASKS_TASK_CONTEXT_H

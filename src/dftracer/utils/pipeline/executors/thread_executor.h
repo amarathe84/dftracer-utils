@@ -3,10 +3,10 @@
 
 #include <dftracer/utils/pipeline/executors/executor.h>
 
+#include <cstdint>
 #include <future>
 #include <memory>
 #include <vector>
-#include <cstdint>
 
 namespace dftracer::utils {
 

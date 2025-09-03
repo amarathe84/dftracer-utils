@@ -22,8 +22,8 @@ class Task {
    public:
     virtual ~Task() = default;
     virtual std::any execute(std::any& in) = 0;
-    
-    virtual void setup_context(TaskContext* context) {}
+
+    virtual void setup_context(TaskContext*) {}
     virtual bool needs_context() const { return false; }
 
     std::type_index get_input_type() const { return input_type_; }

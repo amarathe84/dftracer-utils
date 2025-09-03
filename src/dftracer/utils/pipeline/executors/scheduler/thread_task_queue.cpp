@@ -12,7 +12,7 @@ bool TaskQueue::pop(TaskItem& item) {
     if (queue_.empty()) {
         return false;
     }
-    
+
     // Owner thread takes from the front (FIFO for owner)
     item = std::move(queue_.front());
     queue_.pop_front();
@@ -24,7 +24,7 @@ bool TaskQueue::steal(TaskItem& item) {
     if (queue_.empty()) {
         return false;
     }
-    
+
     // Stealing threads take from the back (to reduce contention)
     item = std::move(queue_.back());
     queue_.pop_back();

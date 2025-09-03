@@ -4,8 +4,8 @@
 #include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/common/inflater.h>
 #include <dftracer/utils/common/logging.h>
-#include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/common/platform_compat.h>
+#include <dftracer/utils/indexer/checkpoint.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -16,7 +16,8 @@ struct Checkpointer {
     std::size_t c_offset;
     int bits;
     Inflater &inflater;
-    alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char window[constants::indexer::ZLIB_WINDOW_SIZE];
+    alignas(DFTRACER_OPTIMAL_ALIGNMENT) unsigned char window
+        [constants::indexer::ZLIB_WINDOW_SIZE];
 
     Checkpointer(Inflater &in, std::size_t uc_offset_ = 0)
         : uc_offset(uc_offset_), c_offset(0), bits(0), inflater(in) {

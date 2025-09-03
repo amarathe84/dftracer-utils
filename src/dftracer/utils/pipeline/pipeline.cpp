@@ -5,7 +5,7 @@
 namespace dftracer::utils {
 
 TaskIndex Pipeline::add_task(std::unique_ptr<Task> task, TaskIndex depends_on) {
-    TaskIndex index = nodes_.size();
+    TaskIndex index = static_cast<TaskIndex>(nodes_.size());
     nodes_.push_back(std::move(task));
     dependencies_.push_back({});
     dependents_.push_back({});
@@ -16,7 +16,8 @@ TaskIndex Pipeline::add_task(std::unique_ptr<Task> task, TaskIndex depends_on) {
 }
 
 void Pipeline::add_dependency(TaskIndex from, TaskIndex to) {
-    if (from >= nodes_.size() || to >= nodes_.size()) {
+    if (from >= static_cast<TaskIndex>(nodes_.size()) ||
+        to >= static_cast<TaskIndex>(nodes_.size())) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,
                             "Invalid task index");
     }
@@ -27,7 +28,7 @@ void Pipeline::add_dependency(TaskIndex from, TaskIndex to) {
 }
 
 bool Pipeline::validate_types() const {
-    for (TaskIndex i = 0; i < nodes_.size(); ++i) {
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(nodes_.size()); ++i) {
         for (TaskIndex dependent : dependencies_[i]) {
             if (nodes_[dependent]->get_output_type() !=
                 nodes_[i]->get_input_type()) {
@@ -45,12 +46,13 @@ bool Pipeline::validate_types() const {
 
 bool Pipeline::has_cycles() const {
     std::vector<int> in_degree(nodes_.size(), 0);
-    for (TaskIndex i = 0; i < nodes_.size(); ++i) {
-        in_degree[i] = dependencies_[i].size();  // Count static dependencies
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(nodes_.size()); ++i) {
+        in_degree[i] = static_cast<int>(
+            dependencies_[i].size());  // Count static dependencies
     }
 
     std::queue<TaskIndex> queue;
-    for (TaskIndex i = 0; i < nodes_.size(); ++i) {
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(nodes_.size()); ++i) {
         if (in_degree[i] == 0) {
             queue.push(i);
         }
@@ -75,14 +77,14 @@ bool Pipeline::has_cycles() const {
 
 std::vector<TaskIndex> Pipeline::topological_sort() const {
     std::vector<TaskIndex> result;
-    std::vector<int> in_degree(nodes_.size(), 0);
+    std::vector<std::size_t> in_degree(nodes_.size(), 0);
 
-    for (TaskIndex i = 0; i < nodes_.size(); ++i) {
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(nodes_.size()); ++i) {
         in_degree[i] = dependencies_[i].size();  // Count static dependencies
     }
 
     std::queue<TaskIndex> queue;
-    for (TaskIndex i = 0; i < nodes_.size(); ++i) {
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(nodes_.size()); ++i) {
         if (in_degree[i] == 0) {
             queue.push(i);
         }
@@ -109,7 +111,7 @@ void Pipeline::chain(Pipeline&& other) {
         return;
     }
 
-    TaskIndex offset = nodes_.size();
+    TaskIndex offset = static_cast<TaskIndex>(nodes_.size());
 
     for (auto& task : other.nodes_) {
         nodes_.push_back(std::move(task));
@@ -117,8 +119,8 @@ void Pipeline::chain(Pipeline&& other) {
         dependents_.push_back({});
     }
 
-    for (TaskIndex i = 0; i < other.dependencies_.size(); ++i) {
-        TaskIndex new_index = offset + i;
+    for (std::size_t i = 0; i < other.dependencies_.size(); ++i) {
+        TaskIndex new_index = offset + static_cast<TaskIndex>(i);
         for (TaskIndex dep : other.dependencies_[i]) {
             TaskIndex new_dep = offset + dep;
             dependencies_[new_index].push_back(new_dep);

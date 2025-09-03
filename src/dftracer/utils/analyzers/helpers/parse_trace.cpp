@@ -32,7 +32,8 @@
 //     //     if (cat.empty()) {
 //     //         return trace;
 //     //     } else {
-//     //         std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
+//     //         std::transform(cat.begin(), cat.end(), cat.begin(),
+//     ::tolower);
 //     //         trace.cat = cat;
 //     //     }
 
@@ -92,7 +93,8 @@
 //     //                 auto obj = obj_result.value();
 //     //                 for (auto field : obj) {
 //     //                     std::string field_key = std::string(field.key);
-//     //                     if (field_key == "args" && field.value.is_object()) {
+//     //                     if (field_key == "args" &&
+//     field.value.is_object()) {
 //     //                         auto args_result = field.value.get_object();
 //     //                         if (!args_result.error()) {
 //     //                             auto args = args_result.value();
@@ -103,14 +105,14 @@
 //     //                                     std::uint64_t ret_value = 0;
 //     //                                     if (arg_field.value.is_uint64()) {
 //     //                                         ret_value =
-//     //                                             arg_field.value.get_uint64();
+//     // arg_field.value.get_uint64();
 //     //                                     } else if
 //     //                                     (arg_field.value.is_int64()) {
 //     //                                         int64_t signed_ret =
-//     //                                             arg_field.value.get_int64();
+//     // arg_field.value.get_int64();
 //     //                                         if (signed_ret > 0) {
 //     //                                             ret_value +=
-//     //                                                 static_cast<std::uint64_t>(
+//     // static_cast<std::uint64_t>(
 //     //                                                     signed_ret);
 //     //                                         }
 //     //                                     }
@@ -202,7 +204,8 @@
 //     //     if (cat.empty()) {
 //     //         return trace;
 //     //     } else {
-//     //         std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
+//     //         std::transform(cat.begin(), cat.end(), cat.begin(),
+//     ::tolower);
 //     //         trace.cat = cat;
 //     //     }
 
@@ -262,7 +265,8 @@
 //     //                 auto obj = obj_result.value();
 //     //                 for (auto field : obj) {
 //     //                     std::string field_key = std::string(field.key);
-//     //                     if (field_key == "args" && field.value.is_object()) {
+//     //                     if (field_key == "args" &&
+//     field.value.is_object()) {
 //     //                         auto args_result = field.value.get_object();
 //     //                         if (!args_result.error()) {
 //     //                             auto args = args_result.value();
@@ -273,14 +277,14 @@
 //     //                                     std::uint64_t ret_value = 0;
 //     //                                     if (arg_field.value.is_uint64()) {
 //     //                                         ret_value =
-//     //                                             arg_field.value.get_uint64();
+//     // arg_field.value.get_uint64();
 //     //                                     } else if
 //     //                                     (arg_field.value.is_int64()) {
 //     //                                         int64_t signed_ret =
-//     //                                             arg_field.value.get_int64();
+//     // arg_field.value.get_int64();
 //     //                                         if (signed_ret > 0) {
 //     //                                             ret_value =
-//     //                                                 static_cast<std::uint64_t>(
+//     // static_cast<std::uint64_t>(
 //     //                                                     signed_ret);
 //     //                                         }
 //     //                                     }
