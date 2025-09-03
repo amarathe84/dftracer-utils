@@ -31,7 +31,7 @@ std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
             static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 4));
         checkpoint.bits = sqlite3_column_int(stmt, 5);
 
-        size_t dict_size = static_cast<size_t>(sqlite3_column_bytes(stmt, 6));
+        std::size_t dict_size = static_cast<std::size_t>(sqlite3_column_bytes(stmt, 6));
         checkpoint.dict_compressed.resize(dict_size);
         std::memcpy(checkpoint.dict_compressed.data(),
                     sqlite3_column_blob(stmt, 6), dict_size);

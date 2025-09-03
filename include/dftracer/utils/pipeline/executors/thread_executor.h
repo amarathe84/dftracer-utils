@@ -6,20 +6,13 @@
 #include <future>
 #include <memory>
 #include <vector>
+#include <cstdint>
 
 namespace dftracer::utils {
 
-class ThreadPool;
-class ThreadWorker;
-
-// struct ThreadWorker {
-//   std::queue
-// };
-
 class ThreadExecutor : public Executor {
    private:
-    size_t max_threads_;
-    std::unique_ptr<ThreadPool> pool_;
+    std::size_t max_threads_;
 
    public:
     ThreadExecutor();

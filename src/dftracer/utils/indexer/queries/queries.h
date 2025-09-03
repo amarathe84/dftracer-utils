@@ -46,7 +46,7 @@ std::uint64_t query_num_lines(const SqliteDatabase &db,
                               const std::string &gz_path_logical_path);
 int query_file_id(const SqliteDatabase &db,
                   const std::string &gz_path_logical_path);
-bool query_checkpoint(const SqliteDatabase &db, size_t target_offset,
+bool query_checkpoint(const SqliteDatabase &db, std::size_t target_offset,
                       int file_id, IndexCheckpoint &checkpoint);
 std::vector<IndexCheckpoint> query_checkpoints(const SqliteDatabase &db,
                                                int file_id);

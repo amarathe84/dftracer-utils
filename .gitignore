@@ -68,3 +68,9 @@ build
 CLAUDE.md
 TODO
 temp
+
+*.pfw.gz
+traces
+refs
+dfanalyzer
+*.ipynb

@@ -42,7 +42,7 @@ class Indexer {
 
     // Lookup
     int find_file_id(const std::string &gz_path) const;
-    bool find_checkpoint(size_t target_offset,
+    bool find_checkpoint(std::size_t target_offset,
                          IndexCheckpoint &checkpoint) const;
     std::vector<IndexCheckpoint> get_checkpoints() const;
     std::vector<IndexCheckpoint> get_checkpoints_for_line_range(

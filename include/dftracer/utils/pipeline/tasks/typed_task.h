@@ -11,7 +11,7 @@ namespace dftracer::utils {
 template <typename I, typename O>
 class TypedTask : public Task {
    protected:
-    TypedTask(TaskType t) : Task(t, typeid(I), typeid(O)) {}
+    TypedTask() : Task(typeid(I), typeid(O)) {}
 
    public:
     virtual ~TypedTask() = default;

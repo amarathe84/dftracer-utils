@@ -5,7 +5,7 @@
 
 namespace dftracer::utils {
 
-bool query_checkpoint(const SqliteDatabase& db, size_t target_offset,
+bool query_checkpoint(const SqliteDatabase& db, std::size_t target_offset,
                       int file_id, IndexCheckpoint& checkpoint) {
     DFTRACER_UTILS_LOG_DEBUG(
         "query_checkpoint called: target_offset=%zu, file_id=%d", target_offset,

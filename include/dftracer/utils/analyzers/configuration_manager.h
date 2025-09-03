@@ -58,7 +58,7 @@ class AnalyzerConfigManager {
     inline double time_granularity() const { return time_granularity_; }
     inline bool checkpoint() const { return checkpoint_; }
     inline const std::string& checkpoint_dir() const { return checkpoint_dir_; }
-    inline size_t checkpoint_size() const { return checkpoint_size_; }
+    inline std::size_t checkpoint_size() const { return checkpoint_size_; }
     inline double time_resolution() const { return time_resolution_; }
 
     // Setter

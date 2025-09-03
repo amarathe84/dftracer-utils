@@ -4,6 +4,8 @@
 #include <dftracer/utils/common/typedefs.h>
 #include <dftracer/utils/pipeline/error.h>
 #include <dftracer/utils/pipeline/tasks/task.h>
+#include <dftracer/utils/pipeline/tasks/function_task.h>
+#include <dftracer/utils/pipeline/tasks/task_context.h>
 
 #include <any>
 #include <atomic>
@@ -37,15 +39,23 @@ class Pipeline {
     Pipeline(Pipeline&&) = default;
     Pipeline& operator=(Pipeline&&) = default;
 
-    TaskIndex add_task(std::unique_ptr<Task> task);
+    TaskIndex add_task(std::unique_ptr<Task> task, TaskIndex depends_on = -1);
+    TaskIndex safe_add_task(std::unique_ptr<Task> task, TaskIndex depends_on = -1);
+
     void add_dependency(TaskIndex from, TaskIndex to);
+    void safe_add_dependency(TaskIndex from, TaskIndex to);
+
+    template<typename I, typename O>
+    TaskIndex add_task(std::function<O(I, TaskContext&)> func) {
+        auto task = make_task<I, O>(std::move(func));
+        return add_task(std::move(task));
+    }
 
     void chain(Pipeline&& other);
 
     size_t size() const { return nodes_.size(); }
     bool empty() const { return nodes_.empty(); }
 
-    // Inline accessor methods for executors
     inline const std::vector<std::unique_ptr<Task>>& get_nodes() const {
         return nodes_;
     }
@@ -70,10 +80,11 @@ class Pipeline {
         return dependents_[index];
     }
 
-    // Validation methods (now public for executors)
     bool validate_types() const;
     bool has_cycles() const;
     std::vector<TaskIndex> topological_sort() const;
+
+    TaskContext create_context(TaskIndex task_id);
 
    protected:
 };

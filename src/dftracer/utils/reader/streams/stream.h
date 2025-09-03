@@ -17,8 +17,8 @@ class Stream {
    protected:
     FILE *file_handle_;
     mutable ReaderInflater inflater_;
-    size_t current_position_;
-    size_t target_end_bytes_;
+    std::size_t current_position_;
+    std::size_t target_end_bytes_;
     bool is_active_;
     bool is_finished_;
     bool decompression_initialized_;
@@ -26,7 +26,7 @@ class Stream {
 
     // Less frequently accessed members
     std::string current_gz_path_;
-    size_t start_bytes_;
+    std::size_t start_bytes_;
     IndexCheckpoint checkpoint_;
 
    public:
@@ -42,8 +42,8 @@ class Stream {
 
     virtual ~Stream() { reset(); }
 
-    bool matches(const std::string &gz_path, size_t start_bytes,
-                 size_t end_bytes) const {
+    bool matches(const std::string &gz_path, std::size_t start_bytes,
+                 std::size_t end_bytes) const {
         return current_gz_path_ == gz_path && start_bytes_ == start_bytes &&
                target_end_bytes_ == end_bytes;
     }

@@ -1,17 +1,31 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/tasks/function_task.h>
+#include <mutex>
 
 namespace dftracer::utils {
 
-TaskIndex Pipeline::add_task(std::unique_ptr<Task> task) {
+TaskIndex Pipeline::add_task(std::unique_ptr<Task> task, TaskIndex depends_on) {
     TaskIndex index = nodes_.size();
     nodes_.push_back(std::move(task));
     dependencies_.push_back({});
     dependents_.push_back({});
     task_completed_[index] = false;
     dependency_count_[index] = 0;
+    if (depends_on >= 0) {
+        add_dependency(depends_on, index);
+    }
     return index;
 }
+
+TaskIndex Pipeline::safe_add_task(std::unique_ptr<Task> task, TaskIndex depends_on) {
+    static std::mutex task_addition_mutex;
+    std::lock_guard<std::mutex> lock(task_addition_mutex);
+
+    TaskIndex index = add_task(std::move(task), depends_on);
+    return index;
+}
+
 
 void Pipeline::add_dependency(TaskIndex from, TaskIndex to) {
     if (from >= nodes_.size() || to >= nodes_.size()) {
@@ -23,6 +37,12 @@ void Pipeline::add_dependency(TaskIndex from, TaskIndex to) {
     dependencies_[to].push_back(from);  // "to" depends on "from"
     dependents_[from].push_back(to);    // "from" has dependent "to"
     dependency_count_[to]++;
+}
+
+void Pipeline::safe_add_dependency(TaskIndex from, TaskIndex to) {
+    static std::mutex dependency_addition_mutex;
+    std::lock_guard<std::mutex> lock(dependency_addition_mutex);
+    add_dependency(from, to);
 }
 
 bool Pipeline::validate_types() const {
@@ -127,6 +147,10 @@ void Pipeline::chain(Pipeline&& other) {
             dependency_count_[new_index]++;
         }
     }
+}
+
+TaskContext Pipeline::create_context(TaskIndex task_id) {
+    return TaskContext(this, task_id);
 }
 
 }  // namespace dftracer::utils
