@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     Pipeline pipeline;
-    pipeline.add_task<std::vector<std::string>, std::size_t>(
+    auto task_result = pipeline.add_task<std::vector<std::string>, std::size_t>(
         [checkpoint_size, force_rebuild](std::vector<std::string> file_list,
                                          TaskContext& ctx) -> std::size_t {
             return process_files_parallel(file_list, checkpoint_size,
@@ -272,8 +272,8 @@ int main(int argc, char** argv) {
         });
 
     ThreadExecutor executor(num_threads);
-    std::any result = executor.execute(pipeline, pfw_files);
-    std::size_t total_events = std::any_cast<std::size_t>(result);
+    executor.execute(pipeline, pfw_files);
+    std::size_t total_events = task_result.future.get();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end_time - start_time;

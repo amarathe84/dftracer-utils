@@ -7,6 +7,8 @@
 #include <dftracer/utils/pipeline/tasks/function_task.h>
 #include <dftracer/utils/pipeline/tasks/task.h>
 #include <dftracer/utils/pipeline/tasks/task_context.h>
+#include <dftracer/utils/pipeline/tasks/task_result.h>
+#include <dftracer/utils/pipeline/tasks/task_tag.h>
 
 #include <any>
 #include <atomic>
@@ -37,13 +39,16 @@ class Pipeline {
     Pipeline(Pipeline&&) = default;
     Pipeline& operator=(Pipeline&&) = default;
 
-    TaskIndex add_task(std::unique_ptr<Task> task, TaskIndex depends_on = -1);
     void add_dependency(TaskIndex from, TaskIndex to);
 
     template <typename I, typename O>
-    TaskIndex add_task(std::function<O(I, TaskContext&)> func) {
-        auto task = make_task<I, O>(std::move(func));
-        return add_task(std::move(task));
+    TaskResult<O> add_task(std::function<O(I, TaskContext&)> func,
+                           TaskIndex depends_on = -1) {
+        auto [wrapped_func, future] =
+            wrap_function_with_promise<I, O>(std::move(func));
+        auto task = make_task<I, O>(std::move(wrapped_func));
+        TaskIndex task_id = add_task(std::move(task), depends_on);
+        return TaskResult<O>{task_id, std::move(future)};
     }
 
     void chain(Pipeline&& other);
@@ -80,6 +85,7 @@ class Pipeline {
     std::vector<TaskIndex> topological_sort() const;
 
    protected:
+    TaskIndex add_task(std::unique_ptr<Task> task, TaskIndex depends_on = -1);
 };
 }  // namespace dftracer::utils
 

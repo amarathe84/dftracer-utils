@@ -1228,21 +1228,19 @@ TEST_CASE("Robustness - Memory and performance stress") {
         }
 
         // Should have read substantial number of lines across all futures
-        std::cout << "Total lines read across futures: " << total_lines
-                  << std::endl;
+        printf("Total lines read across futures: %zu\n", total_lines);
         CHECK(total_lines > 0);
     }
 }
 
 TEST_CASE("Robustness - Line-based reading stress tests") {
-    std::cout << "=== Starting Line-based reading stress tests ==="
-              << std::endl;
+    printf("=== Starting Line-based reading stress tests ===\n");
     LargeTestEnvironment env(256, 1024);  // Much larger file with bigger lines
                                           // to force successful checkpoints
     REQUIRE(env.is_valid());
 
-    std::cout << "Expected lines: " << env.get_num_lines()
-              << ", bytes per line: " << env.get_bytes_per_line() << std::endl;
+    printf("Expected lines: %zu, bytes per line: %zu\n", env.get_num_lines(),
+           env.get_bytes_per_line());
 
     std::string gz_file = env.create_large_gzip_file();
     REQUIRE(!gz_file.empty());
@@ -1251,8 +1249,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
     std::ifstream file(gz_file, std::ios::binary | std::ios::ate);
     if (file.is_open()) {
         auto file_size = file.tellg();
-        std::cout << "Created gzip file size: " << file_size << " bytes"
-                  << std::endl;
+        printf("Created gzip file size: %lld bytes\n",
+               static_cast<long long>(file_size));
         file.close();
     }
 
@@ -1260,58 +1258,58 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
     // Build index with small chunks to force many checkpoints with line counts
     {
-        std::cout << "Creating indexer for file: " << gz_file << std::endl;
-        std::cout << "Chunk size: 0.5 MB (small enough to create checkpoints "
-                     "during processing)"
-                  << std::endl;
+        printf("Creating indexer for file: %s\n", gz_file.c_str());
+        printf(
+            "Chunk size: 0.5 MB (small enough to create checkpoints during "
+            "processing)\n");
         Indexer indexer(gz_file, idx_file, mb_to_b(0.5), true);
-        std::cout << "Building index..." << std::endl;
+        printf("Building index...\n");
         indexer.build();
-        std::cout << "Index built successfully" << std::endl;
+        printf("Index built successfully\n");
 
         // Verify we have line data - skip tests if indexer doesn't support line
         // reading
         auto checkpoints = indexer.get_checkpoints();
         std::size_t num_lines = indexer.get_num_lines();
 
-        std::cout << "Checkpoints: " << checkpoints.size()
-                  << ", Lines: " << num_lines << std::endl;
+        printf("Checkpoints: %zu, Lines: %zu\n", checkpoints.size(), num_lines);
 
         // Debug: Let's manually check the database file
-        std::cout << "DEBUG: Manually checking database file: " << idx_file
-                  << std::endl;
+        printf("DEBUG: Manually checking database file: %s\n",
+               idx_file.c_str());
 
         // Check if database file exists and its size
         std::ifstream db_file(idx_file, std::ios::binary | std::ios::ate);
         if (db_file.is_open()) {
             auto db_size = db_file.tellg();
-            std::cout << "DEBUG: Database file size: " << db_size << " bytes"
-                      << std::endl;
+            printf("DEBUG: Database file size: %lld bytes\n",
+                   static_cast<long long>(db_size));
             db_file.close();
         } else {
-            std::cout << "DEBUG: Cannot open database file" << std::endl;
+            printf("DEBUG: Cannot open database file\n");
         }
 
         if (num_lines == 0) {
-            std::cout
-                << "WARN: Skipping line reading robustness tests - no line data"
-                << std::endl;
+            printf(
+                "WARN: Skipping line reading robustness tests - no line "
+                "data\n");
             WARN("Skipping line reading robustness tests - no line data");
             return;
         }
 
         if (checkpoints.empty()) {
-            std::cout << "INFO: Running line reading tests without traditional "
-                         "checkpoints"
-                      << std::endl;
-            std::cout << "This suggests the indexer uses direct line counting "
-                         "instead of checkpoint-based indexing"
-                      << std::endl;
+            printf(
+                "INFO: Running line reading tests without traditional "
+                "checkpoints\n");
+            printf(
+                "This suggests the indexer uses direct line counting instead "
+                "of checkpoint-based indexing\n");
         }
 
-        std::cout << "Line reading robustness test setup: "
-                  << checkpoints.size() << " checkpoints, " << num_lines
-                  << " total lines" << std::endl;
+        printf(
+            "Line reading robustness test setup: %zu checkpoints, %zu total "
+            "lines\n",
+            checkpoints.size(), num_lines);
         INFO("Line reading robustness test setup: "
              << checkpoints.size() << " checkpoints, " << num_lines
              << " total lines");
@@ -1320,8 +1318,7 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
     Reader reader(gz_file, idx_file);
 
     SUBCASE("Random line range reading consistency") {
-        std::cout << "Starting Random line range reading consistency test"
-                  << std::endl;
+        printf("Starting Random line range reading consistency test\n");
         std::size_t total_lines = 0;
 
         // Get total lines from indexer

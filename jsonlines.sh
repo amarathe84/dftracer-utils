@@ -35,10 +35,10 @@ wait
   echo "]"
 } > "$outfile"
 
-if command -v pigz >/dev/null 2>&1; then
-  pigz "$outfile"
-else
-  gzip "$outfile"
-fi
+# if command -v pigz >/dev/null 2>&1; then
+#   pigz "$outfile"
+# else
+#   gzip "$outfile"
+# fi
 
 echo "Elapsed time: ${SECONDS}s"
