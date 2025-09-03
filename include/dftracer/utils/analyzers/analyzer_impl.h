@@ -38,8 +38,8 @@ namespace trace_reader {
 
 struct WorkInfo {
     std::string path;
-    size_t start;
-    size_t end;
+    std::size_t start;
+    std::size_t end;
 
     template <typename Archive>
     void serialize(Archive& ar) {
@@ -49,7 +49,7 @@ struct WorkInfo {
 
 struct FileMetadata {
     std::string path;
-    size_t size;
+    std::size_t size;
 
     template <typename Archive>
     void serialize(Archive& ar) {
@@ -75,20 +75,20 @@ inline auto get_traces_metadata(Context& ctx,
 template <typename Context>
 inline auto generate_chunks(Context& ctx,
                             const std::vector<std::string>& traces,
-                            size_t batch_size) {
+                     std::size_t batch_size,
     return get_traces_metadata(ctx, traces)
         .flatmap([batch_size](const FileMetadata& file_info) {
-            std::vector<WorkInfo> work_items;
-            size_t start = 0;
-            size_t end = 0;
+    std::vector<WorkInfo> work_items;
+    std::size_t start = 0;
+    std::size_t end = 0;
 
-            while (start < file_info.size) {
-                end = std::min(start + batch_size, file_info.size);
-                work_items.push_back({file_info.path, start, end});
-                start = end;
-            }
+    while (start < file_info.size) {
+        end = std::min(start + batch_size, file_info.size);
+        work_items.push_back({file_info.path, start, end});
+        start = end;
+    }
 
-            return work_items;
+    return work_items;
         });
 }
 
@@ -144,7 +144,7 @@ inline auto parse_and_filter_traces(
             std::vector<TraceRecord> valid_records;
             valid_records.reserve(partition.size());
 
-            size_t filtered_count = 0;
+            std::size_t filtered_count = 0;
 
             for (const auto& doc : partition) {
                 try {
@@ -325,10 +325,10 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
     // First pass: find global minimum timestamp
     auto global_min_timestamp =
         trace_records
-            .map([](const TraceRecord& record) -> uint64_t {
+            .map([](const TraceRecord& record) -> std::uint64_t {
                 return record.time_start;
             })
-            .reduce(ctx, [](uint64_t a, uint64_t b) -> uint64_t {
+            .reduce(ctx, [](std::uint64_t a, std::uint64_t b) -> std::uint64_t {
                 return std::min(a, b);
             });
 
@@ -343,11 +343,11 @@ inline auto normalize_timestamps_globally(Context& ctx, BagType&& trace_records,
         // Normalize timestamps using global minimum
         record.time_start = record.time_start - global_min_timestamp;
         record.time_end =
-            record.time_start + static_cast<uint64_t>(record.duration);
+            record.time_start + static_cast<std::uint64_t>(record.duration);
         // Scale duration by time_resolution
         record.duration = record.duration / config.time_resolution();
-        record.time_range = record.time_start /
-                            static_cast<uint64_t>(config.time_granularity());
+        record.time_range = record.time_start / static_cast<std::uint64_t>(
+                                                    config.time_granularity());
         return record;
     });
 }
@@ -432,9 +432,9 @@ inline auto postread_trace(Context& ctx, BagType&& events,
         std::vector<TraceRecord> result;
         result.reserve(partition.size());
 
-        size_t total_events = partition.size();
-        size_t assigned_events = 0;
-        size_t unassigned_events = 0;
+        std::size_t total_events = partition.size();
+        std::size_t assigned_events = 0;
+        std::size_t unassigned_events = 0;
 
         for (auto record : partition) {
             std::uint64_t assigned_epoch = 0;
@@ -562,7 +562,7 @@ inline auto compute_high_level_metrics(
                     const auto& first_record = records[0];
                     hlm.group_values["cat"] = first_record.cat;
                     hlm.group_values["io_cat"] =
-                        std::to_string(static_cast<uint64_t>(
+                        std::to_string(static_cast<std::uint64_t>(
                             constants::get_io_cat(first_record.func_name)));
                     hlm.group_values["acc_pat"] = first_record.acc_pat;
                     hlm.group_values["func_name"] = first_record.func_name;
@@ -709,9 +709,9 @@ AnalyzerResult Analyzer::analyze_trace(
 
             // Log some statistics
             if (!hlms.empty()) {
-                size_t total_count = 0;
+                std::size_t total_count = 0;
                 double total_time = 0.0;
-                size_t total_size = 0;
+                std::size_t total_size = 0;
 
                 for (const auto& hlm : hlms) {
                     total_count += hlm.count_sum;

@@ -69,7 +69,8 @@ void set_size_bins(Trace& trace) {
     }
 
     if (trace.size >= 0) {
-        size_t bin_index = static_cast<size_t>(get_size_bin_index(trace.size));
+        std::size_t bin_index =
+            static_cast<std::size_t>(get_size_bin_index(trace.size));
         std::string matching_bin =
             SIZE_BIN_PREFIX + SIZE_BIN_SUFFIXES[bin_index];
         trace.bin_fields[matching_bin] = 1;

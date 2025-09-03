@@ -48,7 +48,7 @@ class Pipeline {
 
     void chain(Pipeline&& other);
 
-    size_t size() const { return nodes_.size(); }
+    std::size_t size() const { return nodes_.size(); }
     bool empty() const { return nodes_.empty(); }
 
     inline const std::vector<std::unique_ptr<Task>>& get_nodes() const {

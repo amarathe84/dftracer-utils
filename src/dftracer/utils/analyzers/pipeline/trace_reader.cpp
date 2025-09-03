@@ -13,13 +13,13 @@ using namespace dftracer::utils;
 
 struct FileMetadata {
     std::string path;
-    size_t size;
+    std::size_t size;
 };
 
 struct WorkInfo {
     std::string path;
-    size_t start;
-    size_t end;
+    std::size_t start;
+    std::size_t end;
 };
 
 Pipeline TraceReader::build() {

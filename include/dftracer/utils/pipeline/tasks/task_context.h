@@ -52,7 +52,7 @@ class TaskContext {
         auto task = make_task<I, O>(std::move(func));
         TaskIndex task_id =
             execution_context_->add_dynamic_task(std::move(task), -1);
-        schedule(task_id, std::move(input.value), -1);
+        schedule(task_id, std::move(input.value));
         return task_id;
     }
 
@@ -62,8 +62,6 @@ class TaskContext {
         auto task = make_task<I, O>(std::move(func));
         if (depends_on.id >= 0) {
             Task* dep_task = execution_context_->get_task(depends_on.id);
-            // Allow std::any input type to accept any dependency output
-            // (flexible type handling)
             if (dep_task && task->get_input_type() != typeid(std::any) &&
                 dep_task->get_output_type() != task->get_input_type()) {
                 throw std::invalid_argument(
@@ -87,7 +85,7 @@ class TaskContext {
         auto task = make_task<I, O>(std::move(func));
         TaskIndex task_id = execution_context_->add_dynamic_task(
             std::move(task), depends_on.id);
-        schedule(task_id, std::move(input.value), depends_on.id);
+        schedule(task_id, std::move(input.value));
         return task_id;
     }
 
@@ -98,7 +96,7 @@ class TaskContext {
     }
 
    private:
-    void schedule(TaskIndex task_id, std::any input, TaskIndex depends_on);
+    void schedule(TaskIndex task_id, std::any input);
 };
 
 }  // namespace dftracer::utils

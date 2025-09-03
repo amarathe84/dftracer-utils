@@ -138,7 +138,7 @@ std::any ThreadScheduler::execute(const Pipeline& pipeline, std::any input) {
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
         task_completed_[i] = false;
         dependency_count_[i] =
-            execution_context.get_task_dependencies(i).size();
+            static_cast<int>(execution_context.get_task_dependencies(i).size());
     }
 
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {

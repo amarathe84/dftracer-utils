@@ -44,11 +44,12 @@ class LineProcessor {
  */
 class CLineProcessor : public LineProcessor {
    private:
-    int (*callback_)(const char* data, size_t length, void* user_data);
+    int (*callback_)(const char* data, std::size_t length, void* user_data);
     void* user_data_;
 
    public:
-    CLineProcessor(int (*callback)(const char*, size_t, void*), void* user_data)
+    CLineProcessor(int (*callback)(const char*, std::size_t, void*),
+                   void* user_data)
         : callback_(callback), user_data_(user_data) {}
 
     bool process(const char* data, std::size_t length) override {

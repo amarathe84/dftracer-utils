@@ -3,7 +3,7 @@
 namespace dftracer::utils::analyzers::pipeline {
 
 Pipeline HLMPipelineGenerator::build(
-    const std::vector<std::string>& traces, size_t batch_size,
+    const std::vector<std::string>& traces, std::size_t batch_size,
     const std::vector<std::string>& view_types) {
     // Get the trace reading pipeline
     auto trace_pipeline =

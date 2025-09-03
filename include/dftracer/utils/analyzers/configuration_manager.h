@@ -76,7 +76,8 @@ class AnalyzerConfigManager {
         checkpoint_dir_ = checkpoint_dir;
         return *this;
     }
-    inline AnalyzerConfigManager& set_checkpoint_size(size_t checkpoint_size) {
+    inline AnalyzerConfigManager& set_checkpoint_size(
+        std::size_t checkpoint_size) {
         checkpoint_size_ = checkpoint_size;
         return *this;
     }
@@ -89,7 +90,7 @@ class AnalyzerConfigManager {
     double time_granularity_;
     bool checkpoint_;
     std::string checkpoint_dir_;
-    size_t checkpoint_size_;
+    std::size_t checkpoint_size_;
     double time_resolution_;
 };
 

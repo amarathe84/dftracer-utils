@@ -50,7 +50,7 @@ class ExecutorContext {
 
     void reset();
 
-    size_t dynamic_task_count() const { return dynamic_tasks_.size(); }
+    std::size_t dynamic_task_count() const { return dynamic_tasks_.size(); }
 
     const Pipeline* get_pipeline() const { return pipeline_; }
 

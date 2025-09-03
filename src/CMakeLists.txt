@@ -265,51 +265,37 @@ install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # Temporaries
 # ----------------------------------------
 
-set(TEMPORARY_BINARIES
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/basic_execution_test.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/function_task_example.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/race_condition_examples.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/simple_task_test.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/type_transform_example.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/work_stealing_test.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/deterministic_test.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/multi_dependency_example.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/complex_multi_dependency_example.cpp
-)
+set(TEMPORARY_BINARIES )
 
 foreach(bin ${TEMPORARY_BINARIES})
-  # replace cpp with exec
-  string(REPLACE ".cpp" "" bin_exec ${bin})
-  # remove prefix from bin_exec
-  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/" "" bin_exec ${bin_exec})
+    string(REPLACE ".cpp" "" bin_exec ${bin})
+    string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/" "" bin_exec ${bin_exec})
+    
+    add_executable(${bin_exec} ${bin})
+    set_target_properties(${bin_exec} PROPERTIES OUTPUT_NAME "${bin_exec}")
+    target_link_libraries(${bin_exec} PRIVATE 
+      dftracer_utils
+      argparse::argparse
+      ghc_filesystem
+      xxHash::xxhash
+      yyjson
+    )
+    link_sqlite3(${bin_exec} STATIC)
+    link_zlib(${bin_exec} STATIC)
 
-  add_executable(${bin_exec} ${bin})
-  set_target_properties(${bin_exec} PROPERTIES OUTPUT_NAME "${bin_exec}")
-  target_link_libraries(${bin_exec} PRIVATE 
-  dftracer_utils
-  argparse::argparse
-  ghc_filesystem
-  xxHash::xxhash
-  yyjson
-)
-link_sqlite3(${bin_exec} STATIC)
-link_zlib(${bin_exec} STATIC)
+    target_include_directories(${bin_exec}
+        PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-target_include_directories(${bin_exec}
-    PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_set_warnings(${bin_exec})
 
-target_set_warnings(${bin_exec})
+    # Apply coverage flags if enabled
+    if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${bin_exec} PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+        target_link_libraries(${bin_exec} PRIVATE --coverage)
+    endif()
 
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(${bin_exec} PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-    target_link_libraries(${bin_exec} PRIVATE --coverage)
-endif()
-
-# Install executable
-install(TARGETS ${bin_exec} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-
+    # Install executable
+    install(TARGETS ${bin_exec} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endforeach()
 
 ##########################################

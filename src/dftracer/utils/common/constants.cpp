@@ -1,9 +1,6 @@
 #include <dftracer/utils/common/constants.h>
 
-namespace dftracer::utils::constants {
-
-namespace indexer {
-const char *SQL_SCHEMA = R"(
+const char* dftracer_utils_sql_schema = R"(
     CREATE TABLE IF NOT EXISTS files (
       id INTEGER PRIMARY KEY,
       logical_name TEXT UNIQUE NOT NULL,
@@ -39,5 +36,15 @@ const char *SQL_SCHEMA = R"(
       PRIMARY KEY(file_id)
     );
   )";
+
+#ifdef __cplusplus
+// C++ namespace reference
+namespace dftracer::utils::constants {
+namespace indexer {
+const char* const& SQL_SCHEMA = dftracer_utils_sql_schema;
 }
 }  // namespace dftracer::utils::constants
+
+#else
+const char* DFTRACER_UTILS_SQL_SCHEMA = dftracer_utils_sql_schema;
+#endif

@@ -99,6 +99,20 @@ int main(int argc, char **argv) {
     std::string idx_path = index_path.empty() ? (gz_path + ".idx") : index_path;
 
     try {
+        // check if idx file exists
+        if (!fs::exists(idx_path)) {
+            if (check_rebuild) {
+                DFTRACER_UTILS_LOG_ERROR(
+                    "Index file '%s' does not exist, cannot check",
+                    idx_path.c_str());
+                return 1;
+            }
+            DFTRACER_UTILS_LOG_DEBUG("Index file '%s' does not exist",
+                                     idx_path.c_str());
+            DFTRACER_UTILS_LOG_DEBUG("Will create new index file");
+            force_rebuild = true;
+        }
+
         if (check_rebuild) {
             Indexer indexer(gz_path, idx_path, checkpoint_size, force_rebuild);
             if (!indexer.need_rebuild()) {

@@ -6,7 +6,7 @@ namespace dftracer::utils {
 
 // Unified task access methods
 Task* ExecutorContext::get_task(TaskIndex index) const {
-    if (index < pipeline_->size()) {
+    if (index < static_cast<TaskIndex>(pipeline_->size())) {
         return pipeline_->get_task(index);
     } else {
         return get_dynamic_task(index);
@@ -15,7 +15,7 @@ Task* ExecutorContext::get_task(TaskIndex index) const {
 
 const std::vector<TaskIndex>& ExecutorContext::get_task_dependencies(
     TaskIndex index) const {
-    if (index < pipeline_->size()) {
+    if (index < static_cast<TaskIndex>(pipeline_->size())) {
         return pipeline_->get_task_dependencies(index);
     } else {
         return get_dynamic_dependencies(index);
@@ -24,7 +24,7 @@ const std::vector<TaskIndex>& ExecutorContext::get_task_dependencies(
 
 const std::vector<TaskIndex>& ExecutorContext::get_task_dependents(
     TaskIndex index) const {
-    if (index < pipeline_->size()) {
+    if (index < static_cast<TaskIndex>(pipeline_->size())) {
         return pipeline_->get_task_dependents(index);
     } else {
         return get_dynamic_dependents(index);
@@ -33,7 +33,8 @@ const std::vector<TaskIndex>& ExecutorContext::get_task_dependents(
 
 TaskIndex ExecutorContext::add_dynamic_task(std::unique_ptr<Task> task,
                                             TaskIndex depends_on) {
-    TaskIndex task_id = pipeline_->size() + dynamic_tasks_.size();
+    TaskIndex task_id =
+        static_cast<TaskIndex>(pipeline_->size() + dynamic_tasks_.size());
 
     dynamic_tasks_.push_back(std::move(task));
 
@@ -54,25 +55,30 @@ TaskIndex ExecutorContext::add_dynamic_task(std::unique_ptr<Task> task,
 }
 
 void ExecutorContext::add_dynamic_dependency(TaskIndex from, TaskIndex to) {
-    if (from < pipeline_->size() && to < pipeline_->size()) {
+    if (from < static_cast<TaskIndex>(pipeline_->size()) &&
+        to < static_cast<TaskIndex>(pipeline_->size())) {
         return;
     }
 
-    size_t from_idx = (from >= pipeline_->size())
-                          ? static_cast<size_t>(from - pipeline_->size())
-                          : 0;
-    size_t to_idx = (to >= pipeline_->size())
-                        ? static_cast<size_t>(to - pipeline_->size())
-                        : 0;
+    std::size_t from_idx =
+        (from >= static_cast<TaskIndex>(pipeline_->size()))
+            ? static_cast<std::size_t>(
+                  from - static_cast<TaskIndex>(pipeline_->size()))
+            : 0;
+    std::size_t to_idx =
+        (to >= static_cast<TaskIndex>(pipeline_->size()))
+            ? static_cast<std::size_t>(
+                  to - static_cast<TaskIndex>(pipeline_->size()))
+            : 0;
 
-    if (from >= pipeline_->size()) {
+    if (from >= static_cast<TaskIndex>(pipeline_->size())) {
         while (dynamic_dependents_.size() <= from_idx) {
             dynamic_dependents_.emplace_back();
         }
         dynamic_dependents_[from_idx].push_back(to);
     }
 
-    if (to >= pipeline_->size()) {
+    if (to >= static_cast<TaskIndex>(pipeline_->size())) {
         while (dynamic_dependencies_.size() <= to_idx) {
             dynamic_dependencies_.emplace_back();
         }
@@ -83,7 +89,7 @@ void ExecutorContext::add_dynamic_dependency(TaskIndex from, TaskIndex to) {
 }
 
 Task* ExecutorContext::get_dynamic_task(TaskIndex index) const {
-    if (index < pipeline_->size()) return nullptr;
+    if (index < static_cast<TaskIndex>(pipeline_->size())) return nullptr;
 
     size_t task_idx = static_cast<size_t>(index - pipeline_->size());
     if (task_idx >= dynamic_tasks_.size()) return nullptr;
@@ -94,7 +100,7 @@ Task* ExecutorContext::get_dynamic_task(TaskIndex index) const {
 const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependencies(
     TaskIndex index) const {
     static const std::vector<TaskIndex> empty;
-    if (index < pipeline_->size()) return empty;
+    if (index < static_cast<TaskIndex>(pipeline_->size())) return empty;
 
     size_t task_idx = static_cast<size_t>(index - pipeline_->size());
     if (task_idx >= dynamic_dependencies_.size()) return empty;
@@ -105,7 +111,7 @@ const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependencies(
 const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependents(
     TaskIndex index) const {
     static const std::vector<TaskIndex> empty;
-    if (index < pipeline_->size()) return empty;
+    if (index < static_cast<TaskIndex>(pipeline_->size())) return empty;
 
     size_t task_idx = static_cast<size_t>(index - pipeline_->size());
     if (task_idx >= dynamic_dependents_.size()) return empty;
