@@ -22,8 +22,8 @@ ThreadExecutor::ThreadExecutor()
     : Executor(ExecutorType::THREAD),
       max_threads_(std::thread::hardware_concurrency()) {
     if (max_threads_ == 0) max_threads_ = 2;
-    DFTRACER_UTILS_LOG_INFO("ThreadExecutor initialized with max_threads = %zu",
-                            max_threads_);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "ThreadExecutor initialized with max_threads = %zu", max_threads_);
 }
 
 ThreadExecutor::ThreadExecutor(size_t max_threads)
@@ -31,8 +31,8 @@ ThreadExecutor::ThreadExecutor(size_t max_threads)
     if (max_threads_ == 0) {
         max_threads_ = 2;
     }
-    DFTRACER_UTILS_LOG_INFO("ThreadExecutor initialized with max_threads = %zu",
-                            max_threads_);
+    DFTRACER_UTILS_LOG_DEBUG(
+        "ThreadExecutor initialized with max_threads = %zu", max_threads_);
 }
 
 ThreadExecutor::~ThreadExecutor() = default;

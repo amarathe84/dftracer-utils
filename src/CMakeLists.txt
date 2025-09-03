@@ -48,6 +48,7 @@ set(DFTRACER_UTILS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/reader/error.cpp
     # Utilities
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/timer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utils/string.cpp
     # Pipeline
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/error.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/pipeline.cpp
@@ -143,107 +144,17 @@ if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_link_libraries(dftracer_utils_shared PRIVATE --coverage)
 endif()
 
-# -----------------------------------------
-# Analyzer library
-# -----------------------------------------
-
-# set(DFTRACER_UTILS_ANALYZER_HEADERS pipeline/pipeline.h analyzers/analyzer.h )
-
-# set(DFTRACER_UTILS_ANALYZER_SOURCES analyzers/analyzer.cpp )
-
-# +++++++++++++++++++++++++++++++++++++++++
-# Static library
-# +++++++++++++++++++++++++++++++++++++++++
-
-# add_library(dftracer_utils_analyzer STATIC ${DFTRACER_UTILS_ANALYZER_SOURCES})
-# add_library(dftracer_utils_analyzer::static ALIAS dftracer_utils_analyzer)
-
-# set_target_properties(dftracer_utils_analyzer PROPERTIES OUTPUT_NAME
-# dftracer_utils EXPORT_NAME shared VERSION ${PROJECT_VERSION} SOVERSION
-# ${PROJECT_VERSION_MAJOR} ) target_link_libraries(dftracer_utils_analyzer
-# PUBLIC dftracer_utils ) target_add_rpath(dftracer_utils_analyzer)
-
-# target_include_directories(dftracer_utils_analyzer PUBLIC
-# $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/analyzers>
-# $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/pipeline>
-# $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include> )
-# target_set_warnings(dftracer_utils_analyzer)
-
-# if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-# target_compile_options(dftracer_utils_analyzer PRIVATE --coverage
-# -fprofile-arcs -ftest-coverage) target_link_libraries(dftracer_utils_analyzer
-# PRIVATE --coverage) endif()
-
 # ##############################################################################
 # Executables
 # ##############################################################################
 
-# ----------------------------------------
-# DFT Reader
-# ----------------------------------------
+set(DFTRACER_BINARIES
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_reader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_map.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_event_count.cpp
+)
 
-add_executable(dft_reader
-               ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_reader.cpp)
-set_target_properties(dft_reader PROPERTIES OUTPUT_NAME "dft_reader")
-target_link_libraries(dft_reader PRIVATE dftracer_utils argparse::argparse
-                                         ghc_filesystem xxHash::xxhash yyjson)
-
-# Link SQLite3, zlib, and Arrow for executable (treat as static since it's an
-# executable)
-link_sqlite3(dft_reader STATIC)
-link_zlib(dft_reader STATIC)
-# link_arrow(dft_reader STATIC)
-
-target_include_directories(
-  dft_reader PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src
-                     ${CMAKE_BINARY_DIR}/include)
-
-target_set_warnings(dft_reader)
-
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(dft_reader PRIVATE --coverage -fprofile-arcs
-                                            -ftest-coverage)
-  target_link_libraries(dft_reader PRIVATE --coverage)
-endif()
-
-# Install executable
-install(TARGETS dft_reader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# ----------------------------------------
-# DFT Map
-# ----------------------------------------
-
-add_executable(dft_map
-               ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dft_map.cpp)
-set_target_properties(dft_map PROPERTIES OUTPUT_NAME "dft_map")
-target_link_libraries(dft_map PRIVATE dftracer_utils argparse::argparse
-                                      ghc_filesystem xxHash::xxhash yyjson)
-
-link_sqlite3(dft_map STATIC)
-link_zlib(dft_map STATIC)
-
-target_include_directories(dft_map PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
-target_set_warnings(dft_map)
-
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(dft_map PRIVATE --coverage -fprofile-arcs
-                                         -ftest-coverage)
-  target_link_libraries(dft_map PRIVATE --coverage)
-endif()
-
-# Install executable
-install(TARGETS dft_map RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# ----------------------------------------
-# Temporaries
-# ----------------------------------------
-
-set(TEMPORARY_BINARIES)
-
-foreach(bin ${TEMPORARY_BINARIES})
+foreach(bin ${DFTRACER_BINARIES})
   string(REPLACE ".cpp" "" bin_exec ${bin})
   string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/" "" bin_exec
                  ${bin_exec})

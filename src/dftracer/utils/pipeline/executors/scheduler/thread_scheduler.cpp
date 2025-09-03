@@ -87,7 +87,7 @@ void ThreadScheduler::shutdown() {
         current_execution_context_ = nullptr;
     }
 
-    DFTRACER_UTILS_LOG_INFO("GlobalScheduler shutdown complete");
+    DFTRACER_UTILS_LOG_DEBUG("%s", "GlobalScheduler shutdown complete");
 }
 
 void ThreadScheduler::submit(
@@ -318,7 +318,7 @@ void ThreadScheduler::worker_thread(size_t thread_id) {
         }
     }
 
-    DFTRACER_UTILS_LOG_INFO("Worker thread %zu terminated", thread_id);
+    DFTRACER_UTILS_LOG_DEBUG("Worker thread %zu terminated", thread_id);
 }
 
 void ThreadScheduler::wait_for_completion() {

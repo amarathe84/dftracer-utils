@@ -121,6 +121,13 @@ const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependents(
 
 void ExecutorContext::set_task_output(TaskIndex index, std::any output) {
     task_outputs_[index] = std::move(output);
+
+    // Clean up promise after task completion (promise already fulfilled in
+    // wrapped function)
+    auto promise_it = task_promises_.find(index);
+    if (promise_it != task_promises_.end()) {
+        task_promises_.erase(promise_it);
+    }
 }
 
 std::any ExecutorContext::get_task_output(TaskIndex index) const {
@@ -135,6 +142,17 @@ void ExecutorContext::set_task_completed(TaskIndex index, bool completed) {
 bool ExecutorContext::is_task_completed(TaskIndex index) const {
     auto it = task_completed_.find(index);
     return (it != task_completed_.end()) ? it->second.load() : false;
+}
+
+void ExecutorContext::set_task_promise(
+    TaskIndex index, std::shared_ptr<std::promise<std::any>> promise) {
+    task_promises_[index] = std::move(promise);
+}
+
+std::shared_ptr<std::promise<std::any>> ExecutorContext::get_task_promise(
+    TaskIndex index) const {
+    auto it = task_promises_.find(index);
+    return (it != task_promises_.end()) ? it->second : nullptr;
 }
 
 void ExecutorContext::set_dependency_count(TaskIndex index, int count) {

@@ -6,6 +6,7 @@
 
 #include <any>
 #include <atomic>
+#include <future>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -44,6 +45,11 @@ class ExecutorContext {
     void set_task_completed(TaskIndex index, bool completed);
     bool is_task_completed(TaskIndex index) const;
 
+    void set_task_promise(TaskIndex index,
+                          std::shared_ptr<std::promise<std::any>> promise);
+    std::shared_ptr<std::promise<std::any>> get_task_promise(
+        TaskIndex index) const;
+
     void set_dependency_count(TaskIndex index, int count);
     int get_dependency_count(TaskIndex index) const;
     void decrement_dependency_count(TaskIndex index);
@@ -68,6 +74,8 @@ class ExecutorContext {
     std::unordered_map<TaskIndex, std::any> task_outputs_;
     std::unordered_map<TaskIndex, std::atomic<bool>> task_completed_;
     std::unordered_map<TaskIndex, int> dependency_count_;
+    std::unordered_map<TaskIndex, std::shared_ptr<std::promise<std::any>>>
+        task_promises_;
 };
 
 }  // namespace dftracer::utils

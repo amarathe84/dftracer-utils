@@ -12,9 +12,9 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
-#include <thread>
 
 namespace dftracer::utils {
 
