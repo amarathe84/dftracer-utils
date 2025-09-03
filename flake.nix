@@ -23,6 +23,7 @@
             pigz
             lcov
             openmpi
+            cmake-format
             # sqlite
             # zlib
             # spdlog
