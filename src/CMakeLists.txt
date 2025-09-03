@@ -93,8 +93,8 @@ link_zlib(dftracer_utils STATIC)
 
 target_include_directories(
   dftracer_utils
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
          $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>)
 target_set_warnings(dftracer_utils)
 
@@ -132,8 +132,8 @@ link_zlib(dftracer_utils_shared SHARED)
 
 target_include_directories(
   dftracer_utils_shared
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
          $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>)
 target_set_warnings(dftracer_utils_shared)
 
@@ -153,8 +153,7 @@ set(DFTRACER_BINARIES
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_map.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_event_count.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_pgzip.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_merge.cpp
-)
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_merge.cpp)
 
 foreach(bin ${DFTRACER_BINARIES})
   string(REPLACE ".cpp" "" bin_exec ${bin})
@@ -169,7 +168,8 @@ foreach(bin ${DFTRACER_BINARIES})
   link_sqlite3(${bin_exec} STATIC)
   link_zlib(${bin_exec} STATIC)
 
-  target_include_directories(${bin_exec} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+  target_include_directories(${bin_exec}
+                             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
   target_set_warnings(${bin_exec})
 
@@ -269,7 +269,7 @@ install(TARGETS ${INSTALLABLE_TARGETS} EXPORT dftracer_utilsTargets)
 
 # Install headers
 install(
-  DIRECTORY ${CMAKE_SOURCE_DIR}/include/dftracer/utils/
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../include/dftracer/utils/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dftracer/utils
   FILES_MATCHING
   PATTERN "*.h")

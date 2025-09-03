@@ -54,18 +54,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # This sets where to look for dependent libraries
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR}
                       ${CMAKE_INSTALL_PREFIX})
-# This sets where to look for dependent library's cmake files
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake)
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/share/cmake)
-
-include(CompilerWarnings)
-include(InstallHelpers)
-include(CPM)
-include(Dependencies)
-include(Utils)
-include(Rpath)
-# include(CrossPlatform)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/CompilerWarnings.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/InstallHelpers.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/CPM.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/Dependencies.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/Utils.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/Rpath.cmake)
 
 if(SKBUILD)
   set(CMAKE_INSTALL_LIBDIR
@@ -81,12 +75,14 @@ endif()
 
 if(DFTRACER_UTILS_DEBUG)
   configure_file(
-    "${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.dbg.h.in"
-    "${CMAKE_BINARY_DIR}/include/dftracer/utils/common/config.h" @ONLY)
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.dbg.h.in"
+    "${CMAKE_BINARY_DIR}/include/dftracer/utils/common/config.h"
+    @ONLY)
 else()
   configure_file(
-    "${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.h.in"
-    "${CMAKE_BINARY_DIR}/include/dftracer/utils/common/config.h" @ONLY)
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/dftracer_utils_config.h.in"
+    "${CMAKE_BINARY_DIR}/include/dftracer/utils/common/config.h"
+    @ONLY)
 endif()
 
 set_coverage_compiler_flags(DFTRACER_UTILS_TESTS AND DFTRACER_UTILS_COVERAGE)
