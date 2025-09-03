@@ -64,7 +64,6 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/scheduler/sequential_scheduler.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/executor_context.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/tasks/task_context.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/tasks/task_type.cpp
 
   # Analyzers
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/analyzers/constants.cpp
