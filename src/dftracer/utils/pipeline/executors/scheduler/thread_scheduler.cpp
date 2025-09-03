@@ -1,8 +1,9 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/error.h>
-#include <dftracer/utils/pipeline/executors/thread/scheduler.h>
+#include <dftracer/utils/pipeline/executors/scheduler/thread_scheduler.h>
 #include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/tasks/task_context.h>
+#include <dftracer/utils/pipeline/executors/executor_context.h>
 
 #include <algorithm>
 #include <chrono>
@@ -11,28 +12,13 @@
 #include <iostream>
 
 namespace dftracer::utils {
-std::unique_ptr<GlobalScheduler> GlobalScheduler::instance_ = nullptr;
-std::mutex GlobalScheduler::instance_mutex_;
+ThreadScheduler::ThreadScheduler() : current_execution_context_(nullptr) {}
 
-GlobalScheduler::GlobalScheduler() : current_pipeline_(nullptr) {}
-
-GlobalScheduler::~GlobalScheduler() {
+ThreadScheduler::~ThreadScheduler() {
     shutdown();
 }
 
-GlobalScheduler* GlobalScheduler::get_instance() {
-    std::lock_guard<std::mutex> lock(instance_mutex_);
-    if (!instance_) {
-        instance_ = std::unique_ptr<GlobalScheduler>(new GlobalScheduler());
-    }
-    return instance_.get();
-}
-
-void GlobalScheduler::set_pipeline(const Pipeline* pipeline) {
-    current_pipeline_ = pipeline;
-}
-
-void GlobalScheduler::initialize(std::size_t num_threads) {
+void ThreadScheduler::initialize(std::size_t num_threads) {
     // Ensure clean state
     shutdown();
     
@@ -61,7 +47,7 @@ void GlobalScheduler::initialize(std::size_t num_threads) {
     workers_.reserve(num_threads);
     
     for (std::size_t i = 0; i < num_threads; ++i) {
-        workers_.emplace_back(&GlobalScheduler::worker_thread, this, i);
+        workers_.emplace_back(&ThreadScheduler::worker_thread, this, i);
     }
     
     // Signal workers that they can start processing
@@ -69,7 +55,7 @@ void GlobalScheduler::initialize(std::size_t num_threads) {
     cv_.notify_all();
 }
 
-void GlobalScheduler::shutdown() {
+void ThreadScheduler::shutdown() {
     // Signal all threads to terminate
     should_terminate_ = true;
     
@@ -89,13 +75,13 @@ void GlobalScheduler::shutdown() {
     DFTRACER_UTILS_LOG_INFO("GlobalScheduler shutdown complete");
 }
 
-void GlobalScheduler::submit(TaskIndex task_id, std::any input,
+void ThreadScheduler::submit(TaskIndex task_id, std::any input,
                              std::function<void(std::any)> completion_callback) {
-    Task* task_ptr = current_pipeline_ ? current_pipeline_->get_task(task_id) : nullptr;
-    submit(task_id, task_ptr, std::move(input), std::move(completion_callback));
+    // This method should be called with task pointer directly
+    submit(task_id, nullptr, std::move(input), std::move(completion_callback));
 }
 
-void GlobalScheduler::submit(TaskIndex task_id, Task* task_ptr, std::any input,
+void ThreadScheduler::submit(TaskIndex task_id, Task* task_ptr, std::any input,
                              std::function<void(std::any)> completion_callback) {
     // Safety check: ensure queues are initialized
     if (queues_.empty()) {
@@ -119,7 +105,12 @@ void GlobalScheduler::submit(TaskIndex task_id, Task* task_ptr, std::any input,
     cv_.notify_one();
 }
 
-std::any GlobalScheduler::execute_pipeline(const Pipeline& pipeline, std::any input) {
+std::any ThreadScheduler::execute(const Pipeline& pipeline, std::any input) {
+    
+    // Create ExecutorContext to manage runtime state
+    ExecutorContext execution_context(&pipeline);
+    current_execution_context_ = &execution_context;
+    
     if (pipeline.empty()) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,
                             "Pipeline is empty");
@@ -144,38 +135,38 @@ std::any GlobalScheduler::execute_pipeline(const Pipeline& pipeline, std::any in
     // Initialize dependency counters for initial tasks only
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
         task_completed_[i] = false;
-        dependency_count_[i] = pipeline.get_task_dependencies(i).size();
+        dependency_count_[i] = execution_context.get_task_dependencies(i).size();
     }
     
     // Submit all initial entry tasks (those with no dependencies) - let thread pool handle everything!
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
-        if (pipeline.get_task_dependencies(i).empty()) {
+        if (execution_context.get_task_dependencies(i).empty()) {
             // Entry task - submit immediately with original input
-            auto completion_callback = [this, &pipeline, i](std::any result) {
+            auto completion_callback = [this, &execution_context, i](std::any result) {
                 // Store the result
                 task_outputs_[i] = std::move(result);
                 task_completed_[i] = true;
                 
                 // Process dependent tasks
-                for (TaskIndex dependent : pipeline.get_task_dependents(i)) {
+                for (TaskIndex dependent : execution_context.get_task_dependents(i)) {
                     if (--dependency_count_[dependent] == 0) {
                         // All dependencies satisfied - submit the dependent task
                         std::any dependent_input;
                         
-                        if (pipeline.get_task_dependencies(dependent).size() == 1) {
+                        if (execution_context.get_task_dependencies(dependent).size() == 1) {
                             // Single dependency
                             dependent_input = task_outputs_[i];
                         } else {
                             // Multiple dependencies - combine inputs
                             std::vector<std::any> combined_inputs;
-                            for (TaskIndex dep : pipeline.get_task_dependencies(dependent)) {
+                            for (TaskIndex dep : execution_context.get_task_dependencies(dependent)) {
                                 combined_inputs.push_back(task_outputs_[dep]);
                             }
                             dependent_input = combined_inputs;
                         }
                         
                         // Submit dependent task with recursive callback
-                        submit_with_dependency_handling(pipeline, dependent, std::move(dependent_input));
+                        submit_with_dependency_handling(execution_context, dependent, std::move(dependent_input));
                     }
                 }
                 
@@ -186,7 +177,8 @@ std::any GlobalScheduler::execute_pipeline(const Pipeline& pipeline, std::any in
                 }
             };
             
-            submit(i, input, completion_callback);
+            Task* task_ptr = execution_context.get_task(i);
+            submit(i, task_ptr, input, completion_callback);
         }
     }
     
@@ -240,10 +232,13 @@ std::any GlobalScheduler::execute_pipeline(const Pipeline& pipeline, std::any in
     // Find the terminal tasks (those that no other tasks depend on)
     std::vector<TaskIndex> terminal_tasks;
     for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline.size()); ++i) {
-        if (pipeline.get_task_dependents(i).empty()) {
+        if (execution_context.get_task_dependents(i).empty()) {
             terminal_tasks.push_back(i);
         }
     }
+    
+    // Clean up execution context reference
+    current_execution_context_ = nullptr;
     
     // Return output of the last terminal task
     if (!terminal_tasks.empty()) {
@@ -253,7 +248,8 @@ std::any GlobalScheduler::execute_pipeline(const Pipeline& pipeline, std::any in
     return input;
 }
 
-void GlobalScheduler::worker_thread(size_t thread_id) {
+void ThreadScheduler::worker_thread(size_t thread_id) {
+    
     // Wait until scheduler signals workers are ready
     {
         std::unique_lock<std::mutex> lock(cv_mutex_);
@@ -298,7 +294,7 @@ void GlobalScheduler::worker_thread(size_t thread_id) {
                 if (task.task_ptr) {
                     // Setup context for tasks that need it
                     if (task.task_ptr->needs_context()) {
-                        TaskContext task_context(const_cast<Pipeline*>(current_pipeline_), task_id);
+                        TaskContext task_context(this, current_execution_context_, task_id);
                         task.task_ptr->setup_context(&task_context);
                     }
                     
@@ -350,32 +346,32 @@ void GlobalScheduler::worker_thread(size_t thread_id) {
     DFTRACER_UTILS_LOG_INFO("Worker thread %zu terminated", thread_id);
 }
 
-TaskQueue* GlobalScheduler::get_queue(std::size_t thread_id) {
+TaskQueue* ThreadScheduler::get_queue(std::size_t thread_id) {
     if (thread_id < queues_.size()) {
         return queues_[thread_id].get();
     }
     return nullptr;
 }
 
-bool GlobalScheduler::is_execution_complete() {
+bool ThreadScheduler::is_execution_complete() {
     return active_tasks_ == 0;
 }
 
-void GlobalScheduler::wait_for_completion() {
+void ThreadScheduler::wait_for_completion() {
     std::unique_lock<std::mutex> lock(cv_mutex_);
     cv_.wait(lock, [this]() {
         return active_tasks_ == 0;
     });
 }
 
-void GlobalScheduler::signal_task_completion() {
+void ThreadScheduler::signal_task_completion() {
     active_tasks_--;
     if (active_tasks_ == 0) {
         cv_.notify_all();
     }
 }
 
-void GlobalScheduler::process_all_queued_tasks() {
+void ThreadScheduler::process_all_queued_tasks() {
     // Process all dynamically emitted tasks until queues are empty AND no active tasks
     // This mimics SequentialExecutor's process_queued_tasks() but with work stealing
     
@@ -400,7 +396,7 @@ void GlobalScheduler::process_all_queued_tasks() {
     }
 }
 
-void GlobalScheduler::process_all_remaining_tasks() {
+void ThreadScheduler::process_all_remaining_tasks() {
     // Continuously process ALL remaining tasks until completely done
     // This handles nested dynamic task emission by running indefinitely until no more work exists
     
@@ -436,7 +432,7 @@ void GlobalScheduler::process_all_remaining_tasks() {
     }
 }
 
-void GlobalScheduler::process_dynamic_tasks_synchronously() {
+void ThreadScheduler::process_dynamic_tasks_synchronously() {
     // Process all dynamic tasks similar to SequentialExecutor's process_queued_tasks
     // but using work-stealing thread pool
     
@@ -460,33 +456,33 @@ void GlobalScheduler::process_dynamic_tasks_synchronously() {
     }
 }
 
-void GlobalScheduler::submit_with_dependency_handling(const Pipeline& pipeline, TaskIndex task_id, std::any input) {
+void ThreadScheduler::submit_with_dependency_handling(ExecutorContext& execution_context, TaskIndex task_id, std::any input) {
     // Recursive helper to submit tasks with proper dependency handling
-    auto completion_callback = [this, &pipeline, task_id](std::any result) {
+    auto completion_callback = [this, &execution_context, task_id](std::any result) {
         // Store the result
         task_outputs_[task_id] = std::move(result);
         task_completed_[task_id] = true;
         
         // Process dependent tasks recursively
-        for (TaskIndex dependent : pipeline.get_task_dependents(task_id)) {
+        for (TaskIndex dependent : execution_context.get_task_dependents(task_id)) {
             if (--dependency_count_[dependent] == 0) {
                 // All dependencies satisfied - prepare input
                 std::any dependent_input;
                 
-                if (pipeline.get_task_dependencies(dependent).size() == 1) {
+                if (execution_context.get_task_dependencies(dependent).size() == 1) {
                     // Single dependency
                     dependent_input = task_outputs_[task_id];
                 } else {
                     // Multiple dependencies
                     std::vector<std::any> combined_inputs;
-                    for (TaskIndex dep : pipeline.get_task_dependencies(dependent)) {
+                    for (TaskIndex dep : execution_context.get_task_dependencies(dependent)) {
                         combined_inputs.push_back(task_outputs_[dep]);
                     }
                     dependent_input = combined_inputs;
                 }
                 
                 // Submit dependent task recursively
-                submit_with_dependency_handling(pipeline, dependent, std::move(dependent_input));
+                submit_with_dependency_handling(execution_context, dependent, std::move(dependent_input));
             }
         }
         
@@ -497,7 +493,8 @@ void GlobalScheduler::submit_with_dependency_handling(const Pipeline& pipeline, 
         }
     };
     
-    submit(task_id, std::move(input), completion_callback);
+    Task* task_ptr = execution_context.get_task(task_id);
+    submit(task_id, task_ptr, std::move(input), completion_callback);
 }
 
 }  // namespace dftracer::utils

@@ -14,20 +14,12 @@ std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input) {
     // Use SequentialScheduler to handle both static and dynamic task execution
     SequentialScheduler scheduler;
     
-    // Set this scheduler as the current scheduler for this thread
-    set_current_scheduler(&scheduler);
-    
     try {
         // Execute pipeline using the sequential scheduler
-        std::any result = scheduler.execute_pipeline(pipeline, input);
-        
-        // Clean up scheduler reference
-        set_current_scheduler(nullptr);
+        std::any result = scheduler.execute(pipeline, input);
         
         return result;
     } catch (...) {
-        // Clean up scheduler reference on exception
-        set_current_scheduler(nullptr);
         throw;
     }
 }

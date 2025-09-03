@@ -8,7 +8,6 @@
 
 namespace dftracer::utils {
 
-// Forward declaration
 class TaskContext;
 
 class Task {

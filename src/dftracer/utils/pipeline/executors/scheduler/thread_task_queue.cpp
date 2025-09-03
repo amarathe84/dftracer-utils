@@ -1,4 +1,4 @@
-#include <dftracer/utils/pipeline/executors/thread/task_queue.h>
+#include <dftracer/utils/pipeline/executors/scheduler/thread_task_queue.h>
 
 namespace dftracer::utils {
 

@@ -2,22 +2,16 @@
 #include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/tasks/task_context.h>
 #include <dftracer/utils/pipeline/error.h>
+#include <dftracer/utils/pipeline/executors/executor_context.h>
 #include <dftracer/utils/common/logging.h>
 
-// Forward declaration from task_context.cpp
-namespace dftracer::utils {
-    void set_current_scheduler(SchedulerInterface* scheduler);
-}
 
 namespace dftracer::utils {
 
-SequentialScheduler::SequentialScheduler() : current_pipeline_(nullptr) {}
+SequentialScheduler::SequentialScheduler() : current_execution_context_(nullptr) {}
 
-void SequentialScheduler::set_pipeline(const Pipeline* pipeline) {
-    current_pipeline_ = pipeline;
-}
 
-std::any SequentialScheduler::execute_pipeline(const Pipeline& pipeline, std::any input) {
+std::any SequentialScheduler::execute(const Pipeline& pipeline, std::any input) {
     if (pipeline.empty()) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,
                             "Pipeline is empty");
@@ -31,11 +25,10 @@ std::any SequentialScheduler::execute_pipeline(const Pipeline& pipeline, std::an
                             "Pipeline contains cycles");
     }
     
-    // Set current pipeline for context
-    set_pipeline(&pipeline);
     
-    // Set this scheduler as the current scheduler for this thread
-    set_current_scheduler(this);
+    // Create ExecutorContext to manage runtime state
+    ExecutorContext execution_context(&pipeline);
+    current_execution_context_ = &execution_context;
     
     // Clear previous state
     task_outputs_.clear();
@@ -45,13 +38,6 @@ std::any SequentialScheduler::execute_pipeline(const Pipeline& pipeline, std::an
     
     // Execute pipeline tasks in topological order
     auto execution_order = pipeline.topological_sort();
-    Pipeline* mutable_pipeline = const_cast<Pipeline*>(&pipeline);
-    
-    // Pre-create contexts for all tasks
-    std::vector<TaskContext> task_contexts;
-    for (TaskIndex task_id : execution_order) {
-        task_contexts.push_back(mutable_pipeline->create_context(task_id));
-    }
     
     for (size_t i = 0; i < execution_order.size(); ++i) {
         TaskIndex task_id = execution_order[i];
@@ -72,9 +58,10 @@ std::any SequentialScheduler::execute_pipeline(const Pipeline& pipeline, std::an
             task_input = combined_inputs;
         }
 
-        // Setup context and execute
+        // Setup context for tasks that need it
         if (task->needs_context()) {
-            task->setup_context(&task_contexts[i]);
+            TaskContext task_context(this, current_execution_context_, task_id);
+            task->setup_context(&task_context);
         }
         
         task_outputs_[task_id] = task->execute(task_input);
@@ -86,10 +73,13 @@ std::any SequentialScheduler::execute_pipeline(const Pipeline& pipeline, std::an
     // Find the terminal tasks (those that no other tasks depend on)
     std::vector<TaskIndex> terminal_tasks;
     for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline.size()); ++i) {
-        if (pipeline.get_task_dependencies(i).empty()) {
+        if (execution_context.get_task_dependents(i).empty()) {
             terminal_tasks.push_back(i);
         }
     }
+    
+    // Clean up execution context reference
+    current_execution_context_ = nullptr;
     
     // Return output of the last terminal task
     if (!terminal_tasks.empty()) {
@@ -101,7 +91,8 @@ std::any SequentialScheduler::execute_pipeline(const Pipeline& pipeline, std::an
 
 void SequentialScheduler::submit(TaskIndex task_id, std::any input,
                                 std::function<void(std::any)> completion_callback) {
-    Task* task_ptr = current_pipeline_ ? current_pipeline_->get_task(task_id) : nullptr;
+    // This method should be called with task pointer directly
+    Task* task_ptr = nullptr;  // Will be passed via other submit method
     submit(task_id, task_ptr, std::move(input), std::move(completion_callback));
 }
 
@@ -113,8 +104,6 @@ void SequentialScheduler::submit(TaskIndex task_id, Task* task_ptr, std::any inp
 }
 
 void SequentialScheduler::process_queued_tasks() {
-    Pipeline* mutable_pipeline = const_cast<Pipeline*>(current_pipeline_);
-    
     while (!task_queue_.empty()) {
         TaskItem task = std::move(task_queue_.front());
         task_queue_.pop();
@@ -123,21 +112,15 @@ void SequentialScheduler::process_queued_tasks() {
             std::any result;
             
             if (task.task_ptr) {
-                
+                // Setup context for tasks that need it
                 if (task.task_ptr->needs_context()) {
-                    // Setup context for all tasks that need it
-                    TaskContext task_context(mutable_pipeline, task.task_id);
+                    TaskContext task_context(this, current_execution_context_, task.task_id);
                     task.task_ptr->setup_context(&task_context);
-                    
-                    DFTRACER_UTILS_LOG_INFO("SequentialScheduler: Executing task %d with context, input type %s", 
-                                           task.task_id, task.input.type().name());
-                    result = task.task_ptr->execute(task.input);
-                } else {
-                    // Tasks that don't need context
-                    DFTRACER_UTILS_LOG_INFO("SequentialScheduler: Executing task %d without context, input type %s", 
-                                           task.task_id, task.input.type().name());
-                    result = task.task_ptr->execute(task.input);
                 }
+                
+                DFTRACER_UTILS_LOG_INFO("SequentialScheduler: Executing task %d, input type %s", 
+                                       task.task_id, task.input.type().name());
+                result = task.task_ptr->execute(task.input);
                 DFTRACER_UTILS_LOG_DEBUG("SequentialScheduler: Executed task %d", task.task_id);
             } else {
                 DFTRACER_UTILS_LOG_WARN("SequentialScheduler: No task pointer for task %d, using input as result", task.task_id);

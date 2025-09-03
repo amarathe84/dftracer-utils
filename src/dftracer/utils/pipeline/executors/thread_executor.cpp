@@ -1,7 +1,8 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/error.h>
-#include <dftracer/utils/pipeline/executors/thread/scheduler.h>
+#include <dftracer/utils/pipeline/executors/scheduler/thread_scheduler.h>
 #include <dftracer/utils/pipeline/executors/thread_executor.h>
+#include <dftracer/utils/pipeline/executors/executor_context.h>
 
 #include <any>
 #include <atomic>
@@ -51,20 +52,17 @@ std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input) {
                             "Pipeline contains cycles");
     }
     
-    // Get the global scheduler instance
-    auto scheduler = GlobalScheduler::get_instance();
-    
-    // CRITICAL: Set pipeline reference so scheduler can access tasks
-    scheduler->set_pipeline(&pipeline);
+    // Create thread scheduler instance
+    ThreadScheduler scheduler;
     
     // Initialize the scheduler with the number of threads
-    scheduler->initialize(max_threads_);
+    scheduler.initialize(max_threads_);
     
-    // Execute the pipeline using the scheduler
-    std::any result = scheduler->execute_pipeline(pipeline, input);
+    // Execute the pipeline using the scheduler (scheduler will create ExecutionContext internally)
+    std::any result = scheduler.execute(pipeline, input);
     
     // Shutdown the scheduler when done
-    scheduler->shutdown();
+    scheduler.shutdown();
     
     return result;
 }

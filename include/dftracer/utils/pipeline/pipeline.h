@@ -6,6 +6,7 @@
 #include <dftracer/utils/pipeline/tasks/task.h>
 #include <dftracer/utils/pipeline/tasks/function_task.h>
 #include <dftracer/utils/pipeline/tasks/task_context.h>
+#include <dftracer/utils/pipeline/executors/executor_context.h>
 
 #include <any>
 #include <atomic>
@@ -21,14 +22,9 @@ namespace dftracer::utils {
 class Pipeline {
    protected:
     std::vector<std::unique_ptr<Task>> nodes_;
-    std::vector<std::vector<TaskIndex>>
-        dependencies_;  // who depends on this task
-    std::vector<std::vector<TaskIndex>>
-        dependents_;    // who this task depends on
-    std::unordered_map<TaskIndex, std::any> task_outputs_;
-    std::unordered_map<TaskIndex, std::atomic<bool>> task_completed_;
-    std::unordered_map<TaskIndex, int> dependency_count_;
-
+    std::vector<std::vector<TaskIndex>> dependencies_;  // who depends on this task
+    std::vector<std::vector<TaskIndex>> dependents_;    // who this task depends on
+    
    public:
     Pipeline() = default;
     virtual ~Pipeline() = default;
@@ -40,10 +36,7 @@ class Pipeline {
     Pipeline& operator=(Pipeline&&) = default;
 
     TaskIndex add_task(std::unique_ptr<Task> task, TaskIndex depends_on = -1);
-    TaskIndex safe_add_task(std::unique_ptr<Task> task, TaskIndex depends_on = -1);
-
     void add_dependency(TaskIndex from, TaskIndex to);
-    void safe_add_dependency(TaskIndex from, TaskIndex to);
 
     template<typename I, typename O>
     TaskIndex add_task(std::function<O(I, TaskContext&)> func) {
@@ -83,8 +76,6 @@ class Pipeline {
     bool validate_types() const;
     bool has_cycles() const;
     std::vector<TaskIndex> topological_sort() const;
-
-    TaskContext create_context(TaskIndex task_id);
 
    protected:
 };

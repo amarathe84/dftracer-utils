@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_PIPELINE_TASKS_TASK_CONTEXT_H
 
 #include <dftracer/utils/common/typedefs.h>
+#include <dftracer/utils/pipeline/executors/executor_context.h>
 
 #include <functional>
 #include <typeindex>
@@ -11,79 +12,52 @@
 
 namespace dftracer::utils {
 
-// Forward declarations
-class Pipeline;
 class Task;
 class TaskContext;
-class SchedulerInterface;
+class Scheduler;
 
-// Scheduler registry functions for TaskContext
-void set_current_scheduler(SchedulerInterface* scheduler);
+template<typename T>
+struct Input {
+    T value;
+    explicit Input(T val) : value(std::move(val)) {}
+};
 
-// Forward declaration for make_task
+struct DependsOn {
+    TaskIndex id;
+    explicit DependsOn(TaskIndex task_id) : id(task_id) {}
+};
+
+
 template<typename I, typename O>
 class FunctionTask;
 template<typename I, typename O>
 std::unique_ptr<FunctionTask<I, O>> make_task(
     std::function<O(I, TaskContext&)> func);
 
-/**
- * TaskContext provides a coroutine-style interface for task emission
- * Allows tasks to dynamically emit new tasks during execution
- */
+
 class TaskContext {
 private:
-    Pipeline* pipeline_;
+    Scheduler* scheduler_;
+    ExecutorContext* execution_context_;
     TaskIndex current_task_id_;
     
-    
 public:
-    TaskContext(Pipeline* pipeline, TaskIndex current_task_id)
-        : pipeline_(pipeline), current_task_id_(current_task_id) {}
+    TaskContext(Scheduler* scheduler, ExecutorContext* execution_context, TaskIndex current_task_id)
+        : scheduler_(scheduler), execution_context_(execution_context), current_task_id_(current_task_id) {}
     
-    /**
-     * Emit a new typed task with input data and optional dependency
-     * Returns TaskIndex that can be used for dependency tracking
-     * @param func The function to execute
-     * @param input Input data for the task (only used if depends_on == -1)
-     * @param depends_on Task ID this task depends on (-1 for independent)
-     */
     template<typename I, typename O>
-    TaskIndex emit(std::function<O(I, TaskContext&)> func, I input, TaskIndex depends_on = -1) {
+    TaskIndex emit(std::function<O(I, TaskContext&)> func, const Input<I>& input) {
         auto task = make_task<I, O>(std::move(func));
-        
-        // Type validation: if task depends on another, validate types match
-        if (depends_on >= 0) {
-            auto* dep_task = pipeline_->get_task(depends_on);
-            if (dep_task && dep_task->get_output_type() != task->get_input_type()) {
-                throw std::invalid_argument(
-                    "Type mismatch: dependency output type " +
-                    std::string(dep_task->get_output_type().name()) +
-                    " doesn't match task input type " +
-                    std::string(task->get_input_type().name()));
-            }
-        }
-        
-        TaskIndex task_id = emit_internal(std::move(task), depends_on);
-        
-        // Schedule for execution
-        schedule(task_id, std::move(input), depends_on);
-        
+        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), -1);
+        schedule(task_id, std::move(input.value), -1);
         return task_id;
     }
     
-    /**
-     * Emit a new typed task without input data - will receive input from dependency
-     * @param func The function to execute
-     * @param depends_on Task ID this task depends on (-1 for independent)
-     */
     template<typename I, typename O>
-    TaskIndex emit(std::function<O(I, TaskContext&)> func, TaskIndex depends_on = -1) {
+    TaskIndex emit(std::function<O(I, TaskContext&)> func, DependsOn depends_on) {
         auto task = make_task<I, O>(std::move(func));
-        
-        // Type validation: if task depends on another, validate types match
-        if (depends_on >= 0) {
-            auto* dep_task = pipeline_->get_task(depends_on);
+        if (depends_on.id >= 0) {
+            Task* dep_task = execution_context_->get_task(depends_on.id);
             if (dep_task && dep_task->get_output_type() != task->get_input_type()) {
                 throw std::invalid_argument(
                     "Type mismatch: dependency output type " +
@@ -93,23 +67,24 @@ public:
             }
         }
         
-        TaskIndex task_id = emit_internal(std::move(task), depends_on);
-        
-        // Schedule for execution (input will come from dependency)
-        schedule(task_id, std::any{}, depends_on);
-        
+        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), depends_on.id);
+        schedule(task_id, std::any{}, depends_on.id);
+        return task_id;
+    }
+    
+    template<typename I, typename O>
+    TaskIndex emit(std::function<O(I, TaskContext&)> func, const Input<I>& input, DependsOn depends_on) {
+        auto task = make_task<I, O>(std::move(func));
+        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), depends_on.id);
+        schedule(task_id, std::move(input.value), depends_on.id);
         return task_id;
     }
 
     TaskIndex current() const { return current_task_id_; }
     void add_dependency(TaskIndex from, TaskIndex to);
-    Pipeline* get_pipeline() const { return pipeline_; }
+    ExecutorContext* get_execution_context() const { return execution_context_; }
 
-private:
-    // Internal helper for task creation with atomic dependency setup
-    TaskIndex emit_internal(std::unique_ptr<Task> task, TaskIndex depends_on = -1);
-    
-    // Schedule emitted task with scheduler integration
+private:    
     void schedule(TaskIndex task_id, std::any input, TaskIndex depends_on);
     
 };

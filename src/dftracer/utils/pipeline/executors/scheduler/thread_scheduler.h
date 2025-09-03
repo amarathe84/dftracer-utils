@@ -1,10 +1,10 @@
-#ifndef DFTRACER_UTILS_PIPELINE_EXECUTORS_THREAD_SCHEDULER_H
-#define DFTRACER_UTILS_PIPELINE_EXECUTORS_THREAD_SCHEDULER_H
+#ifndef DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_THREAD_SCHEDULER_H
+#define DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_THREAD_SCHEDULER_H
 
 #include <dftracer/utils/pipeline/tasks/task.h>
 #include <dftracer/utils/common/typedefs.h>
-#include <dftracer/utils/pipeline/executors/scheduler/scheduler_interface.h>
-#include <dftracer/utils/pipeline/executors/thread/task_queue.h>
+#include <dftracer/utils/pipeline/executors/scheduler/scheduler.h>
+#include <dftracer/utils/pipeline/executors/scheduler/thread_task_queue.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -17,15 +17,13 @@
 
 namespace dftracer::utils {
 
-// Forward declaration
+// Forward declarations
 class Pipeline;
+class ExecutorContext;
 
-// GlobalScheduler manages task queues and enables work stealing
-class GlobalScheduler : public SchedulerInterface {
+// ThreadScheduler manages task queues and enables work stealing
+class ThreadScheduler : public Scheduler {
 private:
-    // Singleton instance
-    static std::unique_ptr<GlobalScheduler> instance_;
-    static std::mutex instance_mutex_;
 
     // Task queues - one per worker thread
     std::vector<std::unique_ptr<TaskQueue>> queues_;
@@ -43,25 +41,21 @@ private:
     std::unordered_map<TaskIndex, std::atomic<bool>> task_completed_;
     std::unordered_map<TaskIndex, std::atomic<int>> dependency_count_;
     
-    // Pipeline reference for task execution
-    const Pipeline* current_pipeline_;
+    ExecutorContext* current_execution_context_;  // Active execution context during pipeline execution
     std::mutex results_mutex_;  // Protects task_outputs_
     
 public:
-    GlobalScheduler();
-    ~GlobalScheduler();
+    ThreadScheduler();
+    ~ThreadScheduler();
 
-    // Delete copy/move constructors and assignment operators
-    GlobalScheduler(const GlobalScheduler&) = delete;
-    GlobalScheduler& operator=(const GlobalScheduler&) = delete;
-    GlobalScheduler(GlobalScheduler&&) = delete;
-    GlobalScheduler& operator=(GlobalScheduler&&) = delete;
-
-    // Get singleton instance
-    static GlobalScheduler* get_instance();
+    // Delete copy constructor and assignment operator
+    ThreadScheduler(const ThreadScheduler&) = delete;
+    ThreadScheduler& operator=(const ThreadScheduler&) = delete;
     
-    // Set pipeline for current execution
-    void set_pipeline(const Pipeline* pipeline) override;
+    // Allow move construction and assignment
+    ThreadScheduler(ThreadScheduler&&) = default;
+    ThreadScheduler& operator=(ThreadScheduler&&) = default;
+    
     
     // Initialize with number of worker threads
     void initialize(std::size_t num_threads);
@@ -78,7 +72,7 @@ public:
                std::function<void(std::any)> completion_callback) override;
     
     // Execute a pipeline using the worker threads
-    std::any execute_pipeline(const Pipeline& pipeline, std::any input) override;
+    std::any execute(const Pipeline& pipeline, std::any input) override;
     
     // Worker thread function
     void worker_thread(std::size_t thread_id);
@@ -93,7 +87,7 @@ public:
     void wait_for_completion();
     
     // Signal that an independent task has completed
-    void signal_task_completion();
+    void signal_task_completion() override;
     
     // Process all queued dynamically emitted tasks (with work stealing)
     void process_all_queued_tasks();
@@ -105,9 +99,9 @@ public:
     void process_dynamic_tasks_synchronously();
     
     // Helper method to submit tasks with recursive dependency handling
-    void submit_with_dependency_handling(const Pipeline& pipeline, TaskIndex task_id, std::any input);
+    void submit_with_dependency_handling(ExecutorContext& execution_context, TaskIndex task_id, std::any input);
 };
 
 }  // namespace dftracer::utils
 
-#endif  // DFTRACER_UTILS_PIPELINE_EXECUTORS_THREAD_SCHEDULER_H
+#endif  // DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_THREAD_SCHEDULER_H

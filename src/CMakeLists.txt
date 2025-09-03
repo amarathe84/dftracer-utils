@@ -56,12 +56,13 @@ set(DFTRACER_UTILS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/error.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/pipeline.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/executor_type.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/executor_factory.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/sequential_executor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/thread_executor.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/thread/scheduler.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/thread/task_queue.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/scheduler/scheduler_factory.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/scheduler/thread_scheduler.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/scheduler/thread_task_queue.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/scheduler/sequential_scheduler.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/executors/executor_context.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/tasks/task_context.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/pipeline/tasks/task_type.cpp
 

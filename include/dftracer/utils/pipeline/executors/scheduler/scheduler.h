@@ -1,5 +1,5 @@
-#ifndef DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_INTERFACE_H
-#define DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_INTERFACE_H
+#ifndef DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_H
+#define DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_H
 
 #include <dftracer/utils/pipeline/tasks/task.h>
 #include <dftracer/utils/common/typedefs.h>
@@ -17,14 +17,14 @@ class Pipeline;
  * Abstract interface for task schedulers
  * Uses the same API as the existing thread scheduler for consistency
  */
-class SchedulerInterface {
+class Scheduler {
 public:
-    virtual ~SchedulerInterface() = default;
+    virtual ~Scheduler() = default;
     
     /**
      * Execute a pipeline with the given input
      */
-    virtual std::any execute_pipeline(const Pipeline& pipeline, std::any input) = 0;
+    virtual std::any execute(const Pipeline& pipeline, std::any input) = 0;
     
     /**
      * Submit a task to the scheduler
@@ -39,24 +39,11 @@ public:
                        std::function<void(std::any)> completion_callback) = 0;
     
     /**
-     * Set pipeline for current execution
+     * Signal that a task has completed (for dynamic task completion tracking)
      */
-    virtual void set_pipeline(const Pipeline* pipeline) = 0;
-};
-
-/**
- * Factory for creating schedulers
- */
-class SchedulerFactory {
-public:
-    enum class Type {
-        SEQUENTIAL,  // Single-threaded scheduler
-        THREAD_POOL  // Multi-threaded work-stealing scheduler
-    };
-    
-    static std::unique_ptr<SchedulerInterface> create(Type type, std::size_t num_threads = 1);
+    virtual void signal_task_completion() = 0;
 };
 
 } // namespace dftracer::utils
 
-#endif // DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_INTERFACE_H
+#endif // DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_H
