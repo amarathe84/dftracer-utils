@@ -1,15 +1,17 @@
 #ifndef DFTRACER_UTILS_READER_READER_H
 #define DFTRACER_UTILS_READER_READER_H
 
-#include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/reader/line_processor.h>
+
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stddef.h>
-#include <stdint.h>
+// Forward declare indexer handle from indexer C API
+typedef void *dft_indexer_handle_t;
 
 /**
  * Opaque handle for DFT reader
@@ -35,120 +37,60 @@ int dft_reader_read_lines_with_processor(dft_reader_handle_t reader,
                                          dft_line_processor_callback_t callback,
                                          void *user_data);
 void dft_reader_reset(dft_reader_handle_t reader);
+
 #ifdef __cplusplus
 }  // extern "C"
 
-#include <dftracer/utils/common/constants.h>
-
 #include <cstddef>
 #include <cstdint>
-#include <memory>
-#include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace dftracer::utils {
 
-class Indexer;
-struct ReaderImplementor;
-
+/**
+ * Abstract base interface for all reader implementations.
+ * This provides a common API for GZIP, TAR.GZ, and other archive readers.
+ */
 class Reader {
    public:
-    Reader(const std::string &gz_path, const std::string &idx_path,
-           size_t index_ckpt_size = Indexer::DEFAULT_CHECKPOINT_SIZE);
+    virtual ~Reader() = default;
 
-    Reader(Indexer *indexer);
-    ~Reader();
+    // Core metadata accessors
+    virtual std::size_t get_max_bytes() const = 0;
+    virtual std::size_t get_num_lines() const = 0;
+    virtual const std::string &get_archive_path() const = 0;
+    virtual const std::string &get_idx_path() const = 0;
+    virtual void set_buffer_size(std::size_t size) = 0;
 
-    // Disable copy constructor and copy assignment
+    // Raw byte reading operations
+    virtual std::size_t read(std::size_t start_bytes, std::size_t end_bytes,
+                             char *buffer, std::size_t buffer_size) = 0;
+    virtual std::size_t read_line_bytes(std::size_t start_bytes, std::size_t end_bytes,
+                                        char *buffer, std::size_t buffer_size) = 0;
+
+    // Line-based reading operations
+    virtual std::string read_lines(std::size_t start_line, std::size_t end_line) = 0;
+    virtual void read_lines_with_processor(std::size_t start_line, std::size_t end_line,
+                                           LineProcessor &processor) = 0;
+    virtual void read_line_bytes_with_processor(std::size_t start_bytes,
+                                                std::size_t end_bytes,
+                                                LineProcessor &processor) = 0;
+
+    // State management
+    virtual void reset() = 0;
+    virtual bool is_valid() const = 0;
+
+    // Format identification
+    virtual std::string get_format_name() const = 0;
+
+   protected:
+    Reader() = default;
     Reader(const Reader &) = delete;
     Reader &operator=(const Reader &) = delete;
-    Reader(Reader &&other) noexcept;
-    Reader &operator=(Reader &&other) noexcept;
-
-    /**
-     * Get maximum bytes available in the gzip file
-     */
-    std::size_t get_max_bytes() const;
-
-    /**
-     * Get number of lines in the gzip file
-     */
-    std::size_t get_num_lines() const;
-
-    /**
-     * Read raw bytes from the gzip file using the stored gz_path (streaming)
-     * Returns data without caring about line boundaries. Call repeatedly until
-     * returns 0.
-     */
-    std::size_t read(std::size_t start_bytes, std::size_t end_bytes,
-                     char *buffer, std::size_t buffer_size);
-
-    /**
-     * Read a range of bytes from the gzip file using the stored gz_path
-     * (streaming) Returns complete lines only. Call repeatedly until returns 0.
-     */
-    std::size_t read_line_bytes(std::size_t start_bytes, std::size_t end_bytes,
-                                char *buffer, std::size_t buffer_size);
-
-    /**
-     * Read complete lines from the gzip file and return as a string
-     */
-    std::string read_lines(std::size_t start, std::size_t end);
-
-    /**
-     * Read complete lines from the gzip file using callback processor
-     * (zero-copy)
-     * @param start Starting line number (1-based)
-     * @param end Ending line number (1-based)
-     * @param processor LineProcessor implementation for handling lines
-     */
-    void read_lines_with_processor(std::size_t start, std::size_t end,
-                                   LineProcessor &processor);
-
-    /**
-     * Read complete lines from byte range using callback processor (zero-copy)
-     * @param start_bytes Starting byte position
-     * @param end_bytes Ending byte position
-     * @param processor LineProcessor implementation for handling lines
-     */
-    void read_line_bytes_with_processor(std::size_t start_bytes,
-                                        std::size_t end_bytes,
-                                        LineProcessor &processor);
-
-    /**
-     * Set default reader buffer size in bytes
-     */
-    void set_buffer_size(std::size_t size);
-
-    /**
-     * Reset the reader to the initial state
-     */
-    void reset();
-
-    /**
-     * Check if the reader is valid
-     * @return true if reader is valid, false otherwise
-     */
-    bool is_valid() const;
-
-    /**
-     * Get the gzip file path
-     * @return gzip file path
-     */
-    const std::string &get_gz_path() const;
-
-    /**
-     * Get the index file path
-     * @return index file path
-     */
-    const std::string &get_idx_path() const;
-
-   private:
-    std::unique_ptr<ReaderImplementor> p_impl_;
 };
 
 }  // namespace dftracer::utils
-#endif
+
+#endif  // __cplusplus
 
 #endif  // DFTRACER_UTILS_READER_READER_H

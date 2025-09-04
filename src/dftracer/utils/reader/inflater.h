@@ -41,7 +41,7 @@ class ReaderInflater : public Inflater {
      * Restore inflater state from a checkpoint for random access
      */
     bool restore_from_checkpoint(FILE* file,
-                                 const IndexCheckpoint& checkpoint) {
+                                 const IndexerCheckpoint& checkpoint) {
         DFTRACER_UTILS_LOG_DEBUG(
             "Restoring from checkpoint: c_offset=%llu, uc_offset=%llu, bits=%d",
             checkpoint.c_offset, checkpoint.uc_offset, checkpoint.bits);

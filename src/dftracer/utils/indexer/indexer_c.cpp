@@ -1,5 +1,7 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
+#include <dftracer/utils/indexer/indexer_factory.h>
+#include <dftracer/utils/indexer/checkpoint.h>
 
 #include <cstring>
 
@@ -25,9 +27,11 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
     }
 
     try {
-        auto *indexer =
-            new Indexer(gz_path, idx_path, checkpoint_size, force_rebuild != 0);
-        return static_cast<dft_indexer_handle_t>(indexer);
+        auto indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size, force_rebuild != 0);
+        if (indexer) {
+            return static_cast<dft_indexer_handle_t>(indexer.release());
+        }
+        return nullptr;
     } catch (const std::exception &e) {
         DFTRACER_UTILS_LOG_ERROR("Failed to create DFT indexer: %s", e.what());
         return nullptr;
@@ -102,19 +106,6 @@ uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
     }
 }
 
-int dft_indexer_find_file_id(dft_indexer_handle_t indexer,
-                             const char *gz_path) {
-    if (validate_handle(indexer) < 0 || !gz_path) {
-        return -1;
-    }
-
-    try {
-        return cast_indexer(indexer)->find_file_id(gz_path);
-    } catch (const std::exception &e) {
-        DFTRACER_UTILS_LOG_ERROR("Failed to find file ID: %s", e.what());
-        return -1;
-    }
-}
 
 int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
                                 size_t target_offset,
@@ -124,7 +115,7 @@ int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
     }
 
     try {
-        IndexCheckpoint temp_ckpt;
+        IndexerCheckpoint temp_ckpt;
 
         if (cast_indexer(indexer)->find_checkpoint(
                 static_cast<size_t>(target_offset), temp_ckpt)) {
