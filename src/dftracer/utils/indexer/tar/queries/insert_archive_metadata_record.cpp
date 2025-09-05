@@ -1,12 +1,12 @@
-#include <dftracer/utils/indexer/tar/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
+#include <dftracer/utils/indexer/tar/queries/queries.h>
 
 namespace dftracer::utils::tar_indexer {
 
 void insert_archive_metadata_record(const SqliteDatabase &db, int archive_id,
-                                     std::size_t ckpt_size,
-                                     std::uint64_t total_lines,
-                                     std::uint64_t total_uc_size) {
+                                    std::size_t ckpt_size,
+                                    std::uint64_t total_lines,
+                                    std::uint64_t total_uc_size) {
     SqliteStmt stmt(db,
                     "INSERT INTO metadata(archive_id, checkpoint_size, "
                     "total_lines, total_uc_size) "
@@ -23,9 +23,9 @@ void insert_archive_metadata_record(const SqliteDatabase &db, int archive_id,
 
     int rc = sqlite3_step(stmt);
     if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
-        throw IndexerError(
-            IndexerError::Type::DATABASE_ERROR,
-            "Insert archive metadata failed: " + std::string(sqlite3_errmsg(db.get())));
+        throw IndexerError(IndexerError::Type::DATABASE_ERROR,
+                           "Insert archive metadata failed: " +
+                               std::string(sqlite3_errmsg(db.get())));
     }
 }
 

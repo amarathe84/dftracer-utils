@@ -1,5 +1,5 @@
-#include <dftracer/utils/indexer/tar/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
+#include <dftracer/utils/indexer/tar/queries/queries.h>
 
 namespace dftracer::utils::tar_indexer {
 
@@ -67,7 +67,8 @@ std::string query_archive_name(const SqliteDatabase &db,
     stmt.bind_text(1, tar_gz_path_logical_path);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        const char* name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        const char *name =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
         return name ? std::string(name) : "";
     }
 
@@ -91,7 +92,8 @@ std::uint64_t query_checkpoint_size(const SqliteDatabase &db, int archive_id) {
 
 bool query_stored_file_info(const SqliteDatabase &db,
                             const std::string &tar_gz_path,
-                            std::string &stored_hash, std::time_t &stored_mtime) {
+                            std::string &stored_hash,
+                            std::time_t &stored_mtime) {
     SqliteStmt stmt(db,
                     "SELECT hash, mtime_unix "
                     "FROM files "
@@ -100,7 +102,8 @@ bool query_stored_file_info(const SqliteDatabase &db,
     stmt.bind_text(1, tar_gz_path);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        const char* hash = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        const char *hash =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
         stored_hash = hash ? std::string(hash) : "";
         stored_mtime = static_cast<std::time_t>(sqlite3_column_int64(stmt, 1));
         return true;
@@ -111,11 +114,14 @@ bool query_stored_file_info(const SqliteDatabase &db,
 
 bool query_schema_validity(const SqliteDatabase &db) {
     try {
-        SqliteStmt stmt(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('files', 'tar_archives', 'tar_files', 'tar_gzip_checkpoints', 'metadata');");
-        
+        SqliteStmt stmt(db,
+                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' "
+                        "AND name IN ('files', 'tar_archives', 'tar_files', "
+                        "'tar_gzip_checkpoints', 'metadata');");
+
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             int table_count = sqlite3_column_int(stmt, 0);
-            return table_count == 5; // Should have all 5 tables
+            return table_count == 5;  // Should have all 5 tables
         }
     } catch (...) {
         return false;
@@ -126,7 +132,7 @@ bool query_schema_validity(const SqliteDatabase &db) {
 bool delete_archive_record(const SqliteDatabase &db, int archive_id) {
     SqliteStmt stmt(db, "DELETE FROM tar_archives WHERE id = ?;");
     stmt.bind_int(1, archive_id);
-    
+
     int rc = sqlite3_step(stmt);
     return rc == SQLITE_DONE;
 }

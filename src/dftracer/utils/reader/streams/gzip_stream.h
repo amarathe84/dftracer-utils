@@ -89,7 +89,8 @@ class GzipStream : public Stream {
     }
 
     virtual void initialize(const std::string &gz_path, std::size_t start_bytes,
-                            std::size_t end_bytes, dftracer::utils::Indexer &indexer) {
+                            std::size_t end_bytes,
+                            dftracer::utils::Indexer &indexer) {
         if (is_active_) {
             reset();
         }

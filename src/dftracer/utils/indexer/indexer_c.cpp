@@ -1,7 +1,7 @@
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/indexer/checkpoint.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/indexer/indexer_factory.h>
-#include <dftracer/utils/indexer/checkpoint.h>
 
 #include <cstring>
 
@@ -27,7 +27,8 @@ dft_indexer_handle_t dft_indexer_create(const char *gz_path,
     }
 
     try {
-        auto indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size, force_rebuild != 0);
+        auto indexer = IndexerFactory::create(
+            gz_path, idx_path, checkpoint_size, force_rebuild != 0);
         if (indexer) {
             return static_cast<dft_indexer_handle_t>(indexer.release());
         }
@@ -105,7 +106,6 @@ uint64_t dft_indexer_get_num_lines(dft_indexer_handle_t indexer) {
         return 0;
     }
 }
-
 
 int dft_indexer_find_checkpoint(dft_indexer_handle_t indexer,
                                 size_t target_offset,

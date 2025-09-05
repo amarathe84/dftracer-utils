@@ -15,23 +15,23 @@ namespace dftracer::utils::tar_parser {
  * TAR header structure (POSIX tar format)
  */
 struct TarHeader {
-    char name[100];           // File name
-    char mode[8];             // File mode (octal)
-    char uid[8];              // Owner user ID (octal)
-    char gid[8];              // Owner group ID (octal)
-    char size[12];            // File size (octal)
-    char mtime[12];           // Modification time (octal)
-    char checksum[8];         // Header checksum (octal)
-    char typeflag;            // File type
-    char linkname[100];       // Link name (for links)
-    char magic[6];            // "ustar\0"
-    char version[2];          // "00"
-    char uname[32];           // Owner user name
-    char gname[32];           // Owner group name
-    char devmajor[8];         // Device major number (octal)
-    char devminor[8];         // Device minor number (octal)
-    char prefix[155];         // Path prefix
-    char padding[12];         // Padding to 512 bytes
+    char name[100];      // File name
+    char mode[8];        // File mode (octal)
+    char uid[8];         // Owner user ID (octal)
+    char gid[8];         // Owner group ID (octal)
+    char size[12];       // File size (octal)
+    char mtime[12];      // Modification time (octal)
+    char checksum[8];    // Header checksum (octal)
+    char typeflag;       // File type
+    char linkname[100];  // Link name (for links)
+    char magic[6];       // "ustar\0"
+    char version[2];     // "00"
+    char uname[32];      // Owner user name
+    char gname[32];      // Owner group name
+    char devmajor[8];    // Device major number (octal)
+    char devminor[8];    // Device minor number (octal)
+    char prefix[155];    // Path prefix
+    char padding[12];    // Padding to 512 bytes
 };
 
 static_assert(sizeof(TarHeader) == 512, "TAR header must be 512 bytes");
@@ -45,17 +45,13 @@ struct TarFileEntry {
     std::uint64_t data_offset;  // Offset to file data in archive
     std::uint64_t mtime;        // Modification time (Unix timestamp)
     char typeflag;              // File type flag
-    
+
     // For tar.gz indexing
     std::uint64_t uncompressed_offset;  // Offset in uncompressed stream
-    
-    bool is_regular_file() const {
-        return typeflag == '0' || typeflag == '\0';
-    }
-    
-    bool is_directory() const {
-        return typeflag == '5';
-    }
+
+    bool is_regular_file() const { return typeflag == '0' || typeflag == '\0'; }
+
+    bool is_directory() const { return typeflag == '5'; }
 };
 
 /**
@@ -91,8 +87,7 @@ class TarParser {
      * Parse a single TAR header from the data buffer
      */
     bool parse_single_header(const TarHeader* header,
-                             std::uint64_t header_offset,
-                             TarFileEntry& entry);
+                             std::uint64_t header_offset, TarFileEntry& entry);
 
     /**
      * Verify TAR header checksum

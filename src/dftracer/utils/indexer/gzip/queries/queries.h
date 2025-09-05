@@ -49,7 +49,7 @@ int query_file_id(const SqliteDatabase &db,
 bool query_checkpoint(const SqliteDatabase &db, std::size_t target_offset,
                       int file_id, IndexerCheckpoint &checkpoint);
 std::vector<IndexerCheckpoint> query_checkpoints(const SqliteDatabase &db,
-                                               int file_id);
+                                                 int file_id);
 std::vector<IndexerCheckpoint> query_checkpoints_for_line_range(
     const SqliteDatabase &db, int file_id, std::uint64_t start_line,
     std::uint64_t end_line);

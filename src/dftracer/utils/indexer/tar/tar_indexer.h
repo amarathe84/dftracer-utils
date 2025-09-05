@@ -1,9 +1,10 @@
 #ifndef DFTRACER_UTILS_INDEXER_TAR_INDEXER_H
 #define DFTRACER_UTILS_INDEXER_TAR_INDEXER_H
 
-#include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/indexer/checkpoint.h>
+#include <dftracer/utils/common/archive_format.h>
 #include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/indexer/checkpoint.h>
+#include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/indexer/sqlite/database.h>
 
 #include <cstddef>
@@ -17,7 +18,7 @@ class TarIndexer : public dftracer::utils::Indexer {
    public:
     static constexpr std::uint64_t DEFAULT_CHECKPOINT_SIZE =
         constants::indexer::DEFAULT_CHECKPOINT_SIZE;
-    
+
     TarIndexer(const std::string &tar_gz_path, const std::string &idx_path,
                std::uint64_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE,
                bool force = false);
@@ -26,7 +27,7 @@ class TarIndexer : public dftracer::utils::Indexer {
     TarIndexer &operator=(const TarIndexer &) = delete;
     TarIndexer(TarIndexer &&other) noexcept;
     TarIndexer &operator=(TarIndexer &&other) noexcept;
-    
+
     void build() const override;
     bool need_rebuild() const override;
     bool exists() const override;
@@ -51,7 +52,7 @@ class TarIndexer : public dftracer::utils::Indexer {
     std::vector<IndexerCheckpoint> get_checkpoints() const override;
     std::vector<IndexerCheckpoint> get_checkpoints_for_line_range(
         std::uint64_t start_line, std::uint64_t end_line) const override;
-    
+
     // TAR-specific file lookup
     struct TarFileInfo {
         std::string file_name;
@@ -61,15 +62,18 @@ class TarIndexer : public dftracer::utils::Indexer {
         std::uint64_t data_offset;
         std::uint64_t uncompressed_offset;
     };
-    
+
     std::vector<TarFileInfo> list_files() const;
     bool find_file(const std::string &file_name, TarFileInfo &file_info) const;
-    std::vector<TarFileInfo> find_files_in_range(std::uint64_t start_offset,
-                                                  std::uint64_t end_offset) const;
-    
-    // Format identification
-    IndexerType get_indexer_type() const override;
-    std::string get_format_name() const override;
+    std::vector<TarFileInfo> find_files_in_range(
+        std::uint64_t start_offset, std::uint64_t end_offset) const;
+
+    inline ArchiveFormat get_format_type() const override {
+        return ArchiveFormat::TAR_GZ;
+    }
+    const char *get_format_name() const override {
+        return ::get_format_name(get_format_type());
+    }
 
    private:
     // Direct member variables - eliminates impl layer indirection
@@ -89,7 +93,7 @@ class TarIndexer : public dftracer::utils::Indexer {
     mutable std::uint64_t cached_checkpoint_size;
     mutable std::string cached_archive_name;
     mutable std::vector<IndexerCheckpoint> cached_checkpoints;
-    
+
     // Internal methods
     void open();
     void close();

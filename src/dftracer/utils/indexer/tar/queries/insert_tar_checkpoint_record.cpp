@@ -1,15 +1,16 @@
-#include <dftracer/utils/indexer/tar/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
+#include <dftracer/utils/indexer/tar/queries/queries.h>
 
 namespace dftracer::utils::tar_indexer {
 
 void insert_tar_checkpoint_record(const SqliteDatabase &db, int archive_id,
-                                   const InsertTarCheckpointData &data) {
-    SqliteStmt stmt(db,
-                    "INSERT INTO tar_gzip_checkpoints(archive_id, checkpoint_idx, "
-                    "uc_offset, uc_size, c_offset, c_size, bits, dict_compressed, "
-                    "num_lines, first_line_num, last_line_num, tar_files_count) "
-                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+                                  const InsertTarCheckpointData &data) {
+    SqliteStmt stmt(
+        db,
+        "INSERT INTO tar_gzip_checkpoints(archive_id, checkpoint_idx, "
+        "uc_offset, uc_size, c_offset, c_size, bits, dict_compressed, "
+        "num_lines, first_line_num, last_line_num, tar_files_count) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
     stmt.bind_int(1, archive_id);
     stmt.bind_int64(2, static_cast<int64_t>(data.idx));
@@ -26,9 +27,9 @@ void insert_tar_checkpoint_record(const SqliteDatabase &db, int archive_id,
 
     int rc = sqlite3_step(stmt);
     if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
-        throw IndexerError(
-            IndexerError::Type::DATABASE_ERROR,
-            "Insert TAR checkpoint failed: " + std::string(sqlite3_errmsg(db.get())));
+        throw IndexerError(IndexerError::Type::DATABASE_ERROR,
+                           "Insert TAR checkpoint failed: " +
+                               std::string(sqlite3_errmsg(db.get())));
     }
 }
 

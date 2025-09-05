@@ -1,12 +1,12 @@
-#include <dftracer/utils/indexer/tar/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
+#include <dftracer/utils/indexer/tar/queries/queries.h>
 
 namespace dftracer::utils::tar_indexer {
 
 std::vector<TarIndexer::TarFileInfo> query_tar_files(const SqliteDatabase &db,
-                                                      int archive_id) {
+                                                     int archive_id) {
     std::vector<TarIndexer::TarFileInfo> files;
-    
+
     SqliteStmt stmt(db,
                     "SELECT file_name, file_size, file_mtime, typeflag, "
                     "data_offset, uncompressed_offset "
@@ -18,16 +18,22 @@ std::vector<TarIndexer::TarFileInfo> query_tar_files(const SqliteDatabase &db,
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         TarIndexer::TarFileInfo file_info;
-        file_info.file_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        file_info.file_size = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 1));
-        file_info.file_mtime = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 2));
-        
-        const char* typeflag_str = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        file_info.file_name =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+        file_info.file_size =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 1));
+        file_info.file_mtime =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 2));
+
+        const char *typeflag_str =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
         file_info.typeflag = typeflag_str ? typeflag_str[0] : '0';
-        
-        file_info.data_offset = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 4));
-        file_info.uncompressed_offset = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 5));
-        
+
+        file_info.data_offset =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 4));
+        file_info.uncompressed_offset =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 5));
+
         files.push_back(file_info);
     }
 
@@ -47,16 +53,22 @@ bool query_tar_file(const SqliteDatabase &db, int archive_id,
     stmt.bind_text(2, file_name);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        file_info.file_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        file_info.file_size = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 1));
-        file_info.file_mtime = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 2));
-        
-        const char* typeflag_str = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        file_info.file_name =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+        file_info.file_size =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 1));
+        file_info.file_mtime =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 2));
+
+        const char *typeflag_str =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
         file_info.typeflag = typeflag_str ? typeflag_str[0] : '0';
-        
-        file_info.data_offset = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 4));
-        file_info.uncompressed_offset = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 5));
-        
+
+        file_info.data_offset =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 4));
+        file_info.uncompressed_offset =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 5));
+
         return true;
     }
 
@@ -67,12 +79,13 @@ std::vector<TarIndexer::TarFileInfo> query_tar_files_in_range(
     const SqliteDatabase &db, int archive_id, std::uint64_t start_offset,
     std::uint64_t end_offset) {
     std::vector<TarIndexer::TarFileInfo> files;
-    
+
     SqliteStmt stmt(db,
                     "SELECT file_name, file_size, file_mtime, typeflag, "
                     "data_offset, uncompressed_offset "
                     "FROM tar_files "
-                    "WHERE archive_id = ? AND uncompressed_offset >= ? AND uncompressed_offset < ? "
+                    "WHERE archive_id = ? AND uncompressed_offset >= ? AND "
+                    "uncompressed_offset < ? "
                     "ORDER BY uncompressed_offset;");
 
     stmt.bind_int(1, archive_id);
@@ -81,16 +94,22 @@ std::vector<TarIndexer::TarFileInfo> query_tar_files_in_range(
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         TarIndexer::TarFileInfo file_info;
-        file_info.file_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        file_info.file_size = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 1));
-        file_info.file_mtime = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 2));
-        
-        const char* typeflag_str = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        file_info.file_name =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+        file_info.file_size =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 1));
+        file_info.file_mtime =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 2));
+
+        const char *typeflag_str =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
         file_info.typeflag = typeflag_str ? typeflag_str[0] : '0';
-        
-        file_info.data_offset = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 4));
-        file_info.uncompressed_offset = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 5));
-        
+
+        file_info.data_offset =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 4));
+        file_info.uncompressed_offset =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 5));
+
         files.push_back(file_info);
     }
 

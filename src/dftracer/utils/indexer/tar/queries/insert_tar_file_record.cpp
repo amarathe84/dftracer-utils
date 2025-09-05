@@ -1,10 +1,10 @@
-#include <dftracer/utils/indexer/tar/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
+#include <dftracer/utils/indexer/tar/queries/queries.h>
 
 namespace dftracer::utils::tar_indexer {
 
 void insert_tar_file_record(const SqliteDatabase &db, int archive_id,
-                             const InsertTarFileData &data) {
+                            const InsertTarFileData &data) {
     SqliteStmt stmt(db,
                     "INSERT INTO tar_files(archive_id, file_name, file_size, "
                     "file_mtime, typeflag, data_offset, uncompressed_offset) "
@@ -20,9 +20,9 @@ void insert_tar_file_record(const SqliteDatabase &db, int archive_id,
 
     int rc = sqlite3_step(stmt);
     if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
-        throw IndexerError(
-            IndexerError::Type::DATABASE_ERROR,
-            "Insert TAR file record failed: " + std::string(sqlite3_errmsg(db.get())));
+        throw IndexerError(IndexerError::Type::DATABASE_ERROR,
+                           "Insert TAR file record failed: " +
+                               std::string(sqlite3_errmsg(db.get())));
     }
 }
 

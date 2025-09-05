@@ -2,7 +2,6 @@
 #define DFTRACER_UTILS_READER_READER_H
 
 #include <dftracer/utils/reader/line_processor.h>
-
 #include <stddef.h>
 #include <stdint.h>
 
@@ -65,12 +64,15 @@ class Reader {
     // Raw byte reading operations
     virtual std::size_t read(std::size_t start_bytes, std::size_t end_bytes,
                              char *buffer, std::size_t buffer_size) = 0;
-    virtual std::size_t read_line_bytes(std::size_t start_bytes, std::size_t end_bytes,
-                                        char *buffer, std::size_t buffer_size) = 0;
+    virtual std::size_t read_line_bytes(std::size_t start_bytes,
+                                        std::size_t end_bytes, char *buffer,
+                                        std::size_t buffer_size) = 0;
 
     // Line-based reading operations
-    virtual std::string read_lines(std::size_t start_line, std::size_t end_line) = 0;
-    virtual void read_lines_with_processor(std::size_t start_line, std::size_t end_line,
+    virtual std::string read_lines(std::size_t start_line,
+                                   std::size_t end_line) = 0;
+    virtual void read_lines_with_processor(std::size_t start_line,
+                                           std::size_t end_line,
                                            LineProcessor &processor) = 0;
     virtual void read_line_bytes_with_processor(std::size_t start_bytes,
                                                 std::size_t end_bytes,

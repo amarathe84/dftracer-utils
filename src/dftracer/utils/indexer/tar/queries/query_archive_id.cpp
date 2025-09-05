@@ -1,5 +1,5 @@
-#include <dftracer/utils/indexer/tar/queries/queries.h>
 #include <dftracer/utils/indexer/sqlite/statement.h>
+#include <dftracer/utils/indexer/tar/queries/queries.h>
 
 namespace dftracer::utils::tar_indexer {
 
@@ -17,11 +17,11 @@ int query_archive_id(const SqliteDatabase &db,
     if (rc == SQLITE_ROW) {
         return sqlite3_column_int(stmt, 0);
     } else if (rc == SQLITE_DONE) {
-        return -1; // Not found
+        return -1;  // Not found
     } else {
-        throw IndexerError(
-            IndexerError::Type::DATABASE_ERROR,
-            "Query archive ID failed: " + std::string(sqlite3_errmsg(db.get())));
+        throw IndexerError(IndexerError::Type::DATABASE_ERROR,
+                           "Query archive ID failed: " +
+                               std::string(sqlite3_errmsg(db.get())));
     }
 }
 

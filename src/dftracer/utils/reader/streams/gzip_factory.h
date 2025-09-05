@@ -13,7 +13,8 @@ class GzipStreamFactory {
     dftracer::utils::Indexer &indexer_;
 
    public:
-    explicit GzipStreamFactory(dftracer::utils::Indexer &indexer) : indexer_(indexer) {}
+    explicit GzipStreamFactory(dftracer::utils::Indexer &indexer)
+        : indexer_(indexer) {}
 
     std::unique_ptr<GzipLineByteStream> create_line_stream(
         const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
@@ -22,9 +23,8 @@ class GzipStreamFactory {
         return session;
     }
 
-    std::unique_ptr<GzipByteStream> create_byte_stream(const std::string &gz_path,
-                                                   size_t start_bytes,
-                                                   size_t end_bytes) {
+    std::unique_ptr<GzipByteStream> create_byte_stream(
+        const std::string &gz_path, size_t start_bytes, size_t end_bytes) {
         auto session = std::make_unique<GzipByteStream>();
         session->initialize(gz_path, start_bytes, end_bytes, indexer_);
         return session;

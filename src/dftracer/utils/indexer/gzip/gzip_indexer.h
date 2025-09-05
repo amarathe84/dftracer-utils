@@ -1,9 +1,10 @@
 #ifndef DFTRACER_UTILS_INDEXER_GZIP_INDEXER_H
 #define DFTRACER_UTILS_INDEXER_GZIP_INDEXER_H
 
-#include <dftracer/utils/indexer/indexer.h>
-#include <dftracer/utils/indexer/checkpoint.h>
+#include <dftracer/utils/common/archive_format.h>
 #include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/indexer/checkpoint.h>
+#include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/indexer/sqlite/database.h>
 
 #include <cstddef>
@@ -17,7 +18,7 @@ class GzipIndexer : public dftracer::utils::Indexer {
    public:
     static constexpr std::uint64_t DEFAULT_CHECKPOINT_SIZE =
         constants::indexer::DEFAULT_CHECKPOINT_SIZE;
-    
+
     GzipIndexer(const std::string &gz_path, const std::string &idx_path,
                 std::uint64_t checkpoint_size = DEFAULT_CHECKPOINT_SIZE,
                 bool force = false);
@@ -26,7 +27,7 @@ class GzipIndexer : public dftracer::utils::Indexer {
     GzipIndexer &operator=(const GzipIndexer &) = delete;
     GzipIndexer(GzipIndexer &&other) noexcept;
     GzipIndexer &operator=(GzipIndexer &&other) noexcept;
-    
+
     void build() const override;
     bool need_rebuild() const override;
     bool exists() const override;
@@ -47,10 +48,13 @@ class GzipIndexer : public dftracer::utils::Indexer {
     std::vector<IndexerCheckpoint> get_checkpoints() const override;
     std::vector<IndexerCheckpoint> get_checkpoints_for_line_range(
         std::uint64_t start_line, std::uint64_t end_line) const override;
-    
-    // Format identification
-    IndexerType get_indexer_type() const override;
-    std::string get_format_name() const override;
+
+    inline ArchiveFormat get_format_type() const override {
+        return ArchiveFormat::GZIP;
+    }
+    inline const char *get_format_name() const override {
+        return ::get_format_name(get_format_type());
+    }
 
    private:
     // Direct member variables - eliminates impl layer indirection
@@ -68,7 +72,7 @@ class GzipIndexer : public dftracer::utils::Indexer {
     mutable std::uint64_t cached_num_lines;
     mutable std::uint64_t cached_checkpoint_size;
     mutable std::vector<IndexerCheckpoint> cached_checkpoints;
-    
+
     // Internal methods
     void open();
     void close();

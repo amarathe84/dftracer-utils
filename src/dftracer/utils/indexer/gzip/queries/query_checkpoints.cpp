@@ -6,7 +6,7 @@
 namespace dftracer::utils::gzip_indexer {
 
 std::vector<IndexerCheckpoint> query_checkpoints(const SqliteDatabase &db,
-                                               int file_id) {
+                                                 int file_id) {
     std::vector<dftracer::utils::IndexerCheckpoint> checkpoints;
 
     SqliteStmt stmt(

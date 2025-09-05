@@ -1,9 +1,9 @@
 #ifndef DFTRACER_UTILS_INDEXER_INDEXER_H
 #define DFTRACER_UTILS_INDEXER_INDEXER_H
 
-#include <dftracer/utils/indexer/checkpoint.h>
-#include <dftracer/utils/indexer/indexer_type.h>
+#include <dftracer/utils/common/archive_format.h>
 #include <dftracer/utils/common/constants.h>
+#include <dftracer/utils/indexer/checkpoint.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-typedef void* dft_indexer_handle_t;
+typedef void *dft_indexer_handle_t;
 
 // C API function declarations
 dft_indexer_handle_t dft_indexer_create(const char *gz_path,
@@ -71,8 +71,8 @@ class Indexer {
         std::uint64_t start_line, std::uint64_t end_line) const = 0;
 
     // Archive format identification
-    virtual IndexerType get_indexer_type() const = 0;
-    virtual std::string get_format_name() const = 0;
+    virtual ArchiveFormat get_format_type() const = 0;
+    virtual const char *get_format_name() const = 0;
 
    protected:
     Indexer() = default;

@@ -117,15 +117,18 @@ std::size_t count_events_in_file(const std::string& gz_path,
     try {
         if (!fs::exists(idx_path)) {
             DFTRACER_UTILS_LOG_DEBUG("Building index for %s", gz_path.c_str());
-            auto indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size, true);
+            auto indexer = IndexerFactory::create(gz_path, idx_path,
+                                                  checkpoint_size, true);
             indexer->build();
         } else {
-            auto indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size, false);
+            auto indexer = IndexerFactory::create(gz_path, idx_path,
+                                                  checkpoint_size, false);
             if (indexer->need_rebuild()) {
                 DFTRACER_UTILS_LOG_DEBUG("Rebuilding index for %s",
                                          gz_path.c_str());
                 fs::remove(idx_path);
-                auto new_indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size, true);
+                auto new_indexer = IndexerFactory::create(
+                    gz_path, idx_path, checkpoint_size, true);
                 new_indexer->build();
             }
         }

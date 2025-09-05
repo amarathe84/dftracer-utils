@@ -10,8 +10,8 @@ class Stream {
 
    protected:
     virtual void initialize(const std::string &gz_path, std::size_t start_bytes,
-                            std::size_t end_bytes, dftracer::utils::Indexer &indexer) = 0;
-
+                            std::size_t end_bytes,
+                            dftracer::utils::Indexer &indexer) = 0;
 };
 
 #endif  // DFTRACER_UTILS_READER_STREAMS_STREAM_H

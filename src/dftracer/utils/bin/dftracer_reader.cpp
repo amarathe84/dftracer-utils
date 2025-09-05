@@ -1,4 +1,5 @@
 #include <dftracer/utils/common/config.h>
+#include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/indexer/indexer.h>
 #include <dftracer/utils/indexer/indexer_factory.h>
@@ -24,8 +25,11 @@ int main(int argc, char **argv) {
     argparse::ArgumentParser program("dft_reader",
                                      DFTRACER_UTILS_PACKAGE_VERSION);
     program.add_description(
-        "DFTracer utility for reading and indexing compressed files (GZIP, TAR.GZ)");
-    program.add_argument("file").help("Compressed file to process (GZIP, TAR.GZ)").required();
+        "DFTracer utility for reading and indexing compressed files (GZIP, "
+        "TAR.GZ)");
+    program.add_argument("file")
+        .help("Compressed file to process (GZIP, TAR.GZ)")
+        .required();
     program.add_argument("-i", "--index")
         .help("Index file to use")
         .default_value<std::string>("");
@@ -86,7 +90,8 @@ int main(int argc, char **argv) {
 
     if (checkpoint_size <= 0) {
         DFTRACER_UTILS_LOG_ERROR(
-            "%s", "Checkpoint size must be positive (greater than 0 and in MB)");
+            "%s",
+            "Checkpoint size must be positive (greater than 0 and in MB)");
         return 1;
     }
 
@@ -99,14 +104,15 @@ int main(int argc, char **argv) {
     fclose(test_file);
 
     // Detect format and determine appropriate index file extension
-    auto format = ReaderFactory::detect_format(gz_path);
-    std::string idx_path = index_path.empty() ? 
-        (gz_path + ReaderFactory::get_index_extension(format)) : 
-        index_path;
+    auto format = FormatDetector::detect(gz_path);
+    std::string idx_path = index_path.empty()
+                               ? (gz_path + constants::indexer::EXTENSION)
+                               : index_path;
 
-    DFTRACER_UTILS_LOG_DEBUG("Detected format: %s", 
-        format == gzip_common::ArchiveFormat::TAR_GZ ? "TAR.GZ" : 
-        format == gzip_common::ArchiveFormat::GZIP ? "GZIP" : "UNKNOWN");
+    DFTRACER_UTILS_LOG_DEBUG("Detected format: %s",
+                             format == ArchiveFormat::TAR_GZ ? "TAR.GZ"
+                             : format == ArchiveFormat::GZIP ? "GZIP"
+                                                             : "UNKNOWN");
 
     // Create indexer first
     std::unique_ptr<Indexer> indexer;
@@ -126,7 +132,8 @@ int main(int argc, char **argv) {
         }
 
         // Use IndexerFactory to create appropriate indexer
-        indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size, force_rebuild);
+        indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size,
+                                         force_rebuild);
 
         if (check_rebuild) {
             if (!indexer->need_rebuild()) {
@@ -143,7 +150,8 @@ int main(int argc, char **argv) {
                 fs::remove(idx_path);
             }
             // Recreate indexer after removing old index
-            indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size, true);
+            indexer = IndexerFactory::create(gz_path, idx_path, checkpoint_size,
+                                             true);
             DFTRACER_UTILS_LOG_INFO("Building index for file: %s",
                                     gz_path.c_str());
             indexer->build();
@@ -155,11 +163,13 @@ int main(int argc, char **argv) {
 
     // read operations
     try {
-        // Use ReaderFactory to create appropriate reader, transferring ownership of indexer
+        // Use ReaderFactory to create appropriate reader, transferring
+        // ownership of indexer
         auto reader = ReaderFactory::create(indexer.release());
 
         if (read_mode.find("bytes") == std::string::npos) {
-            std::size_t start_line = (start == -1) ? 1 : static_cast<std::size_t>(start);
+            std::size_t start_line =
+                (start == -1) ? 1 : static_cast<std::size_t>(start);
             std::size_t end_line = static_cast<std::size_t>(end);
             if (end == -1) {
                 end_line = reader->get_num_lines();
@@ -171,50 +181,50 @@ int main(int argc, char **argv) {
             auto lines = reader->read_lines(start_line, end_line);
             fwrite(lines.data(), 1, lines.size(), stdout);
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
-                std::size_t line_count = static_cast<std::size_t>(
-                    std::count(lines.begin(), lines.end(), '\n'));
-                DFTRACER_UTILS_LOG_DEBUG(
-                    "Successfully read %zu lines from range", line_count);
+            std::size_t line_count = static_cast<std::size_t>(
+                std::count(lines.begin(), lines.end(), '\n'));
+            DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu lines from range",
+                                     line_count);
 #endif
         } else {
-            std::size_t start_bytes_ = (start == -1) ? 0 : static_cast<std::size_t>(start);
+            std::size_t start_bytes_ =
+                (start == -1) ? 0 : static_cast<std::size_t>(start);
             std::size_t end_bytes_ =
                 end == -1 ? std::numeric_limits<std::size_t>::max()
                           : static_cast<size_t>(end);
 
-                auto max_bytes = reader->get_max_bytes();
-                if (end_bytes_ > max_bytes) {
-                    end_bytes_ = max_bytes;
-                }
-                DFTRACER_UTILS_LOG_DEBUG(
-                    "Performing byte range read operation");
-                DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes",
-                                         read_buffer_size);
-                auto buffer = std::make_unique<char[]>(read_buffer_size);
-                std::size_t bytes_written;
+            auto max_bytes = reader->get_max_bytes();
+            if (end_bytes_ > max_bytes) {
+                end_bytes_ = max_bytes;
+            }
+            DFTRACER_UTILS_LOG_DEBUG("Performing byte range read operation");
+            DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes",
+                                     read_buffer_size);
+            auto buffer = std::make_unique<char[]>(read_buffer_size);
+            std::size_t bytes_written;
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
-                std::size_t total_bytes = 0;
+            std::size_t total_bytes = 0;
 #endif
 
-                {
-                    while (start_bytes_ < end_bytes_ &&
-                        (bytes_written =
-                             read_mode == "bytes"
-                                 ? reader->read(start_bytes_, end_bytes_,
+            {
+                while (start_bytes_ < end_bytes_ &&
+                       (bytes_written =
+                            read_mode == "bytes"
+                                ? reader->read(start_bytes_, end_bytes_,
                                                buffer.get(), read_buffer_size)
-                                 : reader->read_line_bytes(
-                                       start_bytes_, end_bytes_, buffer.get(),
-                                       read_buffer_size)) > 0) {
-                        fwrite(buffer.get(), 1, bytes_written, stdout);
-                        start_bytes_ += bytes_written; // Advance for next read
+                                : reader->read_line_bytes(
+                                      start_bytes_, end_bytes_, buffer.get(),
+                                      read_buffer_size)) > 0) {
+                    fwrite(buffer.get(), 1, bytes_written, stdout);
+                    start_bytes_ += bytes_written;  // Advance for next read
 #if DFTRACER_UTILS_LOGGER_DEBUG_ENABLED
-                        total_bytes += bytes_written;
+                    total_bytes += bytes_written;
 #endif
-                    }
                 }
+            }
 
-                DFTRACER_UTILS_LOG_DEBUG(
-                    "Successfully read %zu bytes from range", total_bytes);
+            DFTRACER_UTILS_LOG_DEBUG("Successfully read %zu bytes from range",
+                                     total_bytes);
         }
         fflush(stdout);
     } catch (const std::runtime_error &e) {

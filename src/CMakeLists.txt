@@ -22,13 +22,13 @@ find_package(Threads REQUIRED)
 set(DFTRACER_UTILS_SOURCES
     # Common
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/common/constants.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/common/format_detector.cpp
     # Indexer
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer_c.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/helpers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/checkpoint_size.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/error.cpp
     # Indexer
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/common/format_detector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/indexer_factory.cpp
     # GZIP indexer
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/indexer/gzip/queries/delete_file_record.cpp

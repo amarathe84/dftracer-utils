@@ -13,7 +13,8 @@ class GzipByteStream : public GzipStream {
     GzipByteStream() : GzipStream() {}
 
     virtual void initialize(const std::string &gz_path, std::size_t start_bytes,
-                            std::size_t end_bytes, dftracer::utils::Indexer &indexer) override {
+                            std::size_t end_bytes,
+                            dftracer::utils::Indexer &indexer) override {
         DFTRACER_UTILS_LOG_DEBUG(
             "GzipByteStream::initialize - start_bytes=%zu, end_bytes=%zu",
             start_bytes, end_bytes);
@@ -68,7 +69,8 @@ class GzipByteStream : public GzipStream {
             result, bytes_read);
         if (!result || bytes_read == 0) {
             DFTRACER_UTILS_LOG_DEBUG(
-                "GzipByteStream::stream - marking as finished due to read failure "
+                "GzipByteStream::stream - marking as finished due to read "
+                "failure "
                 "or 0 bytes",
                 "");
             is_finished_ = true;

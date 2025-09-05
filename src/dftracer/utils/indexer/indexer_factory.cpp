@@ -1,72 +1,63 @@
-#include <dftracer/utils/indexer/indexer_factory.h>
-#include <dftracer/utils/indexer/gzip_indexer.h>
-#include <dftracer/utils/indexer/tar/tar_indexer.h>
-#include <dftracer/utils/indexer/common/format_detector.h>
+#include <dftracer/utils/common/format_detector.h>
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/indexer/gzip_indexer.h>
+#include <dftracer/utils/indexer/indexer_factory.h>
+#include <dftracer/utils/indexer/tar/tar_indexer.h>
 
 #include <filesystem>
 
 namespace dftracer::utils {
 
-std::unique_ptr<Indexer> IndexerFactory::create(
-    const std::string &archive_path,
-    const std::string &idx_path,
-    std::uint64_t checkpoint_size,
-    bool force) {
-    
-    // Fast path: avoid expensive format detection for clear cases
-    gzip_common::ArchiveFormat format = gzip_common::ArchiveFormat::UNKNOWN;
-    if (archive_path.size() >= 7 && archive_path.substr(archive_path.size() - 7) == ".tar.gz") {
-        format = gzip_common::ArchiveFormat::TAR_GZ;
-    } else if (archive_path.size() >= 4 && archive_path.substr(archive_path.size() - 4) == ".tgz") {
-        format = gzip_common::ArchiveFormat::TAR_GZ;
-    } else if (archive_path.size() >= 3 && archive_path.substr(archive_path.size() - 3) == ".gz") {
-        format = gzip_common::ArchiveFormat::GZIP;
-    } else if (archive_path.size() >= 5 && archive_path.substr(archive_path.size() - 5) == ".gzip") {
-        format = gzip_common::ArchiveFormat::GZIP;
-    } else {
-        format = detect_format(archive_path);  // Only do expensive detection for unclear cases
-    }
-    std::string final_idx_path = idx_path.empty() ? generate_index_path(archive_path, format) : idx_path;
-    
+std::unique_ptr<Indexer> IndexerFactory::create(const std::string &archive_path,
+                                                const std::string &idx_path,
+                                                std::uint64_t checkpoint_size,
+                                                bool force) {
+    ArchiveFormat format = FormatDetector::detect(archive_path);
+    std::string final_idx_path =
+        idx_path.empty() ? generate_index_path(archive_path, format) : idx_path;
+
     switch (format) {
-        case gzip_common::ArchiveFormat::GZIP:
-            return std::make_unique<GzipIndexer>(archive_path, final_idx_path, checkpoint_size, force);
-            
-        case gzip_common::ArchiveFormat::TAR_GZ:
-            return std::make_unique<tar_indexer::TarIndexer>(archive_path, final_idx_path, checkpoint_size, force);
-            
-        case gzip_common::ArchiveFormat::UNKNOWN:
+        case ArchiveFormat::GZIP:
+            return std::make_unique<GzipIndexer>(archive_path, final_idx_path,
+                                                 checkpoint_size, force);
+
+        case ArchiveFormat::TAR_GZ:
+            return std::make_unique<tar_indexer::TarIndexer>(
+                archive_path, final_idx_path, checkpoint_size, force);
+
+        case ArchiveFormat::UNKNOWN:
         default:
-            DFTRACER_UTILS_LOG_ERROR("Unsupported or unrecognized archive format for file: %s", 
-                                      archive_path.c_str());
+            DFTRACER_UTILS_LOG_ERROR(
+                "Unsupported or unrecognized archive format for file: %s",
+                archive_path.c_str());
             return nullptr;
     }
 }
 
-gzip_common::ArchiveFormat IndexerFactory::detect_format(const std::string &archive_path) {
-    return gzip_common::FormatDetector::detect_format(archive_path);
+ArchiveFormat IndexerFactory::detect_format(const std::string &archive_path) {
+    return FormatDetector::detect(archive_path);
 }
 
-std::string IndexerFactory::generate_index_path(const std::string &archive_path, 
-                                                 gzip_common::ArchiveFormat format) {
+std::string IndexerFactory::generate_index_path(const std::string &archive_path,
+                                                ArchiveFormat format) {
     // Auto-detect format if not specified
-    if (format == gzip_common::ArchiveFormat::UNKNOWN) {
-        format = detect_format(archive_path);
+    if (format == ArchiveFormat::UNKNOWN) {
+        format = FormatDetector::detect(archive_path);
     }
-    
+
     switch (format) {
-        case gzip_common::ArchiveFormat::GZIP:
+        case ArchiveFormat::GZIP:
             return archive_path + ".idx";
-            
-        case gzip_common::ArchiveFormat::TAR_GZ:
+
+        case ArchiveFormat::TAR_GZ:
             return archive_path + ".idx.tar";
-            
-        case gzip_common::ArchiveFormat::UNKNOWN:
+
+        case ArchiveFormat::UNKNOWN:
         default:
             // Fallback to generic .idx extension
-            DFTRACER_UTILS_LOG_WARN("Unknown format for %s, using generic .idx extension", 
-                                     archive_path.c_str());
+            DFTRACER_UTILS_LOG_WARN(
+                "Unknown format for %s, using generic .idx extension",
+                archive_path.c_str());
             return archive_path + ".idx";
     }
 }

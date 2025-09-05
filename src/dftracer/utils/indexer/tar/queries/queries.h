@@ -42,10 +42,10 @@ struct InsertTarFileData {
 };
 
 void insert_tar_file_record(const SqliteDatabase &db, int archive_id,
-                             const InsertTarFileData &data);
+                            const InsertTarFileData &data);
 
 std::vector<TarIndexer::TarFileInfo> query_tar_files(const SqliteDatabase &db,
-                                                      int archive_id);
+                                                     int archive_id);
 
 bool query_tar_file(const SqliteDatabase &db, int archive_id,
                     const std::string &file_name,
@@ -91,7 +91,7 @@ int query_archive_id(const SqliteDatabase &db,
 bool query_tar_checkpoint(const SqliteDatabase &db, std::size_t target_offset,
                           int archive_id, IndexerCheckpoint &checkpoint);
 std::vector<IndexerCheckpoint> query_tar_checkpoints(const SqliteDatabase &db,
-                                                    int archive_id);
+                                                     int archive_id);
 std::vector<IndexerCheckpoint> query_tar_checkpoints_for_line_range(
     const SqliteDatabase &db, int archive_id, std::uint64_t start_line,
     std::uint64_t end_line);

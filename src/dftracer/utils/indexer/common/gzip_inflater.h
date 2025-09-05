@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <cstdio>
 
-namespace dftracer::utils::gzip_common {
+namespace dftracer::utils {
 
 /**
  * Result structure for GZIP inflater operations
@@ -162,6 +162,6 @@ class GzipInflater : public Inflater {
     }
 };
 
-}  // namespace dftracer::utils::gzip_common
+}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_INDEXER_COMMON_GZIP_INFLATER_H

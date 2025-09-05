@@ -12,7 +12,7 @@
 #include <cstring>
 #include <vector>
 
-namespace dftracer::utils::gzip_common {
+namespace dftracer::utils {
 
 /**
  * GZIP checkpointer for creating and managing checkpoint data
@@ -146,6 +146,6 @@ class GzipCheckpointer {
     }
 };
 
-}  // namespace dftracer::utils::gzip_common
+}  // namespace dftracer::utils
 
 #endif  // DFTRACER_UTILS_INDEXER_COMMON_GZIP_CHECKPOINTER_H

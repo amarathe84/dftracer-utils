@@ -1,12 +1,12 @@
-#include <dftracer/utils/indexer/gzip/gzip_indexer.h>
-#include <dftracer/utils/indexer/gzip/queries/queries.h>
-#include <dftracer/utils/indexer/checkpoint_size.h>
-#include <dftracer/utils/indexer/common/gzip_inflater.h>
-#include <dftracer/utils/indexer/common/gzip_checkpointer.h>
 #include <dftracer/utils/common/checkpointer.h>
 #include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/common/logging.h>
+#include <dftracer/utils/indexer/checkpoint_size.h>
+#include <dftracer/utils/indexer/common/gzip_checkpointer.h>
+#include <dftracer/utils/indexer/common/gzip_inflater.h>
 #include <dftracer/utils/indexer/error.h>
+#include <dftracer/utils/indexer/gzip/gzip_indexer.h>
+#include <dftracer/utils/indexer/gzip/queries/queries.h>
 #include <dftracer/utils/indexer/helpers.h>
 #include <dftracer/utils/utils/filesystem.h>
 
@@ -15,7 +15,7 @@
 namespace dftracer::utils::gzip_indexer {
 
 // Import the SQL_SCHEMA from constants
-extern const char* const& SQL_SCHEMA;
+extern const char *const &SQL_SCHEMA;
 
 static void init_schema(const SqliteDatabase &db) {
     DFTRACER_UTILS_LOG_DEBUG("Initializing GZIP indexer schema", "");
@@ -28,10 +28,8 @@ static void init_schema(const SqliteDatabase &db) {
 }
 
 static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
-                          std::uint64_t ckpt_size, std::uint64_t &total_lines,
-                          std::uint64_t &total_uc_size) {
-    using namespace gzip_common;
-    
+                           std::uint64_t ckpt_size, std::uint64_t &total_lines,
+                           std::uint64_t &total_uc_size) {
     GzipInflater inflater;
     if (!inflater.initialize(fp)) {
         return false;
@@ -63,8 +61,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
                         compressed_dict.size(),
                         line_count_in_chunk,
                         first_line_in_chunk,
-                        total_lines - 1
-                    };
+                        total_lines - 1};
                     insert_checkpoint_record(db, file_id, checkpoint_data);
                 }
             }
@@ -73,7 +70,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
         GzipInflaterResult result;
         if (!inflater.read(fp, result)) {
             if (result.bytes_read == 0) {
-                break;  // EOF
+                break;     // EOF
             }
             return false;  // Error
         }
@@ -92,7 +89,7 @@ static bool process_chunks(FILE *fp, const SqliteDatabase &db, int file_id,
 }
 
 static bool build_index(const SqliteDatabase &db, int file_id,
-                       const std::string &gz_path, std::uint64_t ckpt_size) {
+                        const std::string &gz_path, std::uint64_t ckpt_size) {
     FILE *fp = std::fopen(gz_path.c_str(), "rb");
     if (!fp) {
         return false;
@@ -101,30 +98,50 @@ static bool build_index(const SqliteDatabase &db, int file_id,
     std::uint64_t total_lines = 0;
     std::uint64_t total_uc_size = 0;
 
-    bool success = process_chunks(fp, db, file_id, ckpt_size, total_lines, total_uc_size);
+    bool success =
+        process_chunks(fp, db, file_id, ckpt_size, total_lines, total_uc_size);
     std::fclose(fp);
 
     if (success) {
-        insert_file_metadata_record(db, file_id, ckpt_size, total_lines, total_uc_size);
+        insert_file_metadata_record(db, file_id, ckpt_size, total_lines,
+                                    total_uc_size);
     }
 
     return success;
 }
 
-GzipIndexer::GzipIndexer(const std::string &gz_path_, 
-                         const std::string &idx_path_,
-                         std::uint64_t ckpt_size_, 
+GzipIndexer::GzipIndexer(const std::string &gz_path_,
+                         const std::string &idx_path_, std::uint64_t ckpt_size_,
                          bool force_rebuild_)
-    : gz_path(gz_path_), gz_path_logical_path(get_logical_path(gz_path_)),
-      idx_path(idx_path_), ckpt_size(ckpt_size_), force_rebuild(force_rebuild_),
-      cached_is_valid(false), cached_file_id(-1), cached_max_bytes(0),
-      cached_num_lines(0), cached_checkpoint_size(0) {
+    : gz_path(gz_path_),
+      gz_path_logical_path(get_logical_path(gz_path_)),
+      idx_path(idx_path_),
+      ckpt_size(ckpt_size_),
+      force_rebuild(force_rebuild_),
+      cached_is_valid(false),
+      cached_file_id(-1),
+      cached_max_bytes(0),
+      cached_num_lines(0),
+      cached_checkpoint_size(0) {
+    if (gz_path.empty()) {
+        throw IndexerError(IndexerError::Type::INVALID_ARGUMENT,
+                           "gz_path must not be empty");
+    }
+
+    if (!fs::exists(gz_path)) {
+        throw IndexerError(IndexerError::Type::FILE_ERROR,
+                           "gz_path does not exist: " + gz_path);
+    }
+
+    if (ckpt_size == 0) {
+        throw IndexerError(IndexerError::Type::INVALID_ARGUMENT,
+                           "ckpt_size must be greater than 0");
+    }
+
     open();
 }
 
-GzipIndexer::~GzipIndexer() {
-    close();
-}
+GzipIndexer::~GzipIndexer() { close(); }
 
 GzipIndexer::GzipIndexer(GzipIndexer &&other) noexcept
     : gz_path(std::move(other.gz_path)),
@@ -165,9 +182,7 @@ void GzipIndexer::open() {
     }
 }
 
-void GzipIndexer::close() { 
-    db.close(); 
-}
+void GzipIndexer::close() { db.close(); }
 
 void GzipIndexer::build() const {
     if (!force_rebuild && !need_rebuild()) {
@@ -175,7 +190,7 @@ void GzipIndexer::build() const {
     }
 
     init_schema(db);
-    
+
     int file_id = find_file_id(gz_path_logical_path);
     if (file_id != -1) {
         delete_file_record(db, file_id);
@@ -184,10 +199,11 @@ void GzipIndexer::build() const {
     std::time_t mtime = get_file_modification_time(gz_path);
     std::string hash = calculate_file_hash(gz_path);
     std::uint64_t bytes = file_size_bytes(gz_path);
-    std::uint64_t final_ckpt_size = determine_checkpoint_size(ckpt_size, gz_path);
+    std::uint64_t final_ckpt_size =
+        determine_checkpoint_size(ckpt_size, gz_path);
 
     insert_file_record(db, gz_path_logical_path, bytes, mtime, hash, file_id);
-    
+
     if (!build_index(db, file_id, gz_path, final_ckpt_size)) {
         throw IndexerError(IndexerError::Type::BUILD_ERROR,
                            "Failed to build index for " + gz_path);
@@ -197,22 +213,21 @@ void GzipIndexer::build() const {
     cached_file_id = file_id;
 }
 
-bool GzipIndexer::is_valid() const { 
-    return cached_is_valid; 
-}
+bool GzipIndexer::is_valid() const { return cached_is_valid; }
 
-bool GzipIndexer::exists() const { 
-    return fs::exists(idx_path); 
-}
+bool GzipIndexer::exists() const { return fs::exists(idx_path); }
 
 bool GzipIndexer::need_rebuild() const {
+    if (is_valid()) return false;
     if (!exists()) return true;
-    if (force_rebuild) return true;
+
+    // Only query schema if database exists - matches original behavior
     if (!query_schema_validity(db)) return true;
 
     std::string stored_hash;
     std::time_t stored_mtime;
-    if (!query_stored_file_info(db, gz_path_logical_path, stored_hash, stored_mtime)) {
+    if (!query_stored_file_info(db, gz_path_logical_path, stored_hash,
+                                stored_mtime)) {
         return true;
     }
 
@@ -222,25 +237,11 @@ bool GzipIndexer::need_rebuild() const {
     return (stored_mtime != current_mtime) || (stored_hash != current_hash);
 }
 
-const std::string &GzipIndexer::get_idx_path() const {
-    return idx_path;
-}
+const std::string &GzipIndexer::get_idx_path() const { return idx_path; }
 
-const std::string &GzipIndexer::get_archive_path() const {
-    return gz_path;
-}
+const std::string &GzipIndexer::get_archive_path() const { return gz_path; }
 
-const std::string &GzipIndexer::get_gz_path() const {
-    return gz_path;
-}
-
-std::string GzipIndexer::get_format_name() const {
-    return "GZIP";
-}
-
-IndexerType GzipIndexer::get_indexer_type() const {
-    return IndexerType::GZIP;
-}
+const std::string &GzipIndexer::get_gz_path() const { return gz_path; }
 
 std::uint64_t GzipIndexer::get_max_bytes() const {
     if (cached_max_bytes == 0) {
