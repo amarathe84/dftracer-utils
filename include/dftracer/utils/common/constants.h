@@ -14,6 +14,7 @@ static constexpr int ZLIB_GZIP_WINDOW_BITS = 31;  // 15 + 16 for gzip format
 static constexpr std::uint64_t DEFAULT_CHECKPOINT_SIZE =
     32 * 1024 * 1024;                             // 32MB
 extern const char* const& SQL_SCHEMA;
+inline const char* EXTENSION = ".idx";
 }  // namespace indexer
 
 namespace reader {
@@ -35,6 +36,7 @@ static constexpr std::size_t FILE_IO_BUFFER_SIZE =
 #define DFTRACER_UTILS_DEFAULT_BUFFER_SIZE 65536
 #define DFTRACER_UTILS_SKIP_BUFFER_SIZE 131072
 #define DFTRACER_UTILS_FILE_IO_BUFFER_SIZE 262144
+#define DFTRACER_UTILS_INDEX_EXTENSION ".idx"
 
 extern const char *DFTRACER_UTILS_SQL_SCHEMA;
 

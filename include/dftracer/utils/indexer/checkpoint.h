@@ -33,9 +33,8 @@ void dft_indexer_free_checkpoints(dft_indexer_checkpoint_t *checkpoints,
 #include <cstdint>
 #include <vector>
 
-namespace dftracer {
-namespace utils {
-struct IndexCheckpoint {
+namespace dftracer::utils {
+struct IndexerCheckpoint {
     std::uint64_t checkpoint_idx;
     std::uint64_t uc_offset;
     std::uint64_t uc_size;
@@ -47,8 +46,7 @@ struct IndexCheckpoint {
     std::uint64_t first_line_num;
     std::uint64_t last_line_num;
 };
-}  // namespace utils
-}  // namespace dftracer
+}  // namespace dftracer::utils
 
 #endif
 

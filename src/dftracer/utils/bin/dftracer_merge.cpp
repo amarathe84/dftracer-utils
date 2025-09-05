@@ -6,6 +6,7 @@
 #include <dftracer/utils/pipeline/tasks/task_tag.h>
 #include <dftracer/utils/reader/line_processor.h>
 #include <dftracer/utils/reader/reader.h>
+#include <dftracer/utils/reader/reader_factory.h>
 #include <dftracer/utils/utils/filesystem.h>
 #include <dftracer/utils/utils/string.h>
 #include <zlib.h>
@@ -96,21 +97,24 @@ static MergeResult process_pfw_gz_file(const std::string& gz_path,
                 fs::remove(idx_path);
             }
             DFTRACER_UTILS_LOG_DEBUG("Building index for %s", gz_path.c_str());
-            Indexer indexer(gz_path, idx_path, checkpoint_size, true);
-            indexer.build();
+            auto indexer = IndexerFactory::create(gz_path, idx_path,
+                                                  checkpoint_size, true);
+            indexer->build();
         } else {
-            Indexer indexer(gz_path, idx_path, checkpoint_size, false);
-            if (indexer.need_rebuild()) {
+            auto indexer = IndexerFactory::create(gz_path, idx_path,
+                                                  checkpoint_size, false);
+            if (indexer->need_rebuild()) {
                 DFTRACER_UTILS_LOG_DEBUG("Rebuilding index for %s",
                                          gz_path.c_str());
                 fs::remove(idx_path);
-                Indexer new_indexer(gz_path, idx_path, checkpoint_size, true);
-                new_indexer.build();
+                auto new_indexer = IndexerFactory::create(
+                    gz_path, idx_path, checkpoint_size, true);
+                new_indexer->build();
             }
         }
 
-        Reader reader(gz_path, idx_path);
-        std::size_t total_lines = reader.get_num_lines();
+        auto reader = ReaderFactory::create(gz_path, idx_path);
+        std::size_t total_lines = reader->get_num_lines();
 
         TempFileLineProcessor processor(temp_file);
         if (!processor.is_valid()) {
@@ -119,7 +123,7 @@ static MergeResult process_pfw_gz_file(const std::string& gz_path,
             return result;
         }
 
-        reader.read_lines_with_processor(1, total_lines, processor);
+        reader->read_lines_with_processor(1, total_lines, processor);
 
         result.lines_processed = processor.get_total_lines();
         result.valid_events = processor.get_valid_events();
