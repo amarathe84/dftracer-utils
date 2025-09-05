@@ -303,18 +303,19 @@ void GzipReader::read_lines_with_processor(std::size_t start_line,
         const auto &last_checkpoint = checkpoints.back();
         total_end_offset = last_checkpoint.uc_offset + last_checkpoint.uc_size;
 
-        std::size_t total_bytes =
-            static_cast<std::size_t>(total_end_offset - total_start_offset);
-        std::vector<char> read_buffer(total_bytes);
-        check_reader_state(is_open, indexer.get());
-        std::size_t bytes_read = read(total_start_offset, total_end_offset,
-                                      read_buffer.data(), total_bytes);
-
-        if (bytes_read > 0) {
-            std::string line_accumulator;
-            std::size_t current_line = first_line_in_data;
-
-            process_lines(read_buffer.data(), bytes_read, current_line,
+        // Use chunked reading instead of allocating huge buffer
+        std::vector<char> chunk_buffer(default_buffer_size);
+        std::string line_accumulator;
+        std::size_t current_line = first_line_in_data;
+        
+        // Create stream for the range
+        line_byte_stream = stream_factory->create_line_stream(gz_path, total_start_offset, total_end_offset);
+        
+        while (!line_byte_stream->is_finished() && current_line <= end_line) {
+            std::size_t bytes_read = line_byte_stream->stream(chunk_buffer.data(), chunk_buffer.size());
+            if (bytes_read == 0) break;
+            
+            process_lines(chunk_buffer.data(), bytes_read, current_line,
                           start_line, end_line, line_accumulator, processor);
         }
     }

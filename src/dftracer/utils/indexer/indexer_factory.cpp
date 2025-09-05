@@ -14,7 +14,19 @@ std::unique_ptr<Indexer> IndexerFactory::create(
     std::uint64_t checkpoint_size,
     bool force) {
     
-    gzip_common::ArchiveFormat format = detect_format(archive_path);
+    // Fast path: avoid expensive format detection for clear cases
+    gzip_common::ArchiveFormat format = gzip_common::ArchiveFormat::UNKNOWN;
+    if (archive_path.size() >= 7 && archive_path.substr(archive_path.size() - 7) == ".tar.gz") {
+        format = gzip_common::ArchiveFormat::TAR_GZ;
+    } else if (archive_path.size() >= 4 && archive_path.substr(archive_path.size() - 4) == ".tgz") {
+        format = gzip_common::ArchiveFormat::TAR_GZ;
+    } else if (archive_path.size() >= 3 && archive_path.substr(archive_path.size() - 3) == ".gz") {
+        format = gzip_common::ArchiveFormat::GZIP;
+    } else if (archive_path.size() >= 5 && archive_path.substr(archive_path.size() - 5) == ".gzip") {
+        format = gzip_common::ArchiveFormat::GZIP;
+    } else {
+        format = detect_format(archive_path);  // Only do expensive detection for unclear cases
+    }
     std::string final_idx_path = idx_path.empty() ? generate_index_path(archive_path, format) : idx_path;
     
     switch (format) {
