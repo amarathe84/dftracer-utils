@@ -131,8 +131,11 @@ void TarIndexer::build() const {
         delete_archive_record(db, archive_id);
     }
 
+    printf("Get modifcation time for %s\n", tar_gz_path.c_str());
     std::time_t mtime = get_file_modification_time(tar_gz_path);
-    std::string hash = calculate_file_hash(tar_gz_path);
+    printf("Calculate hash for %s\n", tar_gz_path.c_str());
+    auto hash = calculate_file_hash(tar_gz_path);
+    printf("Get size for %s\n", tar_gz_path.c_str());
     std::uint64_t bytes = file_size_bytes(tar_gz_path);
     // TODO: use determine_checkpoint_size like GZIP
     std::uint64_t final_ckpt_size = ckpt_size;
@@ -174,12 +177,12 @@ bool TarIndexer::need_rebuild() const {
         }
 
         // Check if file has been modified since last index
-        std::string stored_hash;
+        std::uint64_t stored_hash;
         std::time_t stored_mtime;
         if (query_stored_file_info(db, tar_gz_path_logical_path, stored_hash,
                                    stored_mtime)) {
-            std::string current_hash = calculate_file_hash(tar_gz_path);
-            time_t current_mtime = get_file_modification_time(tar_gz_path);
+            std::uint64_t current_hash = calculate_file_hash(tar_gz_path);
+            std::time_t current_mtime = get_file_modification_time(tar_gz_path);
 
             return (stored_hash != current_hash ||
                     stored_mtime != current_mtime);

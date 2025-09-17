@@ -13,14 +13,14 @@ namespace dftracer::utils::gzip_indexer {
 void insert_file_record(const SqliteDatabase &db,
                         const std::string &gz_path_logical_path,
                         std::size_t bytes, std::time_t file_mtime,
-                        const std::string &file_sha256, int &db_file_id);
+                        std::uint64_t file_hash, int &db_file_id);
 void insert_file_metadata_record(const SqliteDatabase &db, int file_id,
                                  std::size_t ckpt_size,
                                  std::uint64_t total_lines,
                                  std::uint64_t total_uc_size);
 bool query_stored_file_info(const SqliteDatabase &db,
                             const std::string &gz_path,
-                            std::string &stored_hash, time_t &stored_mtime);
+                            std::uint64_t &stored_hash, std::time_t &stored_mtime);
 
 struct InsertCheckpointData {
     std::uint64_t idx;

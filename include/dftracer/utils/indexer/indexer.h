@@ -1,14 +1,8 @@
 #ifndef DFTRACER_UTILS_INDEXER_INDEXER_H
 #define DFTRACER_UTILS_INDEXER_INDEXER_H
 
-#include <dftracer/utils/common/archive_format.h>
 #include <dftracer/utils/common/constants.h>
 #include <dftracer/utils/indexer/checkpoint.h>
-
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <vector>
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,7 +30,12 @@ void dft_indexer_destroy(dft_indexer_handle_t indexer);
 
 #ifdef __cplusplus
 }
-#endif
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <dftracer/utils/common/archive_format.h>
 
 namespace dftracer::utils {
 
@@ -81,5 +80,7 @@ class Indexer {
 };
 
 }  // namespace dftracer::utils
+
+#endif  // __cplusplus
 
 #endif  // DFTRACER_UTILS_INDEXER_INDEXER_H

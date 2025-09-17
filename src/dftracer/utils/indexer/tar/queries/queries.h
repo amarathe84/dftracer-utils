@@ -15,7 +15,7 @@ namespace dftracer::utils::tar_indexer {
 void insert_file_record(const SqliteDatabase &db,
                         const std::string &tar_gz_path_logical_path,
                         std::size_t bytes, std::time_t file_mtime,
-                        const std::string &file_sha256, int &db_file_id);
+                        std::uint64_t file_sha256, int &db_file_id);
 
 void insert_archive_record(const SqliteDatabase &db, int file_id,
                            const std::string &archive_name,
@@ -29,7 +29,7 @@ void insert_archive_metadata_record(const SqliteDatabase &db, int archive_id,
 
 bool query_stored_file_info(const SqliteDatabase &db,
                             const std::string &tar_gz_path,
-                            std::string &stored_hash, time_t &stored_mtime);
+                            std::uint64_t &stored_hash, std::time_t &stored_mtime);
 
 // TAR file entries
 struct InsertTarFileData {

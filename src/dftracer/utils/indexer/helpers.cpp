@@ -16,6 +16,7 @@
 #include <iomanip>
 #include <sstream>
 #include <vector>
+#include <cstdio>
 
 std::string get_logical_path(const std::string &path) {
     auto fs_path = fs::path(path);
@@ -48,46 +49,41 @@ time_t get_file_modification_time(const std::string &file_path) {
 #endif
 }
 
-std::string calculate_file_hash(const std::string &file_path) {
+std::uint64_t calculate_file_hash(const std::string &file_path) {
     // Use much larger buffer for better I/O performance on large files
     constexpr size_t HASH_BUFFER_SIZE = 1024 * 1024;  // 1MB buffer
 
-    std::ifstream file(file_path, std::ios::binary);
-    if (!file.is_open()) {
-        DFTRACER_UTILS_LOG_ERROR("Cannot open file for SHA256 calculation: %s",
+    FILE* file = std::fopen(file_path.c_str(), "rb");
+    if (!file) {
+        DFTRACER_UTILS_LOG_ERROR("Cannot open file for XXH3 calculation: %s",
                                  file_path.c_str());
-        return "";
+        return 0;
     }
 
     XXH3_state_t *state = XXH3_createState();
     if (!state) {
         DFTRACER_UTILS_LOG_ERROR("Failed to create XXH3 state", "");
-        return "";
+        return 0;
     }
     const XXH64_hash_t seed = 0;
     if (XXH3_64bits_reset_withSeed(state, seed) == XXH_ERROR) {
         DFTRACER_UTILS_LOG_ERROR("Failed to reset XXH3 state", "");
         XXH3_freeState(state);
-        return "";
+        return 0;
     }
 
-    // Pre-allocate larger buffer
     std::vector<unsigned char> buffer(HASH_BUFFER_SIZE);
 
-    while (file.read(reinterpret_cast<char *>(buffer.data()),
-                     static_cast<std::streamsize>(buffer.size())) ||
-           file.gcount() > 0) {
-        XXH3_64bits_update(state, buffer.data(),
-                           static_cast<size_t>(file.gcount()));
+    std::size_t bytes_read = 0;
+    while ((bytes_read = std::fread(buffer.data(), 1, buffer.size(), file)) > 0) {
+      XXH3_64bits_update(state, buffer.data(), bytes_read);
     }
+    std::fclose(file);
 
     XXH64_hash_t hash = XXH3_64bits_digest(state);
     XXH3_freeState(state);
 
-    // Convert hash to hex string
-    std::stringstream ss;
-    ss << std::hex << hash;
-    return ss.str();
+    return static_cast<std::uint64_t>(hash);
 }
 
 std::uint64_t file_size_bytes(const std::string &path) {

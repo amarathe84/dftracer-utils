@@ -197,7 +197,7 @@ void GzipIndexer::build() const {
     }
 
     std::time_t mtime = get_file_modification_time(gz_path);
-    std::string hash = calculate_file_hash(gz_path);
+    auto hash = calculate_file_hash(gz_path);
     std::uint64_t bytes = file_size_bytes(gz_path);
     std::uint64_t final_ckpt_size =
         determine_checkpoint_size(ckpt_size, gz_path);
@@ -224,7 +224,7 @@ bool GzipIndexer::need_rebuild() const {
     // Only query schema if database exists - matches original behavior
     if (!query_schema_validity(db)) return true;
 
-    std::string stored_hash;
+    std::uint64_t stored_hash;
     std::time_t stored_mtime;
     if (!query_stored_file_info(db, gz_path_logical_path, stored_hash,
                                 stored_mtime)) {
@@ -232,7 +232,7 @@ bool GzipIndexer::need_rebuild() const {
     }
 
     std::time_t current_mtime = get_file_modification_time(gz_path);
-    std::string current_hash = calculate_file_hash(gz_path);
+    std::uint64_t current_hash = calculate_file_hash(gz_path);
 
     return (stored_mtime != current_mtime) || (stored_hash != current_hash);
 }

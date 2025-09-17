@@ -32,7 +32,6 @@ class TarIndexer : public dftracer::utils::Indexer {
     bool need_rebuild() const override;
     bool exists() const override;
 
-    // Metadata - BaseIndexer interface implementation
     const std::string &get_idx_path() const override;
     const std::string &get_archive_path() const override;
     const std::string &get_tar_gz_path() const;
@@ -76,7 +75,6 @@ class TarIndexer : public dftracer::utils::Indexer {
     }
 
    private:
-    // Direct member variables - eliminates impl layer indirection
     std::string tar_gz_path;
     std::string tar_gz_path_logical_path;
     std::string idx_path;

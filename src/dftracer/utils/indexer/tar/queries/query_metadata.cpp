@@ -92,7 +92,7 @@ std::uint64_t query_checkpoint_size(const SqliteDatabase &db, int archive_id) {
 
 bool query_stored_file_info(const SqliteDatabase &db,
                             const std::string &tar_gz_path,
-                            std::string &stored_hash,
+                            std::uint64_t &stored_hash,
                             std::time_t &stored_mtime) {
     SqliteStmt stmt(db,
                     "SELECT hash, mtime_unix "
@@ -102,9 +102,12 @@ bool query_stored_file_info(const SqliteDatabase &db,
     stmt.bind_text(1, tar_gz_path);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        const char *hash =
-            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
-        stored_hash = hash ? std::string(hash) : "";
+        std::uint64_t hash =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 0));
+        if (hash == 0) {
+            return false;  // No valid hash stored
+        }
+        stored_hash = hash;
         stored_mtime = static_cast<std::time_t>(sqlite3_column_int64(stmt, 1));
         return true;
     }

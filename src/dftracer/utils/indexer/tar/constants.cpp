@@ -8,7 +8,7 @@ const char* tar_sql_schema = R"(
       logical_name TEXT UNIQUE NOT NULL,
       byte_size INTEGER NOT NULL,
       mtime_unix INTEGER NOT NULL,
-      hash TEXT NOT NULL
+      hash INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS tar_archives (
