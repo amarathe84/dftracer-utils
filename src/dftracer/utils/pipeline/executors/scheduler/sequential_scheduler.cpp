@@ -44,14 +44,8 @@ PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
         if (execution_context.get_task_dependencies(i).empty()) {
             execute_task_with_dependencies(execution_context, i, input);
+            process_all_tasks();
         }
-    }
-
-    // Process all tasks iteratively until queues are empty
-    while (!task_queue_.empty()) {
-        process_all_tasks();
-        // Check for new dynamic tasks that became ready
-        process_remaining_dynamic_tasks();
     }
 
     // Find the terminal tasks (those that no other tasks depend on)
@@ -97,21 +91,13 @@ void SequentialScheduler::submit(
 void SequentialScheduler::execute_task_with_dependencies(
     ExecutorContext& execution_context, TaskIndex task_id, std::any input) {
     auto completion_callback = [this, task_id](std::any result) {
-        if (!current_execution_context_) {
-            DFTRACER_UTILS_LOG_ERROR(
-                "SequentialScheduler: No execution context available for task %d",
-                task_id);
-            return;
-        }
-
         task_outputs_[task_id] = std::move(result);
         task_completed_[task_id] = true;
 
-        // Queue dependent tasks instead of executing them recursively
         for (TaskIndex dependent :
              current_execution_context_->get_task_dependents(task_id)) {
             if (--dependency_count_[dependent] == 0) {
-                // All dependencies satisfied - prepare input and queue task
+                // All dependencies satisfied - submit the dependent task
                 std::any dependent_input;
 
                 if (current_execution_context_->get_task_dependencies(dependent).size() ==
@@ -128,16 +114,9 @@ void SequentialScheduler::execute_task_with_dependencies(
                     dependent_input = combined_inputs;
                 }
 
-                // Create completion callback for the dependent task
-                auto dependent_completion_callback = [this, dependent](std::any dep_result) {
-                    task_outputs_[dependent] = std::move(dep_result);
-                    task_completed_[dependent] = true;
-                };
-
-                // Queue the dependent task
-                Task* dependent_task_ptr = current_execution_context_->get_task(dependent);
-                submit(dependent, dependent_task_ptr, std::move(dependent_input), 
-                       dependent_completion_callback);
+                // Submit dependent task with recursive callback
+                execute_task_with_dependencies(*current_execution_context_, dependent,
+                                               std::move(dependent_input));
             }
         }
     };
