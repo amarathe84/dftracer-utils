@@ -89,18 +89,17 @@ void SequentialScheduler::submit(
 
 void SequentialScheduler::execute_task_with_dependencies(
     ExecutorContext& execution_context, TaskIndex task_id, std::any input) {
-    auto completion_callback = [this, &execution_context,
-                                task_id](std::any result) {
+    auto completion_callback = [this, task_id](std::any result) {
         task_outputs_[task_id] = std::move(result);
         task_completed_[task_id] = true;
 
         for (TaskIndex dependent :
-             execution_context.get_task_dependents(task_id)) {
+             current_execution_context_->get_task_dependents(task_id)) {
             if (--dependency_count_[dependent] == 0) {
                 // All dependencies satisfied - submit the dependent task
                 std::any dependent_input;
 
-                if (execution_context.get_task_dependencies(dependent).size() ==
+                if (current_execution_context_->get_task_dependencies(dependent).size() ==
                     1) {
                     // Single dependency
                     dependent_input = task_outputs_[task_id];
@@ -108,14 +107,14 @@ void SequentialScheduler::execute_task_with_dependencies(
                     // Multiple dependencies - combine inputs
                     std::vector<std::any> combined_inputs;
                     for (TaskIndex dep :
-                         execution_context.get_task_dependencies(dependent)) {
+                         current_execution_context_->get_task_dependencies(dependent)) {
                         combined_inputs.push_back(task_outputs_[dep]);
                     }
                     dependent_input = combined_inputs;
                 }
 
                 // Submit dependent task with recursive callback
-                execute_task_with_dependencies(execution_context, dependent,
+                execute_task_with_dependencies(*current_execution_context_, dependent,
                                                std::move(dependent_input));
             }
         }
