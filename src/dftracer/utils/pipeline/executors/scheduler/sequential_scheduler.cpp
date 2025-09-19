@@ -5,13 +5,16 @@
 #include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/tasks/task_context.h>
 
+#include <any>
+#include <unordered_map>
+
 namespace dftracer::utils {
 
 SequentialScheduler::SequentialScheduler()
     : current_execution_context_(nullptr) {}
 
-std::any SequentialScheduler::execute(const Pipeline& pipeline,
-                                      std::any input) {
+PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
+                                            std::any input) {
     ExecutorContext execution_context(&pipeline);
     current_execution_context_ = &execution_context;
 
@@ -55,11 +58,20 @@ std::any SequentialScheduler::execute(const Pipeline& pipeline,
 
     current_execution_context_ = nullptr;
 
-    if (!terminal_tasks.empty()) {
-        return task_outputs_[terminal_tasks.back()];
+    // Always return unordered_map for consistency
+    PipelineOutput terminal_outputs;
+    
+    if (terminal_tasks.empty()) {
+        // No terminal tasks - return input with special key
+        terminal_outputs[-1] = input;
+    } else {
+        // One or more terminal tasks - return all with their IDs
+        for (TaskIndex id : terminal_tasks) {
+            terminal_outputs[id] = task_outputs_[id];
+        }
     }
-
-    return input;
+    
+    return terminal_outputs;
 }
 
 void SequentialScheduler::submit(

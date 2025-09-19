@@ -3,6 +3,7 @@
 
 #include <dftracer/utils/pipeline/executors/executor_type.h>
 #include <dftracer/utils/pipeline/pipeline.h>
+#include <dftracer/utils/pipeline/pipeline_output.h>
 
 #include <any>
 #include <string>
@@ -14,7 +15,7 @@ class Executor {
 
    public:
     virtual ~Executor() = default;
-    virtual std::any execute(const Pipeline& pipeline, std::any input) = 0;
+    virtual PipelineOutput execute(const Pipeline& pipeline, std::any input) = 0;
     inline ExecutorType type() const { return type_; }
 
    public:

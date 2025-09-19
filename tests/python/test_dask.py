@@ -373,17 +373,15 @@ class TestDaskIntegration:
             reference_data = full_reader.read_line_bytes_json(0, max_bytes)
             expected_count = len([obj for obj in reference_data if obj and "name" in obj])
             
-            # Double-check against environment.lines
             assert expected_count == env.lines, f"Reference data mismatch: got {expected_count} records, environment has {env.lines} lines"
             
-            # Test the specific problematic 16KB boundary from the original issue
-            batch_size = 16 * 1024  # 16KB - the original problematic boundary
+            batch_size = 16 * 1024
             batches = []
             for start in range(0, max_bytes, batch_size):
                 end = min(start + batch_size, max_bytes)
                 batches.append((gz_file, start, end))
             
-            print(f"\n=== Testing boundary edge case: 16KB chunks ===")
+            print("\n=== Testing boundary edge case: 16KB chunks ===")
             print(f"Created {len(batches)} batches, expecting {expected_count} total records (env.lines: {env.lines})")
             
             # Process with Dask

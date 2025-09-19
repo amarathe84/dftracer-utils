@@ -42,7 +42,7 @@ class SequentialScheduler : public Scheduler {
     SequentialScheduler();
     ~SequentialScheduler() = default;
 
-    std::any execute(const Pipeline& pipeline, std::any input) override;
+    PipelineOutput execute(const Pipeline& pipeline, std::any input) override;
     void submit(TaskIndex task_id, std::any input,
                 std::function<void(std::any)> completion_callback) override;
     void submit(TaskIndex task_id, Task* task_ptr, std::any input,

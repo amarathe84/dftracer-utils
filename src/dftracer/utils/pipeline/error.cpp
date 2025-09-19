@@ -18,6 +18,9 @@ std::string PipelineError::format_message(Type type,
         case INITIALIZATION_ERROR:
             prefix = "[INITIALIZATION]";
             break;
+        case OUTPUT_CONVERSION_ERROR:
+            prefix = "[OUTPUT_CONVERSION]";
+            break;
         case UNKNOWN_ERROR:
             prefix = "[UNKNOWN]";
             break;

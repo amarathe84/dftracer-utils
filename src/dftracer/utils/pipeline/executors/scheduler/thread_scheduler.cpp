@@ -6,11 +6,13 @@
 #include <dftracer/utils/pipeline/tasks/task_context.h>
 
 #include <algorithm>
+#include <any>
 #include <chrono>
 #include <iostream>
 #include <numeric>
 #include <random>
 #include <thread>
+#include <unordered_map>
 
 namespace dftracer::utils {
 ThreadScheduler::ThreadScheduler() : current_execution_context_(nullptr) {}
@@ -120,7 +122,7 @@ void ThreadScheduler::submit(
     cv_.notify_one();
 }
 
-std::any ThreadScheduler::execute(const Pipeline& pipeline, std::any input) {
+PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline, std::any input) {
     ExecutorContext execution_context(&pipeline);
     current_execution_context_ = &execution_context;
 
@@ -221,12 +223,19 @@ std::any ThreadScheduler::execute(const Pipeline& pipeline, std::any input) {
     // Clean up execution context reference
     current_execution_context_ = nullptr;
 
-    // Return output of the last terminal task
-    if (!terminal_tasks.empty()) {
-        return task_outputs_[terminal_tasks.back()];
+    PipelineOutput terminal_outputs;
+    
+    if (terminal_tasks.empty()) {
+        // No terminal tasks - return input with special key
+        terminal_outputs[-1] = input;
+    } else {
+        // One or more terminal tasks - return all with their IDs
+        for (TaskIndex id : terminal_tasks) {
+            terminal_outputs[id] = task_outputs_[id];
+        }
     }
-
-    return input;
+    
+    return terminal_outputs;
 }
 
 void ThreadScheduler::worker_thread(size_t thread_id) {

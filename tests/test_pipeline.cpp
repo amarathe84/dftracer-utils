@@ -85,8 +85,8 @@ TEST_CASE("Pipeline - Task emission") {
     pipeline.add_task<int, int>(emitting_task);
 
     SequentialExecutor executor;
-    std::any result = executor.execute(pipeline, 10);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, 10);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 15);
 }
@@ -102,8 +102,8 @@ TEST_CASE("Pipeline - String processing") {
 
     SequentialExecutor executor;
     std::string input = "test";
-    std::any result = executor.execute(pipeline, input);
-    std::string final_result = std::any_cast<std::string>(result);
+    PipelineOutput result = executor.execute(pipeline, input);
+    std::string final_result = result.get<std::string>();
 
     CHECK(final_result == "Processed: test");
 }
@@ -123,8 +123,8 @@ TEST_CASE("Pipeline - Vector processing") {
 
     SequentialExecutor executor;
     std::vector<int> input = {1, 2, 3, 4, 5};
-    std::any result = executor.execute(pipeline, input);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, input);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 15);
 }
@@ -155,14 +155,14 @@ TEST_CASE("Pipeline - Deterministic execution") {
 
     SequentialExecutor seq_executor;
     counter = 0;
-    std::any seq_result = seq_executor.execute(pipeline, 42);
-    int seq_final = std::any_cast<int>(seq_result);
+    PipelineOutput seq_result = seq_executor.execute(pipeline, 42);
+    int seq_final = std::any_cast<int>(seq_result.begin()->second);
     int seq_counter = counter.load();
 
     ThreadExecutor thread_executor(2);
     counter = 0;
-    std::any thread_result = thread_executor.execute(pipeline, 42);
-    int thread_final = std::any_cast<int>(thread_result);
+    PipelineOutput thread_result = thread_executor.execute(pipeline, 42);
+    int thread_final = std::any_cast<int>(thread_result.begin()->second);
     int thread_counter = counter.load();
 
     CHECK(seq_final == thread_final);
@@ -186,8 +186,8 @@ TEST_CASE("Pipeline - Multiple task chains") {
     pipeline.add_dependency(t2.id, t3.id);
 
     SequentialExecutor executor;
-    std::any result = executor.execute(pipeline, 10);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, 10);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 17);
 }
@@ -214,8 +214,8 @@ TEST_CASE("Pipeline - Complex task emission") {
 
     SequentialExecutor executor;
     std::vector<int> input = {2, 3, 4};
-    std::any result = executor.execute(pipeline, input);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, input);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 9);
 }
@@ -242,8 +242,8 @@ TEST_CASE("Pipeline - Thread safety") {
     pipeline.add_task<int, int>(thread_safe_task);
 
     ThreadExecutor executor(4);
-    std::any result = executor.execute(pipeline, 5);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, 5);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 5);
     CHECK(shared_counter.load() == 10);
@@ -264,14 +264,14 @@ TEST_CASE("Pipeline - Error handling") {
     SequentialExecutor executor;
 
     SUBCASE("Valid input") {
-        std::any result = executor.execute(pipeline, 5);
-        int final_result = std::any_cast<int>(result);
+        PipelineOutput result = executor.execute(pipeline, 5);
+        int final_result = result.get<int>();
         CHECK(final_result == 10);
     }
 
     SUBCASE("Invalid input") {
-        std::any result = executor.execute(pipeline, -5);
-        int final_result = std::any_cast<int>(result);
+        PipelineOutput result = executor.execute(pipeline, -5);
+        int final_result = result.get<int>();
         CHECK(final_result == -1);
     }
 }
@@ -296,8 +296,8 @@ TEST_CASE("Pipeline - Different executor thread counts") {
 
     for (int thread_count : thread_counts) {
         ThreadExecutor executor(thread_count);
-        std::any result = executor.execute(pipeline, 7);
-        int final_result = std::any_cast<int>(result);
+        PipelineOutput result = executor.execute(pipeline, 7);
+        int final_result = result.get<int>();
         CHECK(final_result == 21);
     }
 }
@@ -363,8 +363,8 @@ TEST_CASE("Pipeline - Multiple dependencies") {
     pipeline.add_dependency(t2.id, t3.id);
 
     SequentialExecutor executor;
-    std::any result = executor.execute(pipeline, 5);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, 5);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 25);
 }
@@ -424,8 +424,8 @@ TEST_CASE("Pipeline - Complex dependency graph") {
     pipeline.add_dependency(t4.id, t5.id);
 
     SequentialExecutor executor;
-    std::any result = executor.execute(pipeline, 2);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, 2);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 48);
 }
@@ -449,8 +449,8 @@ TEST_CASE("Pipeline - Task context usage") {
     pipeline.add_task<int, int>(context_task);
 
     SequentialExecutor executor;
-    std::any result = executor.execute(pipeline, 10);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, 10);
+    int final_result = result.get<int>();
 
     CHECK(final_result == 15);
     CHECK(emitted_tasks.size() == 1);
@@ -485,8 +485,8 @@ TEST_CASE("Pipeline - Large pipeline stress test") {
     }
 
     SequentialExecutor executor;
-    std::any result = executor.execute(pipeline, 0);
-    int final_result = std::any_cast<int>(result);
+    PipelineOutput result = executor.execute(pipeline, 0);
+    int final_result = result.get<int>();
 
     int expected = 0;
     for (int i = 0; i < 100; ++i) {

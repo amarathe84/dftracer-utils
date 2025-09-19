@@ -24,7 +24,7 @@ class ThreadExecutor : public Executor {
     ThreadExecutor(ThreadExecutor&&) = default;
     ThreadExecutor& operator=(ThreadExecutor&&) = default;
 
-    std::any execute(const Pipeline& pipeline, std::any input) override;
+    PipelineOutput execute(const Pipeline& pipeline, std::any input) override;
 };
 
 }  // namespace dftracer::utils

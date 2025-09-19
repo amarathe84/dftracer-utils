@@ -13,6 +13,7 @@ class PipelineError : public std::runtime_error {
         VALIDATION_ERROR,
         EXECUTION_ERROR,
         INITIALIZATION_ERROR,
+        OUTPUT_CONVERSION_ERROR,
         UNKNOWN_ERROR,
     };
 

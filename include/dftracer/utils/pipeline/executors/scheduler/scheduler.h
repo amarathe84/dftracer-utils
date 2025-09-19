@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_PIPELINE_EXECUTORS_SCHEDULER_H
 
 #include <dftracer/utils/common/typedefs.h>
+#include <dftracer/utils/pipeline/pipeline_output.h>
 #include <dftracer/utils/pipeline/tasks/task.h>
 
 #include <any>
@@ -14,7 +15,7 @@ class Pipeline;
 class Scheduler {
    public:
     virtual ~Scheduler() = default;
-    virtual std::any execute(const Pipeline& pipeline, std::any input) = 0;
+    virtual PipelineOutput execute(const Pipeline& pipeline, std::any input) = 0;
     virtual void submit(TaskIndex task_id, std::any input,
                         std::function<void(std::any)> completion_callback) = 0;
     virtual void submit(TaskIndex task_id, Task* task_ptr, std::any input,

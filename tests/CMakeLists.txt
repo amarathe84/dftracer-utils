@@ -20,70 +20,60 @@ target_link_libraries(
 # ##############################################################################
 
 # +++++++++++++++++++++++++++++++++++++++++
-# Test Reader (C++ API)
+# Test (C++ API)
 # +++++++++++++++++++++++++++++++++++++++++
 
-add_executable(test_reader test_reader.cpp)
-target_link_libraries(test_reader PRIVATE doctest::doctest testing_utilities)
-target_set_warnings(test_reader)
+set(TEST_CPP_SOURCES
+    test_reader.cpp
+    test_basic_factory.cpp
+    test_reader_formats.cpp
+    test_reader_tar_comprehensive.cpp
+    test_pipeline.cpp
+    test_reader_robustness.cpp)
 
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(test_reader PRIVATE --coverage -fprofile-arcs
-                                             -ftest-coverage)
-  target_link_libraries(test_reader PRIVATE --coverage)
-endif()
+foreach(test_file ${TEST_CPP_SOURCES})
+  string(REPLACE ".cpp" "" bin_exec ${test_file})
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "" bin_exec
+                 ${bin_exec})
 
-add_test(NAME test_reader COMMAND test_reader)
+  add_executable(${bin_exec} ${test_file})
+  target_link_libraries(${bin_exec} PRIVATE doctest::doctest testing_utilities)
+  target_set_warnings(${bin_exec})
+
+  # Apply coverage flags if enabled
+  if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${bin_exec} PRIVATE --coverage -fprofile-arcs
+                                               -ftest-coverage)
+    target_link_libraries(${bin_exec} PRIVATE --coverage)
+  endif()
+
+  add_test(NAME ${bin_exec} COMMAND ${bin_exec})
+endforeach()
 
 # +++++++++++++++++++++++++++++++++++++++++
 # Test Reader C API
 # +++++++++++++++++++++++++++++++++++++++++
 
-add_executable(test_reader_c test_reader.c)
-target_link_libraries(test_reader_c PRIVATE unity_lib testing_utilities)
+set(TEST_C_SOURCES test_reader.c)
 
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(test_reader_c PRIVATE --coverage -fprofile-arcs
-                                               -ftest-coverage)
-  target_link_libraries(test_reader_c PRIVATE --coverage)
-endif()
+foreach (test_file ${TEST_C_SOURCES})
+  string(REPLACE ".c" "" bin_exec ${test_file})
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "" bin_exec
+                 ${bin_exec})
+  set(bin_exec "${bin_exec}_c")
 
-add_test(NAME test_reader_c COMMAND test_reader_c)
+  add_executable(${bin_exec} ${test_file})
+  target_link_libraries(${bin_exec} PRIVATE unity_lib testing_utilities)
 
-# Test Robustness
+  # Apply coverage flags if enabled
+  if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${bin_exec} PRIVATE --coverage -fprofile-arcs
+                                                 -ftest-coverage)
+    target_link_libraries(${bin_exec} PRIVATE --coverage)
+  endif()
 
-add_executable(test_reader_robustness test_reader_robustness.cpp)
-target_link_libraries(test_reader_robustness PRIVATE doctest::doctest
-                                                     testing_utilities)
-target_set_warnings(test_reader_robustness)
-
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(test_reader_robustness
-                         PRIVATE --coverage -fprofile-arcs -ftest-coverage)
-  target_link_libraries(test_reader_robustness PRIVATE --coverage)
-endif()
-
-add_test(NAME test_reader_robustness COMMAND test_reader_robustness)
-
-# +++++++++++++++++++++++++++++++++++++++++
-# Test Pipeline
-# +++++++++++++++++++++++++++++++++++++++++
-
-add_executable(test_pipeline test_pipeline.cpp)
-target_link_libraries(test_pipeline PRIVATE doctest::doctest testing_utilities)
-target_set_warnings(test_pipeline)
-
-# Apply coverage flags if enabled
-if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(test_pipeline PRIVATE --coverage -fprofile-arcs
-                                               -ftest-coverage)
-  target_link_libraries(test_pipeline PRIVATE --coverage)
-endif()
-
-add_test(NAME test_pipeline COMMAND test_pipeline)
+  add_test(NAME ${bin_exec} COMMAND ${bin_exec})
+endforeach()
 
 # +++++++++++++++++++++++++++++++++++++++++
 # Python Tests (SKBUILD only)

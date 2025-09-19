@@ -37,10 +37,10 @@ ThreadExecutor::ThreadExecutor(size_t max_threads)
 
 ThreadExecutor::~ThreadExecutor() = default;
 
-std::any ThreadExecutor::execute(const Pipeline& pipeline, std::any input) {
+PipelineOutput ThreadExecutor::execute(const Pipeline& pipeline, std::any input) {
     ThreadScheduler scheduler;
     scheduler.initialize(max_threads_);
-    std::any result = scheduler.execute(pipeline, input);
+    PipelineOutput result = scheduler.execute(pipeline, input);
     scheduler.shutdown();
     return result;
 }

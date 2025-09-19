@@ -36,7 +36,7 @@ class ThreadScheduler : public Scheduler {
                 std::function<void(std::any)> completion_callback) override;
     void submit(TaskIndex task_id, Task* task_ptr, std::any input,
                 std::function<void(std::any)> completion_callback) override;
-    std::any execute(const Pipeline& pipeline, std::any input) override;
+    PipelineOutput execute(const Pipeline& pipeline, std::any input) override;
     void signal_task_completion() override;
 
    private:

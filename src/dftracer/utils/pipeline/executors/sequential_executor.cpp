@@ -10,7 +10,7 @@ namespace dftracer::utils {
 
 SequentialExecutor::SequentialExecutor() : Executor(ExecutorType::SEQUENTIAL) {}
 
-std::any SequentialExecutor::execute(const Pipeline& pipeline, std::any input) {
+PipelineOutput SequentialExecutor::execute(const Pipeline& pipeline, std::any input) {
     SequentialScheduler scheduler;
     return scheduler.execute(pipeline, input);
 }
