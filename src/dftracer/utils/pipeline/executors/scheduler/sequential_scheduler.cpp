@@ -44,7 +44,6 @@ PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
         if (execution_context.get_task_dependencies(i).empty()) {
             execute_task_with_dependencies(execution_context, i, input);
-            process_all_tasks();
         }
     }
 
