@@ -99,7 +99,7 @@ add_library(dftracer_utils::static ALIAS dftracer_utils)
 set_target_properties(dftracer_utils PROPERTIES OUTPUT_NAME dftracer_utils)
 target_link_libraries(
   dftracer_utils
-  PRIVATE xxHash::xxhash
+  PRIVATE xxHash::xxhash_static
   PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson)
 target_add_rpath(dftracer_utils)
 add_stdfs_if_needed(dftracer_utils)
@@ -183,7 +183,7 @@ foreach(bin ${DFTRACER_BINARIES})
   set_target_properties(${bin_exec} PROPERTIES OUTPUT_NAME "${bin_exec}")
   target_link_libraries(
     ${bin_exec} PRIVATE dftracer_utils argparse::argparse ghc_filesystem
-                        xxHash::xxhash yyjson)
+                        yyjson)
   link_sqlite3(${bin_exec} STATIC)
   link_zlib(${bin_exec} STATIC)
 
@@ -270,6 +270,9 @@ if(TARGET ghc_filesystem)
 endif()
 if(TARGET xxhash)
   list(APPEND INSTALLABLE_TARGETS xxhash)
+endif()
+if(TARGET xxhash_static)
+  list(APPEND INSTALLABLE_TARGETS xxhash_static)
 endif()
 if(TARGET yyjson)
   list(APPEND INSTALLABLE_TARGETS yyjson)

@@ -514,8 +514,30 @@ function(need_xxhash)
       v0.8.3
       OPTIONS
       "XXHASH_BUILD_XXHSUM OFF"
+      "XXHASH_BUNDLED_MODE ON"
       SOURCE_SUBDIR
-      cmake_unofficial)
+      cmake_unofficial
+      DOWNLOAD_ONLY YES)
+    if(xxhash_ADDED)
+      add_library(xxhash_static "${xxhash_SOURCE_DIR}/xxhash.c")
+      add_library(xxhash SHARED "${xxhash_SOURCE_DIR}/xxhash.c")
+      target_include_directories(
+        xxhash PUBLIC $<BUILD_INTERFACE:${xxhash_SOURCE_DIR}>
+                       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+      target_include_directories(
+        xxhash_static PUBLIC $<BUILD_INTERFACE:${xxhash_SOURCE_DIR}>
+                              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+      install(FILES ${xxhash_SOURCE_DIR}/xxhash.h
+              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+      install(TARGETS xxhash xxhash_static 
+              EXPORT xxhashTargets
+              ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+              LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+      add_library(xxHash::xxhash ALIAS xxhash)
+      add_library(xxHash::xxhash_static ALIAS xxhash_static)
+      message(STATUS "Added xxhash library")
+    endif()
   endif()
 endfunction()
 
