@@ -100,7 +100,7 @@ set_target_properties(dftracer_utils PROPERTIES OUTPUT_NAME dftracer_utils)
 target_link_libraries(
   dftracer_utils
   PRIVATE xxHash::xxhash_static
-  PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson)
+  PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson::yyjson_static)
 target_add_rpath(dftracer_utils)
 add_stdfs_if_needed(dftracer_utils)
 
@@ -139,7 +139,7 @@ set_target_properties(
 target_link_libraries(
   dftracer_utils_shared
   PRIVATE xxHash::xxhash
-  PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson)
+  PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson::yyjson)
 target_add_rpath(dftracer_utils_shared)
 add_stdfs_if_needed(dftracer_utils_shared)
 
@@ -182,8 +182,7 @@ foreach(bin ${DFTRACER_BINARIES})
   add_executable(${bin_exec} ${bin})
   set_target_properties(${bin_exec} PROPERTIES OUTPUT_NAME "${bin_exec}")
   target_link_libraries(
-    ${bin_exec} PRIVATE dftracer_utils argparse::argparse ghc_filesystem
-                        yyjson)
+    ${bin_exec} PRIVATE dftracer_utils argparse::argparse ghc_filesystem)
   link_sqlite3(${bin_exec} STATIC)
   link_zlib(${bin_exec} STATIC)
 
@@ -276,6 +275,9 @@ if(TARGET xxhash_static)
 endif()
 if(TARGET yyjson)
   list(APPEND INSTALLABLE_TARGETS yyjson)
+endif()
+if(TARGET yyjson_static)
+  list(APPEND INSTALLABLE_TARGETS yyjson_static)
 endif()
 if(TARGET dftracer_zlib)
   list(APPEND INSTALLABLE_TARGETS dftracer_zlib)

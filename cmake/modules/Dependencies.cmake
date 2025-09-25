@@ -55,8 +55,39 @@ function(need_yyjson)
       GIT_TAG
       0.12.0
       FORCE
+      YES
+      DOWNLOAD_ONLY
       YES)
   endif()
+
+  set(YYJSON_SOVERSION 0)
+  add_library(yyjson_static STATIC ${yyjson_SOURCE_DIR}/src/yyjson.h
+                                   ${yyjson_SOURCE_DIR}/src/yyjson.c)
+  add_library(yyjson SHARED ${yyjson_SOURCE_DIR}/src/yyjson.h
+                            ${yyjson_SOURCE_DIR}/src/yyjson.c)
+
+  target_include_directories(yyjson_static
+                             PUBLIC $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>)
+  set_target_properties(yyjson_static PROPERTIES VERSION ${PROJECT_VERSION}
+                                                 SOVERSION ${YYJSON_SOVERSION})
+
+  target_include_directories(yyjson
+                             PUBLIC $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>)
+  set_target_properties(yyjson PROPERTIES VERSION ${PROJECT_VERSION}
+                                          SOVERSION ${YYJSON_SOVERSION})
+
+  install(FILES ${yyjson_SOURCE_DIR}/src/yyjson.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(
+    TARGETS yyjson yyjson_static
+    EXPORT yyjsonTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+  add_library(yyjson::yyjson ALIAS yyjson)
+  add_library(yyjson::yyjson_static ALIAS yyjson_static)
+  message(STATUS "Added yyjson library")
 endfunction()
 
 function(need_sqlite3)
@@ -517,23 +548,25 @@ function(need_xxhash)
       "XXHASH_BUNDLED_MODE ON"
       SOURCE_SUBDIR
       cmake_unofficial
-      DOWNLOAD_ONLY YES)
+      DOWNLOAD_ONLY
+      YES)
     if(xxhash_ADDED)
       add_library(xxhash_static "${xxhash_SOURCE_DIR}/xxhash.c")
       add_library(xxhash SHARED "${xxhash_SOURCE_DIR}/xxhash.c")
       target_include_directories(
         xxhash PUBLIC $<BUILD_INTERFACE:${xxhash_SOURCE_DIR}>
-                       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+                      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
       target_include_directories(
         xxhash_static PUBLIC $<BUILD_INTERFACE:${xxhash_SOURCE_DIR}>
-                              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+                             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
       install(FILES ${xxhash_SOURCE_DIR}/xxhash.h
               DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-      install(TARGETS xxhash xxhash_static 
-              EXPORT xxhashTargets
-              ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-              LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+      install(
+        TARGETS xxhash xxhash_static
+        EXPORT xxhashTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
       add_library(xxHash::xxhash ALIAS xxhash)
       add_library(xxHash::xxhash_static ALIAS xxhash_static)
       message(STATUS "Added xxhash library")
