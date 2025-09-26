@@ -39,10 +39,7 @@ const char* test_environment_get_dir(test_environment_handle_t env);
 /**
  * Archive formats supported by the test environment
  */
-typedef enum {
-    TEST_FORMAT_GZIP = 0,
-    TEST_FORMAT_TAR_GZIP = 1
-} test_format_t;
+typedef enum { TEST_FORMAT_GZIP = 0, TEST_FORMAT_TAR_GZIP = 1 } test_format_t;
 
 /**
  * Create a test gzip file and return the path
@@ -54,7 +51,8 @@ char* test_environment_create_test_gzip_file(test_environment_handle_t env);
  * Create a test file with specified format and return the path
  * Returns allocated string - caller must free
  */
-char* test_environment_create_test_file_with_format(test_environment_handle_t env, test_format_t format);
+char* test_environment_create_test_file_with_format(
+    test_environment_handle_t env, test_format_t format);
 
 /**
  * Create a tar.gz archive with multiple files
@@ -66,17 +64,20 @@ char* test_environment_create_test_tar_gzip_file(test_environment_handle_t env);
  * Create a tar archive and then compress it to gzip
  * Returns 1 on success, 0 on failure
  */
-int create_tar_archive_and_compress(const char** file_paths, size_t num_files, const char* output_file);
+int create_tar_archive_and_compress(const char** file_paths, size_t num_files,
+                                    const char* output_file);
 
 /**
  * Extract a specific file from tar.gz archive
  * Returns 1 on success, 0 on failure
  */
-int extract_file_from_tar_gz(const char* tar_gz_path, const char* file_path, const char* output_path);
+int extract_file_from_tar_gz(const char* tar_gz_path, const char* file_path,
+                             const char* output_path);
 
 /**
  * Get list of files in tar archive
- * Returns allocated array of strings - caller must free each string and the array
+ * Returns allocated array of strings - caller must free each string and the
+ * array
  */
 char** get_tar_file_list(const char* tar_path, size_t* num_files);
 
@@ -105,10 +106,7 @@ size_t mb_to_b(double mb);
 
 namespace dft_utils_test {
 
-enum class Format {
-    GZIP = 0,
-    TAR_GZIP = 1
-};
+enum class Format { GZIP = 0, TAR_GZIP = 1 };
 
 struct TarFileInfo {
     std::string filename;
@@ -119,10 +117,14 @@ struct TarFileInfo {
 bool compress_file_to_gzip(const std::string& input_file,
                            const std::string& output_file);
 
-bool create_tar_archive(const std::vector<TarFileInfo>& files, const std::string& output_path);
-bool create_tar_gz_archive(const std::vector<TarFileInfo>& files, const std::string& output_path);
+bool create_tar_archive(const std::vector<TarFileInfo>& files,
+                        const std::string& output_path);
+bool create_tar_gz_archive(const std::vector<TarFileInfo>& files,
+                           const std::string& output_path);
 std::vector<std::string> list_tar_contents(const std::string& tar_path);
-bool extract_from_tar_gz(const std::string& tar_gz_path, const std::string& file_path, const std::string& output_path);
+bool extract_from_tar_gz(const std::string& tar_gz_path,
+                         const std::string& file_path,
+                         const std::string& output_path);
 
 class TestEnvironment {
    public:
@@ -135,7 +137,7 @@ class TestEnvironment {
 
     const std::string& get_dir() const;
     bool is_valid() const;
-    std::string create_test_file(); // Format-aware file creation
+    std::string create_test_file();  // Format-aware file creation
     std::string create_test_gzip_file();
     std::string create_test_tar_gzip_file();
     std::string get_index_path(const std::string& gz_file);
@@ -145,7 +147,7 @@ class TestEnvironment {
     std::size_t num_lines;
     std::string test_dir;
     Format format_;
-    
+
     std::string create_test_gzip_file_impl();
     std::string create_test_tar_gzip_file_impl();
 };

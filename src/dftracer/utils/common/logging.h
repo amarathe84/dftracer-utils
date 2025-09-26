@@ -6,10 +6,10 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cinttypes>
+#include <cstdint>
 #include <cstdio>
 #include <string>
-#include <cstdint>
-#include <cinttypes>
 
 namespace dftracer::utils {
 inline std::string dftracer_utils_macro_get_time() {

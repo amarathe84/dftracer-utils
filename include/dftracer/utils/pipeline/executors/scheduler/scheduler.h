@@ -15,7 +15,8 @@ class Pipeline;
 class Scheduler {
    public:
     virtual ~Scheduler() = default;
-    virtual PipelineOutput execute(const Pipeline& pipeline, std::any input) = 0;
+    virtual PipelineOutput execute(const Pipeline& pipeline,
+                                   std::any input) = 0;
     virtual void submit(TaskIndex task_id, std::any input,
                         std::function<void(std::any)> completion_callback) = 0;
     virtual void submit(TaskIndex task_id, Task* task_ptr, std::any input,

@@ -47,7 +47,7 @@ class TaskContext {
         TaskIndex task_id =
             execution_context_->add_dynamic_task(std::move(task), -1);
         schedule(task_id, std::move(input.value));
-        return TaskResult<O>{task_id, std::move(future)};
+        return TaskResult<O>{task_id, std::move(future), execution_context_};
     }
 
     template <typename I, typename O>
@@ -71,7 +71,7 @@ class TaskContext {
 
         TaskIndex task_id = execution_context_->add_dynamic_task(
             std::move(task), depends_on.id);
-        return TaskResult<O>{task_id, std::move(future)};
+        return TaskResult<O>{task_id, std::move(future), execution_context_};
     }
 
     template <typename I, typename O>
@@ -84,7 +84,7 @@ class TaskContext {
             std::move(task), depends_on.id);
 
         schedule(task_id, std::move(input.value));
-        return TaskResult<O>{task_id, std::move(future)};
+        return TaskResult<O>{task_id, std::move(future), execution_context_};
     }
 
     TaskIndex current() const { return current_task_id_; }

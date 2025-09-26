@@ -90,11 +90,11 @@ int main(int argc, char** argv) {
 
         // Build index if needed
         if (force_rebuild || indexer->need_rebuild()) {
-            DFTRACER_UTILS_LOG_INFO("Building index...");
+            DFTRACER_UTILS_LOG_INFO("%s", "Building index...");
             indexer->build();
-            DFTRACER_UTILS_LOG_INFO("Index built successfully");
+            DFTRACER_UTILS_LOG_INFO("%s", "Index built successfully");
         } else {
-            DFTRACER_UTILS_LOG_INFO("Index is up to date");
+            DFTRACER_UTILS_LOG_INFO("%s", "Index is up to date");
         }
 
         if (build_only) {

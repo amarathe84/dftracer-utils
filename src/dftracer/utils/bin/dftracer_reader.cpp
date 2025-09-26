@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
         if (check_rebuild) {
             if (!indexer->need_rebuild()) {
                 DFTRACER_UTILS_LOG_DEBUG(
-                    "Index is up to date, no rebuild needed");
+                    "%s", "Index is up to date, no rebuild needed");
                 return 0;
             }
         }
@@ -197,7 +197,8 @@ int main(int argc, char **argv) {
             if (end_bytes_ > max_bytes) {
                 end_bytes_ = max_bytes;
             }
-            DFTRACER_UTILS_LOG_DEBUG("Performing byte range read operation");
+            DFTRACER_UTILS_LOG_DEBUG("%s",
+                                     "Performing byte range read operation");
             DFTRACER_UTILS_LOG_DEBUG("Using read buffer size: %zu bytes",
                                      read_buffer_size);
             auto buffer = std::make_unique<char[]>(read_buffer_size);

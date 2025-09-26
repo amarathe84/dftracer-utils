@@ -19,7 +19,7 @@ struct TraceReader {
 
     TraceReader(const std::vector<std::string>& traces_,
                 std::size_t batch_size_)
-        : traces(traces_), batch_size(batch_size_){};
+        : traces(traces_), batch_size(batch_size_) {};
     Pipeline build();
 };
 

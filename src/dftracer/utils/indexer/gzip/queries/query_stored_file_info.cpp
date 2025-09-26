@@ -13,7 +13,8 @@ bool query_stored_file_info(const SqliteDatabase &db,
     stmt.bind_text(1, gz_path);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        std::uint64_t hash = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 0));
+        std::uint64_t hash =
+            static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 0));
         if (hash == 0) {
             return false;
         }

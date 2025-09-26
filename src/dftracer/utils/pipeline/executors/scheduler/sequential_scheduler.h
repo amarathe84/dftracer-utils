@@ -30,7 +30,6 @@ class SequentialScheduler : public Scheduler {
     };
 
     std::queue<TaskItem> task_queue_;
-    std::unordered_map<TaskIndex, std::any> task_outputs_;
     std::unordered_map<TaskIndex, bool>
         task_completed_;    // Track task completion status
     std::unordered_map<TaskIndex, std::size_t>
@@ -47,8 +46,7 @@ class SequentialScheduler : public Scheduler {
                 std::function<void(std::any)> completion_callback) override;
     void submit(TaskIndex task_id, Task* task_ptr, std::any input,
                 std::function<void(std::any)> completion_callback) override;
-    void signal_task_completion() override { /* no-op */
-    }
+    void signal_task_completion() override { /* no-op */ }
 
    private:
     void execute_task_with_dependencies(ExecutorContext& execution_context,

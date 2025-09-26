@@ -120,7 +120,17 @@ const std::vector<TaskIndex>& ExecutorContext::get_dynamic_dependents(
 }
 
 void ExecutorContext::set_task_output(TaskIndex index, std::any output) {
-    task_outputs_[index] = std::move(output);
+    auto task_output = std::make_unique<ExecutorTaskOutput>();
+    task_output->data = std::move(output);
+
+    // Count downstream dependencies that will need this output
+    const auto& dependents = get_task_dependents(index);
+    task_output->dependency_refs = static_cast<int>(dependents.size());
+
+    // User refs start at 0, will be incremented when TaskResult is created
+    task_output->user_refs = 0;
+
+    task_outputs_[index] = std::move(task_output);
 
     // Clean up promise after task completion (promise already fulfilled in
     // wrapped function)
@@ -132,7 +142,7 @@ void ExecutorContext::set_task_output(TaskIndex index, std::any output) {
 
 std::any ExecutorContext::get_task_output(TaskIndex index) const {
     auto it = task_outputs_.find(index);
-    return (it != task_outputs_.end()) ? it->second : std::any{};
+    return (it != task_outputs_.end()) ? it->second->data : std::any{};
 }
 
 void ExecutorContext::set_task_completed(TaskIndex index, bool completed) {
@@ -185,13 +195,13 @@ void ExecutorContext::reset() {
 bool ExecutorContext::validate() const {
     // Check if pipeline is empty
     if (is_empty()) {
-        DFTRACER_UTILS_LOG_ERROR("Pipeline is empty");
+        DFTRACER_UTILS_LOG_ERROR("%s", "Pipeline is empty");
         return false;
     }
 
     // Check for cycles
     if (has_cycles()) {
-        DFTRACER_UTILS_LOG_ERROR("Pipeline contains cycles");
+        DFTRACER_UTILS_LOG_ERROR("%s", "Pipeline contains cycles");
         return false;
     }
 
@@ -238,5 +248,42 @@ bool ExecutorContext::validate() const {
 bool ExecutorContext::is_empty() const { return pipeline_->empty(); }
 
 bool ExecutorContext::has_cycles() const { return pipeline_->has_cycles(); }
+
+void ExecutorContext::increment_user_ref(TaskIndex index) {
+    auto it = task_outputs_.find(index);
+    if (it != task_outputs_.end()) {
+        it->second->user_refs.fetch_add(1);
+    }
+}
+
+void ExecutorContext::release_user_ref(TaskIndex index) {
+    auto it = task_outputs_.find(index);
+    if (it != task_outputs_.end()) {
+        it->second->user_refs.fetch_sub(1);
+        if (it->second->can_cleanup()) {
+            task_outputs_.erase(index);
+        }
+    }
+}
+
+std::any ExecutorContext::consume_task_output(TaskIndex index) {
+    auto it = task_outputs_.find(index);
+    if (it == task_outputs_.end()) {
+        return std::any{};
+    }
+
+    // Copy the data before potentially cleaning up
+    std::any result = it->second->data;
+
+    // Decrement dependency reference
+    it->second->dependency_refs.fetch_sub(1);
+
+    // Cleanup if no more references
+    if (it->second->can_cleanup()) {
+        task_outputs_.erase(index);
+    }
+
+    return result;
+}
 
 }  // namespace dftracer::utils

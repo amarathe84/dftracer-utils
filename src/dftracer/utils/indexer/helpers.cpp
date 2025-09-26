@@ -12,11 +12,11 @@
 #endif
 
 #include <chrono>
+#include <cstdio>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <vector>
-#include <cstdio>
 
 std::string get_logical_path(const std::string &path) {
     auto fs_path = fs::path(path);
@@ -53,7 +53,7 @@ std::uint64_t calculate_file_hash(const std::string &file_path) {
     // Use much larger buffer for better I/O performance on large files
     constexpr size_t HASH_BUFFER_SIZE = 1024 * 1024;  // 1MB buffer
 
-    FILE* file = std::fopen(file_path.c_str(), "rb");
+    FILE *file = std::fopen(file_path.c_str(), "rb");
     if (!file) {
         DFTRACER_UTILS_LOG_ERROR("Cannot open file for XXH3 calculation: %s",
                                  file_path.c_str());
@@ -75,8 +75,9 @@ std::uint64_t calculate_file_hash(const std::string &file_path) {
     std::vector<unsigned char> buffer(HASH_BUFFER_SIZE);
 
     std::size_t bytes_read = 0;
-    while ((bytes_read = std::fread(buffer.data(), 1, buffer.size(), file)) > 0) {
-      XXH3_64bits_update(state, buffer.data(), bytes_read);
+    while ((bytes_read = std::fread(buffer.data(), 1, buffer.size(), file)) >
+           0) {
+        XXH3_64bits_update(state, buffer.data(), bytes_read);
     }
     std::fclose(file);
 
@@ -87,7 +88,7 @@ std::uint64_t calculate_file_hash(const std::string &file_path) {
 }
 
 std::uint64_t file_size_bytes(const std::string &path) {
-    struct stat st {};
+    struct stat st{};
     if (stat(path.c_str(), &st) == 0) {
 #if defined(_WIN32)
         if ((st.st_mode & _S_IFREG) != 0)

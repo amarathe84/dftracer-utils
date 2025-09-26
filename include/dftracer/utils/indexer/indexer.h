@@ -31,11 +31,12 @@ void dft_indexer_destroy(dft_indexer_handle_t indexer);
 #ifdef __cplusplus
 }
 
+#include <dftracer/utils/common/archive_format.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <dftracer/utils/common/archive_format.h>
 
 namespace dftracer::utils {
 

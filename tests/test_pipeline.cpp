@@ -32,7 +32,7 @@ TEST_CASE("Pipeline - Sequential execution") {
 
     SequentialExecutor executor;
     executor.execute(pipeline, 21);
-    int final_result = task_result.future.get();
+    int final_result = task_result.get();
 
     CHECK(final_result == 42);
 }
@@ -46,7 +46,7 @@ TEST_CASE("Pipeline - Thread execution") {
 
     ThreadExecutor executor(2);
     executor.execute(pipeline, 21);
-    int final_result = task_result.future.get();
+    int final_result = task_result.get();
 
     CHECK(final_result == 42);
 }
@@ -67,8 +67,8 @@ TEST_CASE("Pipeline - Task dependencies") {
     SequentialExecutor executor;
     executor.execute(pipeline, 5);
 
-    CHECK(t1.future.get() == 15);
-    CHECK(t2.future.get() == 30);
+    CHECK(t1.get() == 15);
+    CHECK(t2.get() == 30);
 }
 
 TEST_CASE("Pipeline - Task emission") {
@@ -504,7 +504,7 @@ TEST_CASE("TaskResult - Basic future functionality") {
     SequentialExecutor executor;
     executor.execute(pipeline, 5);
 
-    CHECK(result.future.get() == 15);
+    CHECK(result.get() == 15);
 }
 
 TEST_CASE("TaskResult - Multiple task futures") {
@@ -520,8 +520,8 @@ TEST_CASE("TaskResult - Multiple task futures") {
     SequentialExecutor executor;
     executor.execute(pipeline, 5);
 
-    CHECK(result1.future.get() == 15);
-    CHECK(result2.future.get() == 30);
+    CHECK(result1.get() == 15);
+    CHECK(result2.get() == 30);
 }
 
 TEST_CASE("TaskResult - Exception propagation") {
@@ -537,7 +537,7 @@ TEST_CASE("TaskResult - Exception propagation") {
     SequentialExecutor executor;
     executor.execute(pipeline, -5);
 
-    CHECK_THROWS_AS(result.future.get(), std::runtime_error);
+    CHECK_THROWS_AS(result.get(), std::runtime_error);
 }
 
 TEST_CASE("TaskResult - Thread executor futures") {
@@ -553,7 +553,7 @@ TEST_CASE("TaskResult - Thread executor futures") {
     ThreadExecutor executor(2);
     executor.execute(pipeline, 7);
 
-    CHECK(result.future.get() == 28);
+    CHECK(result.get() == 28);
 }
 
 TEST_CASE("TaskResult - Dynamic task futures") {
@@ -578,7 +578,7 @@ TEST_CASE("TaskResult - Dynamic task futures") {
     std::vector<int> input = {2, 3, 4};
     executor.execute(pipeline, input);
 
-    CHECK(result.future.get() == 9);
+    CHECK(result.get() == 9);
     CHECK(dynamic_futures.size() == 3);
     CHECK(dynamic_futures[0].get() == 4);
     CHECK(dynamic_futures[1].get() == 9);
@@ -601,6 +601,6 @@ TEST_CASE("TaskResult - Mixed static and dynamic futures") {
     SequentialExecutor executor;
     executor.execute(pipeline, 42);
 
-    CHECK(static_result.future.get() == "processed 42");
+    CHECK(static_result.get() == "processed 42");
     CHECK(emit_future.get() == 142);
 }

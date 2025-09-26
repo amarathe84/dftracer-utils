@@ -1,7 +1,7 @@
 {
   description = "DFTracer Utilities";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs = { self, nixpkgs }:
   let
@@ -13,7 +13,7 @@
   {
     devShells = forAllSystems (system: pkgs:
       let
-        gcc = pkgs.gcc12;
+        gcc = pkgs.gcc14;
       in {
         default = pkgs.mkShell {
           packages = [ gcc ] ++ (with pkgs; [
@@ -24,10 +24,11 @@
             lcov
             openmpi
             cmake-format
+            # valgrind-light
             # sqlite
             # zlib
             # spdlog
-            (python39.withPackages (p: [
+            (python310.withPackages (p: [
               p.cython
               p.setuptools
               p.wheel

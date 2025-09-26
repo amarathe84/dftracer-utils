@@ -10,23 +10,62 @@
 namespace dftracer::utils {
 
 class TaskContext;
+class ExecutorContext;
 
 template <typename O>
-struct TaskResult {
+class TaskResult {
+   public:
     TaskIndex id;
     std::future<O> future;
 
-    TaskResult(TaskIndex task_id, std::future<O> task_future)
-        : id(task_id), future(std::move(task_future)) {}
-
-    // Move-only semantics
     TaskResult(const TaskResult&) = delete;
     TaskResult& operator=(const TaskResult&) = delete;
-    TaskResult(TaskResult&&) = default;
-    TaskResult& operator=(TaskResult&&) = default;
+
+    TaskResult(TaskResult&& other)
+        : id(other.id),
+          future(std::move(other.future)),
+          context_(other.context_) {
+        other.context_ = nullptr;
+    }
+
+    O get() { return future.get(); }
+
+    TaskResult& operator=(TaskResult&& other) {
+        if (this != &other) {
+            if (context_) context_->release_user_ref(id);
+            id = other.id;
+            future = std::move(other.future);
+            context_ = other.context_;
+            other.context_ = nullptr;
+        }
+        return *this;
+    }
+
+    ~TaskResult() {
+        if (context_) context_->release_user_ref(id);
+    }
+
+   private:
+    ExecutorContext* context_;
+
+    // Constructor for dynamic tasks (with ref counting)
+    TaskResult(TaskIndex task_id, std::future<O> task_future,
+               ExecutorContext* ctx)
+        : id(task_id), future(std::move(task_future)), context_(ctx) {
+        if (context_) context_->increment_user_ref(id);
+    }
+
+    // Constructor for pipeline tasks (no ref counting - these are terminal
+    // outputs)
+    TaskResult(TaskIndex task_id, std::future<O> task_future)
+        : id(task_id), future(std::move(task_future)), context_(nullptr) {
+        // No ref counting needed - pipeline tasks are terminal by definition
+    }
+
+    friend class Pipeline;
+    friend class TaskContext;
 };
 
-// Utility function to wrap any function with promise fulfillment
 template <typename I, typename O>
 std::pair<std::function<O(I, TaskContext&)>, std::future<O>>
 wrap_function_with_promise(std::function<O(I, TaskContext&)> func) {

@@ -306,7 +306,8 @@ int main(int argc, char** argv) {
     // Validate output file extension
     if (output_file.size() < 4 ||
         output_file.substr(output_file.size() - 4) != ".pfw") {
-        DFTRACER_UTILS_LOG_ERROR("Output file should have .pfw extension");
+        DFTRACER_UTILS_LOG_ERROR("%s",
+                                 "Output file should have .pfw extension");
         return 1;
     }
 

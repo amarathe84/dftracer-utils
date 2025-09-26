@@ -29,7 +29,8 @@ void insert_archive_metadata_record(const SqliteDatabase &db, int archive_id,
 
 bool query_stored_file_info(const SqliteDatabase &db,
                             const std::string &tar_gz_path,
-                            std::uint64_t &stored_hash, std::time_t &stored_mtime);
+                            std::uint64_t &stored_hash,
+                            std::time_t &stored_mtime);
 
 // TAR file entries
 struct InsertTarFileData {

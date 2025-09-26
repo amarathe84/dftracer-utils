@@ -47,7 +47,6 @@ class ThreadScheduler : public Scheduler {
     std::atomic<std::size_t> active_tasks_{0};
     std::condition_variable cv_;
     std::mutex cv_mutex_;
-    std::unordered_map<TaskIndex, std::any> task_outputs_;
     std::unordered_map<TaskIndex, std::atomic<bool>> task_completed_;
     std::unordered_map<TaskIndex, std::atomic<int>> dependency_count_;
     ExecutorContext* current_execution_context_;

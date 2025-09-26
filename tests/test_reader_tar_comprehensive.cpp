@@ -29,18 +29,21 @@ TEST_CASE("TAR.GZ Indexer - Basic functionality") {
     std::string idx_file = env.get_index_path(tar_gz_file);
 
     SUBCASE("Build index") {
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
         REQUIRE(indexer != nullptr);
         CHECK_NOTHROW(indexer->build());
     }
 
     SUBCASE("Check rebuild needed") {
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
         REQUIRE(indexer != nullptr);
         CHECK(indexer->need_rebuild());  // Should need rebuild initially
 
         indexer->build();
-        CHECK_FALSE(indexer->need_rebuild());  // Should not need rebuild after building
+        CHECK_FALSE(
+            indexer->need_rebuild());  // Should not need rebuild after building
     }
 
     SUBCASE("Getter methods") {
@@ -84,7 +87,8 @@ TEST_CASE("TAR.GZ Reader - Basic functionality") {
 
     // Build index first
     {
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
         REQUIRE(indexer != nullptr);
         indexer->build();
     }
@@ -103,7 +107,7 @@ TEST_CASE("TAR.GZ Reader - Basic functionality") {
         REQUIRE(reader2 != nullptr);
         CHECK(reader2->is_valid());
     }
-    
+
     SUBCASE("Get max bytes") {
         auto reader = ReaderFactory::create(tar_gz_file, idx_file);
         REQUIRE(reader != nullptr);
@@ -133,8 +137,10 @@ TEST_CASE("TAR.GZ Reader - Basic functionality") {
         std::size_t bytes_read;
         std::size_t current_pos = 0;
         while (current_pos < 50) {
-            std::size_t end_pos = std::min(current_pos + buffer_size, static_cast<std::size_t>(50));
-            bytes_read = reader->read(current_pos, end_pos, buffer, buffer_size);
+            std::size_t end_pos = std::min(current_pos + buffer_size,
+                                           static_cast<std::size_t>(50));
+            bytes_read =
+                reader->read(current_pos, end_pos, buffer, buffer_size);
             if (bytes_read == 0) break;
             result.append(buffer, bytes_read);
             current_pos += bytes_read;
@@ -162,7 +168,8 @@ TEST_CASE("TAR.GZ Reader - Basic functionality") {
 }
 
 TEST_CASE("TAR.GZ API - Multi-file content validation") {
-    TestEnvironment env(300, Format::TAR_GZIP);  // Multiple files with decent content
+    TestEnvironment env(
+        300, Format::TAR_GZIP);  // Multiple files with decent content
     REQUIRE(env.is_valid());
 
     std::string tar_gz_file = env.create_test_tar_gzip_file();
@@ -172,7 +179,8 @@ TEST_CASE("TAR.GZ API - Multi-file content validation") {
 
     // Build index first
     {
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
         REQUIRE(indexer != nullptr);
         indexer->build();
     }
@@ -182,33 +190,37 @@ TEST_CASE("TAR.GZ API - Multi-file content validation") {
 
     SUBCASE("Verify multiple file content is accessible") {
         std::size_t max_bytes = reader->get_max_bytes();
-        
+
         // Read entire file content
         std::string full_content;
         char buffer[4096];
         std::size_t bytes_read;
-        
+
         std::size_t current_pos = 0;
         while (current_pos < max_bytes) {
-            std::size_t end_pos = std::min(current_pos + sizeof(buffer), max_bytes);
-            bytes_read = reader->read(current_pos, end_pos, buffer, sizeof(buffer));
+            std::size_t end_pos =
+                std::min(current_pos + sizeof(buffer), max_bytes);
+            bytes_read =
+                reader->read(current_pos, end_pos, buffer, sizeof(buffer));
             if (bytes_read == 0) break;
             full_content.append(buffer, bytes_read);
             current_pos += bytes_read;
         }
-        
+
         // Should contain data from multiple files in the TAR.GZ
         CHECK(full_content.find("\"file\": \"main\"") != std::string::npos);
-        CHECK(full_content.find("\"file\": \"secondary\"") != std::string::npos);
-        CHECK(full_content.find("\"file\": \"additional\"") != std::string::npos);
-        
+        CHECK(full_content.find("\"file\": \"secondary\"") !=
+              std::string::npos);
+        CHECK(full_content.find("\"file\": \"additional\"") !=
+              std::string::npos);
+
         // Should contain directory structure
         CHECK(full_content.find("logs/additional.jsonl") != std::string::npos);
-        
+
         // Should contain metadata
         CHECK(full_content.find("\"format\": \"tar.gz\"") != std::string::npos);
     }
-    
+
     SUBCASE("JSON boundary detection with multi-file content") {
         char buffer[2048];
         std::string content;
@@ -216,8 +228,10 @@ TEST_CASE("TAR.GZ API - Multi-file content validation") {
 
         std::size_t current_pos = 0;
         while (current_pos < 500) {
-            std::size_t end_pos = std::min(current_pos + sizeof(buffer), static_cast<std::size_t>(500));
-            bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer, sizeof(buffer));
+            std::size_t end_pos = std::min(current_pos + sizeof(buffer),
+                                           static_cast<std::size_t>(500));
+            bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer,
+                                                 sizeof(buffer));
             if (bytes_read == 0) break;
             content.append(buffer, bytes_read);
             current_pos += bytes_read;
@@ -231,16 +245,20 @@ TEST_CASE("TAR.GZ API - Multi-file content validation") {
         // Should contain valid JSON structure
         std::size_t last_brace = content.rfind('}');
         REQUIRE(last_brace != std::string::npos);
-        CHECK(last_brace < content.length() - 1);  // '}' should not be the last character
-        CHECK(content[last_brace + 1] == '\n');    // Should be followed by newline
-        
+        CHECK(last_brace <
+              content.length() - 1);  // '}' should not be the last character
+        CHECK(content[last_brace + 1] ==
+              '\n');                  // Should be followed by newline
+
         // Should not end with incomplete JSON
-        CHECK(content.find("\"message_") == std::string::npos);  // No partial field names
+        CHECK(content.find("\"message_") ==
+              std::string::npos);  // No partial field names
     }
 }
 
 TEST_CASE("TAR.GZ API - JSON boundary detection") {
-    TestEnvironment env(1000, Format::TAR_GZIP);  // More lines for better boundary testing
+    TestEnvironment env(
+        1000, Format::TAR_GZIP);  // More lines for better boundary testing
     REQUIRE(env.is_valid());
 
     std::string tar_gz_file = env.create_test_tar_gzip_file();
@@ -250,7 +268,8 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
 
     // Build index first
     {
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
         REQUIRE(indexer != nullptr);
         indexer->build();
     }
@@ -260,15 +279,18 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
     REQUIRE(reader != nullptr);
 
     SUBCASE("Small range should provide minimum requested bytes") {
-        // Request 100 bytes - should get AT LEAST 100 bytes due to boundary extension
+        // Request 100 bytes - should get AT LEAST 100 bytes due to boundary
+        // extension
         char buffer[2048];
         std::string content;
         std::size_t bytes_read;
 
         std::size_t current_pos = 0;
         while (current_pos < 100) {
-            std::size_t end_pos = std::min(current_pos + sizeof(buffer), static_cast<std::size_t>(100));
-            bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer, sizeof(buffer));
+            std::size_t end_pos = std::min(current_pos + sizeof(buffer),
+                                           static_cast<std::size_t>(100));
+            bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer,
+                                                 sizeof(buffer));
             if (bytes_read == 0) break;
             content.append(buffer, bytes_read);
             current_pos += bytes_read;
@@ -282,8 +304,10 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
         // Should contain complete JSON objects
         std::size_t last_brace = content.rfind('}');
         REQUIRE(last_brace != std::string::npos);
-        CHECK(last_brace < content.length() - 1);  // '}' should not be the last character
-        CHECK(content[last_brace + 1] == '\n');    // Should be followed by newline
+        CHECK(last_brace <
+              content.length() - 1);  // '}' should not be the last character
+        CHECK(content[last_brace + 1] ==
+              '\n');                  // Should be followed by newline
     }
 
     SUBCASE("Output should not cut off in middle of JSON") {
@@ -294,8 +318,10 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
 
         std::size_t current_pos = 0;
         while (current_pos < 500) {
-            std::size_t end_pos = std::min(current_pos + sizeof(buffer), static_cast<std::size_t>(500));
-            bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer, sizeof(buffer));
+            std::size_t end_pos = std::min(current_pos + sizeof(buffer),
+                                           static_cast<std::size_t>(500));
+            bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer,
+                                                 sizeof(buffer));
             if (bytes_read == 0) break;
             content.append(buffer, bytes_read);
             current_pos += bytes_read;
@@ -306,7 +332,8 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
         // Should not end with partial JSON like {"name":"name_%
         std::size_t name_pos = content.find("\"name_");
         std::size_t last_brace_pos = content.rfind('}');
-        bool has_incomplete_name = (name_pos != std::string::npos) && (name_pos > last_brace_pos);
+        bool has_incomplete_name =
+            (name_pos != std::string::npos) && (name_pos > last_brace_pos);
         CHECK_FALSE(has_incomplete_name);
 
         // Verify it ends with complete JSON boundary (}\n)
@@ -317,7 +344,8 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
     }
 
     SUBCASE("Multiple range reads should maintain boundaries across files") {
-        // Read multiple consecutive ranges that might span different files in TAR.GZ
+        // Read multiple consecutive ranges that might span different files in
+        // TAR.GZ
         std::vector<std::string> segments;
         std::size_t current_pos = 0;
         std::size_t segment_size = 200;
@@ -328,7 +356,8 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
             std::size_t bytes_read;
 
             while ((bytes_read = reader->read_line_bytes(
-                        current_pos, current_pos + segment_size, buffer, sizeof(buffer))) > 0) {
+                        current_pos, current_pos + segment_size, buffer,
+                        sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
 
@@ -338,7 +367,8 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
             CHECK(!content.empty());
             CHECK(content.back() == '\n');
 
-            // Verify all lines in segment are complete (no partial lines in middle)
+            // Verify all lines in segment are complete (no partial lines in
+            // middle)
             std::size_t newline_count = 0;
             for (char c : content) {
                 if (c == '\n') newline_count++;
@@ -356,7 +386,8 @@ TEST_CASE("TAR.GZ API - JSON boundary detection") {
                 json_count++;
                 pos += 2;
             }
-            CHECK(json_count > 0);  // Should have at least one complete JSON object
+            CHECK(json_count >
+                  0);  // Should have at least one complete JSON object
         }
     }
 }
@@ -372,7 +403,8 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
 
     // Build index first
     {
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
         REQUIRE(indexer != nullptr);
         indexer->build();
     }
@@ -390,8 +422,10 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
         std::size_t bytes_read;
         std::size_t current_pos = 0;
         while (current_pos < 50) {
-            std::size_t end_pos = std::min(current_pos + buffer_size, static_cast<std::size_t>(50));
-            bytes_read = reader->read(current_pos, end_pos, buffer, buffer_size);
+            std::size_t end_pos = std::min(current_pos + buffer_size,
+                                           static_cast<std::size_t>(50));
+            bytes_read =
+                reader->read(current_pos, end_pos, buffer, buffer_size);
             if (bytes_read == 0) break;
             raw_result.append(buffer, bytes_read);
             current_pos += bytes_read;
@@ -401,7 +435,8 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
         CHECK(!raw_result.empty());
 
         // Raw read should not care about JSON boundaries
-        CHECK(raw_result.size() <= 60);  // Should be much closer to 50 than regular read
+        CHECK(raw_result.size() <=
+              60);  // Should be much closer to 50 than regular read
     }
 
     SUBCASE("Compare raw vs regular read for TAR.GZ") {
@@ -417,8 +452,10 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
         std::size_t bytes_read1;
         std::size_t current_pos1 = 0;
         while (current_pos1 < 100) {
-            std::size_t end_pos = std::min(current_pos1 + buffer_size, static_cast<std::size_t>(100));
-            bytes_read1 = reader1->read(current_pos1, end_pos, buffer1, buffer_size);
+            std::size_t end_pos = std::min(current_pos1 + buffer_size,
+                                           static_cast<std::size_t>(100));
+            bytes_read1 =
+                reader1->read(current_pos1, end_pos, buffer1, buffer_size);
             if (bytes_read1 == 0) break;
             raw_result.append(buffer1, bytes_read1);
             current_pos1 += bytes_read1;
@@ -428,8 +465,10 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
         std::size_t bytes_read2;
         std::size_t current_pos2 = 0;
         while (current_pos2 < 100) {
-            std::size_t end_pos = std::min(current_pos2 + buffer_size, static_cast<std::size_t>(100));
-            bytes_read2 = reader2->read_line_bytes(current_pos2, end_pos, buffer2, buffer_size);
+            std::size_t end_pos = std::min(current_pos2 + buffer_size,
+                                           static_cast<std::size_t>(100));
+            bytes_read2 = reader2->read_line_bytes(current_pos2, end_pos,
+                                                   buffer2, buffer_size);
             if (bytes_read2 == 0) break;
             regular_result.append(buffer2, bytes_read2);
             current_pos2 += bytes_read2;
@@ -439,18 +478,22 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
         CHECK(raw_result.size() == 100);
         CHECK(regular_result.size() <= 100);
 
-        // Regular read should be smaller or equal due to JSON boundary alignment
+        // Regular read should be smaller or equal due to JSON boundary
+        // alignment
         CHECK(regular_result.size() <= raw_result.size());
 
         // Regular read should end with complete JSON line
         CHECK(regular_result.back() == '\n');
 
         // Both should start with same data
-        std::size_t min_size = std::min(raw_result.size(), regular_result.size());
-        CHECK(raw_result.substr(0, min_size) == regular_result.substr(0, min_size));
+        std::size_t min_size =
+            std::min(raw_result.size(), regular_result.size());
+        CHECK(raw_result.substr(0, min_size) ==
+              regular_result.substr(0, min_size));
     }
 
-    SUBCASE("Full file read comparison: raw vs JSON-boundary aware for TAR.GZ") {
+    SUBCASE(
+        "Full file read comparison: raw vs JSON-boundary aware for TAR.GZ") {
         auto reader1 = ReaderFactory::create(tar_gz_file, idx_file);
         auto reader2 = ReaderFactory::create(tar_gz_file, idx_file);
         REQUIRE(reader2 != nullptr);
@@ -463,8 +506,10 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
         std::size_t bytes_read1;
         std::size_t current_pos1 = 0;
         while (current_pos1 < max_bytes) {
-            std::size_t end_pos = std::min(current_pos1 + sizeof(buffer), max_bytes);
-            bytes_read1 = reader1->read(current_pos1, end_pos, buffer, sizeof(buffer));
+            std::size_t end_pos =
+                std::min(current_pos1 + sizeof(buffer), max_bytes);
+            bytes_read1 =
+                reader1->read(current_pos1, end_pos, buffer, sizeof(buffer));
             if (bytes_read1 == 0) break;
             raw_content.append(buffer, bytes_read1);
             current_pos1 += bytes_read1;
@@ -475,8 +520,10 @@ TEST_CASE("TAR.GZ Reader - Raw reading functionality") {
         std::size_t bytes_read2;
         std::size_t current_pos2 = 0;
         while (current_pos2 < max_bytes) {
-            std::size_t end_pos = std::min(current_pos2 + sizeof(buffer), max_bytes);
-            bytes_read2 = reader2->read_line_bytes(current_pos2, end_pos, buffer, sizeof(buffer));
+            std::size_t end_pos =
+                std::min(current_pos2 + sizeof(buffer), max_bytes);
+            bytes_read2 = reader2->read_line_bytes(current_pos2, end_pos,
+                                                   buffer, sizeof(buffer));
             if (bytes_read2 == 0) break;
             json_content.append(buffer, bytes_read2);
             current_pos2 += bytes_read2;
@@ -512,7 +559,8 @@ TEST_CASE("TAR.GZ Reader - Line reading functionality") {
 
     // Build index first with smaller chunk size to force checkpoint creation
     {
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.1));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.1));
         REQUIRE(indexer != nullptr);
         indexer->build();
 
@@ -522,13 +570,15 @@ TEST_CASE("TAR.GZ Reader - Line reading functionality") {
 
         // Skip line reading tests if indexer doesn't have proper line support
         if (total_lines == 0 || checkpoints.empty()) {
-            WARN("Skipping TAR.GZ line reading tests - indexer has no line data");
+            WARN(
+                "Skipping TAR.GZ line reading tests - indexer has no line "
+                "data");
             return;
         }
 
-        INFO("TAR.GZ Indexer created with " << checkpoints.size()
-                                           << " checkpoints and " << total_lines
-                                           << " total lines");
+        INFO("TAR.GZ Indexer created with "
+             << checkpoints.size() << " checkpoints and " << total_lines
+             << " total lines");
     }
 
     SUBCASE("Basic line reading functionality for TAR.GZ") {
@@ -546,7 +596,8 @@ TEST_CASE("TAR.GZ Reader - Line reading functionality") {
         }
         CHECK(line_count == 5);  // Should have exactly 5 lines
 
-        // Verify it starts with expected pattern (should contain main file data)
+        // Verify it starts with expected pattern (should contain main file
+        // data)
         CHECK(result.find("\"id\": 1") != std::string::npos);
         CHECK(result.find("\"file\": \"main\"") != std::string::npos);
     }
@@ -556,7 +607,8 @@ TEST_CASE("TAR.GZ Reader - Line reading functionality") {
         REQUIRE(reader != nullptr);
 
         // Get total line count
-        auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.1));
+        auto indexer =
+            IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.1));
         std::size_t total_lines = indexer->get_num_lines();
 
         if (total_lines > 50) {
@@ -565,9 +617,12 @@ TEST_CASE("TAR.GZ Reader - Line reading functionality") {
             CHECK(!result.empty());
 
             // Should contain data from multiple files
-            bool has_main = result.find("\"file\": \"main\"") != std::string::npos;
-            bool has_secondary = result.find("\"file\": \"secondary\"") != std::string::npos;
-            bool has_additional = result.find("\"file\": \"additional\"") != std::string::npos;
+            bool has_main =
+                result.find("\"file\": \"main\"") != std::string::npos;
+            bool has_secondary =
+                result.find("\"file\": \"secondary\"") != std::string::npos;
+            bool has_additional =
+                result.find("\"file\": \"additional\"") != std::string::npos;
 
             // Should find at least 2 different file sources in first 50 lines
             int file_types = has_main + has_secondary + has_additional;
@@ -598,7 +653,8 @@ TEST_CASE("TAR.GZ Reader - Line reading functionality") {
 
 TEST_CASE("TAR.GZ API - Regression and stress tests") {
     SUBCASE("Large TAR.GZ file handling") {
-        TestEnvironment env(10000, Format::TAR_GZIP);  // Large TAR.GZ with multiple files
+        TestEnvironment env(
+            10000, Format::TAR_GZIP);  // Large TAR.GZ with multiple files
         REQUIRE(env.is_valid());
 
         std::string tar_gz_file = env.create_test_tar_gzip_file();
@@ -608,8 +664,9 @@ TEST_CASE("TAR.GZ API - Regression and stress tests") {
 
         // Build index
         {
-            auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
-        REQUIRE(indexer != nullptr);
+            auto indexer =
+                IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
+            REQUIRE(indexer != nullptr);
             CHECK_NOTHROW(indexer->build());
         }
 
@@ -625,7 +682,8 @@ TEST_CASE("TAR.GZ API - Regression and stress tests") {
             std::string content;
 
             std::size_t bytes_read;
-            while ((bytes_read = reader->read_line_bytes(1000, 50000, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader->read_line_bytes(1000, 50000, buffer,
+                                                         sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
 
@@ -635,10 +693,13 @@ TEST_CASE("TAR.GZ API - Regression and stress tests") {
             CHECK(content.back() == '\n');
 
             // Should contain multiple file sources
-            bool has_main = content.find("\"file\": \"main\"") != std::string::npos;
-            bool has_secondary = content.find("\"file\": \"secondary\"") != std::string::npos;
-            bool has_additional = content.find("\"file\": \"additional\"") != std::string::npos;
-            
+            bool has_main =
+                content.find("\"file\": \"main\"") != std::string::npos;
+            bool has_secondary =
+                content.find("\"file\": \"secondary\"") != std::string::npos;
+            bool has_additional =
+                content.find("\"file\": \"additional\"") != std::string::npos;
+
             int file_types = has_main + has_secondary + has_additional;
             CHECK(file_types >= 2);  // Should span multiple files
 
@@ -667,7 +728,8 @@ TEST_CASE("TAR.GZ API - Regression and stress tests") {
 
         // Build index
         {
-            auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(32.0));
+            auto indexer =
+                IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(32.0));
             indexer->build();
         }
 
@@ -681,8 +743,10 @@ TEST_CASE("TAR.GZ API - Regression and stress tests") {
             std::size_t bytes_read;
             std::size_t current_pos = 0;
             while (current_pos < 10000) {
-                std::size_t end_pos = std::min(current_pos + sizeof(buffer), static_cast<std::size_t>(10000));
-                bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer, sizeof(buffer));
+                std::size_t end_pos = std::min(current_pos + sizeof(buffer),
+                                               static_cast<std::size_t>(10000));
+                bytes_read = reader->read_line_bytes(current_pos, end_pos,
+                                                     buffer, sizeof(buffer));
                 if (bytes_read == 0) break;
                 content.append(buffer, bytes_read);
                 current_pos += bytes_read;
@@ -691,8 +755,9 @@ TEST_CASE("TAR.GZ API - Regression and stress tests") {
             CHECK(content.size() <= 10000);
 
             // Should NOT end with incomplete patterns
-            CHECK(content.find("\"message_") == std::string::npos);  // No partial field names
-            
+            CHECK(content.find("\"message_") ==
+                  std::string::npos);  // No partial field names
+
             // Should end with complete JSON line
             CHECK(content.back() == '\n');
             CHECK(content[content.length() - 2] == '}');
@@ -708,8 +773,10 @@ TEST_CASE("TAR.GZ API - Regression and stress tests") {
             std::size_t bytes_read;
             std::size_t current_pos = 0;
             while (current_pos < 100) {
-                std::size_t end_pos = std::min(current_pos + sizeof(buffer), static_cast<std::size_t>(100));
-                bytes_read = reader->read_line_bytes(current_pos, end_pos, buffer, sizeof(buffer));
+                std::size_t end_pos = std::min(current_pos + sizeof(buffer),
+                                               static_cast<std::size_t>(100));
+                bytes_read = reader->read_line_bytes(current_pos, end_pos,
+                                                     buffer, sizeof(buffer));
                 if (bytes_read == 0) break;
                 content.append(buffer, bytes_read);
                 current_pos += bytes_read;
@@ -740,7 +807,9 @@ TEST_CASE("TAR.GZ Advanced Functions - Error Paths and Edge Cases") {
         // Test different chunk sizes to trigger different code paths
         for (double ckpt_size_mb : {0.1, 0.5, 1.0, 2.0, 5.0}) {
             std::size_t ckpt_size = mb_to_b(ckpt_size_mb);
-            auto indexer = IndexerFactory::create(tar_gz_file, idx_file + std::to_string(ckpt_size_mb), ckpt_size);
+            auto indexer = IndexerFactory::create(
+                tar_gz_file, idx_file + std::to_string(ckpt_size_mb),
+                ckpt_size);
             CHECK_NOTHROW(indexer->build());
             CHECK(indexer->get_checkpoint_size() <= ckpt_size);
         }
@@ -749,8 +818,9 @@ TEST_CASE("TAR.GZ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Multiple readers on same TAR.GZ index") {
         // Build index once
         {
-            auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
-        REQUIRE(indexer != nullptr);
+            auto indexer =
+                IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(1.0));
+            REQUIRE(indexer != nullptr);
             indexer->build();
         }
 
@@ -767,20 +837,23 @@ TEST_CASE("TAR.GZ Advanced Functions - Error Paths and Edge Cases") {
             std::string result;
 
             std::size_t bytes_read;
-            while ((bytes_read = reader->read(0, 50, buffer, sizeof(buffer))) > 0) {
+            while ((bytes_read = reader->read(0, 50, buffer, sizeof(buffer))) >
+                   0) {
                 result.append(buffer, bytes_read);
             }
 
             CHECK(result.size() <= 50);
-            CHECK(result.find("\"id\":") != std::string::npos);  // Should contain JSON from TAR.GZ
+            CHECK(result.find("\"id\":") !=
+                  std::string::npos);  // Should contain JSON from TAR.GZ
         }
     }
 
     SUBCASE("TAR.GZ boundary conditions across files") {
         // Build index
         {
-            auto indexer = IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
-        REQUIRE(indexer != nullptr);
+            auto indexer =
+                IndexerFactory::create(tar_gz_file, idx_file, mb_to_b(0.5));
+            REQUIRE(indexer != nullptr);
             indexer->build();
         }
 
@@ -792,7 +865,7 @@ TEST_CASE("TAR.GZ Advanced Functions - Error Paths and Edge Cases") {
         std::vector<std::pair<std::size_t, std::size_t>> ranges = {
             {0, 1},                               // Very small range
             {0, 10},                              // Small range
-            {0, 100},                             // Medium range  
+            {0, 100},                             // Medium range
             {0, 1000},                            // Large range
             {100, 200},                           // Mid-file range
             {max_bytes / 2, max_bytes / 2 + 50},  // Middle section
@@ -806,12 +879,13 @@ TEST_CASE("TAR.GZ Advanced Functions - Error Paths and Edge Cases") {
                 std::string result;
 
                 std::size_t bytes_read;
-                while ((bytes_read = reader->read(start, end, buffer, sizeof(buffer))) > 0) {
+                while ((bytes_read = reader->read(start, end, buffer,
+                                                  sizeof(buffer))) > 0) {
                     result.append(buffer, bytes_read);
                 }
 
                 CHECK(result.size() <= (end - start));
-                
+
                 // Should contain valid JSON content
                 if (!result.empty()) {
                     CHECK(result.find("\"id\":") != std::string::npos);

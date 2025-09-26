@@ -29,7 +29,6 @@ void ThreadScheduler::initialize(std::size_t num_threads) {
     // Reset all state variables after shutdown
     {
         std::lock_guard<std::mutex> lock(cv_mutex_);
-        task_outputs_.clear();
         task_completed_.clear();
         dependency_count_.clear();
         current_execution_context_ = nullptr;
@@ -83,7 +82,6 @@ void ThreadScheduler::shutdown() {
     {
         std::lock_guard<std::mutex> lock(cv_mutex_);
         active_tasks_ = 0;
-        task_outputs_.clear();
         task_completed_.clear();
         dependency_count_.clear();
         current_execution_context_ = nullptr;
@@ -122,7 +120,8 @@ void ThreadScheduler::submit(
     cv_.notify_one();
 }
 
-PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline, std::any input) {
+PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline,
+                                        std::any input) {
     ExecutorContext execution_context(&pipeline);
     current_execution_context_ = &execution_context;
 
@@ -131,7 +130,6 @@ PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline, std::any input
                             "Pipeline validation failed");
     }
 
-    task_outputs_.clear();
     task_completed_.clear();
     dependency_count_.clear();
 
@@ -148,7 +146,7 @@ PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline, std::any input
             // Submit immediately with original input
             auto completion_callback = [this, &execution_context,
                                         i](std::any result) {
-                task_outputs_[i] = std::move(result);
+                execution_context.set_task_output(i, std::move(result));
                 task_completed_[i] = true;
 
                 // Process dependent tasks
@@ -161,15 +159,17 @@ PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline, std::any input
 
                         if (execution_context.get_task_dependencies(dependent)
                                 .size() == 1) {
-                            // Single dependency
-                            dependent_input = task_outputs_[i];
+                            // Single dependency - consume the output
+                            dependent_input =
+                                execution_context.consume_task_output(i);
                         } else {
                             // Multiple dependencies - combine inputs
                             std::vector<std::any> combined_inputs;
                             for (TaskIndex dep :
                                  execution_context.get_task_dependencies(
                                      dependent)) {
-                                combined_inputs.push_back(task_outputs_[dep]);
+                                combined_inputs.push_back(
+                                    execution_context.consume_task_output(dep));
                             }
                             dependent_input = combined_inputs;
                         }
@@ -224,17 +224,17 @@ PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline, std::any input
     current_execution_context_ = nullptr;
 
     PipelineOutput terminal_outputs;
-    
+
     if (terminal_tasks.empty()) {
         // No terminal tasks - return input with special key
         terminal_outputs[-1] = input;
     } else {
         // One or more terminal tasks - return all with their IDs
         for (TaskIndex id : terminal_tasks) {
-            terminal_outputs[id] = task_outputs_[id];
+            terminal_outputs[id] = execution_context.get_task_output(id);
         }
     }
-    
+
     return terminal_outputs;
 }
 
@@ -298,7 +298,8 @@ void ThreadScheduler::worker_thread(size_t thread_id) {
 
                 {
                     std::lock_guard<std::mutex> lock(results_mutex_);
-                    task_outputs_[task_id] = result;
+                    current_execution_context_->set_task_output(task_id,
+                                                                result);
                 }
 
                 if (task.completion_callback) {
@@ -345,7 +346,7 @@ void ThreadScheduler::submit_with_dependency_handling(
     ExecutorContext& execution_context, TaskIndex task_id, std::any input) {
     auto completion_callback = [this, &execution_context,
                                 task_id](std::any result) {
-        task_outputs_[task_id] = std::move(result);
+        current_execution_context_->set_task_output(task_id, std::move(result));
         task_completed_[task_id] = true;
 
         // Process dependent tasks recursively
@@ -357,14 +358,16 @@ void ThreadScheduler::submit_with_dependency_handling(
 
                 if (execution_context.get_task_dependencies(dependent).size() ==
                     1) {
-                    // Single dependency
-                    dependent_input = task_outputs_[task_id];
+                    // Single dependency - consume the output
+                    dependent_input =
+                        execution_context.consume_task_output(task_id);
                 } else {
                     // Multiple dependencies
                     std::vector<std::any> combined_inputs;
                     for (TaskIndex dep :
                          execution_context.get_task_dependencies(dependent)) {
-                        combined_inputs.push_back(task_outputs_[dep]);
+                        combined_inputs.push_back(
+                            execution_context.consume_task_output(dep));
                     }
                     dependent_input = combined_inputs;
                 }

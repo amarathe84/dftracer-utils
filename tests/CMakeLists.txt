@@ -14,6 +14,7 @@ target_link_libraries(
   testing_utilities
   PUBLIC dftracer_utils
   PRIVATE doctest::doctest ghc_filesystem)
+link_zlib(testing_utilities STATIC)
 
 # ##############################################################################
 # Unit Tests

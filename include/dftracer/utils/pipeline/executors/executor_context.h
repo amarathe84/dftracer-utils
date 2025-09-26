@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_PIPELINE_EXECUTORS_EXECUTOR_CONTEXT_H
 
 #include <dftracer/utils/common/typedefs.h>
+#include <dftracer/utils/pipeline/executors/executor_task_output.h>
 #include <dftracer/utils/pipeline/tasks/task.h>
 
 #include <any>
@@ -45,6 +46,11 @@ class ExecutorContext {
     void set_task_completed(TaskIndex index, bool completed);
     bool is_task_completed(TaskIndex index) const;
 
+    // New reference counting methods
+    void increment_user_ref(TaskIndex index);
+    void release_user_ref(TaskIndex index);
+    std::any consume_task_output(TaskIndex index);
+
     void set_task_promise(TaskIndex index,
                           std::shared_ptr<std::promise<std::any>> promise);
     std::shared_ptr<std::promise<std::any>> get_task_promise(
@@ -71,7 +77,8 @@ class ExecutorContext {
     std::vector<std::vector<TaskIndex>>
         dynamic_dependents_;    // who this task depends on
 
-    std::unordered_map<TaskIndex, std::any> task_outputs_;
+    std::unordered_map<TaskIndex, std::unique_ptr<ExecutorTaskOutput>>
+        task_outputs_;
     std::unordered_map<TaskIndex, std::atomic<bool>> task_completed_;
     std::unordered_map<TaskIndex, int> dependency_count_;
     std::unordered_map<TaskIndex, std::shared_ptr<std::promise<std::any>>>

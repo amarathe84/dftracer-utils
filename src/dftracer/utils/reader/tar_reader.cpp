@@ -25,7 +25,7 @@ TarReader::TarReader(const std::string &tar_gz_path_,
       cached_total_logical_bytes(0),
       cached_total_logical_lines(0) {
     try {
-      printf("Creating TAR reader for gz: %s and index: %s\n",
+        printf("Creating TAR reader for gz: %s and index: %s\n",
                tar_gz_path.c_str(), idx_path.c_str());
         indexer = std::make_unique<TarIndexer>(tar_gz_path, idx_path,
                                                index_ckpt_size, false);

@@ -93,7 +93,7 @@ TEST_CASE("C++ Reader - Basic functionality") {
         // Test automatic destruction
         {
             auto reader = ReaderFactory::create(gz_file, idx_file);
-        REQUIRE(reader != nullptr);
+            REQUIRE(reader != nullptr);
             CHECK(reader->is_valid());
             CHECK(reader->get_archive_path() == gz_file);
         }
@@ -161,12 +161,14 @@ TEST_CASE("C++ Reader - Basic functionality") {
 TEST_CASE("C++ API - Error handling") {
     SUBCASE("Invalid indexer creation") {
         CHECK_THROWS_AS(IndexerFactory::create("/nonexistent/path.gz",
-                                        "/nonexistent/path.idx", static_cast<std::uint64_t>(1.0)),
+                                               "/nonexistent/path.idx",
+                                               static_cast<std::uint64_t>(1.0)),
                         IndexerError);
     }
 
     SUBCASE("Invalid reader creation") {
-        CHECK_THROWS_AS(ReaderFactory::create("/nonexistent/path.gz", "/nonexistent/path.idx"),
+        CHECK_THROWS_AS(ReaderFactory::create("/nonexistent/path.gz",
+                                              "/nonexistent/path.idx"),
                         ReaderError);
     }
 }
@@ -232,14 +234,15 @@ TEST_CASE("C++ API - Edge cases") {
         char buffer[1024];
         CHECK_THROWS(reader->read(100, 50, buffer, sizeof(buffer)));
         CHECK_THROWS(reader->read(50, 50, buffer,
-                                 sizeof(buffer)));  // Equal start and end
+                                  sizeof(buffer)));  // Equal start and end
     }
 
     SUBCASE("Non-existent file should throw") {
         // Use cross-platform non-existent path
         fs::path non_existent =
             fs::temp_directory_path() / "nonexistent" / "file.gz";
-        CHECK_THROWS(ReaderFactory::create(non_existent.string(), non_existent.string()));
+        CHECK_THROWS(ReaderFactory::create(non_existent.string(),
+                                           non_existent.string()));
     }
 }
 
@@ -271,7 +274,8 @@ TEST_CASE("C++ API - Integration test") {
         // Read first range
         std::string content1;
         std::size_t bytes_read;
-        while ((bytes_read = reader->read(0, 100, buffer, sizeof(buffer))) > 0) {
+        while ((bytes_read = reader->read(0, 100, buffer, sizeof(buffer))) >
+               0) {
             content1.append(buffer, bytes_read);
         }
         CHECK(content1.size() <= 100);
@@ -318,7 +322,7 @@ TEST_CASE("C++ API - Memory safety stress test") {
         std::size_t bytes_read;
 
         while ((bytes_read = reader->read(0, 4 * 1024 * 1024, buffer,
-                                         sizeof(buffer))) > 0) {
+                                          sizeof(buffer))) > 0) {
             total_bytes += bytes_read;
         }
 
@@ -337,19 +341,21 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
     std::string idx_file = env.get_index_path(gz_file);
 
     SUBCASE("Indexer with invalid chunk size should throw in constructor") {
-        CHECK_THROWS_AS(IndexerFactory::create(gz_file, idx_file, mb_to_b(0.0)), IndexerError);
+        CHECK_THROWS_AS(IndexerFactory::create(gz_file, idx_file, mb_to_b(0.0)),
+                        IndexerError);
     }
 
     SUBCASE("Reader with invalid paths should throw in constructor") {
         CHECK_THROWS_AS(ReaderFactory::create("/definitely/nonexistent/path.gz",
-                               "/also/nonexistent/path.idx"),
+                                              "/also/nonexistent/path.idx"),
                         std::runtime_error);
     }
 
     SUBCASE("Reader operations on invalid reader should throw") {
         // Build a valid index first
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5));
             REQUIRE(indexer != nullptr);
             indexer->build();
         }
@@ -372,8 +378,9 @@ TEST_CASE("C++ API - Exception handling comprehensive tests") {
     SUBCASE("Invalid read parameters should throw") {
         // Build a valid index first
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5));
-        REQUIRE(indexer != nullptr);
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5));
+            REQUIRE(indexer != nullptr);
             indexer->build();
         }
 
@@ -412,8 +419,10 @@ TEST_CASE("C++ API - Advanced indexer functionality") {
     }
 
     SUBCASE("Different checkpoint sizes") {
-        auto indexer_small = IndexerFactory::create(gz_file, idx_file + "_small", mb_to_b(0.1));
-        auto indexer_large = IndexerFactory::create(gz_file, idx_file + "_large", mb_to_b(10.0));
+        auto indexer_small =
+            IndexerFactory::create(gz_file, idx_file + "_small", mb_to_b(0.1));
+        auto indexer_large =
+            IndexerFactory::create(gz_file, idx_file + "_large", mb_to_b(10.0));
 
         CHECK_NOTHROW(indexer_small->build());
         CHECK_NOTHROW(indexer_large->build());
@@ -516,7 +525,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         result.clear();
         std::size_t bytes_read;
         while ((bytes_read = reader->read_line_bytes(0, 10, buffer,
-                                                    sizeof(buffer))) > 0) {
+                                                     sizeof(buffer))) > 0) {
             result.append(buffer, bytes_read);
         }
         // Small reads should return no data
@@ -526,7 +535,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         if (max_bytes > 1000) {
             result.clear();
             while ((bytes_read = reader->read_line_bytes(100, 1000, buffer,
-                                                        sizeof(buffer))) > 0) {
+                                                         sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() <= 900);
@@ -536,7 +545,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
         if (max_bytes > 10000) {
             result.clear();
             while ((bytes_read = reader->read_line_bytes(1000, 10000, buffer,
-                                                        sizeof(buffer))) > 0) {
+                                                         sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() >= 9000);
@@ -556,7 +565,7 @@ TEST_CASE("C++ API - Advanced reader functionality") {
             // Read near the end of file
             result.clear();
             while ((bytes_read = reader->read(max_bytes - 50, max_bytes, buffer,
-                                             sizeof(buffer))) > 0) {
+                                              sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() > 0);
@@ -606,7 +615,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
         std::size_t bytes_read;
 
         while ((bytes_read = reader->read_line_bytes(0, 100, buffer,
-                                                    sizeof(buffer))) > 0) {
+                                                     sizeof(buffer))) > 0) {
             content.append(buffer, bytes_read);
         }
 
@@ -631,7 +640,7 @@ TEST_CASE("C++ API - JSON boundary detection") {
         std::size_t bytes_read;
 
         while ((bytes_read = reader->read_line_bytes(0, 500, buffer,
-                                                    sizeof(buffer))) > 0) {
+                                                     sizeof(buffer))) > 0) {
             content.append(buffer, bytes_read);
         }
 
@@ -711,8 +720,9 @@ TEST_CASE("C++ API - Regression and stress tests") {
 
         // Build index
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0));
-        REQUIRE(indexer != nullptr);
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0));
+            REQUIRE(indexer != nullptr);
             CHECK_NOTHROW(indexer->build());
         }
 
@@ -729,7 +739,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
 
             std::size_t bytes_read;
             while ((bytes_read = reader->read_line_bytes(1000, 50000, buffer,
-                                                        sizeof(buffer))) > 0) {
+                                                         sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
 
@@ -783,7 +793,8 @@ TEST_CASE("C++ API - Regression and stress tests") {
 
         // Build index
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(32.0));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(32.0));
             indexer->build();
         }
 
@@ -797,7 +808,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
 
             std::size_t bytes_read;
             while ((bytes_read = reader->read_line_bytes(0, 10000, buffer,
-                                                        sizeof(buffer))) > 0) {
+                                                         sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
 
@@ -823,7 +834,7 @@ TEST_CASE("C++ API - Regression and stress tests") {
 
             std::size_t bytes_read;
             while ((bytes_read = reader->read_line_bytes(0, 100, buffer,
-                                                        sizeof(buffer))) > 0) {
+                                                         sizeof(buffer))) > 0) {
                 content.append(buffer, bytes_read);
             }
 
@@ -893,14 +904,15 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
 
         // Raw read (new default behavior)
         std::size_t bytes_read1;
-        while ((bytes_read1 = reader1->read(0, 100, buffer1, buffer_size)) > 0) {
+        while ((bytes_read1 = reader1->read(0, 100, buffer1, buffer_size)) >
+               0) {
             raw_result.append(buffer1, bytes_read1);
         }
 
         // Line bytes read (old read behavior)
         std::size_t bytes_read2;
         while ((bytes_read2 = reader2->read_line_bytes(0, 100, buffer2,
-                                                      buffer_size)) > 0) {
+                                                       buffer_size)) > 0) {
             regular_result.append(buffer2, bytes_read2);
         }
 
@@ -918,7 +930,8 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         // (but could happen to end with newline depending on data)
 
         // Both should start with same data
-        std::size_t min_size = std::min(raw_result.size(), regular_result.size());
+        std::size_t min_size =
+            std::min(raw_result.size(), regular_result.size());
         CHECK(raw_result.substr(0, min_size) ==
               regular_result.substr(0, min_size));
     }
@@ -971,7 +984,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         if (max_bytes > 10) {
             result.clear();
             while ((bytes_read = reader->read(max_bytes - 10, max_bytes - 1,
-                                             buffer, sizeof(buffer))) > 0) {
+                                              buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() == 9);
@@ -993,8 +1006,8 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         std::size_t total_calls = 0;
 
         std::size_t bytes_read;
-        while ((bytes_read =
-                    reader->read(0, 200, small_buffer, small_buffer_size)) > 0) {
+        while ((bytes_read = reader->read(0, 200, small_buffer,
+                                          small_buffer_size)) > 0) {
             result.append(small_buffer, bytes_read);
             total_calls++;
             CHECK(bytes_read <= small_buffer_size);
@@ -1023,7 +1036,8 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
                 std::string segment;
                 std::size_t bytes_read;
                 while ((bytes_read = reader->read(range.first, range.second,
-                                                 buffer, sizeof(buffer))) > 0) {
+                                                  buffer, sizeof(buffer))) >
+                       0) {
                     segment.append(buffer, bytes_read);
                 }
 
@@ -1059,7 +1073,7 @@ TEST_CASE("C++ Reader - Raw reading functionality") {
         std::string json_content;
         std::size_t bytes_read2;
         while ((bytes_read2 = reader2->read_line_bytes(0, max_bytes, buffer,
-                                                      sizeof(buffer))) > 0) {
+                                                       sizeof(buffer))) > 0) {
             json_content.append(buffer, bytes_read2);
         }
 
@@ -1161,7 +1175,8 @@ TEST_CASE("C++ Reader - Line reading functionality") {
         REQUIRE(reader != nullptr);
 
         // Test specific line numbers that should contain predictable content
-        for (std::size_t line_num : std::vector<std::size_t>({1, 10, 50, 100})) {
+        for (std::size_t line_num :
+             std::vector<std::size_t>({1, 10, 50, 100})) {
             std::string result = reader->read_lines(line_num, line_num);
             CHECK(!result.empty());
 
@@ -1288,8 +1303,8 @@ TEST_CASE("C++ Reader - Line reading functionality") {
         std::size_t total_lines = indexer->get_num_lines();
 
         // Test single line reads at different positions
-        std::vector<std::size_t> test_lines = {1, total_lines / 4, total_lines / 2,
-                                          total_lines - 1, total_lines};
+        std::vector<std::size_t> test_lines = {
+            1, total_lines / 4, total_lines / 2, total_lines - 1, total_lines};
 
         for (std::size_t line_num : test_lines) {
             if (line_num <= total_lines) {
@@ -1323,8 +1338,8 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Indexer with various checkpoint sizes") {
         for (double ckpt_size_mb : {0.1, 0.5, 1.0, 2.0, 5.0}) {
             std::size_t ckpt_size = mb_to_b(ckpt_size_mb);
-            auto indexer = IndexerFactory::create(gz_file, idx_file + std::to_string(ckpt_size_mb),
-                            ckpt_size);
+            auto indexer = IndexerFactory::create(
+                gz_file, idx_file + std::to_string(ckpt_size_mb), ckpt_size);
             CHECK_NOTHROW(indexer->build());
             CHECK(indexer->get_checkpoint_size() <= ckpt_size);
             fs::remove(idx_file + std::to_string(ckpt_size_mb));
@@ -1334,8 +1349,8 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Reader with different range sizes to trigger various code paths") {
         // Build index first
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file,
-                            mb_to_b(0.1));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(0.1));
             indexer->build();
         }
 
@@ -1362,7 +1377,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
 
                 std::size_t bytes_read;
                 while ((bytes_read = reader->read(start, end, buffer,
-                                                 sizeof(buffer))) > 0) {
+                                                  sizeof(buffer))) > 0) {
                     result.append(buffer, bytes_read);
                 }
 
@@ -1373,24 +1388,28 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
 
     SUBCASE("Force rebuild scenarios") {
         // Test force rebuild functionality
-        auto indexer1 = IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0), false);
+        auto indexer1 =
+            IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0), false);
         indexer1->build();
         CHECK_FALSE(indexer1->need_rebuild());
 
         // Force rebuild should rebuild even if not needed
-        auto indexer2 = IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0), true);
+        auto indexer2 =
+            IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0), true);
         // Force rebuild affects behavior during construction/build
         CHECK_NOTHROW(indexer2->build());  // Should succeed even if forced
         // Note: force_rebuild flag behavior needs further investigation
         CHECK_FALSE(
-            indexer2->need_rebuild());  // After building, shouldn't need rebuild
+            indexer2
+                ->need_rebuild());  // After building, shouldn't need rebuild
     }
 
     SUBCASE("Multiple readers on same index") {
         // Build index once
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0));
-        REQUIRE(indexer != nullptr);
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(1.0));
+            REQUIRE(indexer != nullptr);
             indexer->build();
         }
 
@@ -1419,8 +1438,9 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
     SUBCASE("Edge case: Reading near file boundaries") {
         // Build index
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5));
-        REQUIRE(indexer != nullptr);
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5));
+            REQUIRE(indexer != nullptr);
             indexer->build();
         }
 
@@ -1436,7 +1456,7 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
             // Read from near the end
             result.clear();
             while ((bytes_read = reader->read(max_bytes - 100, max_bytes - 1,
-                                             buffer, sizeof(buffer))) > 0) {
+                                              buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() <= 100);
@@ -1445,7 +1465,8 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
             if (max_bytes > 1) {
                 result.clear();
                 while ((bytes_read = reader->read(max_bytes - 1, max_bytes,
-                                                 buffer, sizeof(buffer))) > 0) {
+                                                  buffer, sizeof(buffer))) >
+                       0) {
                     result.append(buffer, bytes_read);
                 }
                 CHECK(result.size() <= 1);
@@ -1461,7 +1482,8 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
 
         // Build index with small chunks to force more complex compression
         {
-            auto indexer = IndexerFactory::create(large_gz, large_idx, mb_to_b(0.1));
+            auto indexer =
+                IndexerFactory::create(large_gz, large_idx, mb_to_b(0.1));
             indexer->build();
         }
 
@@ -1476,8 +1498,8 @@ TEST_CASE("C++ Advanced Functions - Error Paths and Edge Cases") {
 
             // First range
             result.clear();
-            while ((bytes_read = reader->read(0, 1000, buffer, sizeof(buffer))) >
-                   0) {
+            while ((bytes_read =
+                        reader->read(0, 1000, buffer, sizeof(buffer))) > 0) {
                 result.append(buffer, bytes_read);
             }
             CHECK(result.size() <= 1000);

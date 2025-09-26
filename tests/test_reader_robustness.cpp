@@ -303,7 +303,8 @@ TEST_CASE("Robustness - Large file continuous stride reading") {
             get_last_json_line(single_read_content);
 
         // Now read same range as three 10MB stride chunks with fresh reader
-        auto stride_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+        auto stride_reader =
+            ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
         REQUIRE(stride_reader != nullptr);
         std::size_t stride_total_lines = 0;
         const std::size_t chunk_size = 10 * 1024 * 1024;
@@ -383,7 +384,8 @@ TEST_CASE("Robustness - Different buffer sizes consistency") {
         for (std::size_t buf_size : buffer_sizes) {
             // Create a fresh reader instance for each buffer size to avoid
             // state issues
-            auto test_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+            auto test_reader =
+                ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
             REQUIRE(test_reader != nullptr);
 
             std::vector<char> buffer(buf_size);
@@ -680,7 +682,8 @@ TEST_CASE("Robustness - Complete file sequential read") {
         std::string complete_last_line = get_last_json_line(complete_content);
 
         // Read same file in 2MB chunks with fresh reader
-        auto chunked_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+        auto chunked_reader =
+            ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
         REQUIRE(chunked_reader != nullptr);
         const std::size_t chunk_size = 2 * 1024 * 1024;
         std::size_t chunked_total_lines = 0;
@@ -755,8 +758,9 @@ TEST_CASE("Robustness - JSON validation and consistency") {
 
         for (std::size_t buf_size : buffer_sizes) {
             for (auto range : test_ranges) {
-                auto test_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
-            REQUIRE(test_reader != nullptr);
+                auto test_reader =
+                    ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+                REQUIRE(test_reader != nullptr);
                 std::vector<char> buffer(buf_size);
                 std::size_t bytes_written = 0;
                 std::string content;
@@ -791,7 +795,8 @@ TEST_CASE("Robustness - JSON validation and consistency") {
         std::vector<std::size_t> line_counts;
 
         for (std::size_t buf_size : buffer_sizes) {
-            auto test_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+            auto test_reader =
+                ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
             REQUIRE(test_reader != nullptr);
             std::vector<char> buffer(buf_size);
             std::size_t bytes_written = 0;
@@ -829,7 +834,8 @@ TEST_CASE("Robustness - JSON validation and consistency") {
         const std::size_t buffer_size = 4 * 1024 * 1024;
 
         // Sequential read
-        auto seq_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+        auto seq_reader =
+            ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
         REQUIRE(seq_reader != nullptr);
         std::vector<char> buffer(buffer_size);
         std::size_t bytes_written = 0;
@@ -850,8 +856,9 @@ TEST_CASE("Robustness - JSON validation and consistency") {
                                                 4 * 1024 * 1024};
 
         for (std::size_t chunk_size : chunk_sizes) {
-            auto chunked_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
-        REQUIRE(chunked_reader != nullptr);
+            auto chunked_reader =
+                ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+            REQUIRE(chunked_reader != nullptr);
             std::size_t chunked_total_lines = 0;
             std::size_t current_pos = 0;
             std::string chunked_last_line;
@@ -957,7 +964,8 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
         std::string complete_last_line = get_last_json_line(complete_content);
 
         // Read same file using stride (chunked) approach covering entire file
-        auto stride_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+        auto stride_reader =
+            ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
         REQUIRE(stride_reader != nullptr);
         std::vector<std::size_t> chunk_sizes = {
             512 * 1024, 1024 * 1024, 2 * 1024 * 1024, 4 * 1024 * 1024};
@@ -1030,7 +1038,8 @@ TEST_CASE("Robustness - Complete file reading equivalence") {
         std::vector<std::size_t> total_line_counts;
 
         for (std::size_t stride_size : stride_sizes) {
-            auto test_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+            auto test_reader =
+                ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
             REQUIRE(test_reader != nullptr);
             std::size_t total_lines = 0;
             std::size_t current_pos = 0;
@@ -1101,8 +1110,9 @@ TEST_CASE("Robustness - Memory and performance stress") {
         std::vector<std::size_t> buffer_sizes = {256, 1024, 4096, 16384, 65536};
 
         for (std::size_t buf_size : buffer_sizes) {
-            auto reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
-    REQUIRE(reader != nullptr);
+            auto reader =
+                ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+            REQUIRE(reader != nullptr);
             std::size_t max_bytes = reader->get_max_bytes();
 
             std::vector<char> buffer(buf_size);
@@ -1176,7 +1186,8 @@ TEST_CASE("Robustness - Memory and performance stress") {
 
         for (std::size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([&gz_file, &idx_file, &total_lines]() {
-                auto thread_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+                auto thread_reader =
+                    ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
                 REQUIRE(thread_reader != nullptr);
                 std::size_t max_bytes = thread_reader->get_max_bytes();
 
@@ -1216,7 +1227,8 @@ TEST_CASE("Robustness - Memory and performance stress") {
         for (std::size_t i = 0; i < num_futures; ++i) {
             futures.push_back(std::async(std::launch::async, [&gz_file,
                                                               &idx_file]() {
-                auto async_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+                auto async_reader =
+                    ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
                 REQUIRE(async_reader != nullptr);
                 std::size_t max_bytes = async_reader->get_max_bytes();
 
@@ -1289,7 +1301,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
         printf(
             "Chunk size: 0.5 MB (small enough to create checkpoints during "
             "processing)\n");
-        auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5), true);
+        auto indexer =
+            IndexerFactory::create(gz_file, idx_file, mb_to_b(0.5), true);
         REQUIRE(indexer != nullptr);
         printf("Building index...\n");
         indexer->build();
@@ -1352,7 +1365,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
         // Get total lines from indexer
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
             REQUIRE(indexer != nullptr);
             total_lines = indexer->get_num_lines();
         }
@@ -1423,7 +1437,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
         // Get total lines from indexer
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
             REQUIRE(indexer != nullptr);
             total_lines = indexer->get_num_lines();
         }
@@ -1489,7 +1504,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
         // Get total lines from indexer
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
             REQUIRE(indexer != nullptr);
             total_lines = indexer->get_num_lines();
         }
@@ -1544,7 +1560,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
         // Get total lines from indexer
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
             REQUIRE(indexer != nullptr);
             total_lines = indexer->get_num_lines();
         }
@@ -1599,7 +1616,8 @@ TEST_CASE("Robustness - Line-based reading stress tests") {
 
         // Get total lines from indexer
         {
-            auto indexer = IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
+            auto indexer =
+                IndexerFactory::create(gz_file, idx_file, mb_to_b(2.0));
             REQUIRE(indexer != nullptr);
             total_lines = indexer->get_num_lines();
         }
@@ -1655,7 +1673,8 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
         // Create multiple readers
         std::vector<std::unique_ptr<Reader>> readers;
         for (std::size_t i = 0; i < 5; ++i) {
-            readers.push_back(ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0)));
+            readers.push_back(
+                ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0)));
             CHECK(readers.back()->is_valid());
         }
 
@@ -1707,7 +1726,8 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
         for (std::size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([&gz_file, &idx_file, &total_lines,
                                   &successful_reads, &failed_reads, i]() {
-                auto thread_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+                auto thread_reader =
+                    ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
                 REQUIRE(thread_reader != nullptr);
 
                 // Each thread reads different ranges - smaller ranges for JSON
@@ -1768,7 +1788,7 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
     SUBCASE("Sequential vs random access pattern comparison") {
         // Create reader for sequential testing
         auto reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
-    REQUIRE(reader != nullptr);
+        REQUIRE(reader != nullptr);
         REQUIRE(reader->is_valid());
 
         // Sequential reading
@@ -1803,7 +1823,8 @@ TEST_CASE("Robustness - Line reading consistency across multiple readers") {
         std::mt19937 gen(rd());
         std::shuffle(indices.begin(), indices.end(), gen);
 
-        auto random_reader = ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
+        auto random_reader =
+            ReaderFactory::create(gz_file, idx_file, mb_to_b(1.0));
         REQUIRE(random_reader != nullptr);
         for (std::size_t idx : indices) {
             std::size_t start = (idx * chunk_size) + 1;
