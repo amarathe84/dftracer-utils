@@ -106,7 +106,8 @@ bool FormatDetector::has_tar_header_after_gzip(FILE* file) {
 
         while (stream.avail_in > 0 && total_out < 512) {
             stream.next_out = out_buffer;
-            stream.avail_out = std::min(buffer_size, 512 - total_out);
+            stream.avail_out =
+                static_cast<uInt>(std::min(buffer_size, 512 - total_out));
 
             int ret = inflate(&stream, Z_NO_FLUSH);
             if (ret != Z_OK && ret != Z_STREAM_END) {

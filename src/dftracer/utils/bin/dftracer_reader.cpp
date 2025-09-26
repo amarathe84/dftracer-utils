@@ -104,7 +104,6 @@ int main(int argc, char **argv) {
     fclose(test_file);
 
     // Detect format and determine appropriate index file extension
-    auto format = FormatDetector::detect(gz_path);
     std::string idx_path = index_path.empty()
                                ? (gz_path + constants::indexer::EXTENSION)
                                : index_path;

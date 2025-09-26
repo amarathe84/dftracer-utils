@@ -437,7 +437,7 @@ int main(int argc, char** argv) {
 
     // Compress output if requested
     if (compress_output && successful_files > 0) {
-        DFTRACER_UTILS_LOG_INFO("Compressing output file...");
+        DFTRACER_UTILS_LOG_INFO("%s", "Compressing output file...");
 
         std::ifstream infile(output_file, std::ios::binary);
         std::ofstream outfile(output_file + ".gz", std::ios::binary);

@@ -19,7 +19,8 @@ void insert_tar_checkpoint_record(const SqliteDatabase &db, int archive_id,
     stmt.bind_int64(5, static_cast<int64_t>(data.c_offset));
     stmt.bind_int64(6, static_cast<int64_t>(data.c_size));
     stmt.bind_int(7, data.bits);
-    stmt.bind_blob(8, data.compressed_dict, data.compressed_dict_size);
+    stmt.bind_blob(8, data.compressed_dict,
+                   static_cast<int>(data.compressed_dict_size));
     stmt.bind_int64(9, static_cast<int64_t>(data.num_lines));
     stmt.bind_int64(10, static_cast<int64_t>(data.first_line_num));
     stmt.bind_int64(11, static_cast<int64_t>(data.last_line_num));
