@@ -141,6 +141,7 @@ void test_indexer_rebuild_detection(void) {
     // Clean up
     free(test_gz_file);
     free(test_idx_file);
+    test_environment_destroy(test_env);
 }
 
 void test_indexer_force_rebuild(void) {
