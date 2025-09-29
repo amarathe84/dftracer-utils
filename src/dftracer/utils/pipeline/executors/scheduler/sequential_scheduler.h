@@ -20,14 +20,11 @@ class SequentialScheduler : public Scheduler {
         TaskIndex task_id;
         Task* task_ptr;
         std::any input;
-        std::function<void(std::any)> completion_callback;
 
-        TaskItem(TaskIndex id, Task* ptr, std::any inp,
-                 std::function<void(std::any)> callback)
+        TaskItem(TaskIndex id, Task* ptr, std::any inp)
             : task_id(id),
               task_ptr(ptr),
-              input(std::move(inp)),
-              completion_callback(std::move(callback)) {}
+              input(std::move(inp)) {}
     };
 
     std::queue<TaskItem> task_queue_;
@@ -37,6 +34,7 @@ class SequentialScheduler : public Scheduler {
         dependency_count_;  // Track remaining dependencies per task
     ExecutorContext* current_execution_context_;  // Active execution context
                                                   // during pipeline execution
+    const Pipeline* current_pipeline_;           // Active pipeline during execution
 
    public:
     SequentialScheduler();

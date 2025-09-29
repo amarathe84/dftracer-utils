@@ -222,11 +222,29 @@ void ThreadScheduler::worker_thread() {
             {
                 std::lock_guard<std::mutex> lock(results_mutex_);
                 
-                completed_results_[task.task_id] = std::make_shared<std::any>(std::move(result));
+                // Check if this is a pipeline task
+                bool is_pipeline_task = current_pipeline_ && task.task_id < static_cast<TaskIndex>(current_pipeline_->size());
+                
+                if (is_pipeline_task) {
+                    // For pipeline tasks: Always store results for extract_terminal_outputs
+                    completed_results_[task.task_id] = std::make_shared<std::any>(result);
+                    if (current_execution_context_) {
+                        current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
+                    }
+                    
+                    // Always fulfill promise for pipeline tasks
+                    current_pipeline_->fulfill_promise(task.task_id, result);
+                } else {
+                    // For dynamic tasks: Always store and fulfill dynamic promise
+                    completed_results_[task.task_id] = std::make_shared<std::any>(result);
+                    if (current_execution_context_) {
+                        current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
+                        current_execution_context_->fulfill_dynamic_promise(task.task_id, result);
+                    }
+                }
                 
                 if (current_execution_context_) {
                     current_execution_context_->mark_task_completed(task.task_id);
-                    current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
                 }
             }
             
@@ -236,9 +254,22 @@ void ThreadScheduler::worker_thread() {
             DFTRACER_UTILS_LOG_ERROR(
                 "Exception in worker thread executing task %d: %s",
                 task.task_id, e.what());
+            
             {
                 std::lock_guard<std::mutex> lock(results_mutex_);
+                
+                // Always store empty result (needed for dependency chain)
                 completed_results_[task.task_id] = std::make_shared<std::any>();
+                
+                // Additionally fulfill promise with exception if this is a pipeline task
+                if (current_pipeline_ && task.task_id < static_cast<TaskIndex>(current_pipeline_->size())) {
+                    current_pipeline_->fulfill_promise_exception(task.task_id, std::current_exception());
+                }
+                
+                if (current_execution_context_) {
+                    current_execution_context_->mark_task_completed(task.task_id);
+                    current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
+                }
             }
             process_completion(task.task_id);
         }

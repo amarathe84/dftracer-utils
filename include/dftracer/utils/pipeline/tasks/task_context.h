@@ -41,10 +41,28 @@ class TaskContext {
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        const Input<I>& input) {
-        auto [wrapped_func, future] = wrap_function_with_promise<I, O>(std::move(func));
-        auto task = make_task<I, O>(std::move(wrapped_func));
-        TaskIndex task_id =
-            execution_context_->add_dynamic_task(std::move(task), -1);
+        // Create task without wrapping - scheduler will fulfill promise
+        auto task = make_task<I, O>(std::move(func));
+        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), -1);
+        
+        // Create promise for TaskResult - will be fulfilled by scheduler
+        auto promise = std::make_shared<std::promise<O>>();
+        auto future = promise->get_future();
+        
+        // Store type-erased promise fulfillment function in ExecutorContext
+        execution_context_->set_promise_fulfiller(task_id, 
+            [promise](const std::any& result) {
+                try {
+                    auto& typed_result = std::any_cast<const O&>(result);
+                    promise->set_value(typed_result);
+                } catch (const std::future_error& e) {
+                    // Promise already set, ignore
+                } catch (const std::bad_any_cast& e) {
+                    promise->set_exception(std::make_exception_ptr(
+                        std::runtime_error("Type mismatch in dynamic promise fulfillment")));
+                }
+            });
+        
         schedule(task_id, input.value());
         return TaskResult<O>{task_id, std::move(future), execution_context_};
     }
@@ -52,8 +70,8 @@ class TaskContext {
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        DependsOn depends_on) {
-        auto [wrapped_func, future] = wrap_function_with_promise<I, O>(std::move(func));
-        auto task = make_task<I, O>(std::move(wrapped_func));
+        // Create task without wrapping - scheduler will fulfill promise
+        auto task = make_task<I, O>(std::move(func));
         if (depends_on.id >= 0) {
             Task* dep_task = execution_context_->get_task(depends_on.id);
             if (dep_task && task->get_input_type() != typeid(std::any) &&
@@ -66,18 +84,53 @@ class TaskContext {
             }
         }
 
-        TaskIndex task_id = execution_context_->add_dynamic_task(
-            std::move(task), depends_on.id);
+        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), depends_on.id);
+        
+        // Create promise for TaskResult - will be fulfilled by scheduler
+        auto promise = std::make_shared<std::promise<O>>();
+        auto future = promise->get_future();
+        
+        // Store type-erased promise fulfillment function in ExecutorContext
+        execution_context_->set_promise_fulfiller(task_id, 
+            [promise](const std::any& result) {
+                try {
+                    auto& typed_result = std::any_cast<const O&>(result);
+                    promise->set_value(typed_result);
+                } catch (const std::future_error& e) {
+                    // Promise already set, ignore
+                } catch (const std::bad_any_cast& e) {
+                    promise->set_exception(std::make_exception_ptr(
+                        std::runtime_error("Type mismatch in dynamic promise fulfillment")));
+                }
+            });
+        
         return TaskResult<O>{task_id, std::move(future), execution_context_};
     }
 
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        const Input<I>& input, DependsOn depends_on) {
-        auto [wrapped_func, future] = wrap_function_with_promise<I, O>(std::move(func));
-        auto task = make_task<I, O>(std::move(wrapped_func));
-        TaskIndex task_id = execution_context_->add_dynamic_task(
-            std::move(task), depends_on.id);
+        // Create task without wrapping - scheduler will fulfill promise
+        auto task = make_task<I, O>(std::move(func));
+        TaskIndex task_id = execution_context_->add_dynamic_task(std::move(task), depends_on.id);
+
+        // Create promise for TaskResult - will be fulfilled by scheduler
+        auto promise = std::make_shared<std::promise<O>>();
+        auto future = promise->get_future();
+        
+        // Store type-erased promise fulfillment function in ExecutorContext
+        execution_context_->set_promise_fulfiller(task_id, 
+            [promise](const std::any& result) {
+                try {
+                    auto& typed_result = std::any_cast<const O&>(result);
+                    promise->set_value(typed_result);
+                } catch (const std::future_error& e) {
+                    // Promise already set, ignore
+                } catch (const std::bad_any_cast& e) {
+                    promise->set_exception(std::make_exception_ptr(
+                        std::runtime_error("Type mismatch in dynamic promise fulfillment")));
+                }
+            });
 
         schedule(task_id, input.value());
         return TaskResult<O>{task_id, std::move(future), execution_context_};

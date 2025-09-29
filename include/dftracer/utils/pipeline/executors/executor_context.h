@@ -66,6 +66,9 @@ class ExecutorContext {
                           std::shared_ptr<std::promise<std::any>> promise);
     std::shared_ptr<std::promise<std::any>> get_task_promise(
         TaskIndex index) const;
+    
+    void set_promise_fulfiller(TaskIndex index, std::function<void(const std::any&)> fulfiller);
+    void fulfill_dynamic_promise(TaskIndex index, const std::any& result) const;
 
     void set_dependency_count(TaskIndex index, int count);
     int get_dependency_count(TaskIndex index) const;
@@ -94,6 +97,8 @@ class ExecutorContext {
     std::unordered_map<TaskIndex, int> dependency_count_;
     std::unordered_map<TaskIndex, std::shared_ptr<std::promise<std::any>>>
         task_promises_;
+    std::unordered_map<TaskIndex, std::function<void(const std::any&)>> 
+        promise_fulfillers_;
 };
 
 }  // namespace dftracer::utils

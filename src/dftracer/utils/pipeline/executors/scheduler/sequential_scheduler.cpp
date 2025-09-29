@@ -11,12 +11,13 @@
 namespace dftracer::utils {
 
 SequentialScheduler::SequentialScheduler()
-    : current_execution_context_(nullptr) {}
+    : current_execution_context_(nullptr), current_pipeline_(nullptr) {}
 
 PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
                                             const std::any& input) {
     ExecutorContext execution_context(&pipeline);
     current_execution_context_ = &execution_context;
+    current_pipeline_ = &pipeline;
 
     if (!execution_context.validate()) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,
@@ -72,6 +73,7 @@ PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
         }
     }
 
+    current_pipeline_ = nullptr;
     return terminal_outputs;
 }
 
@@ -80,53 +82,14 @@ void SequentialScheduler::submit_dynamic_task(TaskIndex task_id, Task* task_ptr,
         return;
     }
     
-    task_queue_.emplace(task_id, task_ptr, input, [this, task_id](std::any result) {
-        current_execution_context_->set_task_output(task_id, std::move(result));
-    });
+    task_queue_.emplace(task_id, task_ptr, input);
 }
 
 
 void SequentialScheduler::execute_task_with_dependencies(
     ExecutorContext& execution_context, TaskIndex task_id, const std::any& input) {
-    auto completion_callback = [this, task_id](std::any result) {
-        current_execution_context_->set_task_output(task_id, std::move(result));
-        task_completed_[task_id] = true;
-
-        for (TaskIndex dependent :
-             current_execution_context_->get_task_dependents(task_id)) {
-            if (--dependency_count_[dependent] == 0) {
-                // All dependencies satisfied - submit the dependent task
-                std::any dependent_input;
-
-                if (current_execution_context_->get_task_dependencies(dependent)
-                        .size() == 1) {
-                    // Single dependency - consume the output
-                    dependent_input =
-                        current_execution_context_->consume_task_output(
-                            task_id);
-                } else {
-                    // Multiple dependencies - combine inputs
-                    std::vector<std::any> combined_inputs;
-                    for (TaskIndex dep :
-                         current_execution_context_->get_task_dependencies(
-                             dependent)) {
-                        combined_inputs.push_back(
-                            current_execution_context_->consume_task_output(
-                                dep));
-                    }
-                    dependent_input = combined_inputs;
-                }
-
-                // Submit dependent task with recursive callback
-                execute_task_with_dependencies(*current_execution_context_,
-                                               dependent,
-                                               std::move(dependent_input));
-            }
-        }
-    };
-
     Task* task_ptr = execution_context.get_task(task_id);
-    task_queue_.emplace(task_id, task_ptr, std::move(input), std::move(completion_callback));
+    task_queue_.emplace(task_id, task_ptr, std::move(input));
 }
 
 void SequentialScheduler::process_all_tasks() {
@@ -158,10 +121,56 @@ void SequentialScheduler::process_all_tasks() {
                 result = task.input;
             }
 
+            // Check if this is a pipeline task (not a dynamic task)
+            bool is_pipeline_task = current_pipeline_ && task.task_id < static_cast<TaskIndex>(current_pipeline_->size());
+            
+            // Check if task has dependents  
+            bool has_dependents = !current_execution_context_->get_task_dependents(task.task_id).empty();
+            
+            // Always store results for ALL tasks - dependency chain needs them
             current_execution_context_->set_task_output(task.task_id, result);
+            
+            // Fulfill promise for ALL tasks (pipeline and dynamic)
+            if (is_pipeline_task) {
+                // Pipeline task promises handled by Pipeline
+                if (has_dependents) {
+                    current_pipeline_->fulfill_promise(task.task_id, result);
+                } else {
+                    current_pipeline_->fulfill_promise(task.task_id, std::move(result));
+                }
+            } else {
+                // Dynamic task promises handled by ExecutorContext
+                if (has_dependents) {
+                    current_execution_context_->fulfill_dynamic_promise(task.task_id, result);
+                } else {
+                    current_execution_context_->fulfill_dynamic_promise(task.task_id, std::move(result));
+                }
+            }
 
-            if (task.completion_callback) {
-                task.completion_callback(result);
+            // Handle dependency chain directly
+            task_completed_[task.task_id] = true;
+
+            // Trigger dependent tasks
+            for (TaskIndex dependent : current_execution_context_->get_task_dependents(task.task_id)) {
+                if (--dependency_count_[dependent] == 0) {
+                    // All dependencies satisfied - submit the dependent task
+                    std::any dependent_input;
+
+                    if (current_execution_context_->get_task_dependencies(dependent).size() == 1) {
+                        // Single dependency - consume the output
+                        dependent_input = current_execution_context_->consume_task_output(task.task_id);
+                    } else {
+                        // Multiple dependencies - combine inputs
+                        std::vector<std::any> combined_inputs;
+                        for (TaskIndex dep : current_execution_context_->get_task_dependencies(dependent)) {
+                            combined_inputs.push_back(current_execution_context_->consume_task_output(dep));
+                        }
+                        dependent_input = combined_inputs;
+                    }
+
+                    // Submit dependent task directly without callback
+                    execute_task_with_dependencies(*current_execution_context_, dependent, std::move(dependent_input));
+                }
             }
 
         } catch (const std::exception& e) {
@@ -169,10 +178,15 @@ void SequentialScheduler::process_all_tasks() {
                 "SequentialScheduler: Exception executing task %d: %s",
                 task.task_id, e.what());
 
-            // Still call callback to avoid hanging
-            if (task.completion_callback) {
-                task.completion_callback(std::any{});
+            // Fulfill pipeline promise with exception if this is a pipeline task
+            if (current_pipeline_) {
+                current_pipeline_->fulfill_promise_exception(task.task_id, std::current_exception());
             }
+
+            // Mark task as completed even in error case to avoid hanging dependent tasks
+            task_completed_[task.task_id] = true;
+            
+            // Don't trigger dependent tasks in error case - let them fail naturally
         }
     }
 
@@ -227,12 +241,7 @@ void SequentialScheduler::process_remaining_dynamic_tasks() {
             task_input = combined_inputs;
         }
 
-        auto completion_callback = [this, task_id](std::any result) {
-            current_execution_context_->set_task_output(task_id,
-                                                        std::move(result));
-        };
-
-        task_queue_.emplace(task_id, task_ptr, std::move(task_input), std::move(completion_callback));
+        task_queue_.emplace(task_id, task_ptr, std::move(task_input));
     }
 }
 

@@ -300,4 +300,15 @@ bool ExecutorContext::wait_for_task_completion(TaskIndex index) {
     return true;
 }
 
+void ExecutorContext::set_promise_fulfiller(TaskIndex index, std::function<void(const std::any&)> fulfiller) {
+    promise_fulfillers_[index] = std::move(fulfiller);
+}
+
+void ExecutorContext::fulfill_dynamic_promise(TaskIndex index, const std::any& result) const {
+    auto it = promise_fulfillers_.find(index);
+    if (it != promise_fulfillers_.end()) {
+        it->second(result);
+    }
+}
+
 }  // namespace dftracer::utils
