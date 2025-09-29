@@ -1,6 +1,8 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/executors/executor_context.h>
 #include <dftracer/utils/pipeline/pipeline.h>
+#include <chrono>
+#include <thread>
 
 namespace dftracer::utils {
 
@@ -284,6 +286,18 @@ std::any ExecutorContext::consume_task_output(TaskIndex index) {
     }
 
     return result;
+}
+
+
+void ExecutorContext::mark_task_completed(TaskIndex index) {
+    set_task_completed(index, true);
+}
+
+bool ExecutorContext::wait_for_task_completion(TaskIndex index) {
+    while (!is_task_completed(index)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
 }
 
 }  // namespace dftracer::utils

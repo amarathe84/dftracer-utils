@@ -3,6 +3,7 @@
 
 #include <dftracer/utils/common/typedefs.h>
 #include <dftracer/utils/pipeline/executors/scheduler/scheduler.h>
+#include <dftracer/utils/pipeline/tasks/task.h>
 
 #include <any>
 #include <functional>
@@ -41,16 +42,12 @@ class SequentialScheduler : public Scheduler {
     SequentialScheduler();
     ~SequentialScheduler() = default;
 
-    PipelineOutput execute(const Pipeline& pipeline, std::any input) override;
-    void submit(TaskIndex task_id, std::any input,
-                std::function<void(std::any)> completion_callback) override;
-    void submit(TaskIndex task_id, Task* task_ptr, std::any input,
-                std::function<void(std::any)> completion_callback) override;
-    void signal_task_completion() override { /* no-op */ }
+    PipelineOutput execute(const Pipeline& pipeline, const std::any& input) override;
+    void submit_dynamic_task(TaskIndex task_id, Task* task_ptr, const std::any& input);
 
    private:
     void execute_task_with_dependencies(ExecutorContext& execution_context,
-                                        TaskIndex task_id, std::any input);
+                                        TaskIndex task_id, const std::any& input);
     void process_all_tasks();
     void process_remaining_dynamic_tasks();
 };

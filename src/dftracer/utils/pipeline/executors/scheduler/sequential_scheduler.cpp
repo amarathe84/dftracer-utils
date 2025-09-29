@@ -14,7 +14,7 @@ SequentialScheduler::SequentialScheduler()
     : current_execution_context_(nullptr) {}
 
 PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
-                                            std::any input) {
+                                            const std::any& input) {
     ExecutorContext execution_context(&pipeline);
     current_execution_context_ = &execution_context;
 
@@ -75,22 +75,19 @@ PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
     return terminal_outputs;
 }
 
-void SequentialScheduler::submit(
-    TaskIndex task_id, std::any input,
-    std::function<void(std::any)> completion_callback) {
-    submit(task_id, nullptr, std::move(input), std::move(completion_callback));
+void SequentialScheduler::submit_dynamic_task(TaskIndex task_id, Task* task_ptr, const std::any& input) {
+    if (!current_execution_context_) {
+        return;
+    }
+    
+    task_queue_.emplace(task_id, task_ptr, input, [this, task_id](std::any result) {
+        current_execution_context_->set_task_output(task_id, std::move(result));
+    });
 }
 
-void SequentialScheduler::submit(
-    TaskIndex task_id, Task* task_ptr, std::any input,
-    std::function<void(std::any)> completion_callback) {
-    task_queue_.emplace(task_id, task_ptr, std::move(input),
-                        std::move(completion_callback));
-    DFTRACER_UTILS_LOG_DEBUG("SequentialScheduler: Queued task %d", task_id);
-}
 
 void SequentialScheduler::execute_task_with_dependencies(
-    ExecutorContext& execution_context, TaskIndex task_id, std::any input) {
+    ExecutorContext& execution_context, TaskIndex task_id, const std::any& input) {
     auto completion_callback = [this, task_id](std::any result) {
         current_execution_context_->set_task_output(task_id, std::move(result));
         task_completed_[task_id] = true;
@@ -129,7 +126,7 @@ void SequentialScheduler::execute_task_with_dependencies(
     };
 
     Task* task_ptr = execution_context.get_task(task_id);
-    submit(task_id, task_ptr, std::move(input), completion_callback);
+    task_queue_.emplace(task_id, task_ptr, std::move(input), std::move(completion_callback));
 }
 
 void SequentialScheduler::process_all_tasks() {
@@ -235,7 +232,7 @@ void SequentialScheduler::process_remaining_dynamic_tasks() {
                                                         std::move(result));
         };
 
-        submit(task_id, task_ptr, std::move(task_input), completion_callback);
+        task_queue_.emplace(task_id, task_ptr, std::move(task_input), std::move(completion_callback));
     }
 }
 

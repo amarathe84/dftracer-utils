@@ -48,18 +48,14 @@ class TaskResult {
    private:
     ExecutorContext* context_;
 
-    // Constructor for dynamic tasks (with ref counting)
     TaskResult(TaskIndex task_id, std::future<O> task_future,
                ExecutorContext* ctx)
         : id(task_id), future(std::move(task_future)), context_(ctx) {
         if (context_) context_->increment_user_ref(id);
     }
 
-    // Constructor for pipeline tasks (no ref counting - these are terminal
-    // outputs)
     TaskResult(TaskIndex task_id, std::future<O> task_future)
         : id(task_id), future(std::move(task_future)), context_(nullptr) {
-        // No ref counting needed - pipeline tasks are terminal by definition
     }
 
     friend class Pipeline;

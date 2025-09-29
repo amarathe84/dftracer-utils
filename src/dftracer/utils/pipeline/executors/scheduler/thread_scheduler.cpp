@@ -2,398 +2,370 @@
 #include <dftracer/utils/pipeline/error.h>
 #include <dftracer/utils/pipeline/executors/executor_context.h>
 #include <dftracer/utils/pipeline/executors/scheduler/thread_scheduler.h>
+#include <dftracer/utils/pipeline/executors/scheduler/task_item.h>
 #include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/tasks/task_context.h>
 
 #include <algorithm>
 #include <any>
-#include <chrono>
 #include <iostream>
-#include <numeric>
-#include <random>
-#include <thread>
-#include <unordered_map>
 
 namespace dftracer::utils {
-ThreadScheduler::ThreadScheduler() : current_execution_context_(nullptr) {}
+ThreadScheduler::ThreadScheduler() = default;
 
 ThreadScheduler::~ThreadScheduler() { shutdown(); }
 
 void ThreadScheduler::initialize(std::size_t num_threads) {
     shutdown();
-
-    should_terminate_ = false;
-    workers_ready_ = false;
-    active_tasks_ = 0;
-
-    // Reset all state variables after shutdown
+    
+    running_ = true;
+    pending_count_ = 0;
+    
     {
-        std::lock_guard<std::mutex> lock(cv_mutex_);
-        task_completed_.clear();
-        dependency_count_.clear();
-        current_execution_context_ = nullptr;
+        std::lock_guard<std::mutex> results_lock(results_mutex_);
+        completed_results_.clear();
+        remaining_deps_.clear();
+        dependents_.clear();
+        dependencies_.clear();
+        dependent_count_.clear();
+        tasks_with_futures_.clear();
+        promises_.clear();
     }
-
-    queues_.clear();
-    queues_.reserve(num_threads);
-
-    for (std::size_t i = 0; i < num_threads; ++i) {
-        auto queue = std::make_unique<TaskQueue>();
-        queues_.push_back(std::move(queue));
-    }
-
-    for (std::size_t i = 0; i < queues_.size(); ++i) {
-        if (!queues_[i]) {
-            throw std::runtime_error("Failed to create TaskQueue " +
-                                     std::to_string(i));
+    
+    {
+        std::lock_guard<std::mutex> queue_lock(queue_mutex_);
+        while (!ready_queue_.empty()) {
+            ready_queue_.pop();
         }
     }
-
+    
     workers_.clear();
     workers_.reserve(num_threads);
-
     for (std::size_t i = 0; i < num_threads; ++i) {
-        workers_.emplace_back(&ThreadScheduler::worker_thread, this, i);
+        workers_.emplace_back(&ThreadScheduler::worker_thread, this);
     }
+}
 
-    // Signal workers that they can start processing
-    workers_ready_ = true;
-    cv_.notify_all();
+void ThreadScheduler::reset() {
+    remaining_deps_.clear();
+    dependents_.clear();
+    dependencies_.clear();
+    dependent_count_.clear();
+    tasks_with_futures_.clear();
+    promises_.clear();
 }
 
 void ThreadScheduler::shutdown() {
     {
-        std::lock_guard<std::mutex> lock(cv_mutex_);
-        should_terminate_ = true;
-        workers_ready_ = false;
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        running_ = false;
     }
-    cv_.notify_all();
-
+    queue_cv_.notify_all();
+    
     for (auto& worker : workers_) {
         if (worker.joinable()) {
             worker.join();
         }
     }
-
+    
     workers_.clear();
-    queues_.clear();
-
-    // Reset counters after threads are joined
-    {
-        std::lock_guard<std::mutex> lock(cv_mutex_);
-        active_tasks_ = 0;
-        task_completed_.clear();
-        dependency_count_.clear();
-        current_execution_context_ = nullptr;
-    }
-
-    DFTRACER_UTILS_LOG_DEBUG("%s", "GlobalScheduler shutdown complete");
+    pending_count_ = 0;
+    
+    DFTRACER_UTILS_LOG_DEBUG("%s", "ThreadScheduler shutdown complete");
 }
 
-void ThreadScheduler::submit(
-    TaskIndex task_id, std::any input,
-    std::function<void(std::any)> completion_callback) {
-    submit(task_id, nullptr, std::move(input), std::move(completion_callback));
-}
-
-void ThreadScheduler::submit(
-    TaskIndex task_id, Task* task_ptr, std::any input,
-    std::function<void(std::any)> completion_callback) {
-    if (queues_.empty()) {
-        throw std::runtime_error(
-            "GlobalScheduler not initialized - no task queues available");
-    }
-
-    TaskItem task(task_id, task_ptr, std::move(input),
-                  std::move(completion_callback));
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<std::size_t> dist(0, queues_.size() - 1);
-    std::size_t queue_id = dist(gen);
-
-    queues_[queue_id]->push(std::move(task));
-
-    active_tasks_++;
-
-    // Notify one waiting thread
-    cv_.notify_one();
-}
 
 PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline,
-                                        std::any input) {
+                                        const std::any& input) {
     ExecutorContext execution_context(&pipeline);
+    current_pipeline_ = &pipeline;
     current_execution_context_ = &execution_context;
-
+    
     if (!execution_context.validate()) {
         throw PipelineError(PipelineError::VALIDATION_ERROR,
                             "Pipeline validation failed");
     }
-
-    task_completed_.clear();
-    dependency_count_.clear();
-
-    TaskIndex initial_pipeline_size = static_cast<TaskIndex>(pipeline.size());
-
-    for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
-        task_completed_[i] = false;
-        dependency_count_[i] =
-            static_cast<int>(execution_context.get_task_dependencies(i).size());
-    }
-
-    for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
-        if (execution_context.get_task_dependencies(i).empty()) {
-            // Submit immediately with original input
-            auto completion_callback = [this, &execution_context,
-                                        i](std::any result) {
-                execution_context.set_task_output(i, std::move(result));
-                task_completed_[i] = true;
-
-                // Process dependent tasks
-                for (TaskIndex dependent :
-                     execution_context.get_task_dependents(i)) {
-                    if (--dependency_count_[dependent] == 0) {
-                        // All dependencies satisfied - submit the dependent
-                        // task
-                        std::any dependent_input;
-
-                        if (execution_context.get_task_dependencies(dependent)
-                                .size() == 1) {
-                            // Single dependency - consume the output
-                            dependent_input =
-                                execution_context.consume_task_output(i);
-                        } else {
-                            // Multiple dependencies - combine inputs
-                            std::vector<std::any> combined_inputs;
-                            for (TaskIndex dep :
-                                 execution_context.get_task_dependencies(
-                                     dependent)) {
-                                combined_inputs.push_back(
-                                    execution_context.consume_task_output(dep));
-                            }
-                            dependent_input = combined_inputs;
-                        }
-
-                        // Submit dependent task with recursive callback
-                        submit_with_dependency_handling(
-                            execution_context, dependent,
-                            std::move(dependent_input));
-                    }
-                }
-
-                // Decrement active tasks counter
-                active_tasks_--;
-                if (active_tasks_ == 0) {
-                    cv_.notify_all();
-                }
-            };
-
-            Task* task_ptr = execution_context.get_task(i);
-            submit(i, task_ptr, input, completion_callback);
-        }
-    }
-
-    // Wait for ALL tasks (main + dynamically emitted) to complete
-    // The key insight: we need to wait until both conditions are stable:
-    // 1. No active tasks being processed (active_tasks_ == 0)
-    // 2. No queued tasks waiting to be processed (all queues empty)
-
-    while (true) {
-        // Wait for current active tasks to complete
-        wait_for_completion();
-
-        // Check if any new tasks were emitted during execution
-        if (!queues_empty() && active_tasks_ == 0) {
-            // Wake up workers to process queued tasks
-            cv_.notify_all();
-        } else if (queues_empty() && active_tasks_ == 0) {
-            // No work left - we're done
-            break;
-        }
-    }
-
-    // Find the terminal tasks (those that no other tasks depend on)
-    std::vector<TaskIndex> terminal_tasks;
-    for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline.size()); ++i) {
-        if (execution_context.get_task_dependents(i).empty()) {
-            terminal_tasks.push_back(i);
-        }
-    }
-
-    // Clean up execution context reference
-    current_execution_context_ = nullptr;
-
-    PipelineOutput terminal_outputs;
-
-    if (terminal_tasks.empty()) {
-        // No terminal tasks - return input with special key
-        terminal_outputs[-1] = input;
-    } else {
-        // One or more terminal tasks - return all with their IDs
-        for (TaskIndex id : terminal_tasks) {
-            terminal_outputs[id] = execution_context.get_task_output(id);
-        }
-    }
-
-    return terminal_outputs;
-}
-
-void ThreadScheduler::worker_thread(size_t thread_id) {
+    
+    setup_dependencies(pipeline);
+    
+    queue_ready_tasks(pipeline, input);
+    
     {
-        std::unique_lock<std::mutex> lock(cv_mutex_);
-        cv_.wait(lock, [this] { return workers_ready_ || should_terminate_; });
-    }
-
-    if (should_terminate_) {
-        return;
-    }
-
-    // Random number generator for selecting queues to steal from
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    while (!should_terminate_) {
-        TaskItem task;
-        bool found_task = false;
-
-        found_task = queues_[thread_id]->pop(task);
-
-        // If no task in own queue, try to steal from other queues
-        if (!found_task) {
-            std::vector<std::size_t> queue_indices(queues_.size());
-            std::iota(queue_indices.begin(), queue_indices.end(), 0);
-            std::shuffle(queue_indices.begin(), queue_indices.end(), gen);
-
-            for (std::size_t i : queue_indices) {
-                if (i != thread_id && queues_[i]->steal(task)) {
-                    found_task = true;
+        std::unique_lock<std::mutex> lock(done_mutex_);
+        done_cv_.wait(lock, [this] { return pending_count_ == 0; });
+        
+        while (true) {
+            {
+                std::lock_guard<std::mutex> queue_lock(queue_mutex_);
+                if (ready_queue_.empty() && pending_count_ == 0) {
                     break;
                 }
             }
+            done_cv_.wait(lock, [this] { return pending_count_ == 0; });
         }
+    }
+    
+    auto results = extract_terminal_outputs(pipeline);
+    
+    current_pipeline_ = nullptr;
+    current_execution_context_ = nullptr;
+    
+    return results;
+}
 
-        if (found_task) {
-            try {
-                TaskIndex task_id = task.task_id;
-                std::any result;
-
-                if (task.task_ptr) {
-                    if (task.task_ptr->needs_context()) {
-                        TaskContext task_context(
-                            this, current_execution_context_, task_id);
-                        task.task_ptr->setup_context(&task_context);
-                    }
-                    result = task.task_ptr->execute(task.input);
-                    DFTRACER_UTILS_LOG_DEBUG("Worker %zu executed task %d",
-                                             thread_id, task_id);
-                } else {
-                    // Fallback for tasks without pointer (shouldn't happen in
-                    // normal execution)
-                    DFTRACER_UTILS_LOG_WARN(
-                        "Worker %zu: No task pointer for task %d, using input "
-                        "as result",
-                        thread_id, task_id);
-                    result = task.input;
-                }
-
-                {
-                    std::lock_guard<std::mutex> lock(results_mutex_);
-                    current_execution_context_->set_task_output(task_id,
-                                                                result);
-                }
-
-                if (task.completion_callback) {
-                    task.completion_callback(result);
-                }
-            } catch (const std::exception& e) {
-                DFTRACER_UTILS_LOG_ERROR(
-                    "Exception in worker thread %zu executing task %d: %s",
-                    thread_id, task.task_id, e.what());
-                // Still call callback to avoid hanging the pipeline
-                if (task.completion_callback) {
-                    task.completion_callback(std::any{});
-                }
-            }
-        } else {
-            // No task found, wait for notification
-            std::unique_lock<std::mutex> lock(cv_mutex_);
-            if (!should_terminate_) {
-                // Wait for new tasks to be submitted or termination signal
-                cv_.wait(lock, [this]() {
-                    return should_terminate_ || !queues_empty();
-                });
-            } else {
+void ThreadScheduler::submit_dynamic_task(TaskIndex task_id, Task* task_ptr, const std::any& input) {
+    if (!running_ || !current_execution_context_) {
+        return;
+    }
+    
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    
+    tasks_with_futures_.insert(task_id);
+    
+    const auto& deps = current_execution_context_->get_dynamic_dependencies(task_id);
+    if (deps.empty()) {
+        ready_queue_.push({task_id, task_ptr, std::move(const_cast<std::any&>(input))});
+        pending_count_++;
+        queue_cv_.notify_one();
+    } else {
+        remaining_deps_[task_id] = static_cast<int>(deps.size());
+        dependencies_[task_id] = deps;
+        
+        for (TaskIndex dep : deps) {
+            dependents_[dep].push_back(task_id);
+            dependent_count_[dep]++;
+        }
+        
+        bool all_satisfied = true;
+        for (TaskIndex dep : deps) {
+            std::lock_guard<std::mutex> results_lock(results_mutex_);
+            if (completed_results_.find(dep) == completed_results_.end()) {
+                all_satisfied = false;
                 break;
             }
         }
-    }
-
-    DFTRACER_UTILS_LOG_DEBUG("Worker thread %zu terminated", thread_id);
-}
-
-void ThreadScheduler::wait_for_completion() {
-    std::unique_lock<std::mutex> lock(cv_mutex_);
-    cv_.wait(lock, [this]() { return active_tasks_ == 0 && queues_empty(); });
-}
-
-void ThreadScheduler::signal_task_completion() {
-    active_tasks_--;
-    // Always notify to wake up main thread for completion check
-    cv_.notify_all();
-}
-
-void ThreadScheduler::submit_with_dependency_handling(
-    ExecutorContext& execution_context, TaskIndex task_id, std::any input) {
-    auto completion_callback = [this, &execution_context,
-                                task_id](std::any result) {
-        current_execution_context_->set_task_output(task_id, std::move(result));
-        task_completed_[task_id] = true;
-
-        // Process dependent tasks recursively
-        for (TaskIndex dependent :
-             execution_context.get_task_dependents(task_id)) {
-            if (--dependency_count_[dependent] == 0) {
-                // All dependencies satisfied - prepare input
-                std::any dependent_input;
-
-                if (execution_context.get_task_dependencies(dependent).size() ==
-                    1) {
-                    // Single dependency - consume the output
-                    dependent_input =
-                        execution_context.consume_task_output(task_id);
+        
+        if (all_satisfied) {
+            std::shared_ptr<std::any> task_input;
+            {
+                std::lock_guard<std::mutex> results_lock(results_mutex_);
+                if (deps.size() == 1) {
+                    task_input = completed_results_[deps[0]];
                 } else {
-                    // Multiple dependencies
-                    std::vector<std::any> combined_inputs;
-                    for (TaskIndex dep :
-                         execution_context.get_task_dependencies(dependent)) {
-                        combined_inputs.push_back(
-                            execution_context.consume_task_output(dep));
+                    auto vector_storage = std::make_shared<std::vector<const std::any*>>();
+                    for (TaskIndex dep : deps) {
+                        vector_storage->push_back(completed_results_[dep].get());
                     }
-                    dependent_input = combined_inputs;
+                    task_input = std::make_shared<std::any>(std::move(vector_storage));
                 }
+            }
+            
+            ready_queue_.push({task_id, task_ptr, task_input});
+            pending_count_++;
+            queue_cv_.notify_one();
+        }
+    }
+}
 
-                // Submit dependent task recursively
-                submit_with_dependency_handling(execution_context, dependent,
-                                                std::move(dependent_input));
+void ThreadScheduler::add_dynamic_dependency_tracking(TaskIndex task_id, const std::vector<TaskIndex>& dependencies) {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    
+    if (!dependencies.empty()) {
+        remaining_deps_[task_id] = static_cast<int>(dependencies.size());
+        dependencies_[task_id] = dependencies;
+        
+        for (TaskIndex dep : dependencies) {
+            dependents_[dep].push_back(task_id);
+            dependent_count_[dep]++;
+        }
+    }
+}
+
+void ThreadScheduler::worker_thread() {
+    while (running_) {
+        TaskItem task;
+        
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            queue_cv_.wait(lock, [this] { 
+                return !running_ || !ready_queue_.empty(); 
+            });
+            
+            if (!running_) {
+                break;
+            }
+            
+            if (!ready_queue_.empty()) {
+                task = std::move(ready_queue_.front());
+                ready_queue_.pop();
+            } else {
+                continue;
             }
         }
-
-        active_tasks_--;
-        // Always notify to check for completion
-        cv_.notify_all();
-    };
-
-    Task* task_ptr = execution_context.get_task(task_id);
-    submit(task_id, task_ptr, std::move(input), completion_callback);
-}
-
-bool ThreadScheduler::queues_empty() const {
-    for (const auto& queue : queues_) {
-        if (!queue->empty()) {
-            return false;
+        
+        try {
+            std::any result;
+            
+            if (task.task_ptr) {
+                if (task.task_ptr->needs_context()) {
+                    TaskContext task_context(this, current_execution_context_, task.task_id);
+                    task.task_ptr->setup_context(&task_context);
+                }
+                
+                result = task.task_ptr->execute(const_cast<std::any&>(task.get_input()));
+                DFTRACER_UTILS_LOG_DEBUG("Worker executed task %d", task.task_id);
+            } else {
+                DFTRACER_UTILS_LOG_WARN("No task pointer for task %d", task.task_id);
+                result = task.get_input();
+            }
+            
+            {
+                std::lock_guard<std::mutex> lock(results_mutex_);
+                
+                completed_results_[task.task_id] = std::make_shared<std::any>(std::move(result));
+                
+                if (current_execution_context_) {
+                    current_execution_context_->mark_task_completed(task.task_id);
+                    current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
+                }
+            }
+            
+            process_completion(task.task_id);
+            
+        } catch (const std::exception& e) {
+            DFTRACER_UTILS_LOG_ERROR(
+                "Exception in worker thread executing task %d: %s",
+                task.task_id, e.what());
+            {
+                std::lock_guard<std::mutex> lock(results_mutex_);
+                completed_results_[task.task_id] = std::make_shared<std::any>();
+            }
+            process_completion(task.task_id);
+        }
+        
+        if (--pending_count_ == 0) {
+            std::lock_guard<std::mutex> lock(done_mutex_);
+            done_cv_.notify_all();
         }
     }
-    return true;
+    
+    DFTRACER_UTILS_LOG_DEBUG("Worker thread terminated");
+}
+
+void ThreadScheduler::process_completion(TaskIndex completed_task) {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    
+    if (auto it = dependents_.find(completed_task); it != dependents_.end()) {
+        for (TaskIndex dependent : it->second) {
+            if (--remaining_deps_[dependent] == 0) {
+                auto deps = get_dependencies(dependent);
+                std::shared_ptr<std::any> input_ptr;
+                
+                {
+                    std::lock_guard<std::mutex> results_lock(results_mutex_);
+                    if (deps.size() == 1) {
+                        input_ptr = completed_results_[deps[0]];
+                    } else {
+                        auto vector_storage = std::make_shared<std::vector<const std::any*>>();
+                        for (TaskIndex dep : deps) {
+                            vector_storage->push_back(completed_results_[dep].get());
+                        }
+                        input_ptr = std::make_shared<std::any>(std::move(vector_storage));
+                    }
+                }
+                
+                ready_queue_.push({dependent, get_task(dependent), input_ptr});
+                pending_count_++;
+                queue_cv_.notify_one();
+            }
+        }
+    }
+    
+    if (auto dep_it = dependents_.find(completed_task); dep_it != dependents_.end()) {
+        if (--dependent_count_[completed_task] == 0) {
+            if (tasks_with_futures_.find(completed_task) == tasks_with_futures_.end()) {
+                std::lock_guard<std::mutex> results_lock(results_mutex_);
+                completed_results_.erase(completed_task);
+            }
+        }
+    }
+    
+}
+
+void ThreadScheduler::setup_dependencies(const Pipeline& pipeline) {
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline.size()); ++i) {
+        const auto& deps = pipeline.get_task_dependencies(i);
+        remaining_deps_[i] = static_cast<int>(deps.size());
+        dependencies_[i] = deps;
+        
+        for (TaskIndex dep : deps) {
+            dependents_[dep].push_back(i);
+            dependent_count_[dep]++;
+        }
+    }
+}
+
+void ThreadScheduler::queue_ready_tasks(const Pipeline& pipeline, const std::any& input) {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    
+    auto input_storage = std::make_shared<std::any>(input);
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline.size()); ++i) {
+        if (remaining_deps_[i] == 0) {
+            ready_queue_.push({i, pipeline.get_task(i), input_storage});
+            pending_count_++;
+        }
+    }
+    
+    queue_cv_.notify_all();
+}
+
+PipelineOutput ThreadScheduler::extract_terminal_outputs(const Pipeline& pipeline) {
+    PipelineOutput terminal_outputs;
+    
+    std::vector<TaskIndex> terminal_tasks;
+    for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline.size()); ++i) {
+        if (pipeline.get_task_dependents(i).empty()) {
+            terminal_tasks.push_back(i);
+        }
+    }
+    
+    if (terminal_tasks.empty()) {
+        terminal_outputs[-1] = std::any{};
+    } else {
+        std::lock_guard<std::mutex> lock(results_mutex_);
+        for (TaskIndex id : terminal_tasks) {
+            if (auto it = completed_results_.find(id); it != completed_results_.end() && it->second) {
+                terminal_outputs[id] = *it->second;
+            } else {
+                terminal_outputs[id] = std::any{};
+            }
+        }
+    }
+    
+    return terminal_outputs;
+}
+
+Task* ThreadScheduler::get_task(TaskIndex task_id) const {
+    if (current_pipeline_) {
+        Task* pipeline_task = current_pipeline_->get_task(task_id);
+        if (pipeline_task) {
+            return pipeline_task;
+        }
+    }
+    
+    return current_execution_context_ ? current_execution_context_->get_dynamic_task(task_id) : nullptr;
+}
+
+std::vector<TaskIndex> ThreadScheduler::get_dependencies(TaskIndex task_id) const {
+    if (auto it = dependencies_.find(task_id); it != dependencies_.end()) {
+        return it->second;
+    }
+    
+    if (current_execution_context_) {
+        return current_execution_context_->get_dynamic_dependencies(task_id);
+    }
+    
+    return {};
 }
 
 }  // namespace dftracer::utils

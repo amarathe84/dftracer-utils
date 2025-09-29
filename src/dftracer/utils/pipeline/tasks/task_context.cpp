@@ -16,27 +16,21 @@ void TaskContext::add_dependency(TaskIndex from, TaskIndex to) {
     execution_context_->add_dynamic_dependency(from, to);
 }
 
-void TaskContext::schedule(TaskIndex task_id, std::any input) {
-    if (!scheduler_) {
+void TaskContext::schedule(TaskIndex task_id, const std::any& input) {
+    if (!scheduler_ || !execution_context_) {
         return;
     }
 
-    // Submit all dynamic tasks - the scheduler will handle dependency
-    // resolution
-    auto completion_callback = [scheduler = scheduler_](std::any) {
-        // Signal completion for dynamic tasks (matching pipeline task behavior)
-        if (scheduler) {
-            scheduler->signal_task_completion();
-        }
-    };
-
-    Task* task_ptr = execution_context_->get_task(task_id);
+    Task* task_ptr = execution_context_->get_dynamic_task(task_id);
     if (!task_ptr) {
         return;
     }
 
-    scheduler_->submit(task_id, task_ptr, std::move(input),
-                       completion_callback);
+    if (auto* thread_scheduler = dynamic_cast<ThreadScheduler*>(scheduler_)) {
+        thread_scheduler->submit_dynamic_task(task_id, task_ptr, input);
+    } else if (auto* seq_scheduler = dynamic_cast<SequentialScheduler*>(scheduler_)) {
+        seq_scheduler->submit_dynamic_task(task_id, task_ptr, input);
+    }
 }
 
 }  // namespace dftracer::utils

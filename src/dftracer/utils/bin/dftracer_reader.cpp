@@ -108,6 +108,8 @@ int main(int argc, char **argv) {
                                ? (gz_path + constants::indexer::EXTENSION)
                                : index_path;
 
+    ArchiveFormat format = IndexerFactory::detect_format(gz_path);
+
     DFTRACER_UTILS_LOG_DEBUG("Detected format: %s",
                              format == ArchiveFormat::TAR_GZ ? "TAR.GZ"
                              : format == ArchiveFormat::GZIP ? "GZIP"

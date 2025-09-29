@@ -3,17 +3,18 @@
 
 #include <dftracer/utils/common/typedefs.h>
 #include <dftracer/utils/pipeline/executors/scheduler/scheduler.h>
-#include <dftracer/utils/pipeline/executors/scheduler/thread_task_queue.h>
+#include <dftracer/utils/pipeline/executors/scheduler/task_item.h>
 #include <dftracer/utils/pipeline/tasks/task.h>
 
 #include <atomic>
 #include <condition_variable>
-#include <deque>
-#include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace dftracer::utils {
@@ -32,31 +33,46 @@ class ThreadScheduler : public Scheduler {
 
     void initialize(std::size_t num_threads);
     void shutdown();
-    void submit(TaskIndex task_id, std::any input,
-                std::function<void(std::any)> completion_callback) override;
-    void submit(TaskIndex task_id, Task* task_ptr, std::any input,
-                std::function<void(std::any)> completion_callback) override;
-    PipelineOutput execute(const Pipeline& pipeline, std::any input) override;
-    void signal_task_completion() override;
+    virtual void reset() override; 
+    
+    PipelineOutput execute(const Pipeline& pipeline, const std::any& input) override;
+    
+    void submit_dynamic_task(TaskIndex task_id, Task* task_ptr, const std::any& input);
+    void add_dynamic_dependency_tracking(TaskIndex task_id, const std::vector<TaskIndex>& dependencies);
 
    private:
-    std::vector<std::unique_ptr<TaskQueue>> queues_;
+    std::unordered_map<TaskIndex, std::shared_ptr<std::any>> completed_results_;
+    std::queue<TaskItem> ready_queue_;
+    std::atomic<int> pending_count_{0};
     std::vector<std::thread> workers_;
-    std::atomic<bool> should_terminate_{false};
-    std::atomic<bool> workers_ready_{false};
-    std::atomic<std::size_t> active_tasks_{0};
-    std::condition_variable cv_;
-    std::mutex cv_mutex_;
-    std::unordered_map<TaskIndex, std::atomic<bool>> task_completed_;
-    std::unordered_map<TaskIndex, std::atomic<int>> dependency_count_;
-    ExecutorContext* current_execution_context_;
+    
+    std::unordered_map<TaskIndex, std::atomic<int>> remaining_deps_;
+    std::unordered_map<TaskIndex, std::vector<TaskIndex>> dependents_;
+    std::unordered_map<TaskIndex, std::vector<TaskIndex>> dependencies_;
+    std::unordered_map<TaskIndex, std::atomic<int>> dependent_count_;
+    
+    std::unordered_set<TaskIndex> tasks_with_futures_;
+    
+    std::unordered_map<TaskIndex, std::shared_ptr<std::promise<std::any>>> promises_;
+    
+    std::atomic<bool> running_{true};
+    std::condition_variable done_cv_;
+    std::condition_variable queue_cv_;
+    std::mutex done_mutex_;
+    std::mutex queue_mutex_;
     std::mutex results_mutex_;
-
-    void worker_thread(std::size_t thread_id);
-    void wait_for_completion();
-    void submit_with_dependency_handling(ExecutorContext& execution_context,
-                                         TaskIndex task_id, std::any input);
-    bool queues_empty() const;
+    
+    const Pipeline* current_pipeline_{nullptr};
+    ExecutorContext* current_execution_context_{nullptr};
+    
+    void worker_thread();
+    
+    void setup_dependencies(const Pipeline& pipeline);
+    void queue_ready_tasks(const Pipeline& pipeline, const std::any& input);
+    void process_completion(TaskIndex completed_task);
+    PipelineOutput extract_terminal_outputs(const Pipeline& pipeline);
+    Task* get_task(TaskIndex task_id) const;
+    std::vector<TaskIndex> get_dependencies(TaskIndex task_id) const;
 };
 
 }  // namespace dftracer::utils

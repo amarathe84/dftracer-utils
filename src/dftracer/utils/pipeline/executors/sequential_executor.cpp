@@ -2,6 +2,7 @@
 #include <dftracer/utils/pipeline/executors/scheduler/sequential_scheduler.h>
 #include <dftracer/utils/pipeline/executors/sequential_executor.h>
 #include <dftracer/utils/pipeline/tasks/task_context.h>
+#include <dftracer/utils/pipeline/tasks/task_result.h>
 
 #include <any>
 #include <unordered_map>

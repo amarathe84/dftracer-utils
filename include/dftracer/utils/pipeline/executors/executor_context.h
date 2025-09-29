@@ -7,8 +7,10 @@
 
 #include <any>
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <memory>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -46,10 +48,19 @@ class ExecutorContext {
     void set_task_completed(TaskIndex index, bool completed);
     bool is_task_completed(TaskIndex index) const;
 
-    // New reference counting methods
     void increment_user_ref(TaskIndex index);
     void release_user_ref(TaskIndex index);
     std::any consume_task_output(TaskIndex index);
+    
+    template<typename O>
+    O wait_and_get_result(TaskIndex index) {
+        while (!is_task_completed(index)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return std::any_cast<O>(get_task_output(index));
+    }
+    void mark_task_completed(TaskIndex index);
+    bool wait_for_task_completion(TaskIndex index);
 
     void set_task_promise(TaskIndex index,
                           std::shared_ptr<std::promise<std::any>> promise);

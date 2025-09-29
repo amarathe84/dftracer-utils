@@ -41,21 +41,18 @@ class TaskContext {
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        const Input<I>& input) {
-        auto [wrapped_func, future] =
-            wrap_function_with_promise<I, O>(std::move(func));
+        auto [wrapped_func, future] = wrap_function_with_promise<I, O>(std::move(func));
         auto task = make_task<I, O>(std::move(wrapped_func));
         TaskIndex task_id =
             execution_context_->add_dynamic_task(std::move(task), -1);
-        schedule(task_id, std::move(input.value));
+        schedule(task_id, input.value());
         return TaskResult<O>{task_id, std::move(future), execution_context_};
     }
 
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        DependsOn depends_on) {
-        auto [wrapped_func, future] =
-            wrap_function_with_promise<I, O>(std::move(func));
-
+        auto [wrapped_func, future] = wrap_function_with_promise<I, O>(std::move(func));
         auto task = make_task<I, O>(std::move(wrapped_func));
         if (depends_on.id >= 0) {
             Task* dep_task = execution_context_->get_task(depends_on.id);
@@ -77,13 +74,12 @@ class TaskContext {
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        const Input<I>& input, DependsOn depends_on) {
-        auto [wrapped_func, future] =
-            wrap_function_with_promise<I, O>(std::move(func));
+        auto [wrapped_func, future] = wrap_function_with_promise<I, O>(std::move(func));
         auto task = make_task<I, O>(std::move(wrapped_func));
         TaskIndex task_id = execution_context_->add_dynamic_task(
             std::move(task), depends_on.id);
 
-        schedule(task_id, std::move(input.value));
+        schedule(task_id, input.value());
         return TaskResult<O>{task_id, std::move(future), execution_context_};
     }
 
@@ -94,7 +90,7 @@ class TaskContext {
     }
 
    private:
-    void schedule(TaskIndex task_id, std::any input);
+    void schedule(TaskIndex task_id, const std::any& input);
 };
 
 }  // namespace dftracer::utils

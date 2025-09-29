@@ -24,16 +24,13 @@ namespace dftracer::utils {
 class Pipeline {
    protected:
     std::vector<std::unique_ptr<Task>> nodes_;
-    std::vector<std::vector<TaskIndex>>
-        dependencies_;  // who depends on this task
-    std::vector<std::vector<TaskIndex>>
-        dependents_;    // who this task depends on
+    std::vector<std::vector<TaskIndex>> dependencies_;
+    std::vector<std::vector<TaskIndex>> dependents_;
 
    public:
     Pipeline() = default;
     virtual ~Pipeline() = default;
 
-    // Move-only class
     Pipeline(const Pipeline&) = delete;
     Pipeline& operator=(const Pipeline&) = delete;
     Pipeline(Pipeline&&) = default;

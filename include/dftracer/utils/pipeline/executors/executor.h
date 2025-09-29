@@ -18,6 +18,7 @@ class Executor {
     virtual PipelineOutput execute(const Pipeline& pipeline,
                                    std::any input) = 0;
     inline ExecutorType type() const { return type_; }
+    virtual void reset() {}
 
    public:
     const ExecutorType type_;

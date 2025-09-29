@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_PIPELINE_EXECUTORS_THREAD_EXECUTOR_H
 
 #include <dftracer/utils/pipeline/executors/executor.h>
+#include <dftracer/utils/pipeline/executors/scheduler/thread_scheduler.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -14,6 +15,7 @@ namespace dftracer::utils {
 class ThreadExecutor : public Executor {
    private:
     std::size_t max_threads_;
+    ThreadScheduler scheduler_;
 
    public:
     ThreadExecutor();
@@ -25,6 +27,7 @@ class ThreadExecutor : public Executor {
     ThreadExecutor& operator=(ThreadExecutor&&) = default;
 
     PipelineOutput execute(const Pipeline& pipeline, std::any input) override;
+    virtual void reset() override;
 };
 
 }  // namespace dftracer::utils

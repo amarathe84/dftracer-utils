@@ -3,11 +3,8 @@
 
 #include <dftracer/utils/common/typedefs.h>
 #include <dftracer/utils/pipeline/pipeline_output.h>
-#include <dftracer/utils/pipeline/tasks/task.h>
 
 #include <any>
-#include <functional>
-#include <memory>
 
 namespace dftracer::utils {
 class Pipeline;
@@ -15,13 +12,11 @@ class Pipeline;
 class Scheduler {
    public:
     virtual ~Scheduler() = default;
+
+    virtual void reset() {}
+    
     virtual PipelineOutput execute(const Pipeline& pipeline,
-                                   std::any input) = 0;
-    virtual void submit(TaskIndex task_id, std::any input,
-                        std::function<void(std::any)> completion_callback) = 0;
-    virtual void submit(TaskIndex task_id, Task* task_ptr, std::any input,
-                        std::function<void(std::any)> completion_callback) = 0;
-    virtual void signal_task_completion() = 0;
+                                   const std::any& input) = 0;
 };
 
 }  // namespace dftracer::utils

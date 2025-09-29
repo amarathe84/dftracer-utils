@@ -22,6 +22,7 @@ ThreadExecutor::ThreadExecutor()
     : Executor(ExecutorType::THREAD),
       max_threads_(std::thread::hardware_concurrency()) {
     if (max_threads_ == 0) max_threads_ = 2;
+    scheduler_.initialize(max_threads_);
     DFTRACER_UTILS_LOG_DEBUG(
         "ThreadExecutor initialized with max_threads = %zu", max_threads_);
 }
@@ -31,18 +32,22 @@ ThreadExecutor::ThreadExecutor(size_t max_threads)
     if (max_threads_ == 0) {
         max_threads_ = 2;
     }
+    scheduler_.initialize(max_threads_);
     DFTRACER_UTILS_LOG_DEBUG(
         "ThreadExecutor initialized with max_threads = %zu", max_threads_);
 }
 
-ThreadExecutor::~ThreadExecutor() = default;
+ThreadExecutor::~ThreadExecutor() {
+    scheduler_.shutdown();
+}
+
+void ThreadExecutor::reset() {
+    scheduler_.reset();
+}
 
 PipelineOutput ThreadExecutor::execute(const Pipeline& pipeline,
                                        std::any input) {
-    ThreadScheduler scheduler;
-    scheduler.initialize(max_threads_);
-    PipelineOutput result = scheduler.execute(pipeline, input);
-    scheduler.shutdown();
+    PipelineOutput result = scheduler_.execute(pipeline, input);
     return result;
 }
 
