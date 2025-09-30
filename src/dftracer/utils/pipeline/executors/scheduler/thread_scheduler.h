@@ -41,7 +41,6 @@ class ThreadScheduler : public Scheduler {
     void add_dynamic_dependency_tracking(TaskIndex task_id, const std::vector<TaskIndex>& dependencies);
 
    private:
-    std::unordered_map<TaskIndex, std::shared_ptr<std::any>> completed_results_;
     std::queue<TaskItem> ready_queue_;
     std::atomic<int> pending_count_{0};
     std::vector<std::thread> workers_;

@@ -18,9 +18,7 @@ private:
     
 public:
     static Input ref(const T& val) {
-        Input input;
-        input.data_ = std::reference_wrapper<const T>(val);
-        return input;
+        return Input(val);
     }
     
     static Input copy(const T& val) {
@@ -30,9 +28,7 @@ public:
     }
     
     static Input move(T&& val) {
-        Input input;
-        input.data_ = std::move(val);
-        return input;
+        return Input(std::move(val), true);
     }
     
     const T& value() const {
@@ -45,6 +41,7 @@ public:
     
 private:
     Input() = default;
+    Input(T&& val, bool) : data_(std::move(val)) {}
 };
 
 struct DependsOn {

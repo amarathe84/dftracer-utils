@@ -83,6 +83,7 @@ class ExecutorContext {
     bool validate() const;
     bool is_empty() const;
     bool has_cycles() const;
+    bool is_terminal_task(TaskIndex index) const;
 
    private:
     std::vector<std::unique_ptr<Task>> dynamic_tasks_;

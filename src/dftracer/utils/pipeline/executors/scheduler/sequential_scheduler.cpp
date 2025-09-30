@@ -33,21 +33,18 @@ PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
 
     TaskIndex initial_pipeline_size = static_cast<TaskIndex>(pipeline.size());
 
-    // Initialize dependency counts and completion status
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
         task_completed_[i] = false;
         dependency_count_[i] =
             execution_context.get_task_dependencies(i).size();
     }
 
-    // Execute tasks with no dependencies first (like ThreadScheduler)
     for (TaskIndex i = 0; i < initial_pipeline_size; ++i) {
         if (execution_context.get_task_dependencies(i).empty()) {
             execute_task_with_dependencies(execution_context, i, input);
         }
     }
 
-    // Find the terminal tasks (those that no other tasks depend on)
     std::vector<TaskIndex> terminal_tasks;
     for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline.size()); ++i) {
         if (execution_context.get_task_dependents(i).empty()) {
@@ -55,19 +52,15 @@ PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
         }
     }
 
-    // Process all queued tasks
     process_all_tasks();
 
     current_execution_context_ = nullptr;
 
-    // Always return unordered_map for consistency
     PipelineOutput terminal_outputs;
 
     if (terminal_tasks.empty()) {
-        // No terminal tasks - return input with special key
         terminal_outputs[-1] = input;
     } else {
-        // One or more terminal tasks - return all with their IDs
         for (TaskIndex id : terminal_tasks) {
             terminal_outputs[id] = execution_context.get_task_output(id);
         }
@@ -127,10 +120,9 @@ void SequentialScheduler::process_all_tasks() {
             // Check if task has dependents  
             bool has_dependents = !current_execution_context_->get_task_dependents(task.task_id).empty();
             
-            // Always store results for ALL tasks - dependency chain needs them
             current_execution_context_->set_task_output(task.task_id, result);
             
-            // Fulfill promise for ALL tasks (pipeline and dynamic)
+            // Fulfill promise for ALL tasks
             if (is_pipeline_task) {
                 // Pipeline task promises handled by Pipeline
                 if (has_dependents) {
@@ -147,7 +139,6 @@ void SequentialScheduler::process_all_tasks() {
                 }
             }
 
-            // Handle dependency chain directly
             task_completed_[task.task_id] = true;
 
             // Trigger dependent tasks
@@ -185,12 +176,9 @@ void SequentialScheduler::process_all_tasks() {
 
             // Mark task as completed even in error case to avoid hanging dependent tasks
             task_completed_[task.task_id] = true;
-            
-            // Don't trigger dependent tasks in error case - let them fail naturally
         }
     }
 
-    // Process any dynamic tasks that became ready during execution
     process_remaining_dynamic_tasks();
 }
 
@@ -204,7 +192,6 @@ void SequentialScheduler::process_remaining_dynamic_tasks() {
 
     for (std::size_t idx = 0; idx < dynamic_count; ++idx) {
         TaskIndex task_id = static_cast<TaskIndex>(pipeline_size + idx);
-        // Skip if already executed
         if (current_execution_context_->is_task_completed(task_id)) {
             continue;
         }

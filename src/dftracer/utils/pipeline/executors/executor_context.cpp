@@ -251,6 +251,12 @@ bool ExecutorContext::is_empty() const { return pipeline_->empty(); }
 
 bool ExecutorContext::has_cycles() const { return pipeline_->has_cycles(); }
 
+bool ExecutorContext::is_terminal_task(TaskIndex index) const {
+    // Only main pipeline tasks (not dynamically emitted) should be stored in ExecutorContext
+    // Dynamic tasks are handled through promises/futures only
+    return index < static_cast<TaskIndex>(pipeline_->size());
+}
+
 void ExecutorContext::increment_user_ref(TaskIndex index) {
     auto it = task_outputs_.find(index);
     if (it != task_outputs_.end()) {

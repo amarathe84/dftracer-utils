@@ -75,7 +75,7 @@ TEST_CASE("Pipeline - Task emission") {
     Pipeline pipeline;
 
     auto emitting_task = [](int input, TaskContext& ctx) -> int {
-        auto child_task = [](int x, TaskContext& ctx2) -> int { return x * 3; };
+        auto child_task = [](int x, TaskContext&) -> int { return x * 3; };
 
         ctx.emit<int, int>(child_task, Input{input * 2},
                            DependsOn{ctx.current()});
@@ -94,7 +94,7 @@ TEST_CASE("Pipeline - Task emission") {
 TEST_CASE("Pipeline - String processing") {
     Pipeline pipeline;
 
-    auto string_task = [](std::string input, TaskContext& ctx) -> std::string {
+    auto string_task = [](std::string input, TaskContext&) -> std::string {
         return "Processed: " + input;
     };
 
@@ -111,7 +111,7 @@ TEST_CASE("Pipeline - String processing") {
 TEST_CASE("Pipeline - Vector processing") {
     Pipeline pipeline;
 
-    auto vector_task = [](std::vector<int> input, TaskContext& ctx) -> int {
+    auto vector_task = [](std::vector<int> input, TaskContext&) -> int {
         int sum = 0;
         for (const auto& elem : input) {
             sum += elem;
@@ -137,7 +137,7 @@ TEST_CASE("Pipeline - Deterministic execution") {
     auto deterministic_task = [&counter](int input, TaskContext& ctx) -> int {
         for (int i = 0; i < 5; ++i) {
             auto work_task = [&counter, i, input](int work_amount,
-                                                  TaskContext& ctx2) -> int {
+                                                  TaskContext&) -> int {
                 counter++;
                 int result = input;
                 for (int j = 0; j < work_amount * 10; ++j) {
@@ -199,7 +199,7 @@ TEST_CASE("Pipeline - Complex task emission") {
         int sum = 0;
         for (size_t i = 0; i < input.size(); ++i) {
             auto element_processor = [i](int element,
-                                         TaskContext& ctx2) -> int {
+                                         TaskContext&) -> int {
                 return element * element;
             };
 
@@ -229,7 +229,7 @@ TEST_CASE("Pipeline - Thread safety") {
                                               TaskContext& ctx) -> int {
         for (int i = 0; i < 10; ++i) {
             auto atomic_task = [&shared_counter, i](int x,
-                                                    TaskContext& ctx2) -> int {
+                                                    TaskContext&) -> int {
                 shared_counter++;
                 return x + i;
             };
@@ -252,7 +252,7 @@ TEST_CASE("Pipeline - Thread safety") {
 TEST_CASE("Pipeline - Error handling") {
     Pipeline pipeline;
 
-    auto error_task = [](int input, TaskContext& ctx) -> int {
+    auto error_task = [](int input, TaskContext&) -> int {
         if (input < 0) {
             return -1;
         }
@@ -286,7 +286,7 @@ TEST_CASE("Pipeline - Empty pipeline") {
 TEST_CASE("Pipeline - Different executor thread counts") {
     Pipeline pipeline;
 
-    auto simple_task = [](int input, TaskContext& ctx) -> int {
+    auto simple_task = [](int input, TaskContext&) -> int {
         return input * 3;
     };
 
@@ -305,9 +305,9 @@ TEST_CASE("Pipeline - Different executor thread counts") {
 TEST_CASE("Pipeline - Cyclic dependency detection") {
     Pipeline pipeline;
 
-    auto task1 = [](int input, TaskContext& ctx) -> int { return input + 1; };
+    auto task1 = [](int input, TaskContext&) -> int { return input + 1; };
 
-    auto task2 = [](int input, TaskContext& ctx) -> int { return input * 2; };
+    auto task2 = [](int input, TaskContext&) -> int { return input * 2; };
 
     auto t1 = pipeline.add_task<int, int>(task1);
     auto t2 = pipeline.add_task<int, int>(task2);
@@ -322,11 +322,11 @@ TEST_CASE("Pipeline - Cyclic dependency detection") {
 TEST_CASE("Pipeline - Type mismatch validation") {
     Pipeline pipeline;
 
-    auto string_task = [](int input, TaskContext& ctx) -> std::string {
+    auto string_task = [](int input, TaskContext&) -> std::string {
         return std::to_string(input);
     };
 
-    auto int_task = [](int input, TaskContext& ctx) -> int {
+    auto int_task = [](int input, TaskContext&) -> int {
         return input * 2;
     };
 
@@ -342,12 +342,12 @@ TEST_CASE("Pipeline - Type mismatch validation") {
 TEST_CASE("Pipeline - Multiple dependencies") {
     Pipeline pipeline;
 
-    auto task1 = [](int input, TaskContext& ctx) -> int { return input + 10; };
+    auto task1 = [](int input, TaskContext&) -> int { return input + 10; };
 
-    auto task2 = [](int input, TaskContext& ctx) -> int { return input * 2; };
+    auto task2 = [](int input, TaskContext&) -> int { return input * 2; };
 
     auto combiner_task = [](std::vector<std::any> inputs,
-                            TaskContext& ctx) -> int {
+                            TaskContext&) -> int {
         int sum = 0;
         for (const auto& input : inputs) {
             sum += std::any_cast<int>(input);
@@ -372,11 +372,11 @@ TEST_CASE("Pipeline - Multiple dependencies") {
 TEST_CASE("Pipeline - Multiple dependencies type mismatch") {
     Pipeline pipeline;
 
-    auto task1 = [](int input, TaskContext& ctx) -> int { return input + 10; };
+    auto task1 = [](int input, TaskContext&) -> int { return input + 10; };
 
-    auto task2 = [](int input, TaskContext& ctx) -> int { return input * 2; };
+    auto task2 = [](int input, TaskContext&) -> int { return input * 2; };
 
-    auto bad_combiner = [](int input, TaskContext& ctx) -> int {
+    auto bad_combiner = [](int input, TaskContext&) -> int {
         return input;
     };
 
@@ -394,16 +394,16 @@ TEST_CASE("Pipeline - Multiple dependencies type mismatch") {
 TEST_CASE("Pipeline - Complex dependency graph") {
     Pipeline pipeline;
 
-    auto add_task = [](int input, TaskContext& ctx) -> int {
+    auto add_task = [](int input, TaskContext&) -> int {
         return input + 1;
     };
 
-    auto multiply_task = [](int input, TaskContext& ctx) -> int {
+    auto multiply_task = [](int input, TaskContext&) -> int {
         return input * 2;
     };
 
     auto combiner_task = [](std::vector<std::any> inputs,
-                            TaskContext& ctx) -> int {
+                            TaskContext&) -> int {
         int product = 1;
         for (const auto& input : inputs) {
             product *= std::any_cast<int>(input);
@@ -436,7 +436,7 @@ TEST_CASE("Pipeline - Task context usage") {
     std::vector<TaskIndex> emitted_tasks;
 
     auto context_task = [&emitted_tasks](int input, TaskContext& ctx) -> int {
-        auto child_task = [input](int multiplier, TaskContext& ctx2) -> int {
+        auto child_task = [input](int multiplier, TaskContext&) -> int {
             return input * multiplier;
         };
 
@@ -472,7 +472,7 @@ TEST_CASE("Pipeline - Large pipeline stress test") {
     std::vector<TaskIndex> tasks;
 
     for (int i = 0; i < 100; ++i) {
-        auto task = [i](int input, TaskContext& ctx) -> int {
+        auto task = [i](int input, TaskContext&) -> int {
             return input + i;
         };
 

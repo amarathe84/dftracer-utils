@@ -5,16 +5,7 @@
 #include <dftracer/utils/pipeline/executors/thread_executor.h>
 
 #include <any>
-#include <atomic>
-#include <condition_variable>
-#include <deque>
-#include <functional>
-#include <future>
-#include <memory>
-#include <mutex>
 #include <thread>
-#include <unordered_map>
-#include <vector>
 
 namespace dftracer::utils {
 

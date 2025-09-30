@@ -27,7 +27,6 @@ class Pipeline {
     std::vector<std::vector<TaskIndex>> dependencies_;
     std::vector<std::vector<TaskIndex>> dependents_;
     
-    // Store promise fulfillment functions for ALL tasks (pipeline + dynamic)
     std::unordered_map<TaskIndex, std::function<void(const std::any&)>> promise_fulfillers_;
     std::unordered_map<TaskIndex, std::function<void(std::exception_ptr)>> promise_exception_fulfillers_;
 
@@ -45,38 +44,30 @@ class Pipeline {
     template <typename I, typename O>
     TaskResult<O> add_task(std::function<O(I, TaskContext&)> func,
                            TaskIndex depends_on = -1) {
-        // Don't wrap with promise - execute directly to avoid copying
         auto task = make_task<I, O>(std::move(func));
         TaskIndex task_id = add_task(std::move(task), depends_on);
         
-        // Create promise for TaskResult - will be fulfilled by scheduler
         auto promise = std::make_shared<std::promise<O>>();
         auto future = promise->get_future();
         
-        // Store type-safe fulfillment function
         promise_fulfillers_[task_id] = [promise](const std::any& result) {
             try {
                 auto& typed_result = std::any_cast<const O&>(result);
                 promise->set_value(typed_result);
             } catch (const std::future_error& e) {
-                // Promise already set, ignore
             } catch (const std::bad_any_cast& e) {
                 promise->set_exception(std::make_exception_ptr(
                     std::runtime_error("Type mismatch in promise fulfillment: " + std::string(e.what()))));
             }
         };
         
-        // Store exception fulfillment function
         promise_exception_fulfillers_[task_id] = [promise](std::exception_ptr exception) {
             try {
                 promise->set_exception(exception);
             } catch (const std::future_error& e) {
-                // Promise already set, ignore
             }
         };
         
-        // Note: We'll need ExecutorContext to be available here for reference counting
-        // For now, return TaskResult without ExecutorContext - reference counting will be handled elsewhere
         return TaskResult<O>{task_id, std::move(future)};
     }
 
@@ -113,7 +104,6 @@ class Pipeline {
     bool has_cycles() const;
     std::vector<TaskIndex> topological_sort() const;
     
-    // Method for schedulers to fulfill promises for ALL tasks
     void fulfill_promise(TaskIndex task_id, const std::any& result) const {
         auto it = promise_fulfillers_.find(task_id);
         if (it != promise_fulfillers_.end()) {
@@ -121,7 +111,6 @@ class Pipeline {
         }
     }
     
-    // Method for schedulers to fulfill promises with exceptions for ALL tasks
     void fulfill_promise_exception(TaskIndex task_id, std::exception_ptr exception) const {
         auto it = promise_exception_fulfillers_.find(task_id);
         if (it != promise_exception_fulfillers_.end()) {
@@ -129,7 +118,6 @@ class Pipeline {
         }
     }
     
-    // Method for dynamic tasks to register their promises
     template<typename O>
     void register_dynamic_promise(TaskIndex task_id, std::shared_ptr<std::promise<O>> promise) {
         promise_fulfillers_[task_id] = [promise](const std::any& result) {
@@ -137,7 +125,6 @@ class Pipeline {
                 auto& typed_result = std::any_cast<const O&>(result);
                 promise->set_value(typed_result);
             } catch (const std::future_error& e) {
-                // Promise already set, ignore
             } catch (const std::bad_any_cast& e) {
                 promise->set_exception(std::make_exception_ptr(
                     std::runtime_error("Type mismatch in dynamic promise fulfillment: " + std::string(e.what()))));
@@ -148,7 +135,6 @@ class Pipeline {
             try {
                 promise->set_exception(exception);
             } catch (const std::future_error& e) {
-                // Promise already set, ignore
             }
         };
     }

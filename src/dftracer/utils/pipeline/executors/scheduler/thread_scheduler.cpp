@@ -23,7 +23,7 @@ void ThreadScheduler::initialize(std::size_t num_threads) {
     
     {
         std::lock_guard<std::mutex> results_lock(results_mutex_);
-        completed_results_.clear();
+        // No more completed_results_ to clear
         remaining_deps_.clear();
         dependents_.clear();
         dependencies_.clear();
@@ -53,6 +53,11 @@ void ThreadScheduler::reset() {
     dependent_count_.clear();
     tasks_with_futures_.clear();
     promises_.clear();
+    
+    // Also reset ExecutorContext to clear task outputs
+    if (current_execution_context_) {
+        current_execution_context_->reset();
+    }
 }
 
 void ThreadScheduler::shutdown() {
@@ -138,8 +143,7 @@ void ThreadScheduler::submit_dynamic_task(TaskIndex task_id, Task* task_ptr, con
         
         bool all_satisfied = true;
         for (TaskIndex dep : deps) {
-            std::lock_guard<std::mutex> results_lock(results_mutex_);
-            if (completed_results_.find(dep) == completed_results_.end()) {
+            if (!current_execution_context_->is_task_completed(dep)) {
                 all_satisfied = false;
                 break;
             }
@@ -147,17 +151,14 @@ void ThreadScheduler::submit_dynamic_task(TaskIndex task_id, Task* task_ptr, con
         
         if (all_satisfied) {
             std::shared_ptr<std::any> task_input;
-            {
-                std::lock_guard<std::mutex> results_lock(results_mutex_);
-                if (deps.size() == 1) {
-                    task_input = completed_results_[deps[0]];
-                } else {
-                    auto vector_storage = std::make_shared<std::vector<const std::any*>>();
-                    for (TaskIndex dep : deps) {
-                        vector_storage->push_back(completed_results_[dep].get());
-                    }
-                    task_input = std::make_shared<std::any>(std::move(vector_storage));
+            if (deps.size() == 1) {
+                task_input = std::make_shared<std::any>(current_execution_context_->get_task_output(deps[0]));
+            } else {
+                std::vector<std::any> combined_inputs;
+                for (TaskIndex dep : deps) {
+                    combined_inputs.push_back(current_execution_context_->get_task_output(dep));
                 }
+                task_input = std::make_shared<std::any>(std::move(combined_inputs));
             }
             
             ready_queue_.push({task_id, task_ptr, task_input});
@@ -226,20 +227,27 @@ void ThreadScheduler::worker_thread() {
                 bool is_pipeline_task = current_pipeline_ && task.task_id < static_cast<TaskIndex>(current_pipeline_->size());
                 
                 if (is_pipeline_task) {
-                    // For pipeline tasks: Always store results for extract_terminal_outputs
-                    completed_results_[task.task_id] = std::make_shared<std::any>(result);
-                    if (current_execution_context_) {
-                        current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
-                    }
+                    bool has_dependents = current_execution_context_ ? 
+                        !current_execution_context_->get_task_dependents(task.task_id).empty() : false;
                     
-                    // Always fulfill promise for pipeline tasks
-                    current_pipeline_->fulfill_promise(task.task_id, result);
+                    if (has_dependents) {
+                        // Has dependents - must copy for both ExecutorContext and promise
+                        if (current_execution_context_) {
+                            current_execution_context_->set_task_output(task.task_id, result);
+                        }
+                        current_pipeline_->fulfill_promise(task.task_id, result);
+                    } else {
+                        // No dependents - can move to promise, skip ExecutorContext storage for non-terminal tasks
+                        bool is_terminal = current_execution_context_ ? 
+                            current_execution_context_->is_terminal_task(task.task_id) : false;
+                        if (current_execution_context_ && is_terminal) {
+                            current_execution_context_->set_task_output(task.task_id, result);
+                        }
+                        current_pipeline_->fulfill_promise(task.task_id, std::move(result));
+                    }
                 } else {
-                    // For dynamic tasks: Always store and fulfill dynamic promise
-                    completed_results_[task.task_id] = std::make_shared<std::any>(result);
                     if (current_execution_context_) {
-                        current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
-                        current_execution_context_->fulfill_dynamic_promise(task.task_id, result);
+                        current_execution_context_->fulfill_dynamic_promise(task.task_id, std::move(result));
                     }
                 }
                 
@@ -258,17 +266,15 @@ void ThreadScheduler::worker_thread() {
             {
                 std::lock_guard<std::mutex> lock(results_mutex_);
                 
-                // Always store empty result (needed for dependency chain)
-                completed_results_[task.task_id] = std::make_shared<std::any>();
+                // Store empty result for dependency chain and mark completed
+                if (current_execution_context_) {
+                    current_execution_context_->set_task_output(task.task_id, std::any{});
+                    current_execution_context_->mark_task_completed(task.task_id);
+                }
                 
                 // Additionally fulfill promise with exception if this is a pipeline task
                 if (current_pipeline_ && task.task_id < static_cast<TaskIndex>(current_pipeline_->size())) {
                     current_pipeline_->fulfill_promise_exception(task.task_id, std::current_exception());
-                }
-                
-                if (current_execution_context_) {
-                    current_execution_context_->mark_task_completed(task.task_id);
-                    current_execution_context_->set_task_output(task.task_id, *completed_results_[task.task_id]);
                 }
             }
             process_completion(task.task_id);
@@ -280,7 +286,7 @@ void ThreadScheduler::worker_thread() {
         }
     }
     
-    DFTRACER_UTILS_LOG_DEBUG("Worker thread terminated");
+    DFTRACER_UTILS_LOG_DEBUG("Worker thread terminated", "");
 }
 
 void ThreadScheduler::process_completion(TaskIndex completed_task) {
@@ -292,17 +298,14 @@ void ThreadScheduler::process_completion(TaskIndex completed_task) {
                 auto deps = get_dependencies(dependent);
                 std::shared_ptr<std::any> input_ptr;
                 
-                {
-                    std::lock_guard<std::mutex> results_lock(results_mutex_);
-                    if (deps.size() == 1) {
-                        input_ptr = completed_results_[deps[0]];
-                    } else {
-                        auto vector_storage = std::make_shared<std::vector<const std::any*>>();
-                        for (TaskIndex dep : deps) {
-                            vector_storage->push_back(completed_results_[dep].get());
-                        }
-                        input_ptr = std::make_shared<std::any>(std::move(vector_storage));
+                if (deps.size() == 1) {
+                    input_ptr = std::make_shared<std::any>(current_execution_context_->get_task_output(deps[0]));
+                } else {
+                    std::vector<std::any> combined_inputs;
+                    for (TaskIndex dep : deps) {
+                        combined_inputs.push_back(current_execution_context_->get_task_output(dep));
                     }
+                    input_ptr = std::make_shared<std::any>(std::move(combined_inputs));
                 }
                 
                 ready_queue_.push({dependent, get_task(dependent), input_ptr});
@@ -311,16 +314,6 @@ void ThreadScheduler::process_completion(TaskIndex completed_task) {
             }
         }
     }
-    
-    if (auto dep_it = dependents_.find(completed_task); dep_it != dependents_.end()) {
-        if (--dependent_count_[completed_task] == 0) {
-            if (tasks_with_futures_.find(completed_task) == tasks_with_futures_.end()) {
-                std::lock_guard<std::mutex> results_lock(results_mutex_);
-                completed_results_.erase(completed_task);
-            }
-        }
-    }
-    
 }
 
 void ThreadScheduler::setup_dependencies(const Pipeline& pipeline) {
@@ -363,10 +356,9 @@ PipelineOutput ThreadScheduler::extract_terminal_outputs(const Pipeline& pipelin
     if (terminal_tasks.empty()) {
         terminal_outputs[-1] = std::any{};
     } else {
-        std::lock_guard<std::mutex> lock(results_mutex_);
         for (TaskIndex id : terminal_tasks) {
-            if (auto it = completed_results_.find(id); it != completed_results_.end() && it->second) {
-                terminal_outputs[id] = *it->second;
+            if (current_execution_context_) {
+                terminal_outputs[id] = current_execution_context_->consume_task_output(id);
             } else {
                 terminal_outputs[id] = std::any{};
             }
