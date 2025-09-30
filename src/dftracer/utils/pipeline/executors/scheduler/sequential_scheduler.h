@@ -22,9 +22,7 @@ class SequentialScheduler : public Scheduler {
         std::any input;
 
         TaskItem(TaskIndex id, Task* ptr, std::any inp)
-            : task_id(id),
-              task_ptr(ptr),
-              input(std::move(inp)) {}
+            : task_id(id), task_ptr(ptr), input(std::move(inp)) {}
     };
 
     std::queue<TaskItem> task_queue_;
@@ -34,18 +32,21 @@ class SequentialScheduler : public Scheduler {
         dependency_count_;  // Track remaining dependencies per task
     ExecutorContext* current_execution_context_;  // Active execution context
                                                   // during pipeline execution
-    const Pipeline* current_pipeline_;           // Active pipeline during execution
+    const Pipeline* current_pipeline_;  // Active pipeline during execution
 
    public:
     SequentialScheduler();
     ~SequentialScheduler() = default;
 
-    PipelineOutput execute(const Pipeline& pipeline, const std::any& input) override;
-    void submit_dynamic_task(TaskIndex task_id, Task* task_ptr, const std::any& input);
+    PipelineOutput execute(const Pipeline& pipeline,
+                           const std::any& input) override;
+    void submit_dynamic_task(TaskIndex task_id, Task* task_ptr,
+                             const std::any& input);
 
    private:
     void execute_task_with_dependencies(ExecutorContext& execution_context,
-                                        TaskIndex task_id, const std::any& input);
+                                        TaskIndex task_id,
+                                        const std::any& input);
     void process_all_tasks();
     void process_remaining_dynamic_tasks();
 };

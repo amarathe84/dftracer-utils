@@ -28,7 +28,8 @@ void TaskContext::schedule(TaskIndex task_id, const std::any& input) {
 
     if (auto* thread_scheduler = dynamic_cast<ThreadScheduler*>(scheduler_)) {
         thread_scheduler->submit_dynamic_task(task_id, task_ptr, input);
-    } else if (auto* seq_scheduler = dynamic_cast<SequentialScheduler*>(scheduler_)) {
+    } else if (auto* seq_scheduler =
+                   dynamic_cast<SequentialScheduler*>(scheduler_)) {
         seq_scheduler->submit_dynamic_task(task_id, task_ptr, input);
     }
 }

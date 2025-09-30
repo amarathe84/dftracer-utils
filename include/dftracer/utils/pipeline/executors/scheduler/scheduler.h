@@ -14,7 +14,7 @@ class Scheduler {
     virtual ~Scheduler() = default;
 
     virtual void reset() {}
-    
+
     virtual PipelineOutput execute(const Pipeline& pipeline,
                                    const std::any& input) = 0;
 };

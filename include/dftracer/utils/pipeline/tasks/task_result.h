@@ -28,8 +28,8 @@ class TaskResult {
         other.context_ = nullptr;
     }
 
-    O get() { 
-        auto result = future.get(); 
+    O get() {
+        auto result = future.get();
         if (context_) {
             context_->release_user_ref(id);
             context_ = nullptr;
@@ -62,8 +62,7 @@ class TaskResult {
     }
 
     TaskResult(TaskIndex task_id, std::future<O> task_future)
-        : id(task_id), future(std::move(task_future)), context_(nullptr) {
-    }
+        : id(task_id), future(std::move(task_future)), context_(nullptr) {}
 
     friend class Pipeline;
     friend class TaskContext;

@@ -198,8 +198,7 @@ TEST_CASE("Pipeline - Complex task emission") {
     auto generator = [](std::vector<int> input, TaskContext& ctx) -> int {
         int sum = 0;
         for (size_t i = 0; i < input.size(); ++i) {
-            auto element_processor = [i](int element,
-                                         TaskContext&) -> int {
+            auto element_processor = [i](int element, TaskContext&) -> int {
                 return element * element;
             };
 
@@ -286,9 +285,7 @@ TEST_CASE("Pipeline - Empty pipeline") {
 TEST_CASE("Pipeline - Different executor thread counts") {
     Pipeline pipeline;
 
-    auto simple_task = [](int input, TaskContext&) -> int {
-        return input * 3;
-    };
+    auto simple_task = [](int input, TaskContext&) -> int { return input * 3; };
 
     pipeline.add_task<int, int>(simple_task);
 
@@ -326,9 +323,7 @@ TEST_CASE("Pipeline - Type mismatch validation") {
         return std::to_string(input);
     };
 
-    auto int_task = [](int input, TaskContext&) -> int {
-        return input * 2;
-    };
+    auto int_task = [](int input, TaskContext&) -> int { return input * 2; };
 
     auto t1 = pipeline.add_task<int, std::string>(string_task);
     auto t2 = pipeline.add_task<int, int>(int_task);
@@ -346,8 +341,7 @@ TEST_CASE("Pipeline - Multiple dependencies") {
 
     auto task2 = [](int input, TaskContext&) -> int { return input * 2; };
 
-    auto combiner_task = [](std::vector<std::any> inputs,
-                            TaskContext&) -> int {
+    auto combiner_task = [](std::vector<std::any> inputs, TaskContext&) -> int {
         int sum = 0;
         for (const auto& input : inputs) {
             sum += std::any_cast<int>(input);
@@ -376,9 +370,7 @@ TEST_CASE("Pipeline - Multiple dependencies type mismatch") {
 
     auto task2 = [](int input, TaskContext&) -> int { return input * 2; };
 
-    auto bad_combiner = [](int input, TaskContext&) -> int {
-        return input;
-    };
+    auto bad_combiner = [](int input, TaskContext&) -> int { return input; };
 
     auto t1 = pipeline.add_task<int, int>(task1);
     auto t2 = pipeline.add_task<int, int>(task2);
@@ -394,16 +386,13 @@ TEST_CASE("Pipeline - Multiple dependencies type mismatch") {
 TEST_CASE("Pipeline - Complex dependency graph") {
     Pipeline pipeline;
 
-    auto add_task = [](int input, TaskContext&) -> int {
-        return input + 1;
-    };
+    auto add_task = [](int input, TaskContext&) -> int { return input + 1; };
 
     auto multiply_task = [](int input, TaskContext&) -> int {
         return input * 2;
     };
 
-    auto combiner_task = [](std::vector<std::any> inputs,
-                            TaskContext&) -> int {
+    auto combiner_task = [](std::vector<std::any> inputs, TaskContext&) -> int {
         int product = 1;
         for (const auto& input : inputs) {
             product *= std::any_cast<int>(input);
@@ -472,9 +461,7 @@ TEST_CASE("Pipeline - Large pipeline stress test") {
     std::vector<TaskIndex> tasks;
 
     for (int i = 0; i < 100; ++i) {
-        auto task = [i](int input, TaskContext&) -> int {
-            return input + i;
-        };
+        auto task = [i](int input, TaskContext&) -> int { return input + i; };
 
         auto task_result = pipeline.add_task<int, int>(task);
         tasks.push_back(task_result.id);

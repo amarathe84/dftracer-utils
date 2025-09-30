@@ -60,13 +60,16 @@ class Reader {
     virtual const std::string &get_archive_path() const = 0;
     virtual const std::string &get_idx_path() const = 0;
     virtual void set_buffer_size(std::size_t size) = 0;
-    
+
     // Estimate line count for a byte range (for pre-allocation)
-    virtual std::size_t estimate_lines_in_range(std::size_t start_bytes, std::size_t end_bytes) const {
+    virtual std::size_t estimate_lines_in_range(std::size_t start_bytes,
+                                                std::size_t end_bytes) const {
         if (get_max_bytes() == 0) return 0;
-        double lines_per_byte = static_cast<double>(get_num_lines()) / static_cast<double>(get_max_bytes());
+        double lines_per_byte = static_cast<double>(get_num_lines()) /
+                                static_cast<double>(get_max_bytes());
         double byte_range = static_cast<double>(end_bytes - start_bytes);
-        return static_cast<std::size_t>(byte_range * lines_per_byte * 1.1); // 10% buffer
+        return static_cast<std::size_t>(byte_range * lines_per_byte *
+                                        1.1);  // 10% buffer
     }
 
     // Raw byte reading operations

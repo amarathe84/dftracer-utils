@@ -51,8 +51,8 @@ class ExecutorContext {
     void increment_user_ref(TaskIndex index);
     void release_user_ref(TaskIndex index);
     std::any consume_task_output(TaskIndex index);
-    
-    template<typename O>
+
+    template <typename O>
     O wait_and_get_result(TaskIndex index) {
         while (!is_task_completed(index)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -66,8 +66,9 @@ class ExecutorContext {
                           std::shared_ptr<std::promise<std::any>> promise);
     std::shared_ptr<std::promise<std::any>> get_task_promise(
         TaskIndex index) const;
-    
-    void set_promise_fulfiller(TaskIndex index, std::function<void(const std::any&)> fulfiller);
+
+    void set_promise_fulfiller(TaskIndex index,
+                               std::function<void(const std::any&)> fulfiller);
     void fulfill_dynamic_promise(TaskIndex index, const std::any& result) const;
 
     void set_dependency_count(TaskIndex index, int count);
@@ -98,7 +99,7 @@ class ExecutorContext {
     std::unordered_map<TaskIndex, int> dependency_count_;
     std::unordered_map<TaskIndex, std::shared_ptr<std::promise<std::any>>>
         task_promises_;
-    std::unordered_map<TaskIndex, std::function<void(const std::any&)>> 
+    std::unordered_map<TaskIndex, std::function<void(const std::any&)>>
         promise_fulfillers_;
 };
 

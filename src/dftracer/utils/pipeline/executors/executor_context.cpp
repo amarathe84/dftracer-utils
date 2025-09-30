@@ -1,12 +1,11 @@
 #include <dftracer/utils/common/logging.h>
 #include <dftracer/utils/pipeline/executors/executor_context.h>
 #include <dftracer/utils/pipeline/pipeline.h>
+
 #include <chrono>
 #include <thread>
 
 namespace dftracer::utils {
-
-// Unified task access methods
 Task* ExecutorContext::get_task(TaskIndex index) const {
     if (index < static_cast<TaskIndex>(pipeline_->size())) {
         return pipeline_->get_task(index);
@@ -125,7 +124,6 @@ void ExecutorContext::set_task_output(TaskIndex index, std::any output) {
     auto task_output = std::make_unique<ExecutorTaskOutput>();
     task_output->data = std::move(output);
 
-    // Count downstream dependencies that will need this output
     const auto& dependents = get_task_dependents(index);
     task_output->dependency_refs = static_cast<int>(dependents.size());
 
@@ -195,27 +193,22 @@ void ExecutorContext::reset() {
 }
 
 bool ExecutorContext::validate() const {
-    // Check if pipeline is empty
     if (is_empty()) {
         DFTRACER_UTILS_LOG_ERROR("%s", "Pipeline is empty");
         return false;
     }
 
-    // Check for cycles
     if (has_cycles()) {
         DFTRACER_UTILS_LOG_ERROR("%s", "Pipeline contains cycles");
         return false;
     }
 
-    // Validate types with executor-aware logic
     for (TaskIndex i = 0; i < static_cast<TaskIndex>(pipeline_->size()); ++i) {
         const auto& task_dependencies = get_task_dependencies(i);
 
         if (task_dependencies.empty()) {
-            // No dependencies - entry task (input comes from pipeline input)
             continue;
         } else if (task_dependencies.size() == 1) {
-            // Single dependency - direct output-to-input connection
             TaskIndex dep = task_dependencies[0];
             Task* dep_task = get_task(dep);
             Task* current_task = get_task(i);
@@ -229,9 +222,6 @@ bool ExecutorContext::validate() const {
                 return false;
             }
         } else {
-            // Multiple dependencies - executor combines into
-            // std::vector<std::any> Task must expect std::vector<std::any> as
-            // input
             Task* current_task = get_task(i);
             if (current_task->get_input_type() !=
                 typeid(std::vector<std::any>)) {
@@ -252,8 +242,6 @@ bool ExecutorContext::is_empty() const { return pipeline_->empty(); }
 bool ExecutorContext::has_cycles() const { return pipeline_->has_cycles(); }
 
 bool ExecutorContext::is_terminal_task(TaskIndex index) const {
-    // Only main pipeline tasks (not dynamically emitted) should be stored in ExecutorContext
-    // Dynamic tasks are handled through promises/futures only
     return index < static_cast<TaskIndex>(pipeline_->size());
 }
 
@@ -280,20 +268,17 @@ std::any ExecutorContext::consume_task_output(TaskIndex index) {
         return std::any{};
     }
 
-    // Copy the data before potentially cleaning up
     std::any result = it->second->data;
 
     // Decrement dependency reference
     it->second->dependency_refs.fetch_sub(1);
 
-    // Cleanup if no more references
     if (it->second->can_cleanup()) {
         task_outputs_.erase(index);
     }
 
     return result;
 }
-
 
 void ExecutorContext::mark_task_completed(TaskIndex index) {
     set_task_completed(index, true);
@@ -306,11 +291,13 @@ bool ExecutorContext::wait_for_task_completion(TaskIndex index) {
     return true;
 }
 
-void ExecutorContext::set_promise_fulfiller(TaskIndex index, std::function<void(const std::any&)> fulfiller) {
+void ExecutorContext::set_promise_fulfiller(
+    TaskIndex index, std::function<void(const std::any&)> fulfiller) {
     promise_fulfillers_[index] = std::move(fulfiller);
 }
 
-void ExecutorContext::fulfill_dynamic_promise(TaskIndex index, const std::any& result) const {
+void ExecutorContext::fulfill_dynamic_promise(TaskIndex index,
+                                              const std::any& result) const {
     auto it = promise_fulfillers_.find(index);
     if (it != promise_fulfillers_.end()) {
         it->second(result);

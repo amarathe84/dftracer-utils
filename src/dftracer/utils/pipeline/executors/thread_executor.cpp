@@ -28,13 +28,9 @@ ThreadExecutor::ThreadExecutor(size_t max_threads)
         "ThreadExecutor initialized with max_threads = %zu", max_threads_);
 }
 
-ThreadExecutor::~ThreadExecutor() {
-    scheduler_.shutdown();
-}
+ThreadExecutor::~ThreadExecutor() { scheduler_.shutdown(); }
 
-void ThreadExecutor::reset() {
-    scheduler_.reset();
-}
+void ThreadExecutor::reset() { scheduler_.reset(); }
 
 PipelineOutput ThreadExecutor::execute(const Pipeline& pipeline,
                                        std::any input) {
