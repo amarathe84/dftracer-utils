@@ -124,13 +124,13 @@ static CompressedResult compress_file(const std::string& input_path,
 
 static std::vector<CompressedResult> process_files_parallel(
     const std::vector<std::string>& files, TaskContext& ctx) {
-    std::vector<std::future<CompressedResult>> futures;
+    std::vector<TaskResult<CompressedResult>::Future> futures;
     futures.reserve(files.size());
 
     for (const auto& file_path : files) {
         auto task_result = ctx.emit<std::string, CompressedResult>(
             compress_file, Input{file_path});
-        futures.push_back(std::move(task_result.future));
+        futures.push_back(std::move(task_result.future()));
     }
 
     std::vector<CompressedResult> results;
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
 
     ThreadExecutor executor(num_threads);
     executor.execute(pipeline, pfw_files);
-    std::vector<CompressedResult> results = task_result.future.get();
+    std::vector<CompressedResult> results = task_result.get();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end_time - start_time;

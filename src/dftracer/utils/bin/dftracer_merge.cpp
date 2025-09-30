@@ -17,7 +17,6 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
-#include <future>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -188,7 +187,7 @@ static MergeResult process_pfw_file(const std::string& pfw_path,
 static std::vector<MergeResult> process_files_parallel(
     const std::vector<std::string>& files, std::size_t checkpoint_size,
     bool force_rebuild, const std::string& temp_dir, TaskContext& p_ctx) {
-    std::vector<std::future<MergeResult>> futures;
+    std::vector<TaskResult<MergeResult>::Future> futures;
     futures.reserve(files.size());
 
     auto process_file = [&temp_dir, checkpoint_size, force_rebuild](
@@ -219,7 +218,7 @@ static std::vector<MergeResult> process_files_parallel(
     for (const auto& file_path : files) {
         auto task_result = p_ctx.emit<std::string, MergeResult>(
             process_file, Input{file_path});
-        futures.push_back(std::move(task_result.future));
+        futures.push_back(std::move(task_result.future()));
     }
 
     std::vector<MergeResult> results;
@@ -380,7 +379,7 @@ int main(int argc, char** argv) {
 
     ThreadExecutor executor(num_threads);
     executor.execute(pipeline, input_files);
-    std::vector<MergeResult> results = task_result.future.get();
+    std::vector<MergeResult> results = task_result.get();
 
     // Concatenate all temp files into final output
     FILE* output_fp = std::fopen(output_file.c_str(), "w");

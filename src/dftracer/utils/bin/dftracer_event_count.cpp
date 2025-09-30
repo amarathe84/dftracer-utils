@@ -30,7 +30,7 @@ static std::size_t process_files_parallel(const std::vector<std::string>& files,
                                           std::size_t checkpoint_size,
                                           bool force_rebuild,
                                           TaskContext& ctx) {
-    std::vector<std::future<std::size_t>> futures;
+    std::vector<TaskResult<std::size_t>::Future> futures;
     futures.reserve(files.size());
 
     auto process_file = [checkpoint_size, force_rebuild](
@@ -79,7 +79,7 @@ static std::size_t process_files_parallel(const std::vector<std::string>& files,
     for (const auto& file_path : files) {
         auto task_result =
             ctx.emit<std::string, std::size_t>(process_file, Input{file_path});
-        futures.push_back(std::move(task_result.future));
+        futures.push_back(std::move(task_result.future()));
     }
 
     std::size_t total_count = 0;
@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
 
     ThreadExecutor executor(num_threads);
     executor.execute(pipeline, pfw_files);
-    std::size_t total_events = task_result.future.get();
+    std::size_t total_events = task_result.get();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end_time - start_time;

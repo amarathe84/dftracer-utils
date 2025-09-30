@@ -6,42 +6,35 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <utility>
+#include <chrono>
 
 namespace dftracer::utils {
 
 class TaskContext;
 class ExecutorContext;
-
 template <typename O>
 class TaskResult {
    public:
-    TaskIndex id;
-    std::future<O> future;
-
+    TaskResult() : id_(-1), future_(), context_(nullptr) {}
     TaskResult(const TaskResult&) = delete;
     TaskResult& operator=(const TaskResult&) = delete;
 
+    using Status = std::future_status;
+    using Future = std::future<O>;
+    using SharedFuture = std::shared_future<O>;
+
     TaskResult(TaskResult&& other)
-        : id(other.id),
-          future(std::move(other.future)),
+        : id_(other.id_),
+          future_(std::move(other.future_)),
           context_(other.context_) {
         other.context_ = nullptr;
     }
-
-    O get() {
-        auto result = future.get();
-        if (context_) {
-            context_->release_user_ref(id);
-            context_ = nullptr;
-        }
-        return result;
-    }
-
     TaskResult& operator=(TaskResult&& other) {
         if (this != &other) {
-            if (context_) context_->release_user_ref(id);
-            id = other.id;
-            future = std::move(other.future);
+            if (context_) context_->release_user_ref(id_);
+            id_ = other.id_;
+            future_ = std::move(other.future_);
             context_ = other.context_;
             other.context_ = nullptr;
         }
@@ -49,20 +42,49 @@ class TaskResult {
     }
 
     ~TaskResult() {
-        if (context_) context_->release_user_ref(id);
+        if (context_) context_->release_user_ref(id_);
+    }
+
+    O get() {
+        auto result = future_.get();
+        if (context_) {
+            context_->release_user_ref(id_);
+            context_ = nullptr;
+        }
+        return result;
+    }
+
+    inline void wait() { future_.wait(); }
+    template<class Clock, class Duration>
+    inline Status wait_until(const std::chrono::duration<Clock, Duration>& timeout_time) {
+        return future_.wait_until(timeout_time);
+    }
+    template<class Rep, class Period>
+    inline Status wait_for(const std::chrono::duration<Rep, Period>& timeout_duration) {
+        return future_.wait_for(timeout_duration);
+    }
+    inline TaskIndex id() const { return id_; }
+    inline Future& future() { return future_; }
+    inline const Future& future() const { return future_; }
+    inline SharedFuture share() { return future_.share(); }
+    inline bool valid() const { return future_.valid(); }
+    inline bool is_ready() const {
+        return wait_for(std::chrono::seconds(0)) == Status::ready;
     }
 
    private:
+    TaskIndex id_;
+    Future future_;
     ExecutorContext* context_;
 
-    TaskResult(TaskIndex task_id, std::future<O> task_future,
+    TaskResult(TaskIndex id, Future future,
                ExecutorContext* ctx)
-        : id(task_id), future(std::move(task_future)), context_(ctx) {
-        if (context_) context_->increment_user_ref(id);
+        : id_(id), future_(std::move(future)), context_(ctx) {
+        if (context_) context_->increment_user_ref(id_);
     }
 
-    TaskResult(TaskIndex task_id, std::future<O> task_future)
-        : id(task_id), future(std::move(task_future)), context_(nullptr) {}
+    TaskResult(TaskIndex task_id, std::future<O> future)
+        : id_(task_id), future_(std::move(future)), context_(nullptr) {}
 
     friend class Pipeline;
     friend class TaskContext;

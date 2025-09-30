@@ -166,41 +166,41 @@ endif()
 # Executables
 # ##############################################################################
 
-# set(DFTRACER_BINARIES
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_reader.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_tar.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_map.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_event_count.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_pgzip.cpp
-#     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_merge.cpp)
+set(DFTRACER_BINARIES
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_reader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_tar.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_map.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_event_count.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_pgzip.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_merge.cpp)
 
-# foreach(bin ${DFTRACER_BINARIES})
-#   string(REPLACE ".cpp" "" bin_exec ${bin})
-#   string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/" "" bin_exec
-#                  ${bin_exec})
+foreach(bin ${DFTRACER_BINARIES})
+  string(REPLACE ".cpp" "" bin_exec ${bin})
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/" "" bin_exec
+                 ${bin_exec})
 
-#   add_executable(${bin_exec} ${bin})
-#   set_target_properties(${bin_exec} PROPERTIES OUTPUT_NAME "${bin_exec}")
-#   target_link_libraries(
-#     ${bin_exec} PRIVATE dftracer_utils argparse::argparse ghc_filesystem)
-#   link_sqlite3(${bin_exec} STATIC)
-#   link_zlib(${bin_exec} STATIC)
+  add_executable(${bin_exec} ${bin})
+  set_target_properties(${bin_exec} PROPERTIES OUTPUT_NAME "${bin_exec}")
+  target_link_libraries(
+    ${bin_exec} PRIVATE dftracer_utils argparse::argparse ghc_filesystem)
+  link_sqlite3(${bin_exec} STATIC)
+  link_zlib(${bin_exec} STATIC)
 
-#   target_include_directories(${bin_exec}
-#                              PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+  target_include_directories(${bin_exec}
+                             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-#   target_set_warnings(${bin_exec})
+  target_set_warnings(${bin_exec})
 
-#   # Apply coverage flags if enabled
-#   if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#     target_compile_options(${bin_exec} PRIVATE --coverage -fprofile-arcs
-#                                                -ftest-coverage)
-#     target_link_libraries(${bin_exec} PRIVATE --coverage)
-#   endif()
+  # Apply coverage flags if enabled
+  if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${bin_exec} PRIVATE --coverage -fprofile-arcs
+                                               -ftest-coverage)
+    target_link_libraries(${bin_exec} PRIVATE --coverage)
+  endif()
 
-#   # Install executable
-#   install(TARGETS ${bin_exec} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# endforeach()
+  # Install executable
+  install(TARGETS ${bin_exec} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endforeach()
 
 # ##############################################################################
 # Python binding

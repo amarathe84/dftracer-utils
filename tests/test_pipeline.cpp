@@ -20,7 +20,7 @@ TEST_CASE("Pipeline - Basic functionality") {
     auto double_task = [](int input, TaskContext&) -> int { return input * 2; };
 
     auto task_result = pipeline.add_task<int, int>(double_task);
-    CHECK(task_result.id == 0);
+    CHECK(task_result.id() == 0);
 }
 
 TEST_CASE("Pipeline - Sequential execution") {
@@ -62,7 +62,7 @@ TEST_CASE("Pipeline - Task dependencies") {
 
     auto t1 = pipeline.add_task<int, int>(add_task);
     auto t2 = pipeline.add_task<int, int>(multiply_task);
-    pipeline.add_dependency(t1.id, t2.id);
+    pipeline.add_dependency(t1.id(), t2.id());
 
     SequentialExecutor executor;
     executor.execute(pipeline, 5);
@@ -182,8 +182,8 @@ TEST_CASE("Pipeline - Multiple task chains") {
     auto t2 = pipeline.add_task<int, int>(task2);
     auto t3 = pipeline.add_task<int, int>(task3);
 
-    pipeline.add_dependency(t1.id, t2.id);
-    pipeline.add_dependency(t2.id, t3.id);
+    pipeline.add_dependency(t1.id(), t2.id());
+    pipeline.add_dependency(t2.id(), t3.id());
 
     SequentialExecutor executor;
     PipelineOutput result = executor.execute(pipeline, 10);
@@ -309,8 +309,8 @@ TEST_CASE("Pipeline - Cyclic dependency detection") {
     auto t1 = pipeline.add_task<int, int>(task1);
     auto t2 = pipeline.add_task<int, int>(task2);
 
-    pipeline.add_dependency(t1.id, t2.id);
-    pipeline.add_dependency(t2.id, t1.id);
+    pipeline.add_dependency(t1.id(), t2.id());
+    pipeline.add_dependency(t2.id(), t1.id());
 
     SequentialExecutor executor;
     CHECK_THROWS_AS(executor.execute(pipeline, 5), PipelineError);
@@ -328,7 +328,7 @@ TEST_CASE("Pipeline - Type mismatch validation") {
     auto t1 = pipeline.add_task<int, std::string>(string_task);
     auto t2 = pipeline.add_task<int, int>(int_task);
 
-    pipeline.add_dependency(t1.id, t2.id);
+    pipeline.add_dependency(t1.id(), t2.id());
 
     SequentialExecutor executor;
     CHECK_THROWS_AS(executor.execute(pipeline, 5), PipelineError);
@@ -353,8 +353,8 @@ TEST_CASE("Pipeline - Multiple dependencies") {
     auto t2 = pipeline.add_task<int, int>(task2);
     auto t3 = pipeline.add_task<std::vector<std::any>, int>(combiner_task);
 
-    pipeline.add_dependency(t1.id, t3.id);
-    pipeline.add_dependency(t2.id, t3.id);
+    pipeline.add_dependency(t1.id(), t3.id());
+    pipeline.add_dependency(t2.id(), t3.id());
 
     SequentialExecutor executor;
     PipelineOutput result = executor.execute(pipeline, 5);
@@ -376,8 +376,8 @@ TEST_CASE("Pipeline - Multiple dependencies type mismatch") {
     auto t2 = pipeline.add_task<int, int>(task2);
     auto t3 = pipeline.add_task<int, int>(bad_combiner);
 
-    pipeline.add_dependency(t1.id, t3.id);
-    pipeline.add_dependency(t2.id, t3.id);
+    pipeline.add_dependency(t1.id(), t3.id());
+    pipeline.add_dependency(t2.id(), t3.id());
 
     SequentialExecutor executor;
     CHECK_THROWS_AS(executor.execute(pipeline, 5), PipelineError);
@@ -406,11 +406,11 @@ TEST_CASE("Pipeline - Complex dependency graph") {
     auto t4 = pipeline.add_task<int, int>(multiply_task);
     auto t5 = pipeline.add_task<std::vector<std::any>, int>(combiner_task);
 
-    pipeline.add_dependency(t1.id, t2.id);
-    pipeline.add_dependency(t1.id, t3.id);
-    pipeline.add_dependency(t2.id, t5.id);
-    pipeline.add_dependency(t3.id, t4.id);
-    pipeline.add_dependency(t4.id, t5.id);
+    pipeline.add_dependency(t1.id(), t2.id());
+    pipeline.add_dependency(t1.id(), t3.id());
+    pipeline.add_dependency(t2.id(), t5.id());
+    pipeline.add_dependency(t3.id(), t4.id());
+    pipeline.add_dependency(t4.id(), t5.id());
 
     SequentialExecutor executor;
     PipelineOutput result = executor.execute(pipeline, 2);
@@ -430,7 +430,7 @@ TEST_CASE("Pipeline - Task context usage") {
         };
 
         auto child_result = ctx.emit<int, int>(child_task, Input{3});
-        emitted_tasks.push_back(child_result.id);
+        emitted_tasks.push_back(child_result.id());
 
         return input + 5;
     };
@@ -464,7 +464,7 @@ TEST_CASE("Pipeline - Large pipeline stress test") {
         auto task = [i](int input, TaskContext&) -> int { return input + i; };
 
         auto task_result = pipeline.add_task<int, int>(task);
-        tasks.push_back(task_result.id);
+        tasks.push_back(task_result.id());
 
         if (i > 0) {
             pipeline.add_dependency(tasks[i - 1], tasks[i]);
@@ -502,7 +502,7 @@ TEST_CASE("TaskResult - Multiple task futures") {
 
     auto result1 = pipeline.add_task<int, int>(add_task);
     auto result2 = pipeline.add_task<int, int>(mul_task);
-    pipeline.add_dependency(result1.id, result2.id);
+    pipeline.add_dependency(result1.id(), result2.id());
 
     SequentialExecutor executor;
     executor.execute(pipeline, 5);
@@ -545,7 +545,7 @@ TEST_CASE("TaskResult - Thread executor futures") {
 
 TEST_CASE("TaskResult - Dynamic task futures") {
     Pipeline pipeline;
-    std::vector<std::future<int>> dynamic_futures;
+    std::vector<TaskResult<int>::Future> dynamic_futures;
 
     auto mapper = [&dynamic_futures](std::vector<int> input,
                                      TaskContext& ctx) -> int {
@@ -553,7 +553,7 @@ TEST_CASE("TaskResult - Dynamic task futures") {
         for (int val : input) {
             auto task_result = ctx.emit<int, int>(
                 [](int x, TaskContext&) -> int { return x * x; }, Input{val});
-            dynamic_futures.push_back(std::move(task_result.future));
+            dynamic_futures.push_back(std::move(task_result.future()));
             sum += val;
         }
         return sum;
@@ -574,12 +574,12 @@ TEST_CASE("TaskResult - Dynamic task futures") {
 
 TEST_CASE("TaskResult - Mixed static and dynamic futures") {
     Pipeline pipeline;
-    std::future<int> emit_future;
+    TaskResult<int>::Future emit_future;
 
     auto task = [&emit_future](int input, TaskContext& ctx) -> std::string {
         auto result = ctx.emit<int, int>(
             [](int x, TaskContext&) -> int { return x + 100; }, Input{input});
-        emit_future = std::move(result.future);
+        emit_future = std::move(result.future());
         return "processed " + std::to_string(input);
     };
 
