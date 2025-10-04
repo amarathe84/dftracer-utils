@@ -280,6 +280,12 @@ void GzipReader::read_lines_with_processor(std::size_t start_line,
 
             buffer_usage = 0;
         }
+
+        if (!line_accumulator.empty() && current_line >= start_line &&
+            current_line <= end_line) {
+            processor.process(line_accumulator.c_str(),
+                              line_accumulator.length());
+        }
     } else {
         std::uint64_t total_start_offset = 0;
         std::uint64_t total_end_offset = 0;
@@ -319,6 +325,12 @@ void GzipReader::read_lines_with_processor(std::size_t start_line,
 
             process_lines(chunk_buffer.data(), bytes_read, current_line,
                           start_line, end_line, line_accumulator, processor);
+        }
+
+        if (!line_accumulator.empty() && current_line >= start_line &&
+            current_line <= end_line) {
+            processor.process(line_accumulator.c_str(),
+                              line_accumulator.length());
         }
     }
 

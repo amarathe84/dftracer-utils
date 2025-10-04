@@ -3,11 +3,11 @@
 
 #include <dftracer/utils/common/typedefs.h>
 
+#include <chrono>
 #include <functional>
 #include <future>
 #include <memory>
 #include <utility>
-#include <chrono>
 
 namespace dftracer::utils {
 
@@ -55,12 +55,14 @@ class TaskResult {
     }
 
     inline void wait() { future_.wait(); }
-    template<class Clock, class Duration>
-    inline Status wait_until(const std::chrono::duration<Clock, Duration>& timeout_time) {
+    template <class Clock, class Duration>
+    inline Status wait_until(
+        const std::chrono::duration<Clock, Duration>& timeout_time) {
         return future_.wait_until(timeout_time);
     }
-    template<class Rep, class Period>
-    inline Status wait_for(const std::chrono::duration<Rep, Period>& timeout_duration) {
+    template <class Rep, class Period>
+    inline Status wait_for(
+        const std::chrono::duration<Rep, Period>& timeout_duration) {
         return future_.wait_for(timeout_duration);
     }
     inline TaskIndex id() const { return id_; }
@@ -77,8 +79,7 @@ class TaskResult {
     Future future_;
     ExecutorContext* context_;
 
-    TaskResult(TaskIndex id, Future future,
-               ExecutorContext* ctx)
+    TaskResult(TaskIndex id, Future future, ExecutorContext* ctx)
         : id_(id), future_(std::move(future)), context_(ctx) {
         if (context_) context_->increment_user_ref(id_);
     }

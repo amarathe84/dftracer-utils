@@ -20,6 +20,7 @@ class GzipStream : public Stream {
     mutable ReaderInflater inflater_;
     std::size_t current_position_;
     std::size_t target_end_bytes_;
+    std::size_t max_file_bytes_;
     bool is_active_;
     bool is_finished_;
     bool decompression_initialized_;
@@ -36,6 +37,7 @@ class GzipStream : public Stream {
           file_handle_(nullptr),
           current_position_(0),
           target_end_bytes_(0),
+          max_file_bytes_(0),
           is_active_(false),
           is_finished_(false),
           decompression_initialized_(false),
@@ -57,6 +59,7 @@ class GzipStream : public Stream {
         start_bytes_ = 0;
         current_position_ = 0;
         target_end_bytes_ = 0;
+        max_file_bytes_ = 0;
         is_active_ = false;
         is_finished_ = false;
         if (file_handle_) {
@@ -97,6 +100,7 @@ class GzipStream : public Stream {
         current_gz_path_ = gz_path;
         start_bytes_ = start_bytes;
         target_end_bytes_ = end_bytes;
+        max_file_bytes_ = indexer.get_max_bytes();
         is_active_ = true;
         is_finished_ = false;
 

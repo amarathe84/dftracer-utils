@@ -188,19 +188,28 @@ class GzipLineByteStream : public GzipStream {
     }
 
     std::size_t adjust_to_boundary(char *buffer, std::size_t buffer_size) {
-        // Look for the last newline in the buffer
+        std::size_t newline_pos = SIZE_MAX;
         for (int64_t i = static_cast<int64_t>(buffer_size) - 1; i >= 0; i--) {
             if (buffer[i] == '\n') {
-                return static_cast<std::size_t>(i) + 1;
+                newline_pos = static_cast<std::size_t>(i) + 1;
+                break;
             }
         }
 
-        // If we're at EOF or this is the final chunk, return all data
-        if (is_finished_ || current_position_ >= target_end_bytes_) {
+        if (newline_pos != SIZE_MAX) {
+            bool at_file_end = target_end_bytes_ >= max_file_bytes_;
+            std::size_t remaining = buffer_size - newline_pos;
+            if (remaining > 0 && at_file_end) {
+                return buffer_size;
+            }
+            return newline_pos;
+        }
+
+        bool at_file_end = target_end_bytes_ >= max_file_bytes_;
+        if (is_finished_ || at_file_end) {
             return buffer_size;
         }
 
-        // Otherwise, we need more data to complete the line
         return 0;
     }
 
