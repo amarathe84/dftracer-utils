@@ -19,6 +19,10 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <string>
+#include <typeindex>
+#include <utility>
+#include <vector>
 
 namespace dftracer::utils {
 class Pipeline {
@@ -32,8 +36,11 @@ class Pipeline {
     std::unordered_map<TaskIndex, std::function<void(std::exception_ptr)>>
         promise_exception_fulfillers_;
 
+    std::string name_;
+
    public:
     Pipeline() = default;
+    explicit Pipeline(std::string name) : name_(std::move(name)) {}
     virtual ~Pipeline() = default;
 
     Pipeline(const Pipeline&) = delete;
@@ -80,6 +87,9 @@ class Pipeline {
 
     std::size_t size() const { return nodes_.size(); }
     bool empty() const { return nodes_.empty(); }
+
+    void set_name(std::string name) { name_ = std::move(name); }
+    const std::string& get_name() const { return name_; }
 
     inline const std::vector<std::unique_ptr<Task>>& get_nodes() const {
         return nodes_;

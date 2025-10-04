@@ -26,13 +26,10 @@ class SequentialScheduler : public Scheduler {
     };
 
     std::queue<TaskItem> task_queue_;
-    std::unordered_map<TaskIndex, bool>
-        task_completed_;    // Track task completion status
-    std::unordered_map<TaskIndex, std::size_t>
-        dependency_count_;  // Track remaining dependencies per task
-    ExecutorContext* current_execution_context_;  // Active execution context
-                                                  // during pipeline execution
-    const Pipeline* current_pipeline_;  // Active pipeline during execution
+    std::unordered_map<TaskIndex, bool> task_completed_;
+    std::unordered_map<TaskIndex, std::size_t> dependency_count_;
+    ExecutorContext* current_execution_context_;
+    const Pipeline* current_pipeline_;
 
    public:
     SequentialScheduler();

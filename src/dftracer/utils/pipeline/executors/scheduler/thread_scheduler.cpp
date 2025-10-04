@@ -23,7 +23,6 @@ void ThreadScheduler::initialize(std::size_t num_threads) {
 
     {
         std::lock_guard<std::mutex> results_lock(results_mutex_);
-        // No more completed_results_ to clear
         remaining_deps_.clear();
         dependents_.clear();
         dependencies_.clear();
@@ -47,6 +46,8 @@ void ThreadScheduler::initialize(std::size_t num_threads) {
 }
 
 void ThreadScheduler::reset() {
+    Scheduler::reset();
+
     remaining_deps_.clear();
     dependents_.clear();
     dependencies_.clear();
@@ -54,7 +55,6 @@ void ThreadScheduler::reset() {
     tasks_with_futures_.clear();
     promises_.clear();
 
-    // Also reset ExecutorContext to clear task outputs
     if (current_execution_context_) {
         current_execution_context_->reset();
     }
@@ -89,6 +89,10 @@ PipelineOutput ThreadScheduler::execute(const Pipeline& pipeline,
         throw PipelineError(PipelineError::VALIDATION_ERROR,
                             "Pipeline validation failed");
     }
+
+    completed_tasks_ = 0;
+    total_tasks_ = pipeline.size();
+    current_pipeline_name_ = pipeline.get_name();
 
     setup_dependencies(pipeline);
 
@@ -126,6 +130,7 @@ void ThreadScheduler::submit_dynamic_task(TaskIndex task_id, Task* task_ptr,
     std::lock_guard<std::mutex> lock(queue_mutex_);
 
     tasks_with_futures_.insert(task_id);
+    total_tasks_++;
 
     const auto& deps =
         current_execution_context_->get_dynamic_dependencies(task_id);
@@ -283,6 +288,7 @@ void ThreadScheduler::worker_thread() {
                 }
             }
 
+            report_progress(task.task_id, current_pipeline_name_);
             process_completion(task.task_id);
 
         } catch (const std::exception& e) {
@@ -310,6 +316,7 @@ void ThreadScheduler::worker_thread() {
                         task.task_id, std::current_exception());
                 }
             }
+            report_progress(task.task_id, current_pipeline_name_);
             process_completion(task.task_id);
         }
 

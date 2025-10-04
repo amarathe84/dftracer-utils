@@ -34,6 +34,7 @@ void ThreadExecutor::reset() { scheduler_.reset(); }
 
 PipelineOutput ThreadExecutor::execute(const Pipeline& pipeline,
                                        std::any input) {
+    scheduler_.set_progress_callback(progress_callback_);
     PipelineOutput result = scheduler_.execute(pipeline, input);
     return result;
 }

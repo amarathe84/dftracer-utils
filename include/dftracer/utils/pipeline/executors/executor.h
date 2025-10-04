@@ -2,6 +2,7 @@
 #define DFTRACER_UTILS_PIPELINE_EXECUTORS_EXECUTOR_H
 
 #include <dftracer/utils/pipeline/executors/executor_type.h>
+#include <dftracer/utils/pipeline/executors/progress_callback.h>
 #include <dftracer/utils/pipeline/pipeline.h>
 #include <dftracer/utils/pipeline/pipeline_output.h>
 
@@ -20,8 +21,15 @@ class Executor {
     inline ExecutorType type() const { return type_; }
     virtual void reset() {}
 
+    virtual void set_progress_callback(ProgressCallback callback) {
+        progress_callback_ = std::move(callback);
+    }
+
    public:
     const ExecutorType type_;
+
+   protected:
+    ProgressCallback progress_callback_;
 };
 
 }  // namespace dftracer::utils

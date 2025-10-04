@@ -14,6 +14,7 @@ SequentialExecutor::SequentialExecutor() : Executor(ExecutorType::SEQUENTIAL) {}
 PipelineOutput SequentialExecutor::execute(const Pipeline& pipeline,
                                            std::any input) {
     SequentialScheduler scheduler;
+    scheduler.set_progress_callback(progress_callback_);
     return scheduler.execute(pipeline, input);
 }
 

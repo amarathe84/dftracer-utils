@@ -24,12 +24,15 @@ PipelineOutput SequentialScheduler::execute(const Pipeline& pipeline,
                             "Pipeline validation failed");
     }
 
-    // Clear previous state
     task_completed_.clear();
     dependency_count_.clear();
     while (!task_queue_.empty()) {
         task_queue_.pop();
     }
+
+    total_tasks_ = pipeline.size();
+    completed_tasks_ = 0;
+    current_pipeline_name_ = pipeline.get_name();
 
     TaskIndex initial_pipeline_size = static_cast<TaskIndex>(pipeline.size());
 
@@ -76,6 +79,7 @@ void SequentialScheduler::submit_dynamic_task(TaskIndex task_id, Task* task_ptr,
         return;
     }
 
+    total_tasks_++;
     task_queue_.emplace(task_id, task_ptr, input);
 }
 
@@ -149,6 +153,7 @@ void SequentialScheduler::process_all_tasks() {
             }
 
             task_completed_[task.task_id] = true;
+            report_progress(task.task_id, current_pipeline_name_);
 
             // Trigger dependent tasks
             for (TaskIndex dependent :
@@ -197,9 +202,8 @@ void SequentialScheduler::process_all_tasks() {
                     task.task_id, std::current_exception());
             }
 
-            // Mark task as completed even in error case to avoid hanging
-            // dependent tasks
             task_completed_[task.task_id] = true;
+            report_progress(task.task_id, current_pipeline_name_);
         }
     }
 

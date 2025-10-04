@@ -41,16 +41,13 @@ class TaskContext {
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        const Input<I>& input) {
-        // Create task without wrapping - scheduler will fulfill promise
         auto task = make_task<I, O>(std::move(func));
         TaskIndex task_id =
             execution_context_->add_dynamic_task(std::move(task), -1);
 
-        // Create promise for TaskResult - will be fulfilled by scheduler
         auto promise = std::make_shared<std::promise<O>>();
         auto future = promise->get_future();
 
-        // Store type-erased promise fulfillment function in ExecutorContext
         execution_context_->set_promise_fulfiller(
             task_id, [promise](const std::any& result) {
                 try {
@@ -72,7 +69,6 @@ class TaskContext {
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        DependsOn depends_on) {
-        // Create task without wrapping - scheduler will fulfill promise
         auto task = make_task<I, O>(std::move(func));
         if (depends_on.id >= 0) {
             Task* dep_task = execution_context_->get_task(depends_on.id);
@@ -89,11 +85,9 @@ class TaskContext {
         TaskIndex task_id = execution_context_->add_dynamic_task(
             std::move(task), depends_on.id);
 
-        // Create promise for TaskResult - will be fulfilled by scheduler
         auto promise = std::make_shared<std::promise<O>>();
         auto future = promise->get_future();
 
-        // Store type-erased promise fulfillment function in ExecutorContext
         execution_context_->set_promise_fulfiller(
             task_id, [promise](const std::any& result) {
                 try {
@@ -114,16 +108,13 @@ class TaskContext {
     template <typename I, typename O>
     TaskResult<O> emit(std::function<O(I, TaskContext&)> func,
                        const Input<I>& input, DependsOn depends_on) {
-        // Create task without wrapping - scheduler will fulfill promise
         auto task = make_task<I, O>(std::move(func));
         TaskIndex task_id = execution_context_->add_dynamic_task(
             std::move(task), depends_on.id);
 
-        // Create promise for TaskResult - will be fulfilled by scheduler
         auto promise = std::make_shared<std::promise<O>>();
         auto future = promise->get_future();
 
-        // Store type-erased promise fulfillment function in ExecutorContext
         execution_context_->set_promise_fulfiller(
             task_id, [promise](const std::any& result) {
                 try {
