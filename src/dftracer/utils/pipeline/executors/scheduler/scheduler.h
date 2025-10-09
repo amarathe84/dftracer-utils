@@ -27,10 +27,12 @@ class Scheduler {
     }
 
    protected:
-    void report_progress(TaskIndex task_id, const std::string& pipeline_name = "") {
+    void report_progress(TaskIndex task_id,
+                         const std::string& pipeline_name = "") {
         if (progress_callback_) {
             ++completed_tasks_;
-            ProgressInfo info{completed_tasks_, total_tasks_, task_id, pipeline_name};
+            ProgressInfo info{completed_tasks_, total_tasks_, task_id,
+                              pipeline_name};
             progress_callback_(info);
         }
     }

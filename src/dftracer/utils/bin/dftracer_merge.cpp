@@ -63,7 +63,6 @@ class TempFileLineProcessor : public LineProcessor {
 
         if (json_trim_and_validate(data, length, trimmed, trimmed_length) &&
             trimmed_length > 8) {
-            // Write valid JSON lines to temp file
             std::fwrite(trimmed, 1, trimmed_length, temp_file_);
             std::fwrite("\n", 1, 1, temp_file_);
             valid_events_++;
@@ -142,7 +141,6 @@ static MergeResult process_pfw_gz_file(const std::string& gz_path,
 
 static MergeResult process_pfw_file(const std::string& pfw_path,
                                     const std::string& temp_dir, TaskContext&) {
-    // Generate unique temp file name
     static std::atomic<int> temp_counter{0};
     std::string temp_file =
         temp_dir + "/merge_temp_" + std::to_string(temp_counter++) + ".tmp";
@@ -310,7 +308,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Check if output file exists
     std::string final_output =
         compress_output ? output_file + ".gz" : output_file;
     if (fs::exists(final_output) && !force_override) {
@@ -320,13 +317,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Remove existing output files if force override
     if (force_override) {
         if (fs::exists(output_file)) fs::remove(output_file);
         if (fs::exists(output_file + ".gz")) fs::remove(output_file + ".gz");
     }
 
-    // Find input files
     std::vector<std::string> input_files;
     for (const auto& entry : fs::directory_iterator(input_dir)) {
         if (entry.is_regular_file()) {
@@ -362,7 +357,6 @@ int main(int argc, char** argv) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Create temp directory
     std::string temp_dir =
         fs::path(output_file).parent_path() / "dftracer_merge_tmp";
     fs::create_directories(temp_dir);
@@ -381,7 +375,6 @@ int main(int argc, char** argv) {
     executor.execute(pipeline, input_files);
     std::vector<MergeResult> results = task_result.get();
 
-    // Concatenate all temp files into final output
     FILE* output_fp = std::fopen(output_file.c_str(), "w");
     if (!output_fp) {
         DFTRACER_UTILS_LOG_ERROR("Cannot create output file: %s",
@@ -389,36 +382,36 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    setvbuf(output_fp, nullptr, _IOFBF,
-            1024 * 1024);  // Large buffer for copying
+    setvbuf(output_fp, nullptr, _IOFBF, 1024 * 1024);
+
+    std::fprintf(output_fp, "[\n");
+
+    constexpr std::size_t BUFFER_SIZE = 64 * 1024;
+    std::vector<char> buffer(BUFFER_SIZE);
 
     for (const auto& result : results) {
         if (result.success && !result.temp_file_path.empty()) {
             FILE* temp_fp = std::fopen(result.temp_file_path.c_str(), "r");
             if (temp_fp) {
-                // Copy temp file to output
-                char buffer[64 * 1024];
                 std::size_t bytes_read;
-                while ((bytes_read = std::fread(buffer, 1, sizeof(buffer),
+                while ((bytes_read = std::fread(buffer.data(), 1, BUFFER_SIZE,
                                                 temp_fp)) > 0) {
-                    std::fwrite(buffer, 1, bytes_read, output_fp);
+                    std::fwrite(buffer.data(), 1, bytes_read, output_fp);
                 }
                 std::fclose(temp_fp);
-                // Clean up temp file
                 fs::remove(result.temp_file_path);
             }
         }
     }
 
+    std::fprintf(output_fp, "\n]\n");
     std::fclose(output_fp);
 
-    // Clean up temp directory
     fs::remove_all(temp_dir);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end_time - start_time;
 
-    // Calculate statistics
     std::size_t successful_files = 0;
     std::size_t total_events = 0;
     std::size_t total_lines = 0;
@@ -434,7 +427,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Compress output if requested
     if (compress_output && successful_files > 0) {
         DFTRACER_UTILS_LOG_INFO("%s", "Compressing output file...");
 
@@ -445,14 +437,14 @@ int main(int argc, char** argv) {
             z_stream strm{};
             if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16,
                              8, Z_DEFAULT_STRATEGY) == Z_OK) {
-                constexpr std::size_t BUFFER_SIZE = 64 * 1024;
-                std::vector<unsigned char> in_buffer(BUFFER_SIZE);
-                std::vector<unsigned char> out_buffer(BUFFER_SIZE);
+                constexpr std::size_t COMPRESS_BUFFER_SIZE = 64 * 1024;
+                std::vector<unsigned char> in_buffer(COMPRESS_BUFFER_SIZE);
+                std::vector<unsigned char> out_buffer(COMPRESS_BUFFER_SIZE);
 
                 int flush = Z_NO_FLUSH;
                 do {
                     infile.read(reinterpret_cast<char*>(in_buffer.data()),
-                                BUFFER_SIZE);
+                                COMPRESS_BUFFER_SIZE);
                     std::streamsize bytes_read = infile.gcount();
 
                     if (bytes_read == 0) break;
@@ -462,12 +454,12 @@ int main(int argc, char** argv) {
                     flush = infile.eof() ? Z_FINISH : Z_NO_FLUSH;
 
                     do {
-                        strm.avail_out = BUFFER_SIZE;
+                        strm.avail_out = COMPRESS_BUFFER_SIZE;
                         strm.next_out = out_buffer.data();
                         deflate(&strm, flush);
 
                         std::size_t bytes_to_write =
-                            BUFFER_SIZE - strm.avail_out;
+                            COMPRESS_BUFFER_SIZE - strm.avail_out;
                         outfile.write(
                             reinterpret_cast<const char*>(out_buffer.data()),
                             bytes_to_write);

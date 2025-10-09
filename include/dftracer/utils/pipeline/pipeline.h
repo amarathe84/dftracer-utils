@@ -16,11 +16,11 @@
 #include <future>
 #include <memory>
 #include <queue>
+#include <string>
 #include <thread>
+#include <typeindex>
 #include <unordered_map>
 #include <unordered_set>
-#include <string>
-#include <typeindex>
 #include <utility>
 #include <vector>
 
