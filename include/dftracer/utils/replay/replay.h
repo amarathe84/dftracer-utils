@@ -27,6 +27,8 @@ namespace dftracer::utils::replay {
 struct ReplayConfig {
     bool maintain_timing = true;            // Maintain original timing between operations
     bool dry_run = false;                   // Only parse and log operations, don't execute
+    bool dftracer_mode = false;             // Use DFTracer sleep-based replay mode
+    bool no_sleep = false;                  // Disable sleep calls in dftracer mode
     double timing_scale = 1.0;              // Scale timing (1.0 = original, 0.5 = 2x faster, 2.0 = 2x slower)
     std::uint64_t start_time_offset = 0;    // Offset to add to all timestamps
     std::unordered_set<std::string> filter_functions; // Only replay these functions (empty = all)
@@ -102,28 +104,25 @@ private:
 };
 
 /**
- * Executor for STDIO operations (fopen, fread, fwrite, fclose, etc.)
- */
-class StdioExecutor : public TraceExecutor {
+Stub DFtracer executor: Need to expand on thsi to integrate with DFtracer
+*/
+
+class DFTracerExecutor : public TraceExecutor {
 public:
     bool execute(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) override;
     bool can_handle(const dftracer::utils::analyzers::Trace& trace) const override;
-    std::string get_name() const override { return "STDIO"; }
+    std::string get_name() const override { return "DFTracer"; }
 
 private:
-    std::unordered_map<std::string, FILE*> open_files_; // Track FILE pointers
-    
-    bool execute_fopen(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config);
-    bool execute_fclose(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config);
-    bool execute_fread(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config);
-    bool execute_fwrite(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config);
-    bool execute_fseek(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config);
+    void sleep_for_duration(double duration_microseconds);
+    bool dftracer_initialized_ = false;
 };
 
 /**
  * Main replay engine that coordinates trace reading and execution
  */
 class ReplayEngine {
+    friend class ReplayLineProcessor;
 public:
     explicit ReplayEngine(const ReplayConfig& config);
     ~ReplayEngine();

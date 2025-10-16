@@ -10,7 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <sstream>
+#include <iostream>
 #include <thread>
 #include <algorithm>
 #include <iomanip>
@@ -250,114 +250,6 @@ bool PosixExecutor::execute_stat(const dftracer::utils::analyzers::Trace& trace,
     return true;
 }
 
-// =============================================================================
-// StdioExecutor Implementation  
-// =============================================================================
-
-bool StdioExecutor::execute(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) {
-    const std::string& func_name = trace.func_name;
-    
-    if (config.dry_run) {
-        DFTRACER_UTILS_LOG_DEBUG("DRY RUN: Would execute STDIO %s", func_name.c_str());
-        return true;
-    }
-    
-    if (func_name == "fopen" || func_name == "fopen64") {
-        return execute_fopen(trace, config);
-    } else if (func_name == "fclose") {
-        return execute_fclose(trace, config);
-    } else if (func_name == "fread") {
-        return execute_fread(trace, config);
-    } else if (func_name == "fwrite") {
-        return execute_fwrite(trace, config);
-    } else if (func_name == "fseek" || func_name == "fseeko") {
-        return execute_fseek(trace, config);
-    }
-    
-    DFTRACER_UTILS_LOG_DEBUG("Unsupported STDIO function: %s", func_name.c_str());
-    return false;
-}
-
-bool StdioExecutor::can_handle(const dftracer::utils::analyzers::Trace& trace) const {
-    return trace.cat == "stdio";
-}
-
-bool StdioExecutor::execute_fopen(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) {
-    DFTRACER_UTILS_LOG_DEBUG("Executing STDIO fopen");
-    
-    if (!trace.fhash.empty()) {
-        std::string file_path = config.output_directory.empty() 
-            ? ("replay_file_" + trace.fhash)
-            : (config.output_directory + "/replay_file_" + trace.fhash);
-        
-        ensure_directory_exists(file_path);
-        
-        FILE* fp = fopen(file_path.c_str(), "w+");
-        if (fp) {
-            open_files_[trace.fhash] = fp;
-            DFTRACER_UTILS_LOG_DEBUG("Opened file %s", file_path.c_str());
-            return true;
-        } else {
-            DFTRACER_UTILS_LOG_ERROR("Failed to open file %s: %s", file_path.c_str(), strerror(errno));
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-bool StdioExecutor::execute_fclose(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) {
-    DFTRACER_UTILS_LOG_DEBUG("Executing STDIO fclose");
-    
-    auto it = open_files_.find(trace.fhash);
-    if (it != open_files_.end()) {
-        fclose(it->second);
-        open_files_.erase(it);
-        DFTRACER_UTILS_LOG_DEBUG("Closed file with hash %s", trace.fhash.c_str());
-    }
-    
-    return true;
-}
-
-bool StdioExecutor::execute_fread(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) {
-    DFTRACER_UTILS_LOG_DEBUG("Executing STDIO fread (size: %lld)", static_cast<long long>(trace.size));
-    
-    auto it = open_files_.find(trace.fhash);
-    if (it != open_files_.end() && trace.size > 0) {
-        std::vector<char> buffer(std::min(static_cast<std::size_t>(trace.size), config.max_file_size));
-        size_t bytes_read = fread(buffer.data(), 1, buffer.size(), it->second);
-        DFTRACER_UTILS_LOG_DEBUG("Read %zu bytes", bytes_read);
-    }
-    
-    return true;
-}
-
-bool StdioExecutor::execute_fwrite(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) {
-    DFTRACER_UTILS_LOG_DEBUG("Executing STDIO fwrite (size: %lld)", static_cast<long long>(trace.size));
-    
-    auto it = open_files_.find(trace.fhash);
-    if (it != open_files_.end() && trace.size > 0) {
-        std::size_t write_size = std::min(static_cast<std::size_t>(trace.size), config.max_file_size);
-        std::vector<char> buffer(write_size, 'A'); // Fill with dummy data
-        size_t bytes_written = fwrite(buffer.data(), 1, buffer.size(), it->second);
-        DFTRACER_UTILS_LOG_DEBUG("Wrote %zu bytes", bytes_written);
-    }
-    
-    return true;
-}
-
-bool StdioExecutor::execute_fseek(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) {
-    DFTRACER_UTILS_LOG_DEBUG("Executing STDIO fseek (offset: %lld)", static_cast<long long>(trace.offset));
-    
-    auto it = open_files_.find(trace.fhash);
-    if (it != open_files_.end() && trace.offset >= 0) {
-        int result = fseek(it->second, trace.offset, SEEK_SET);
-        DFTRACER_UTILS_LOG_DEBUG("Seek to offset %lld, result: %d", 
-                                 static_cast<long long>(trace.offset), result);
-    }
-    
-    return true;
-}
 
 // =============================================================================
 // ReplayEngine Implementation
@@ -366,9 +258,14 @@ bool StdioExecutor::execute_fseek(const dftracer::utils::analyzers::Trace& trace
 ReplayEngine::ReplayEngine(const ReplayConfig& config) 
     : config_(config), replay_start_time_(std::chrono::steady_clock::now()) {
     
-    // Add default executors
-    add_executor(std::make_unique<PosixExecutor>());
-    add_executor(std::make_unique<StdioExecutor>());
+    if (config.dftracer_mode) {
+        // In DFTracer mode, only use the DFTracerExecutor for sleep-based replay
+        add_executor(std::make_unique<DFTracerExecutor>());
+    } else {
+        // Add default executors for normal replay mode
+        add_executor(std::make_unique<PosixExecutor>());
+        // TODO: Add StdioExecutor when implemented
+    }
 }
 
 ReplayEngine::~ReplayEngine() = default;
@@ -385,24 +282,48 @@ ReplayResult ReplayEngine::replay_file(const std::string& trace_file, const std:
     auto start_time = std::chrono::steady_clock::now();
     
     try {
-        // Create reader for the trace file
-        std::string idx_path = index_file.empty() ? (trace_file + ".idx") : index_file;
-        auto reader = ReaderFactory::create_reader(trace_file, idx_path);
+        // Check if the file is compressed or plain text
+        bool is_compressed = (trace_file.size() >= 3 && trace_file.substr(trace_file.size() - 3) == ".gz") ||
+                            (trace_file.size() >= 7 && trace_file.substr(trace_file.size() - 7) == ".tar.gz");
         
-        if (!reader) {
-            result.error_messages.push_back("Failed to create reader for file: " + trace_file);
-            return result;
+        if (is_compressed) {
+            // Handle compressed files with ReaderFactory
+            std::string idx_path = index_file.empty() ? (trace_file + ".idx") : index_file;
+            auto reader = ReaderFactory::create(trace_file, idx_path);
+            
+            if (!reader) {
+                result.error_messages.push_back("Failed to create reader for file: " + trace_file);
+                return result;
+            }
+            
+            // Create line processor for handling trace lines
+            ReplayLineProcessor processor(*this, result);
+            
+            // Read all lines using the line processor
+            reader->read_lines_with_processor(0, reader->get_num_lines(), processor);
+        } else {
+            // Handle plain text files directly
+            std::ifstream file(trace_file);
+            if (!file.is_open()) {
+                result.error_messages.push_back("Failed to open plain text file: " + trace_file);
+                return result;
+            }
+            
+            std::string line;
+            while (std::getline(file, line)) {
+                // Skip empty lines and bracket lines
+                if (line.empty() || line == "[" || line == "]") {
+                    continue;
+                }
+                
+                // Remove trailing comma if present
+                if (!line.empty() && line.back() == ',') {
+                    line.pop_back();
+                }
+                
+                process_trace_line(line, result);
+            }
         }
-        
-        // Create line processor for handling trace lines
-        ReplayLineProcessor processor(*this, result);
-        
-        // Read all lines using the line processor
-        reader->read_lines_with_processor(0, reader->get_num_lines(), 
-            [](const char* data, std::size_t length, void* user_data) -> bool {
-                auto* proc = static_cast<ReplayLineProcessor*>(user_data);
-                return proc->process(data, length);
-            }, &processor);
         
     } catch (const std::exception& e) {
         result.error_messages.push_back("Exception during replay: " + std::string(e.what()));
@@ -464,8 +385,9 @@ bool ReplayEngine::process_trace_line(const std::string& line, ReplayResult& res
         return true;
     }
     
-    // Apply timing logic
-    if (config_.maintain_timing && trace.time_start > 0 && trace.type == dftracer::utils::analyzers::TraceType::Regular) {
+    // Apply timing logic (skip during dry-run or dftracer-mode)
+    // In dftracer-mode, the DFTracerExecutor handles all timing internally
+    if (config_.maintain_timing && !config_.dry_run && !config_.dftracer_mode && trace.time_start > 0 && trace.type == dftracer::utils::analyzers::TraceType::Regular) {
         apply_timing(trace);
     }
     
@@ -550,6 +472,10 @@ bool ReplayEngine::parse_trace_json(const std::string& json_line, dftracer::util
 }
 
 void ReplayEngine::apply_timing(const dftracer::utils::analyzers::Trace& trace) {
+    if (!config_.maintain_timing) {
+        return; // Skip timing logic if timing is disabled
+    }
+    
     if (!first_timestamp_set_) {
         first_trace_timestamp_ = trace.time_start;
         first_timestamp_set_ = true;
@@ -568,6 +494,21 @@ void ReplayEngine::apply_timing(const dftracer::utils::analyzers::Trace& trace) 
     
     if (scaled_elapsed_us > static_cast<std::uint64_t>(replay_elapsed.count())) {
         std::uint64_t sleep_us = scaled_elapsed_us - replay_elapsed.count();
+        
+        // Add safety limits to prevent extremely long sleeps
+        const std::uint64_t MAX_SLEEP_US = 10 * 1000 * 1000; // 10 seconds max
+        if (sleep_us > MAX_SLEEP_US) {
+            if (config_.verbose) {
+                std::cout << "Warning: Capping sleep from " << sleep_us / 1000.0 
+                          << " ms to " << MAX_SLEEP_US / 1000.0 << " ms" << std::endl;
+            }
+            sleep_us = MAX_SLEEP_US;
+        }
+        
+        if (config_.verbose && sleep_us > 1000) { // Log sleeps > 1ms
+            std::cout << "Timing sleep: " << sleep_us / 1000.0 << " ms" << std::endl;
+        }
+        
         std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
     }
 }
@@ -636,6 +577,67 @@ ReplayLineProcessor::ReplayLineProcessor(ReplayEngine& engine, ReplayResult& res
 bool ReplayLineProcessor::process(const char* data, std::size_t length) {
     std::string line(data, length);
     return engine_.process_trace_line(line, result_);
+}
+
+// =============================================================================
+// DFTracerExecutor Implementation: Support DFTracer-mode execution
+
+
+bool DFTracerExecutor::execute(const dftracer::utils::analyzers::Trace& trace, const ReplayConfig& config) {
+    if (config.dry_run) {
+        return true;
+    }
+    
+    // DFTracer mode: sleep for the duration of the operation instead of doing actual I/O
+    // This simulates the timing of the original operation without the overhead
+    double duration_us = static_cast<double>(trace.time_end - trace.time_start);
+    
+    // Apply much more aggressive limits for practical testing
+    // Cap individual operation sleeps to 1ms (vs 10 seconds in apply_timing)
+    const double MAX_DFTRACER_SLEEP_US = 1.0 * 1000.0; // 1ms max
+    if (duration_us > MAX_DFTRACER_SLEEP_US) {
+        duration_us = MAX_DFTRACER_SLEEP_US;
+    }
+    
+    // Handle sleep based on configuration
+    if (config.no_sleep) {
+        // No sleep mode: skip all sleep calls for maximum speed
+        if (config.verbose && duration_us >= 100000.0) {
+            std::cout << "DFTracer would sleep for " << std::fixed << std::setprecision(3) 
+                      << duration_us / 1000.0 << " ms for " << trace.func_name << " (skipped)" << std::endl;            
+        }
+    } else {
+        // Normal dftracer mode: perform sleep with duration limits
+        if (config.verbose && duration_us >= 100.0) {
+            std::cout << "DFTracer sleeping for " << std::fixed << std::setprecision(3) 
+                      << duration_us / 1000.0 << " ms for " << trace.func_name << std::endl;
+        }
+        sleep_for_duration(duration_us);
+    }
+    
+    return true;
+}
+
+bool DFTracerExecutor::can_handle(const dftracer::utils::analyzers::Trace& /* trace */) const {
+    // Handle all trace events for dftracer replay mode
+    return true;
+}
+
+void DFTracerExecutor::sleep_for_duration(double duration_microseconds) {
+    if (duration_microseconds <= 0) return;
+    
+    // Add safety limits to prevent extremely long sleeps
+    const double MAX_SLEEP_US = 10.0 * 1000.0 * 1000.0; // 10 seconds max
+    if (duration_microseconds > MAX_SLEEP_US) {
+        duration_microseconds = MAX_SLEEP_US;
+    }
+    
+    // Convert microseconds to nanoseconds for high precision sleep
+    auto sleep_duration = std::chrono::nanoseconds(
+        static_cast<std::int64_t>(duration_microseconds * 1000)
+    );
+    
+    std::this_thread::sleep_for(sleep_duration);
 }
 
 } // namespace dftracer::utils::replay

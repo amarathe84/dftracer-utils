@@ -30,7 +30,8 @@ set(TEST_CPP_SOURCES
     test_reader_formats.cpp
     # test_reader_tar_comprehensive.cpp
     test_pipeline.cpp
-    test_reader_robustness.cpp)
+    test_reader_robustness.cpp
+    test_replay.cpp)
 
 foreach(test_file ${TEST_CPP_SOURCES})
   string(REPLACE ".cpp" "" bin_exec ${test_file})

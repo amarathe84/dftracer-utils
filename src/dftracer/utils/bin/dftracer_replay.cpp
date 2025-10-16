@@ -8,8 +8,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <iomanip>
-#include <fstream>
-#include <sstream>
 
 using namespace dftracer::utils;
 using namespace dftracer::utils::replay;
@@ -54,25 +52,7 @@ void print_results(const ReplayResult& result, bool verbose) {
     }
 }
 
-/**
- * Parse comma-separated list into a set
- */
-std::unordered_set<std::string> parse_list(const std::string& list_str) {
-    std::unordered_set<std::string> result;
-    if (list_str.empty()) return result;
-    
-    std::stringstream ss(list_str);
-    std::string item;
-    while (std::getline(ss, item, ',')) {
-        // Trim whitespace
-        item.erase(0, item.find_first_not_of(" \t"));
-        item.erase(item.find_last_not_of(" \t") + 1);
-        if (!item.empty()) {
-            result.insert(item);
-        }
-    }
-    return result;
-}
+
 
 /**
  * Collect trace files from directory or file list
@@ -87,7 +67,8 @@ std::vector<std::string> collect_trace_files(const std::vector<std::string>& inp
                 for (const auto& entry : fs::recursive_directory_iterator(input)) {
                     if (entry.is_regular_file()) {
                         std::string path = entry.path().string();
-                        if (path.ends_with(".pfw") || path.ends_with(".pfw.gz")) {
+                        if ((path.size() >= 4 && path.substr(path.size() - 4) == ".pfw") || 
+                            (path.size() >= 7 && path.substr(path.size() - 7) == ".pfw.gz")) {
                             trace_files.push_back(path);
                         }
                     }
@@ -96,7 +77,8 @@ std::vector<std::string> collect_trace_files(const std::vector<std::string>& inp
                 for (const auto& entry : fs::directory_iterator(input)) {
                     if (entry.is_regular_file()) {
                         std::string path = entry.path().string();
-                        if (path.ends_with(".pfw") || path.ends_with(".pfw.gz")) {
+                        if ((path.size() >= 4 && path.substr(path.size() - 4) == ".pfw") || 
+                            (path.size() >= 7 && path.substr(path.size() - 7) == ".pfw.gz")) {
                             trace_files.push_back(path);
                         }
                     }
@@ -130,41 +112,17 @@ int main(int argc, char** argv) {
         .help("Ignore original timing and execute as fast as possible")
         .flag();
     
-    program.add_argument("--timing-scale")
-        .help("Scale timing (1.0 = original speed, 0.5 = 2x faster, 2.0 = 2x slower)")
-        .default_value(1.0)
-        .scan<'g', double>();
-    
-    // Filtering options
-    program.add_argument("--filter-functions")
-        .help("Comma-separated list of functions to replay (empty = all)")
-        .default_value(std::string(""));
-    
-    program.add_argument("--exclude-functions")
-        .help("Comma-separated list of functions to exclude")
-        .default_value(std::string(""));
-    
-    program.add_argument("--filter-categories")
-        .help("Comma-separated list of categories to replay (posix, stdio, etc.)")
-        .default_value(std::string(""));
-    
-    // Output options
-    program.add_argument("-o", "--output-dir")
-        .help("Output directory for created files (default: use original paths)")
-        .default_value(std::string(""));
-    
-    program.add_argument("--max-file-size")
-        .help("Maximum file size to create in bytes (default: 100MB)")
-        .default_value<std::size_t>(100 * 1024 * 1024)
-        .scan<'d', std::size_t>();
-    
     // Execution options
     program.add_argument("--dry-run")
         .help("Parse and analyze traces without executing operations")
         .flag();
     
-    program.add_argument("-r", "--recursive")
-        .help("Recursively search directories for trace files")
+    program.add_argument("--dftracer-mode")
+        .help("Use DFTracer sleep-based replay (sleep for operation duration instead of doing actual I/O)")
+        .flag();
+    
+    program.add_argument("--no-sleep")
+        .help("When used with --dftracer-mode, disable sleep calls for maximum speed")
         .flag();
     
     program.add_argument("-v", "--verbose")
@@ -182,18 +140,19 @@ int main(int argc, char** argv) {
     // Parse arguments
     std::vector<std::string> inputs = program.get<std::vector<std::string>>("inputs");
     bool no_timing = program.get<bool>("--no-timing");
-    double timing_scale = program.get<double>("--timing-scale");
-    std::string filter_functions_str = program.get<std::string>("--filter-functions");
-    std::string exclude_functions_str = program.get<std::string>("--exclude-functions");
-    std::string filter_categories_str = program.get<std::string>("--filter-categories");
-    std::string output_dir = program.get<std::string>("--output-dir");
-    std::size_t max_file_size = program.get<std::size_t>("--max-file-size");
     bool dry_run = program.get<bool>("--dry-run");
-    bool recursive = program.get<bool>("--recursive");
+    bool dftracer_mode = program.get<bool>("--dftracer-mode");
+    bool no_sleep = program.get<bool>("--no-sleep");
     bool verbose = program.get<bool>("--verbose");
     
-    // Collect trace files
-    std::vector<std::string> trace_files = collect_trace_files(inputs, recursive);
+    // Validate --no-sleep usage
+    if (no_sleep && !dftracer_mode) {
+        std::cerr << "Error: --no-sleep can only be used with --dftracer-mode" << std::endl;
+        return 1;
+    }
+    
+    // Collect trace files (always non-recursive since we removed --recursive)
+    std::vector<std::string> trace_files = collect_trace_files(inputs, false);
     
     if (trace_files.empty()) {
         std::cerr << "No trace files found in the specified inputs." << std::endl;
@@ -205,71 +164,23 @@ int main(int argc, char** argv) {
         std::cout << "  " << file << std::endl;
     }
     
-    // Create output directory if specified
-    if (!output_dir.empty()) {
-        if (!fs::exists(output_dir)) {
-            try {
-                fs::create_directories(output_dir);
-                std::cout << "Created output directory: " << output_dir << std::endl;
-            } catch (const std::exception& e) {
-                std::cerr << "Failed to create output directory " << output_dir << ": " << e.what() << std::endl;
-                return 1;
-            }
-        }
-    }
-    
     // Configure replay
     ReplayConfig config;
     config.maintain_timing = !no_timing;
-    config.timing_scale = timing_scale;
     config.dry_run = dry_run;
+    config.dftracer_mode = dftracer_mode;
+    config.no_sleep = no_sleep;
     config.verbose = verbose;
-    config.output_directory = output_dir;
-    config.max_file_size = max_file_size;
-    config.filter_functions = parse_list(filter_functions_str);
-    config.exclude_functions = parse_list(exclude_functions_str);
-    config.filter_categories = parse_list(filter_categories_str);
+
     
     // Print configuration
     std::cout << "\n=== Replay Configuration ===" << std::endl;
     std::cout << "Maintain timing: " << (config.maintain_timing ? "yes" : "no") << std::endl;
-    if (config.maintain_timing) {
-        std::cout << "Timing scale: " << config.timing_scale << "x" << std::endl;
-    }
     std::cout << "Dry run: " << (config.dry_run ? "yes" : "no") << std::endl;
-    std::cout << "Max file size: " << (config.max_file_size / (1024 * 1024)) << " MB" << std::endl;
-    if (!config.output_directory.empty()) {
-        std::cout << "Output directory: " << config.output_directory << std::endl;
-    }
-    if (!config.filter_functions.empty()) {
-        std::cout << "Filter functions: ";
-        bool first = true;
-        for (const auto& func : config.filter_functions) {
-            if (!first) std::cout << ", ";
-            std::cout << func;
-            first = false;
-        }
-        std::cout << std::endl;
-    }
-    if (!config.exclude_functions.empty()) {
-        std::cout << "Exclude functions: ";
-        bool first = true;
-        for (const auto& func : config.exclude_functions) {
-            if (!first) std::cout << ", ";
-            std::cout << func;
-            first = false;
-        }
-        std::cout << std::endl;
-    }
-    if (!config.filter_categories.empty()) {
-        std::cout << "Filter categories: ";
-        bool first = true;
-        for (const auto& cat : config.filter_categories) {
-            if (!first) std::cout << ", ";
-            std::cout << cat;
-            first = false;
-        }
-        std::cout << std::endl;
+    if (config.dftracer_mode) {
+        std::cout << "DFTracer mode: yes (" << (config.no_sleep ? "no-sleep" : "sleep-based") << ")" << std::endl;
+    } else {
+        std::cout << "DFTracer mode: no (actual I/O)" << std::endl;
     }
     
     // Create replay engine and execute
@@ -284,7 +195,7 @@ int main(int argc, char** argv) {
     auto total_wall_time = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     
     std::cout << "\n=== Replay Completed ===" << std::endl;
-    std::cout << "Wall clock time: " << total_wall_time.count() / 1000.0 << " ms" << std::endl;
+    std::cout << "Wall clock time: " << static_cast<double>(total_wall_time.count()) / 1000.0 << " ms" << std::endl;
     
     // Print results
     print_results(result, verbose);
