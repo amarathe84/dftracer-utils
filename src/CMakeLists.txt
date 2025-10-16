@@ -89,6 +89,8 @@ set(DFTRACER_UTILS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/analyzers/helpers/parse_trace.cpp
     # Replay
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/replay/replay.cpp
+    # Call Graph
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_graph/call_graph.cpp
 )
 
 # +++++++++++++++++++++++++++++++++++++++++
@@ -176,7 +178,8 @@ set(DFTRACER_BINARIES
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_pgzip.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_merge.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_split.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_replay.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_replay.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_call_graph.cpp)
 
 foreach(bin ${DFTRACER_BINARIES})
   string(REPLACE ".cpp" "" bin_exec ${bin})
