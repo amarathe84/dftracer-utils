@@ -199,6 +199,12 @@ public:
      * Called by TraceReader after all data is loaded
      */
     void build_hierarchy();
+    
+    /**
+     * Build hierarchy for a specific process (lazy/on-demand)
+     * @param key ProcessKey to build hierarchy for
+     */
+    void build_hierarchy_for_process(const ProcessKey& key);
 
 private:
     friend class TraceReader;
@@ -209,6 +215,11 @@ private:
      * Delegates to TraceReader for actual I/O
      */
     bool load(const std::string& trace_file);
+    
+    /**
+     * Build hierarchy for a single ProcessCallGraph
+     */
+    void build_hierarchy_internal(ProcessCallGraph* graph);
     
     /**
      * Print calls recursively 

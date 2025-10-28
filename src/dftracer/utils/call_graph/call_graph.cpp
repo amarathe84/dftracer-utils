@@ -23,9 +23,15 @@ bool TraceReader::read(const std::string& trace_file, CallGraph& graph) {
     std::string line;
     size_t line_count = 0;
     size_t processed = 0;
+    size_t report_interval = 10000;
     
     while (std::getline(file, line)) {
         line_count++;
+        
+        // progress indicator
+        if (line_count % report_interval == 0) {
+            std::cout << "  processed " << line_count << " lines, " << processed << " traces..." << std::endl;
+        }
         
         // skip brackets and empty lines
         if (line.empty() || line == "[" || line == "]") {
@@ -40,14 +46,14 @@ bool TraceReader::read(const std::string& trace_file, CallGraph& graph) {
         if (process_trace_line(line, graph)) {
             processed++;
         } else {
-            std::cerr << "failed to parse line " << line_count << " in " << trace_file << std::endl;
+            // Don't spam errors for metadata entries
+            if (line_count < 10) {
+                std::cerr << "failed to parse line " << line_count << " in " << trace_file << std::endl;
+            }
         }
     }
     
     std::cout << "processed " << processed << " trace entries from " << trace_file << std::endl;
-    
-    // build parent child relationships after trace loaded
-    graph.build_hierarchy();
     
     return true;
 }
@@ -57,7 +63,10 @@ bool TraceReader::read_multiple(const std::vector<std::string>& trace_files, Cal
     
     std::cout << "reading " << trace_files.size() << " trace files..." << std::endl;
     
+    size_t file_num = 0;
     for (const auto& file : trace_files) {
+        file_num++;
+        std::cout << "[" << file_num << "/" << trace_files.size() << "] ";
         if (!read(file, graph)) {
             std::cerr << "failed to read: " << file << std::endl;
             all_success = false;
@@ -65,7 +74,7 @@ bool TraceReader::read_multiple(const std::vector<std::string>& trace_files, Cal
     }
     
     // build parent child relationships after all traces loaded
-    std::cout << "building call hierarchy across all traces..." << std::endl;
+    std::cout << "building call hierarchy for " << graph.size() << " process/thread/node combinations..." << std::endl;
     graph.build_hierarchy();
     
     return all_success;
@@ -234,49 +243,75 @@ void CallGraph::add_call(const ProcessKey& key, std::shared_ptr<FunctionCall> ca
 }
 
 void CallGraph::build_hierarchy() {
-    // build parent child relationships
+    std::cout << "building hierarchy for " << process_graphs_.size() << " process graphs..." << std::endl;
+    
+    size_t count = 0;
     for (auto& [key, graph] : process_graphs_) {
-        std::vector<std::shared_ptr<FunctionCall>> sorted_calls;
-        for (auto& [id, call] : graph->calls) {
-            sorted_calls.push_back(call);
+        count++;
+        if (count % 10 == 0 || count == process_graphs_.size()) {
+            std::cout << "  processed " << count << "/" << process_graphs_.size() << " processes..." << std::endl;
         }
+        build_hierarchy_internal(graph.get());
+    }
+    
+    std::cout << "hierarchy building complete" << std::endl;
+}
+
+void CallGraph::build_hierarchy_for_process(const ProcessKey& key) {
+    auto it = process_graphs_.find(key);
+    if (it != process_graphs_.end()) {
+        build_hierarchy_internal(it->second.get());
+    }
+}
+
+void CallGraph::build_hierarchy_internal(ProcessCallGraph* graph) {
+    // Skip if already built (root_calls is populated)
+    if (!graph->root_calls.empty()) {
+        return;
+    }
+    
+    std::vector<std::shared_ptr<FunctionCall>> sorted_calls;
+    sorted_calls.reserve(graph->calls.size());
+    
+    for (auto& [id, call] : graph->calls) {
+        sorted_calls.push_back(call);
+    }
+    
+    // sort by start time to build hierarchy
+    std::sort(sorted_calls.begin(), sorted_calls.end(), 
+              [](const auto& a, const auto& b) {
+                  return a->start_time < b->start_time;
+              });
+    
+    // find parents for each call
+    for (auto& call : sorted_calls) {
+        bool found_parent = false;
         
-        // sort by start time to build hierarchy
-        std::sort(sorted_calls.begin(), sorted_calls.end(), 
-                  [](const auto& a, const auto& b) {
-                      return a->start_time < b->start_time;
-                  });
-        
-        // find parents for each call
-        for (auto& call : sorted_calls) {
-            bool found_parent = false;
+        // look for parent that contains this call
+        for (auto& potential_parent : sorted_calls) {
+            if (potential_parent->id == call->id) continue;
             
-            // look for parent that contains this call
-            for (auto& potential_parent : sorted_calls) {
-                if (potential_parent->id == call->id) continue;
+            std::uint64_t parent_end = potential_parent->start_time + potential_parent->duration;
+            
+            // check if call is inside parent timespan and level is correct
+            if (call->start_time >= potential_parent->start_time &&
+                (call->start_time + call->duration) <= parent_end &&
+                call->level > potential_parent->level) {
                 
-                std::uint64_t parent_end = potential_parent->start_time + potential_parent->duration;
-                
-                // check if call is inside parent timespan and level is correct
-                if (call->start_time >= potential_parent->start_time &&
-                    (call->start_time + call->duration) <= parent_end &&
-                    call->level > potential_parent->level) {
-                    
-                    // find closest parent by level
-                    if (!found_parent || 
-                        potential_parent->level > graph->calls[call->parent_id]->level) {
-                        call->parent_id = potential_parent->id;
-                        found_parent = true;
-                    }
+                // find closest parent by level
+                if (!found_parent || 
+                    potential_parent->level > graph->calls[call->parent_id]->level) {
+                    call->parent_id = potential_parent->id;
+                    found_parent = true;
                 }
             }
-            
-            // add to parent children or root
-            if (found_parent) {
-                graph->calls[call->parent_id]->children.push_back(call->id);
-            } else {
-                graph->root_calls.push_back(call->id);
-            }
+        }
+        
+        // add to parent children or root
+        if (found_parent) {
+            graph->calls[call->parent_id]->children.push_back(call->id);
+        } else {
+            graph->root_calls.push_back(call->id);
         }
     }
 }

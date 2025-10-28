@@ -13,8 +13,9 @@ void print_usage(const char* program_name) {
     std::cerr << "  trace_file_or_directory: single file, multiple files (space-separated), or directory" << std::endl;
     std::cerr << "  options:" << std::endl;
     std::cerr << "    --pattern <pattern>  : file pattern when reading directory (default: *.pfw)" << std::endl;
-    std::cerr << "    --summary           : show summary statistics only" << std::endl;
-    std::cerr << "    --detailed          : show detailed call graphs (default)" << std::endl;
+    std::cerr << "    --limit <n>          : limit to first N trace files" << std::endl;
+    std::cerr << "    --summary            : show summary statistics only" << std::endl;
+    std::cerr << "    --detailed           : show detailed call graphs (default)" << std::endl;
 }
 
 void print_summary(const CallGraph& call_graph) {
