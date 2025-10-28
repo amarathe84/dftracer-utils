@@ -73,8 +73,58 @@ namespace dftracer::utils::call_graph {
  */
 using TraceCallback = std::function<bool(const std::string& json_line)>;
 
+// Forward declaration
+class CallGraph;
+
 /**
- * Main call graph with all processes
+ * TraceReader - Handles reading and parsing trace files
+ * Separates I/O concerns from the CallGraph data structure
+ * Supports reading from single files, multiple files, or directories
+ */
+class TraceReader {
+public:
+    TraceReader() = default;
+    ~TraceReader() = default;
+    
+    /**
+     * Read trace file and populate call graph
+     * @param trace_file Path to trace log file
+     * @param graph CallGraph to populate
+     * @return true if successful, false otherwise
+     */
+    bool read(const std::string& trace_file, CallGraph& graph);
+    
+    /**
+     * Read multiple trace files and populate call graph
+     * Each file may contain traces from different nodes/processes
+     * @param trace_files Vector of paths to trace files
+     * @param graph CallGraph to populate
+     * @return true if all files read successfully, false otherwise
+     */
+    bool read_multiple(const std::vector<std::string>& trace_files, CallGraph& graph);
+    
+    /**
+     * Read all trace files matching pattern from a directory
+     * @param directory Path to directory containing trace files
+     * @param pattern Glob pattern for trace files (e.g., "*.pfw")
+     * @param graph CallGraph to populate
+     * @return true if successful, false otherwise
+     */
+    bool read_directory(const std::string& directory, const std::string& pattern, CallGraph& graph);
+    
+private:
+    /**
+     * Process a single JSON trace line
+     * @param line JSON line from trace file
+     * @param graph CallGraph to add data to
+     * @return true if successful, false otherwise
+     */
+    bool process_trace_line(const std::string& line, CallGraph& graph);
+};
+
+/**
+ * Main call graph - Container for all process call graphs
+ * Acts as a map-like structure that returns ProcessCallGraph nodes by ProcessKey
  * Modern C++ API design:
  * - Constructor takes log file (no separate load method)
  * - Simplified method names based on return types
@@ -137,25 +187,28 @@ public:
      * Get number of process/thread/node combinations
      */
     size_t size() const { return process_graphs_.size(); }
+    
+    /**
+     * Add a function call to the appropriate process graph
+     * Used by TraceReader to populate the graph
+     */
+    void add_call(const ProcessKey& key, std::shared_ptr<FunctionCall> call);
+    
+    /**
+     * Build parent-child relationships after all traces loaded
+     * Called by TraceReader after all data is loaded
+     */
+    void build_hierarchy();
 
 private:
+    friend class TraceReader;
     std::unordered_map<ProcessKey, std::unique_ptr<ProcessCallGraph>> process_graphs_;
     
     /**
      * Load call graph from trace file (moved to private)
-     * Delegates file I/O to reader abstraction
+     * Delegates to TraceReader for actual I/O
      */
     bool load(const std::string& trace_file);
-    
-    /**
-     * Process single trace using callback pattern
-     */
-    bool process_trace(const std::string& json_line);
-    
-    /**
-     * Build parent-child relationships after all traces loaded
-     */
-    void build_hierarchy();
     
     /**
      * Print calls recursively 

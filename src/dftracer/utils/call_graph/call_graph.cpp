@@ -3,26 +3,30 @@
 #include <iostream>
 #include <algorithm>
 #include <yyjson.h>
+#include <filesystem>
 
 namespace dftracer::utils::call_graph {
 
-CallGraph::CallGraph(const std::string& log_file) {
-    if (!load(log_file)) {
-        std::cerr << "Failed to load call graph from: " << log_file << std::endl;
-    }
-}
+// ============================================================================
+// TraceReader Implementation
+// ============================================================================
 
-CallGraph::~CallGraph() {}
-
-bool CallGraph::load(const std::string& trace_file) {
+bool TraceReader::read(const std::string& trace_file, CallGraph& graph) {
     std::ifstream file(trace_file);
     if (!file.is_open()) {
         std::cerr << "cant open trace file: " << trace_file << std::endl;
         return false;
     }
     
+    std::cout << "reading trace file: " << trace_file << std::endl;
+    
     std::string line;
+    size_t line_count = 0;
+    size_t processed = 0;
+    
     while (std::getline(file, line)) {
+        line_count++;
+        
         // skip brackets and empty lines
         if (line.empty() || line == "[" || line == "]") {
             continue;
@@ -33,66 +37,76 @@ bool CallGraph::load(const std::string& trace_file) {
             line.pop_back();
         }
         
-        if (!process_trace(line)) {
-            std::cerr << "failed to parse line: " << line << std::endl;
+        if (process_trace_line(line, graph)) {
+            processed++;
+        } else {
+            std::cerr << "failed to parse line " << line_count << " in " << trace_file << std::endl;
         }
     }
     
-    // build parent child relationships after all traces loaded
-    build_hierarchy();
+    std::cout << "processed " << processed << " trace entries from " << trace_file << std::endl;
+    
+    // build parent child relationships after trace loaded
+    graph.build_hierarchy();
     
     return true;
 }
 
-void CallGraph::build_hierarchy() {
-    // build parent child relationships
-    for (auto& [key, graph] : process_graphs_) {
-        std::vector<std::shared_ptr<FunctionCall>> sorted_calls;
-        for (auto& [id, call] : graph->calls) {
-            sorted_calls.push_back(call);
+bool TraceReader::read_multiple(const std::vector<std::string>& trace_files, CallGraph& graph) {
+    bool all_success = true;
+    
+    std::cout << "reading " << trace_files.size() << " trace files..." << std::endl;
+    
+    for (const auto& file : trace_files) {
+        if (!read(file, graph)) {
+            std::cerr << "failed to read: " << file << std::endl;
+            all_success = false;
         }
-        
-        // sort by start time to build hierarchy
-        std::sort(sorted_calls.begin(), sorted_calls.end(), 
-                  [](const auto& a, const auto& b) {
-                      return a->start_time < b->start_time;
-                  });
-        
-        // find parents for each call
-        for (auto& call : sorted_calls) {
-            bool found_parent = false;
+    }
+    
+    // build parent child relationships after all traces loaded
+    std::cout << "building call hierarchy across all traces..." << std::endl;
+    graph.build_hierarchy();
+    
+    return all_success;
+}
+
+bool TraceReader::read_directory(const std::string& directory, const std::string& pattern, CallGraph& graph) {
+    namespace fs = std::filesystem;
+    
+    if (!fs::exists(directory) || !fs::is_directory(directory)) {
+        std::cerr << "directory does not exist: " << directory << std::endl;
+        return false;
+    }
+    
+    std::vector<std::string> trace_files;
+    
+    // collect all matching files
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
             
-            // look for parent that contains this call
-            for (auto& potential_parent : sorted_calls) {
-                if (potential_parent->id == call->id) continue;
-                
-                std::uint64_t parent_end = potential_parent->start_time + potential_parent->duration;
-                
-                // check if call is inside parent timespan and level is correct
-                if (call->start_time >= potential_parent->start_time &&
-                    (call->start_time + call->duration) <= parent_end &&
-                    call->level > potential_parent->level) {
-                    
-                    // find closest parent by level
-                    if (!found_parent || 
-                        potential_parent->level > graph->calls[call->parent_id]->level) {
-                        call->parent_id = potential_parent->id;
-                        found_parent = true;
-                    }
-                }
-            }
-            
-            // add to parent children or root
-            if (found_parent) {
-                graph->calls[call->parent_id]->children.push_back(call->id);
-            } else {
-                graph->root_calls.push_back(call->id);
+            // simple pattern matching (for now, just check file extension)
+            if (pattern == "*" || filename.find(pattern.substr(1)) != std::string::npos) {
+                trace_files.push_back(entry.path().string());
             }
         }
     }
+    
+    if (trace_files.empty()) {
+        std::cerr << "no trace files found in " << directory << " matching " << pattern << std::endl;
+        return false;
+    }
+    
+    // sort files for consistent processing order
+    std::sort(trace_files.begin(), trace_files.end());
+    
+    std::cout << "found " << trace_files.size() << " trace files in " << directory << std::endl;
+    
+    return read_multiple(trace_files, graph);
 }
 
-bool CallGraph::process_trace(const std::string& line) {
+bool TraceReader::process_trace_line(const std::string& line, CallGraph& graph) {
     yyjson_doc* doc = yyjson_read(line.c_str(), line.length(), 0);
     if (!doc) {
         return false;
@@ -154,15 +168,6 @@ bool CallGraph::process_trace(const std::string& line) {
         }
     }
     
-    // Create composite key
-    ProcessKey key(static_cast<std::uint32_t>(pid), tid, node_id);
-    
-    // make sure process graph exists
-    if (process_graphs_.find(key) == process_graphs_.end()) {
-        process_graphs_[key] = std::make_unique<ProcessCallGraph>();
-        process_graphs_[key]->key = key;
-    }
-    
     // create function call
     auto call = std::make_shared<FunctionCall>();
     call->id = call_id;
@@ -190,13 +195,90 @@ bool CallGraph::process_trace(const std::string& line) {
         }
     }
     
-    // add to process graph
-    ProcessCallGraph* graph = process_graphs_[key].get();
-    graph->calls[call_id] = call;
-    graph->call_sequence.push_back(call_id);
+    // add call to graph
+    ProcessKey key(static_cast<std::uint32_t>(pid), tid, node_id);
+    graph.add_call(key, call);
     
     yyjson_doc_free(doc);
     return true;
+}
+
+// ============================================================================
+// CallGraph Implementation
+// ============================================================================
+
+CallGraph::CallGraph(const std::string& log_file) {
+    if (!load(log_file)) {
+        std::cerr << "Failed to load call graph from: " << log_file << std::endl;
+    }
+}
+
+CallGraph::~CallGraph() {}
+
+
+bool CallGraph::load(const std::string& trace_file) {
+    TraceReader reader;
+    return reader.read(trace_file, *this);
+}
+
+void CallGraph::add_call(const ProcessKey& key, std::shared_ptr<FunctionCall> call) {
+    // make sure process graph exists
+    if (process_graphs_.find(key) == process_graphs_.end()) {
+        process_graphs_[key] = std::make_unique<ProcessCallGraph>();
+        process_graphs_[key]->key = key;
+    }
+    
+    ProcessCallGraph* graph = process_graphs_[key].get();
+    graph->calls[call->id] = call;
+    graph->call_sequence.push_back(call->id);
+}
+
+void CallGraph::build_hierarchy() {
+    // build parent child relationships
+    for (auto& [key, graph] : process_graphs_) {
+        std::vector<std::shared_ptr<FunctionCall>> sorted_calls;
+        for (auto& [id, call] : graph->calls) {
+            sorted_calls.push_back(call);
+        }
+        
+        // sort by start time to build hierarchy
+        std::sort(sorted_calls.begin(), sorted_calls.end(), 
+                  [](const auto& a, const auto& b) {
+                      return a->start_time < b->start_time;
+                  });
+        
+        // find parents for each call
+        for (auto& call : sorted_calls) {
+            bool found_parent = false;
+            
+            // look for parent that contains this call
+            for (auto& potential_parent : sorted_calls) {
+                if (potential_parent->id == call->id) continue;
+                
+                std::uint64_t parent_end = potential_parent->start_time + potential_parent->duration;
+                
+                // check if call is inside parent timespan and level is correct
+                if (call->start_time >= potential_parent->start_time &&
+                    (call->start_time + call->duration) <= parent_end &&
+                    call->level > potential_parent->level) {
+                    
+                    // find closest parent by level
+                    if (!found_parent || 
+                        potential_parent->level > graph->calls[call->parent_id]->level) {
+                        call->parent_id = potential_parent->id;
+                        found_parent = true;
+                    }
+                }
+            }
+            
+            // add to parent children or root
+            if (found_parent) {
+                graph->calls[call->parent_id]->children.push_back(call->id);
+            } else {
+                graph->root_calls.push_back(call->id);
+            }
+        }
+    }
 }
 
 ProcessCallGraph* CallGraph::get(const ProcessKey& key) {
