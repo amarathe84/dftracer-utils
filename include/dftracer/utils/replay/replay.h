@@ -120,11 +120,26 @@ private:
 
 /**
  * Main replay engine that coordinates trace reading and execution
+ * Modern C++ API design:
+ * - Constructor takes log file and config together
+ * - Simplified method names
+ * - Delegates file I/O to reader abstraction
  */
 class ReplayEngine {
     friend class ReplayLineProcessor;
 public:
+    /**
+     * Construct replay engine with configuration only
+     * Use this when you want to replay multiple files with same config
+     */
     explicit ReplayEngine(const ReplayConfig& config);
+    
+    /**
+     * Construct and immediately load from trace file
+     * Modern C++ style - single constructor does everything
+     */
+    ReplayEngine(const std::string& trace_file, const ReplayConfig& config);
+    
     ~ReplayEngine();
     
     /**
@@ -135,19 +150,20 @@ public:
     
     /**
      * Replay traces from a single file
+     * Simplified name - delegates file I/O to reader
      * @param trace_file Path to trace file (.pfw or .pfw.gz)
      * @param index_file Optional path to index file (for .pfw.gz files)
      * @return Replay results and statistics
      */
-    ReplayResult replay_file(const std::string& trace_file, 
-                            const std::string& index_file = "");
+    ReplayResult replay(const std::string& trace_file, 
+                       const std::string& index_file = "");
     
     /**
      * Replay traces from multiple files
      * @param trace_files Vector of trace file paths
      * @return Aggregated replay results and statistics
      */
-    ReplayResult replay_files(const std::vector<std::string>& trace_files);
+    ReplayResult replay(const std::vector<std::string>& trace_files);
 
 private:
     ReplayConfig config_;

@@ -6,11 +6,15 @@
 
 namespace dftracer::utils::call_graph {
 
-CallGraph::CallGraph() {}
+CallGraph::CallGraph(const std::string& log_file) {
+    if (!load(log_file)) {
+        std::cerr << "Failed to load call graph from: " << log_file << std::endl;
+    }
+}
 
 CallGraph::~CallGraph() {}
 
-bool CallGraph::load_from_trace(const std::string& trace_file) {
+bool CallGraph::load(const std::string& trace_file) {
     std::ifstream file(trace_file);
     if (!file.is_open()) {
         std::cerr << "cant open trace file: " << trace_file << std::endl;
@@ -29,13 +33,20 @@ bool CallGraph::load_from_trace(const std::string& trace_file) {
             line.pop_back();
         }
         
-        if (!parse_trace_line(line)) {
+        if (!process_trace(line)) {
             std::cerr << "failed to parse line: " << line << std::endl;
         }
     }
     
+    // build parent child relationships after all traces loaded
+    build_hierarchy();
+    
+    return true;
+}
+
+void CallGraph::build_hierarchy() {
     // build parent child relationships
-    for (auto& [pid, graph] : process_graphs_) {
+    for (auto& [key, graph] : process_graphs_) {
         std::vector<std::shared_ptr<FunctionCall>> sorted_calls;
         for (auto& [id, call] : graph->calls) {
             sorted_calls.push_back(call);
@@ -79,11 +90,9 @@ bool CallGraph::load_from_trace(const std::string& trace_file) {
             }
         }
     }
-    
-    return true;
 }
 
-bool CallGraph::parse_trace_line(const std::string& line) {
+bool CallGraph::process_trace(const std::string& line) {
     yyjson_doc* doc = yyjson_read(line.c_str(), line.length(), 0);
     if (!doc) {
         return false;
@@ -123,19 +132,35 @@ bool CallGraph::parse_trace_line(const std::string& line) {
     std::uint64_t start_time = yyjson_get_uint(ts_val);
     std::uint64_t duration = dur_val ? yyjson_get_uint(dur_val) : 0;
     
-    // get level from args
+    // get level, tid, and node_id from args
     int level = 0;
+    std::uint32_t tid = 0;
+    std::uint32_t node_id = 0;
+    
     if (args_val && yyjson_is_obj(args_val)) {
         yyjson_val* level_val = yyjson_obj_get(args_val, "level");
         if (level_val) {
             level = yyjson_get_int(level_val);
         }
+        
+        yyjson_val* tid_val = yyjson_obj_get(args_val, "tid");
+        if (tid_val) {
+            tid = static_cast<std::uint32_t>(yyjson_get_uint(tid_val));
+        }
+        
+        yyjson_val* node_val = yyjson_obj_get(args_val, "node_id");
+        if (node_val) {
+            node_id = static_cast<std::uint32_t>(yyjson_get_uint(node_val));
+        }
     }
     
+    // Create composite key
+    ProcessKey key(static_cast<std::uint32_t>(pid), tid, node_id);
+    
     // make sure process graph exists
-    if (process_graphs_.find(pid) == process_graphs_.end()) {
-        process_graphs_[pid] = std::make_unique<ProcessCallGraph>();
-        process_graphs_[pid]->process_id = pid;
+    if (process_graphs_.find(key) == process_graphs_.end()) {
+        process_graphs_[key] = std::make_unique<ProcessCallGraph>();
+        process_graphs_[key]->key = key;
     }
     
     // create function call
@@ -152,21 +177,21 @@ bool CallGraph::parse_trace_line(const std::string& line) {
     if (args_val && yyjson_is_obj(args_val)) {
         yyjson_obj_iter iter;
         yyjson_obj_iter_init(args_val, &iter);
-        yyjson_val* key, *val;
-        while ((key = yyjson_obj_iter_next(&iter))) {
-            val = yyjson_obj_iter_get_val(key);
-            if (yyjson_is_str(val)) {
-                call->args[yyjson_get_str(key)] = yyjson_get_str(val);
-            } else if (yyjson_is_int(val)) {
-                call->args[yyjson_get_str(key)] = std::to_string(yyjson_get_int(val));
-            } else if (yyjson_is_uint(val)) {
-                call->args[yyjson_get_str(key)] = std::to_string(yyjson_get_uint(val));
+        yyjson_val* arg_key, *arg_val;
+        while ((arg_key = yyjson_obj_iter_next(&iter))) {
+            arg_val = yyjson_obj_iter_get_val(arg_key);
+            if (yyjson_is_str(arg_val)) {
+                call->args[yyjson_get_str(arg_key)] = yyjson_get_str(arg_val);
+            } else if (yyjson_is_int(arg_val)) {
+                call->args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_int(arg_val));
+            } else if (yyjson_is_uint(arg_val)) {
+                call->args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_uint(arg_val));
             }
         }
     }
     
     // add to process graph
-    ProcessCallGraph* graph = process_graphs_[pid].get();
+    ProcessCallGraph* graph = process_graphs_[key].get();
     graph->calls[call_id] = call;
     graph->call_sequence.push_back(call_id);
     
@@ -174,31 +199,49 @@ bool CallGraph::parse_trace_line(const std::string& line) {
     return true;
 }
 
-ProcessCallGraph* CallGraph::get_process_graph(std::uint64_t pid) {
-    auto it = process_graphs_.find(pid);
+ProcessCallGraph* CallGraph::get(const ProcessKey& key) {
+    auto it = process_graphs_.find(key);
     if (it != process_graphs_.end()) {
         return it->second.get();
     }
     return nullptr;
 }
 
-std::vector<std::uint64_t> CallGraph::get_process_ids() const {
-    std::vector<std::uint64_t> pids;
-    for (const auto& [pid, graph] : process_graphs_) {
-        pids.push_back(pid);
-    }
-    return pids;
+ProcessCallGraph* CallGraph::get(std::uint32_t pid, std::uint32_t tid, std::uint32_t node_id) {
+    return get(ProcessKey(pid, tid, node_id));
 }
 
-void CallGraph::print_process_graph(std::uint64_t pid) const {
-    auto it = process_graphs_.find(pid);
+ProcessCallGraph& CallGraph::operator[](const ProcessKey& key) {
+    auto it = process_graphs_.find(key);
     if (it == process_graphs_.end()) {
-        std::cout << "no graph for process " << pid << std::endl;
+        // Create new process graph if it doesn't exist
+        process_graphs_[key] = std::make_unique<ProcessCallGraph>();
+        process_graphs_[key]->key = key;
+        return *process_graphs_[key];
+    }
+    return *it->second;
+}
+
+std::vector<ProcessKey> CallGraph::keys() const {
+    std::vector<ProcessKey> result;
+    result.reserve(process_graphs_.size());
+    for (const auto& [key, graph] : process_graphs_) {
+        result.push_back(key);
+    }
+    return result;
+}
+
+void CallGraph::print(const ProcessKey& key) const {
+    auto it = process_graphs_.find(key);
+    if (it == process_graphs_.end()) {
+        std::cout << "no graph for process key (pid=" << key.pid 
+                  << ", tid=" << key.tid << ", node=" << key.node_id << ")" << std::endl;
         return;
     }
     
     const ProcessCallGraph& graph = *it->second;
-    std::cout << "call graph for process " << pid << std::endl;
+    std::cout << "call graph for process key (pid=" << key.pid 
+              << ", tid=" << key.tid << ", node=" << key.node_id << ")" << std::endl;
     std::cout << "total calls: " << graph.calls.size() << std::endl;
     std::cout << std::endl;
     
@@ -206,6 +249,10 @@ void CallGraph::print_process_graph(std::uint64_t pid) const {
     for (std::uint64_t root_id : graph.root_calls) {
         print_calls_recursive(graph, root_id, 0);
     }
+}
+
+void CallGraph::print(std::uint32_t pid, std::uint32_t tid, std::uint32_t node_id) const {
+    print(ProcessKey(pid, tid, node_id));
 }
 
 void CallGraph::print_calls_recursive(const ProcessCallGraph& graph, std::uint64_t call_id, int indent) const {

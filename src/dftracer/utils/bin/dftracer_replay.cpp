@@ -189,7 +189,7 @@ int main(int argc, char** argv) {
     auto start_time = std::chrono::steady_clock::now();
     
     ReplayEngine engine(config);
-    ReplayResult result = engine.replay_files(trace_files);
+    ReplayResult result = engine.replay(trace_files);
     
     auto end_time = std::chrono::steady_clock::now();
     auto total_wall_time = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);

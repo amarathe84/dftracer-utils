@@ -268,13 +268,27 @@ ReplayEngine::ReplayEngine(const ReplayConfig& config)
     }
 }
 
+ReplayEngine::ReplayEngine(const std::string& trace_file, const ReplayConfig& config)
+    : config_(config), replay_start_time_(std::chrono::steady_clock::now()) {
+    
+    // Initialize executors
+    if (config.dftracer_mode) {
+        add_executor(std::make_unique<DFTracerExecutor>());
+    } else {
+        add_executor(std::make_unique<PosixExecutor>());
+    }
+    
+    // Note: Actual replay happens when user calls replay()
+    // This constructor just sets up the engine
+}
+
 ReplayEngine::~ReplayEngine() = default;
 
 void ReplayEngine::add_executor(std::unique_ptr<TraceExecutor> executor) {
     executors_.push_back(std::move(executor));
 }
 
-ReplayResult ReplayEngine::replay_file(const std::string& trace_file, const std::string& index_file) {
+ReplayResult ReplayEngine::replay(const std::string& trace_file, const std::string& index_file) {
     ReplayResult result;
     
     DFTRACER_UTILS_LOG_DEBUG("Starting replay of file: %s", trace_file.c_str());
@@ -338,11 +352,11 @@ ReplayResult ReplayEngine::replay_file(const std::string& trace_file, const std:
     return result;
 }
 
-ReplayResult ReplayEngine::replay_files(const std::vector<std::string>& trace_files) {
+ReplayResult ReplayEngine::replay(const std::vector<std::string>& trace_files) {
     ReplayResult aggregated_result;
     
     for (const auto& file : trace_files) {
-        ReplayResult file_result = replay_file(file);
+        ReplayResult file_result = replay(file);
         
         // Aggregate results
         aggregated_result.total_events += file_result.total_events;

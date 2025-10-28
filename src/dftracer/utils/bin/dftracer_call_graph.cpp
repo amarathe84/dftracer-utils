@@ -12,27 +12,28 @@ int main(int argc, char* argv[]) {
     
     std::string trace_file = argv[1];
     
-    CallGraph call_graph;
-    
     std::cout << "loading trace from: " << trace_file << std::endl;
     
-    if (!call_graph.load_from_trace(trace_file)) {
-        std::cerr << "failed to load trace file" << std::endl;
+    // Constructor-based loading - modern C++ style
+    CallGraph call_graph(trace_file);
+    
+    if (call_graph.empty()) {
+        std::cerr << "failed to load trace file or no data found" << std::endl;
         return 1;
     }
     
     std::cout << "trace loaded successfully" << std::endl;
     
-    // get all process ids
-    auto pids = call_graph.get_process_ids();
+    // get all process keys (PID, TID, NodeID combinations)
+    auto process_keys = call_graph.keys();
     
-    std::cout << "found " << pids.size() << " process(es)" << std::endl;
+    std::cout << "found " << process_keys.size() << " process/thread/node combination(s)" << std::endl;
     
-    // print call graph for each process
-    for (auto pid : pids) {
+    // print call graph for each process key
+    for (const auto& key : process_keys) {
         std::cout << std::endl;
         std::cout << "========================================" << std::endl;
-        call_graph.print_process_graph(pid);
+        call_graph.print(key);
         std::cout << "========================================" << std::endl;
     }
     
