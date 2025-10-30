@@ -8,6 +8,203 @@
 namespace dftracer::utils::call_graph {
 
 // ============================================================================
+// CallGraphNode Implementation
+// ============================================================================
+
+CallGraphNode::CallGraphNode()
+    : id_(0)
+    , name_()
+    , category_()
+    , start_time_(0)
+    , duration_(0)
+    , level_(0)
+    , parent_id_(0)
+    , args_()
+    , children_()
+    , initialized_(false)
+    , cleaned_up_(false) {
+}
+
+CallGraphNode::CallGraphNode(std::uint64_t id, const std::string& name, const std::string& category)
+    : id_(id)
+    , name_(name)
+    , category_(category)
+    , start_time_(0)
+    , duration_(0)
+    , level_(0)
+    , parent_id_(0)
+    , args_()
+    , children_()
+    , initialized_(false)
+    , cleaned_up_(false) {
+}
+
+CallGraphNode::~CallGraphNode() {
+    if (!cleaned_up_) {
+        cleanup();
+    }
+    // Clear all state
+    id_ = 0;
+    name_.clear();
+    category_.clear();
+    start_time_ = 0;
+    duration_ = 0;
+    level_ = 0;
+    parent_id_ = 0;
+    args_.clear();
+    children_.clear();
+    initialized_ = false;
+    cleaned_up_ = true;
+}
+
+CallGraphNode::CallGraphNode(CallGraphNode&& other) noexcept
+    : id_(other.id_)
+    , name_(std::move(other.name_))
+    , category_(std::move(other.category_))
+    , start_time_(other.start_time_)
+    , duration_(other.duration_)
+    , level_(other.level_)
+    , parent_id_(other.parent_id_)
+    , args_(std::move(other.args_))
+    , children_(std::move(other.children_))
+    , initialized_(other.initialized_)
+    , cleaned_up_(other.cleaned_up_) {
+    // Reset other
+    other.id_ = 0;
+    other.start_time_ = 0;
+    other.duration_ = 0;
+    other.level_ = 0;
+    other.parent_id_ = 0;
+    other.initialized_ = false;
+    other.cleaned_up_ = true;
+}
+
+CallGraphNode& CallGraphNode::operator=(CallGraphNode&& other) noexcept {
+    if (this != &other) {
+        // Clean up current resources
+        if (!cleaned_up_) {
+            cleanup();
+        }
+        
+        // Move from other
+        id_ = other.id_;
+        name_ = std::move(other.name_);
+        category_ = std::move(other.category_);
+        start_time_ = other.start_time_;
+        duration_ = other.duration_;
+        level_ = other.level_;
+        parent_id_ = other.parent_id_;
+        args_ = std::move(other.args_);
+        children_ = std::move(other.children_);
+        initialized_ = other.initialized_;
+        cleaned_up_ = other.cleaned_up_;
+        
+        // Reset other
+        other.id_ = 0;
+        other.start_time_ = 0;
+        other.duration_ = 0;
+        other.level_ = 0;
+        other.parent_id_ = 0;
+        other.initialized_ = false;
+        other.cleaned_up_ = true;
+    }
+    return *this;
+}
+
+void CallGraphNode::initialize(std::uint64_t id, const std::string& name, const std::string& category,
+                               std::uint64_t start_time, std::uint64_t duration, int level) {
+    id_ = id;
+    name_ = name;
+    category_ = category;
+    start_time_ = start_time;
+    duration_ = duration;
+    level_ = level;
+    parent_id_ = 0;
+    args_.clear();
+    children_.clear();
+    initialized_ = true;
+    cleaned_up_ = false;
+}
+
+void CallGraphNode::cleanup() {
+    if (cleaned_up_) {
+        return;
+    }
+    
+    // Clear containers to free memory
+    args_.clear();
+    children_.clear();
+    name_.clear();
+    category_.clear();
+    
+    cleaned_up_ = true;
+}
+
+// ============================================================================
+// CallGraphFactory Implementation
+// ============================================================================
+
+CallGraphFactory::CallGraphFactory()
+    : node_count_(0)
+    , initialized_(false)
+    , cleaned_up_(false)
+    , managed_nodes_() {
+}
+
+CallGraphFactory::~CallGraphFactory() {
+    if (!cleaned_up_) {
+        cleanup();
+    }
+    node_count_ = 0;
+    initialized_ = false;
+    cleaned_up_ = true;
+    managed_nodes_.clear();
+}
+
+void CallGraphFactory::initialize() {
+    node_count_ = 0;
+    managed_nodes_.clear();
+    initialized_ = true;
+    cleaned_up_ = false;
+}
+
+void CallGraphFactory::cleanup() {
+    if (cleaned_up_) {
+        return;
+    }
+    
+    // Clean up all managed nodes
+    for (auto& node : managed_nodes_) {
+        if (node) {
+            node->cleanup();
+        }
+    }
+    managed_nodes_.clear();
+    node_count_ = 0;
+    cleaned_up_ = true;
+}
+
+std::shared_ptr<CallGraphNode> CallGraphFactory::create_node(
+    std::uint64_t id,
+    const std::string& name,
+    const std::string& category,
+    std::uint64_t start_time,
+    std::uint64_t duration,
+    int level,
+    const std::unordered_map<std::string, std::string>& args) {
+    
+    auto node = std::make_shared<CallGraphNode>(id, name, category);
+    node->initialize(id, name, category, start_time, duration, level);
+    node->set_args(args);
+    
+    // Track the node for cleanup
+    managed_nodes_.push_back(node);
+    node_count_++;
+    
+    return node;
+}
+
+// ============================================================================
 // TraceReader Implementation
 // ============================================================================
 
@@ -160,6 +357,9 @@ bool TraceReader::process_trace_line(const std::string& line, CallGraph& graph) 
     std::uint32_t tid = 0;
     std::uint32_t node_id = 0;
     
+    // Collect all args
+    std::unordered_map<std::string, std::string> args;
+    
     if (args_val && yyjson_is_obj(args_val)) {
         yyjson_val* level_val = yyjson_obj_get(args_val, "level");
         if (level_val) {
@@ -175,37 +375,28 @@ bool TraceReader::process_trace_line(const std::string& line, CallGraph& graph) 
         if (node_val) {
             node_id = static_cast<std::uint32_t>(yyjson_get_uint(node_val));
         }
-    }
-    
-    // create function call
-    auto call = std::make_shared<FunctionCall>();
-    call->id = call_id;
-    call->name = name;
-    call->category = category;
-    call->start_time = start_time;
-    call->duration = duration;
-    call->level = level;
-    call->parent_id = 0; // will be set later
-    
-    // store args
-    if (args_val && yyjson_is_obj(args_val)) {
+        
+        // Store all args
         yyjson_obj_iter iter;
         yyjson_obj_iter_init(args_val, &iter);
         yyjson_val* arg_key, *arg_val;
         while ((arg_key = yyjson_obj_iter_next(&iter))) {
             arg_val = yyjson_obj_iter_get_val(arg_key);
             if (yyjson_is_str(arg_val)) {
-                call->args[yyjson_get_str(arg_key)] = yyjson_get_str(arg_val);
+                args[yyjson_get_str(arg_key)] = yyjson_get_str(arg_val);
             } else if (yyjson_is_int(arg_val)) {
-                call->args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_int(arg_val));
+                args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_int(arg_val));
             } else if (yyjson_is_uint(arg_val)) {
-                call->args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_uint(arg_val));
+                args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_uint(arg_val));
             }
         }
     }
     
-    // add call to graph
+    // Create function call using factory
     ProcessKey key(static_cast<std::uint32_t>(pid), tid, node_id);
+    auto call = graph.get_factory().create_node(call_id, name, category, start_time, duration, level, args);
+    
+    // Add call to graph
     graph.add_call(key, call);
     
     yyjson_doc_free(doc);
@@ -216,21 +407,71 @@ bool TraceReader::process_trace_line(const std::string& line, CallGraph& graph) 
 // CallGraph Implementation
 // ============================================================================
 
-CallGraph::CallGraph(const std::string& log_file) {
-    if (!load(log_file)) {
-        std::cerr << "Failed to load call graph from: " << log_file << std::endl;
-    }
+CallGraph::CallGraph()
+    : process_graphs_()
+    , factory_()
+    , log_file_()
+    , initialized_(false)
+    , cleaned_up_(false) {
 }
 
-CallGraph::~CallGraph() {}
+CallGraph::CallGraph(const std::string& log_file)
+    : process_graphs_()
+    , factory_()
+    , log_file_(log_file)
+    , initialized_(false)
+    , cleaned_up_(false) {
+}
 
+CallGraph::~CallGraph() {
+    if (!cleaned_up_) {
+        cleanup();
+    }
+    // Clear all state
+    process_graphs_.clear();
+    log_file_.clear();
+    initialized_ = false;
+    cleaned_up_ = true;
+}
+
+void CallGraph::initialize() {
+    factory_.initialize();
+    process_graphs_.clear();
+    initialized_ = true;
+    cleaned_up_ = false;
+}
+
+void CallGraph::cleanup() {
+    if (cleaned_up_) {
+        return;
+    }
+    
+    // Clean up all process graphs
+    for (auto& [key, graph] : process_graphs_) {
+        if (graph) {
+            graph->calls.clear();
+            graph->root_calls.clear();
+            graph->call_sequence.clear();
+        }
+    }
+    process_graphs_.clear();
+    
+    // Clean up factory
+    factory_.cleanup();
+    
+    cleaned_up_ = true;
+}
 
 bool CallGraph::load(const std::string& trace_file) {
+    if (!initialized_) {
+        initialize();
+    }
+    log_file_ = trace_file;
     TraceReader reader;
     return reader.read(trace_file, *this);
 }
 
-void CallGraph::add_call(const ProcessKey& key, std::shared_ptr<FunctionCall> call) {
+void CallGraph::add_call(const ProcessKey& key, std::shared_ptr<CallGraphNode> call) {
     // make sure process graph exists
     if (process_graphs_.find(key) == process_graphs_.end()) {
         process_graphs_[key] = std::make_unique<ProcessCallGraph>();
@@ -238,8 +479,8 @@ void CallGraph::add_call(const ProcessKey& key, std::shared_ptr<FunctionCall> ca
     }
     
     ProcessCallGraph* graph = process_graphs_[key].get();
-    graph->calls[call->id] = call;
-    graph->call_sequence.push_back(call->id);
+    graph->calls[call->get_id()] = call;
+    graph->call_sequence.push_back(call->get_id());
 }
 
 void CallGraph::build_hierarchy() {
@@ -270,7 +511,7 @@ void CallGraph::build_hierarchy_internal(ProcessCallGraph* graph) {
         return;
     }
     
-    std::vector<std::shared_ptr<FunctionCall>> sorted_calls;
+    std::vector<std::shared_ptr<CallGraphNode>> sorted_calls;
     sorted_calls.reserve(graph->calls.size());
     
     for (auto& [id, call] : graph->calls) {
@@ -280,7 +521,7 @@ void CallGraph::build_hierarchy_internal(ProcessCallGraph* graph) {
     // sort by start time to build hierarchy
     std::sort(sorted_calls.begin(), sorted_calls.end(), 
               [](const auto& a, const auto& b) {
-                  return a->start_time < b->start_time;
+                  return a->get_start_time() < b->get_start_time();
               });
     
     // find parents for each call
@@ -289,19 +530,19 @@ void CallGraph::build_hierarchy_internal(ProcessCallGraph* graph) {
         
         // look for parent that contains this call
         for (auto& potential_parent : sorted_calls) {
-            if (potential_parent->id == call->id) continue;
+            if (potential_parent->get_id() == call->get_id()) continue;
             
-            std::uint64_t parent_end = potential_parent->start_time + potential_parent->duration;
+            std::uint64_t parent_end = potential_parent->get_start_time() + potential_parent->get_duration();
             
             // check if call is inside parent timespan and level is correct
-            if (call->start_time >= potential_parent->start_time &&
-                (call->start_time + call->duration) <= parent_end &&
-                call->level > potential_parent->level) {
+            if (call->get_start_time() >= potential_parent->get_start_time() &&
+                (call->get_start_time() + call->get_duration()) <= parent_end &&
+                call->get_level() > potential_parent->get_level()) {
                 
                 // find closest parent by level
                 if (!found_parent || 
-                    potential_parent->level > graph->calls[call->parent_id]->level) {
-                    call->parent_id = potential_parent->id;
+                    potential_parent->get_level() > graph->calls[call->get_parent_id()]->get_level()) {
+                    call->set_parent_id(potential_parent->get_id());
                     found_parent = true;
                 }
             }
@@ -309,9 +550,9 @@ void CallGraph::build_hierarchy_internal(ProcessCallGraph* graph) {
         
         // add to parent children or root
         if (found_parent) {
-            graph->calls[call->parent_id]->children.push_back(call->id);
+            graph->calls[call->get_parent_id()]->add_child(call->get_id());
         } else {
-            graph->root_calls.push_back(call->id);
+            graph->root_calls.push_back(call->get_id());
         }
     }
 }
@@ -386,13 +627,13 @@ void CallGraph::print_calls_recursive(const ProcessCallGraph& graph, std::uint64
     }
     
     // print call info
-    std::cout << call->name << " [" << call->category << "] "
-              << "level=" << call->level << " "
-              << "dur=" << call->duration << "us "
-              << "ts=" << call->start_time << std::endl;
+    std::cout << call->get_name() << " [" << call->get_category() << "] "
+              << "level=" << call->get_level() << " "
+              << "dur=" << call->get_duration() << "us "
+              << "ts=" << call->get_start_time() << std::endl;
     
     // print children
-    for (std::uint64_t child_id : call->children) {
+    for (std::uint64_t child_id : call->get_children()) {
         print_calls_recursive(graph, child_id, indent + 1);
     }
 }

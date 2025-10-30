@@ -81,6 +81,7 @@ int main(int argc, char* argv[]) {
     }
     
     CallGraph call_graph;
+    call_graph.initialize();  // Initialize before use
     TraceReader reader;
     
     namespace fs = std::filesystem;
@@ -98,6 +99,9 @@ int main(int argc, char* argv[]) {
             std::cerr << "failed to load trace file" << std::endl;
             return 1;
         }
+        // Build hierarchy for single file (read_multiple does this automatically)
+        std::cout << "building call hierarchy..." << std::endl;
+        call_graph.build_hierarchy();
     } else {
         std::cerr << "input path is neither a file nor directory: " << input_path << std::endl;
         return 1;
