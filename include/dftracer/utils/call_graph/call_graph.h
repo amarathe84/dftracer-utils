@@ -240,14 +240,16 @@ public:
      */
     bool read_directory(const std::string& directory, const std::string& pattern, CallGraph& graph);
     
-private:
     /**
      * Process a single JSON trace line
+     * Made public for MPI-based filtered readers
      * @param line JSON line from trace file
      * @param graph CallGraph to add data to
      * @return true if successful, false otherwise
      */
     bool process_trace_line(const std::string& line, CallGraph& graph);
+
+private:
 };
 
 /**

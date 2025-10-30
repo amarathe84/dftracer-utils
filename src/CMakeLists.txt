@@ -210,6 +210,44 @@ foreach(bin ${DFTRACER_BINARIES})
 endforeach()
 
 # ##############################################################################
+# MPI-enabled binaries (optional)
+# ##############################################################################
+
+if(DFTRACER_UTILS_ENABLE_MPI)
+  set(DFTRACER_MPI_BINARIES
+      ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/dftracer_call_graph_mpi.cpp)
+
+  foreach(bin ${DFTRACER_MPI_BINARIES})
+    string(REPLACE ".cpp" "" bin_exec ${bin})
+    string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/bin/" "" bin_exec
+                   ${bin_exec})
+
+    add_executable(${bin_exec} ${bin})
+    set_target_properties(${bin_exec} PROPERTIES OUTPUT_NAME "${bin_exec}")
+    target_link_libraries(
+      ${bin_exec} PRIVATE dftracer_utils argparse::argparse ghc_filesystem MPI::MPI_CXX)
+    link_sqlite3(${bin_exec} STATIC)
+    link_zlib(${bin_exec} STATIC)
+
+    target_include_directories(${bin_exec}
+                               PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+    target_include_directories(${bin_exec} PRIVATE ${MPI_CXX_INCLUDE_DIRS})
+
+    target_set_warnings(${bin_exec})
+
+    # Apply coverage flags if enabled
+    if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      target_compile_options(${bin_exec} PRIVATE --coverage -fprofile-arcs
+                                                 -ftest-coverage)
+      target_link_libraries(${bin_exec} PRIVATE --coverage)
+    endif()
+
+    # Install executable
+    install(TARGETS ${bin_exec} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  endforeach()
+endif()
+
+# ##############################################################################
 # Python binding
 # ##############################################################################
 
