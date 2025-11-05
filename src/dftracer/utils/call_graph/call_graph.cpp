@@ -1,4 +1,7 @@
 #include <dftracer/utils/call_graph/call_graph.h>
+#include <dftracer/utils/reader/reader_factory.h>
+#include <dftracer/utils/reader/line_processor.h>
+#include <dftracer/utils/common/format_detector.h>
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -205,17 +208,141 @@ std::shared_ptr<CallGraphNode> CallGraphFactory::create_node(
 }
 
 // ============================================================================
+// TraceLineProcessor - LineProcessor for parsing trace events
+// ============================================================================
+
+class TraceLineProcessor : public LineProcessor {
+public:
+    TraceLineProcessor(TraceReader& reader, CallGraph& graph)
+        : reader_(reader)
+        , graph_(graph)
+        , line_count_(0)
+        , processed_(0)
+        , report_interval_(10000) {}
+    
+    bool process(const char* data, std::size_t length) override {
+        line_count_++;
+        
+        // Progress indicator
+        if (line_count_ % report_interval_ == 0) {
+            std::cout << "  processed " << line_count_ << " lines, " 
+                      << processed_ << " traces..." << std::endl;
+        }
+        
+        // Skip empty lines, brackets
+        if (length == 0) {
+            return true;
+        }
+        
+        std::string line(data, length);
+        
+        // Skip brackets
+        if (line == "[" || line == "]") {
+            return true;
+        }
+        
+        // Remove trailing comma
+        if (!line.empty() && line.back() == ',') {
+            line.pop_back();
+        }
+        
+        if (reader_.process_trace_line(line, graph_)) {
+            processed_++;
+        }
+        
+        return true; // Continue processing
+    }
+    
+    void end() override {
+        std::cout << "processed " << processed_ << " trace entries from " 
+                  << line_count_ << " total lines" << std::endl;
+    }
+    
+    std::size_t get_processed_count() const { return processed_; }
+    
+private:
+    TraceReader& reader_;
+    CallGraph& graph_;
+    std::size_t line_count_;
+    std::size_t processed_;
+    std::size_t report_interval_;
+};
+
+// ============================================================================
 // TraceReader Implementation
 // ============================================================================
 
 bool TraceReader::read(const std::string& trace_file, CallGraph& graph) {
+    std::cout << "reading trace file: " << trace_file << std::endl;
+    
+    // Try to use Reader API first (for compressed files, tar.gz, etc.)
+    if (read_with_reader(trace_file, graph)) {
+        return true;
+    }
+    
+    // Fallback to direct reading for plain text files
+    return read_direct(trace_file, graph);
+}
+
+bool TraceReader::read_with_reader(const std::string& trace_file, CallGraph& graph) {
+    try {
+        // Detect file format
+        ArchiveFormat format = FormatDetector::detect(trace_file);
+        
+        // Check if format is supported by Reader
+        if (!ReaderFactory::is_format_supported(format)) {
+            // Not supported, will use fallback
+            return false;
+        }
+        
+        // Generate index file path
+        std::string idx_file = trace_file + ".zindex";
+        
+        // Create reader (this will auto-build index if needed)
+        auto reader = ReaderFactory::create(trace_file, idx_file);
+        if (!reader || !reader->is_valid()) {
+            std::cerr << "Failed to create reader for " << trace_file << std::endl;
+            return false;
+        }
+        
+        std::cout << "Using Reader API for " << trace_file 
+                  << " (format: " << reader->get_format_name() << ")" << std::endl;
+        
+        // Create line processor
+        TraceLineProcessor processor(*this, graph);
+        
+        // Read all lines using line processor
+        std::size_t num_lines = reader->get_num_lines();
+        if (num_lines > 0) {
+            reader->read_lines_with_processor(1, num_lines, processor);
+        }
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Reader API failed for " << trace_file << ": " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool TraceReader::read_direct(const std::string& trace_file, CallGraph& graph) {
+    // Detect file format to see if we need decompression
+    ArchiveFormat format = FormatDetector::detect(trace_file);
+    
+    // If it's a compressed format but Reader API failed, we can't handle it
+    if (format == ArchiveFormat::GZIP || format == ArchiveFormat::TAR_GZ) {
+        std::cerr << "Cannot read compressed file without index: " << trace_file << std::endl;
+        std::cerr << "Please create an index using dftracer_map or use an uncompressed file" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Using direct file reading for " << trace_file << std::endl;
+    
     std::ifstream file(trace_file);
     if (!file.is_open()) {
         std::cerr << "cant open trace file: " << trace_file << std::endl;
         return false;
     }
-    
-    std::cout << "reading trace file: " << trace_file << std::endl;
     
     std::string line;
     size_t line_count = 0;

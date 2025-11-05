@@ -250,6 +250,16 @@ public:
     bool process_trace_line(const std::string& line, CallGraph& graph);
 
 private:
+    /**
+     * Detect file format and use appropriate reader
+     * Returns true if read with Reader API, false if need fallback
+     */
+    bool read_with_reader(const std::string& trace_file, CallGraph& graph);
+    
+    /**
+     * Fallback to direct file reading for plain text files
+     */
+    bool read_direct(const std::string& trace_file, CallGraph& graph);
 };
 
 /**
