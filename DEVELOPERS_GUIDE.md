@@ -6,6 +6,23 @@
 make test
 ```
 
+## MPI Multi-Process Tests
+
+Build and test with MPI support for distributed call graph generation:
+
+```bash
+# Build with MPI
+make build-mpi
+
+# Run basic MPI tests (2, 4, 8 processes)
+make test-mpi
+
+# Run comprehensive MPI test suite
+make test-mpi-comprehensive
+```
+
+For detailed MPI testing information, see [MPI Testing Guide](MPI_TESTING_GUIDE.md).
+
 ## Code Coverage
 
 This project supports code coverage reporting using lcov/gcov.
