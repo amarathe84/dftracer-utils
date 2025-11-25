@@ -227,8 +227,8 @@ public:
      * Get the generated call graph
      * @return Reference to the call graph
      */
-    CallGraph& get_call_graph() { return call_graph_; }
-    const CallGraph& get_call_graph() const { return call_graph_; }
+    CallGraph& get_call_graph() { return *call_graph_; }
+    const CallGraph& get_call_graph() const { return *call_graph_; }
     
     /**
      * Get MPI rank
@@ -252,7 +252,7 @@ public:
 
 private:
     MPICallGraphConfig config_;
-    CallGraph call_graph_;
+    std::unique_ptr<CallGraph> call_graph_;
     
     // MPI state
     int rank_ = 0;
