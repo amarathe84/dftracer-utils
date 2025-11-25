@@ -93,6 +93,13 @@ set(DFTRACER_UTILS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_graph/call_graph.cpp
 )
 
+# Add MPI call graph sources if MPI is enabled
+if(DFTRACER_UTILS_ENABLE_MPI)
+  list(APPEND DFTRACER_UTILS_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_graph/call_graph_mpi.cpp
+  )
+endif()
+
 # +++++++++++++++++++++++++++++++++++++++++
 # Static library
 # +++++++++++++++++++++++++++++++++++++++++
@@ -105,6 +112,13 @@ target_link_libraries(
   dftracer_utils
   PRIVATE xxHash::xxhash_static
   PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson::yyjson_static)
+
+# Add MPI compile definitions and link library when enabled
+if(DFTRACER_UTILS_ENABLE_MPI)
+  target_compile_definitions(dftracer_utils PUBLIC DFTRACER_UTILS_MPI_ENABLED)
+  target_link_libraries(dftracer_utils PUBLIC MPI::MPI_CXX)
+endif()
+
 target_add_rpath(dftracer_utils)
 add_stdfs_if_needed(dftracer_utils)
 
@@ -144,6 +158,13 @@ target_link_libraries(
   dftracer_utils_shared
   PRIVATE xxHash::xxhash
   PUBLIC ghc_filesystem cpp-logger Threads::Threads yyjson::yyjson)
+
+# Add MPI compile definitions and link library when enabled
+if(DFTRACER_UTILS_ENABLE_MPI)
+  target_compile_definitions(dftracer_utils_shared PUBLIC DFTRACER_UTILS_MPI_ENABLED)
+  target_link_libraries(dftracer_utils_shared PUBLIC MPI::MPI_CXX)
+endif()
+
 target_add_rpath(dftracer_utils_shared)
 add_stdfs_if_needed(dftracer_utils_shared)
 
