@@ -14,6 +14,7 @@
 #include <thread>
 #include <algorithm>
 #include <iomanip>
+#include <random>
 
 namespace dftracer::utils::replay {
 
@@ -393,6 +394,37 @@ bool ReplayEngine::process_trace_line(const std::string& line, ReplayResult& res
     result.total_events++;
     result.function_counts[trace.func_name]++;
     result.category_counts[trace.cat]++;
+    result.pid_counts[trace.pid]++;
+    result.tid_counts[trace.tid]++;
+    
+    // Track timestamp range
+    if (trace.time_start > 0) {
+        if (trace.time_start < result.first_timestamp) {
+            result.first_timestamp = trace.time_start;
+        }
+        if (trace.time_start > result.last_timestamp) {
+            result.last_timestamp = trace.time_start;
+        }
+    }
+    
+    // Track I/O bytes
+    if (trace.size > 0) {
+        if (trace.func_name.find("read") != std::string::npos || 
+            trace.func_name.find("Read") != std::string::npos) {
+            result.total_bytes_read += trace.size;
+        } else if (trace.func_name.find("write") != std::string::npos || 
+                   trace.func_name.find("Write") != std::string::npos) {
+            result.total_bytes_written += trace.size;
+        }
+    }
+    
+    // Check max events limit
+    if (config_.max_events > 0 && result.executed_events >= config_.max_events) {
+        if (config_.verbose) {
+            std::cout << "Reached max events limit: " << config_.max_events << std::endl;
+        }
+        return false; // Stop processing
+    }
     
     if (!should_execute_trace(trace)) {
         result.filtered_events++;
@@ -528,6 +560,53 @@ void ReplayEngine::apply_timing(const dftracer::utils::analyzers::Trace& trace) 
 }
 
 bool ReplayEngine::should_execute_trace(const dftracer::utils::analyzers::Trace& trace) const {
+    // Check PID filters
+    if (!config_.filter_pids.empty()) {
+        if (config_.filter_pids.find(trace.pid) == config_.filter_pids.end()) {
+            return false;
+        }
+    }
+    if (!config_.exclude_pids.empty()) {
+        if (config_.exclude_pids.find(trace.pid) != config_.exclude_pids.end()) {
+            return false;
+        }
+    }
+    
+    // Check TID filters
+    if (!config_.filter_tids.empty()) {
+        if (config_.filter_tids.find(trace.tid) == config_.filter_tids.end()) {
+            return false;
+        }
+    }
+    if (!config_.exclude_tids.empty()) {
+        if (config_.exclude_tids.find(trace.tid) != config_.exclude_tids.end()) {
+            return false;
+        }
+    }
+    
+    // Check timestamp filters
+    if (config_.start_timestamp > 0 && trace.time_start < config_.start_timestamp) {
+        return false;
+    }
+    if (config_.end_timestamp < UINT64_MAX && trace.time_start > config_.end_timestamp) {
+        return false;
+    }
+    
+    // Check operation size filters
+    if (config_.min_operation_size >= 0 && trace.size >= 0 && trace.size < config_.min_operation_size) {
+        return false;
+    }
+    if (config_.max_operation_size >= 0 && trace.size >= 0 && trace.size > config_.max_operation_size) {
+        return false;
+    }
+    
+    // Check level filters (from trace args if available)
+    // For now, we'll skip this check if level info isn't readily available
+    // A more complete implementation would extract this from the original JSON
+    if (config_.min_level >= 0 || config_.max_level >= 0) {
+        // Level filtering would go here when level information is available in Trace struct
+    }
+    
     // Check function filters
     if (!config_.filter_functions.empty()) {
         if (config_.filter_functions.find(trace.func_name) == config_.filter_functions.end()) {
@@ -546,6 +625,31 @@ bool ReplayEngine::should_execute_trace(const dftracer::utils::analyzers::Trace&
     if (!config_.filter_categories.empty()) {
         if (config_.filter_categories.find(trace.cat) == config_.filter_categories.end()) {
             return false;
+        }
+    }
+    if (!config_.exclude_categories.empty()) {
+        if (config_.exclude_categories.find(trace.cat) != config_.exclude_categories.end()) {
+            return false;
+        }
+    }
+    
+    // Apply sampling
+    if (config_.sampling_rate < 1.0) {
+        if (config_.sample_deterministic) {
+            // Deterministic sampling based on trace pid and timestamp
+            std::hash<std::uint64_t> hasher;
+            std::size_t hash = hasher(trace.pid + trace.tid + trace.time_start + config_.sample_seed);
+            double normalized = static_cast<double>(hash % 10000) / 10000.0;
+            if (normalized >= config_.sampling_rate) {
+                return false;
+            }
+        } else {
+            // Random sampling (note: not thread-safe without mutex)
+            static std::mt19937_64 rng(config_.sample_seed);
+            static std::uniform_real_distribution<double> dist(0.0, 1.0);
+            if (dist(rng) >= config_.sampling_rate) {
+                return false;
+            }
         }
     }
     
@@ -652,6 +756,90 @@ void DFTracerExecutor::sleep_for_duration(double duration_microseconds) {
     );
     
     std::this_thread::sleep_for(sleep_duration);
+}
+
+// =============================================================================
+// ReplayResult::print_summary Implementation
+// =============================================================================
+
+void ReplayResult::print_summary(bool verbose) const {
+    std::cout << "\n=== Replay Summary ===" << std::endl;
+    std::cout << "Total events: " << total_events << std::endl;
+    std::cout << "Executed: " << executed_events << std::endl;
+    std::cout << "Filtered: " << filtered_events << std::endl;
+    std::cout << "Failed: " << failed_events << std::endl;
+    
+    double success_rate = total_events > 0 
+        ? (static_cast<double>(executed_events) / total_events * 100.0) : 0.0;
+    std::cout << "Success rate: " << std::fixed << std::setprecision(2) << success_rate << "%" << std::endl;
+    
+    std::cout << "\nTiming:" << std::endl;
+    std::cout << "  Total duration: " << total_duration.count() / 1000.0 << " ms" << std::endl;
+    std::cout << "  Execution duration: " << execution_duration.count() / 1000.0 << " ms" << std::endl;
+    
+    if (first_timestamp != UINT64_MAX && last_timestamp > 0) {
+        std::cout << "  Trace timespan: " << (last_timestamp - first_timestamp) / 1000000.0 << " seconds" << std::endl;
+    }
+    
+    std::cout << "\nI/O Statistics:" << std::endl;
+    std::cout << "  Bytes read: " << total_bytes_read << " (" 
+              << total_bytes_read / (1024.0 * 1024.0) << " MB)" << std::endl;
+    std::cout << "  Bytes written: " << total_bytes_written << " (" 
+              << total_bytes_written / (1024.0 * 1024.0) << " MB)" << std::endl;
+    
+    std::cout << "\nProcess/Thread Statistics:" << std::endl;
+    std::cout << "  Unique PIDs: " << pid_counts.size() << std::endl;
+    std::cout << "  Unique TIDs: " << tid_counts.size() << std::endl;
+    
+    if (verbose) {
+        if (!pid_counts.empty()) {
+            std::cout << "\n  Events per PID:" << std::endl;
+            for (const auto& [pid, count] : pid_counts) {
+                std::cout << "    PID " << pid << ": " << count << " events" << std::endl;
+            }
+        }
+        
+        if (!tid_counts.empty() && tid_counts.size() > 1) {
+            std::cout << "\n  Events per TID:" << std::endl;
+            for (const auto& [tid, count] : tid_counts) {
+                std::cout << "    TID " << tid << ": " << count << " events" << std::endl;
+            }
+        }
+        
+        if (!function_counts.empty()) {
+            std::cout << "\n  Top functions by count:" << std::endl;
+            std::vector<std::pair<std::string, std::size_t>> sorted_funcs(
+                function_counts.begin(), function_counts.end());
+            std::sort(sorted_funcs.begin(), sorted_funcs.end(),
+                     [](const auto& a, const auto& b) { return a.second > b.second; });
+            
+            std::size_t max_display = std::min(sorted_funcs.size(), std::size_t(10));
+            for (std::size_t i = 0; i < max_display; i++) {
+                std::cout << "    " << std::setw(30) << std::left << sorted_funcs[i].first 
+                         << ": " << sorted_funcs[i].second << std::endl;
+            }
+        }
+        
+        if (!category_counts.empty()) {
+            std::cout << "\n  Events per category:" << std::endl;
+            for (const auto& [cat, count] : category_counts) {
+                std::cout << "    " << std::setw(20) << std::left << cat << ": " << count << std::endl;
+            }
+        }
+    }
+    
+    if (!error_messages.empty()) {
+        std::cout << "\n=== Errors (" << error_messages.size() << " total) ===" << std::endl;
+        std::size_t max_errors = std::min(error_messages.size(), std::size_t(10));
+        for (std::size_t i = 0; i < max_errors; i++) {
+            std::cout << "  " << error_messages[i] << std::endl;
+        }
+        if (error_messages.size() > 10) {
+            std::cout << "  ... and " << (error_messages.size() - 10) << " more errors" << std::endl;
+        }
+    }
+    
+    std::cout << "=====================" << std::endl;
 }
 
 } // namespace dftracer::utils::replay

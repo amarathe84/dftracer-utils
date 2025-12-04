@@ -25,18 +25,49 @@ namespace dftracer::utils::replay {
  * Configuration options for trace replay
  */
 struct ReplayConfig {
+    // Execution options
     bool maintain_timing = true;            // Maintain original timing between operations
     bool dry_run = false;                   // Only parse and log operations, don't execute
     bool dftracer_mode = false;             // Use DFTracer sleep-based replay mode
     bool no_sleep = false;                  // Disable sleep calls in dftracer mode
     double timing_scale = 1.0;              // Scale timing (1.0 = original, 0.5 = 2x faster, 2.0 = 2x slower)
     std::uint64_t start_time_offset = 0;    // Offset to add to all timestamps
-    std::unordered_set<std::string> filter_functions; // Only replay these functions (empty = all)
-    std::unordered_set<std::string> exclude_functions; // Exclude these functions
-    std::unordered_set<std::string> filter_categories;  // Only replay these categories
     bool verbose = false;                   // Verbose logging
     std::string output_directory;           // Directory for creating files (empty = use original paths)
     std::size_t max_file_size = 1024 * 1024 * 100; // Max file size to create (100MB default)
+    
+    // Function and category filters
+    std::unordered_set<std::string> filter_functions; // Only replay these functions (empty = all)
+    std::unordered_set<std::string> exclude_functions; // Exclude these functions
+    std::unordered_set<std::string> filter_categories;  // Only replay these categories
+    std::unordered_set<std::string> exclude_categories; // Exclude these categories
+    
+    // Process/Thread filters
+    std::unordered_set<std::uint32_t> filter_pids;     // Only replay these PIDs (empty = all)
+    std::unordered_set<std::uint32_t> filter_tids;     // Only replay these TIDs (empty = all)
+    std::unordered_set<std::uint32_t> exclude_pids;    // Exclude these PIDs
+    std::unordered_set<std::uint32_t> exclude_tids;    // Exclude these TIDs
+    
+    // Timestamp filters (microseconds)
+    std::uint64_t start_timestamp = 0;                 // Only replay events after this timestamp (0 = no filter)
+    std::uint64_t end_timestamp = UINT64_MAX;          // Only replay events before this timestamp
+    
+    // Operation size filters
+    std::int64_t min_operation_size = -1;              // Only replay operations >= this size (-1 = no filter)
+    std::int64_t max_operation_size = -1;              // Only replay operations <= this size (-1 = no filter)
+    
+    // Level/depth filter (for hierarchical traces)
+    int min_level = -1;                                // Only replay operations at or above this level (-1 = no filter)
+    int max_level = -1;                                // Only replay operations at or below this level (-1 = no filter)
+    
+    // Sampling options
+    double sampling_rate = 1.0;                        // Replay every Nth operation (1.0 = all, 0.1 = 10%)
+    std::uint64_t sample_seed = 0;                     // Random seed for sampling (0 = deterministic based on event id)
+    bool sample_deterministic = true;                  // Use deterministic sampling vs random
+    
+    // Resource limits
+    std::size_t max_events = 0;                        // Maximum events to replay (0 = unlimited)
+    std::size_t max_open_files = 1024;                 // Maximum open file descriptors
 };
 
 /**
@@ -52,6 +83,17 @@ struct ReplayResult {
     std::unordered_map<std::string, std::size_t> function_counts;
     std::unordered_map<std::string, std::size_t> category_counts;
     std::vector<std::string> error_messages;
+    
+    // Extended statistics
+    std::unordered_map<std::uint32_t, std::size_t> pid_counts;
+    std::unordered_map<std::uint32_t, std::size_t> tid_counts;
+    std::size_t total_bytes_read = 0;
+    std::size_t total_bytes_written = 0;
+    std::uint64_t first_timestamp = UINT64_MAX;
+    std::uint64_t last_timestamp = 0;
+    
+    // Helper to print summary
+    void print_summary(bool verbose = false) const;
 };
 
 /**

@@ -8,51 +8,10 @@
 #include <cstdlib>
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 using namespace dftracer::utils;
 using namespace dftracer::utils::replay;
-
-/**
- * Print replay results in a formatted way
- */
-void print_results(const ReplayResult& result, bool verbose) {
-    std::cout << "\n=== Replay Results ===" << std::endl;
-    std::cout << "Total events processed: " << result.total_events << std::endl;
-    std::cout << "Events executed: " << result.executed_events << std::endl;
-    std::cout << "Events filtered: " << result.filtered_events << std::endl;
-    std::cout << "Events failed: " << result.failed_events << std::endl;
-    
-    double success_rate = result.total_events > 0 
-        ? (static_cast<double>(result.executed_events) / result.total_events * 100.0)
-        : 0.0;
-    std::cout << "Success rate: " << std::fixed << std::setprecision(2) << success_rate << "%" << std::endl;
-    
-    std::cout << "Total duration: " << result.total_duration.count() / 1000.0 << " ms" << std::endl;
-    std::cout << "Execution duration: " << result.execution_duration.count() / 1000.0 << " ms" << std::endl;
-    
-    if (verbose && !result.function_counts.empty()) {
-        std::cout << "\n=== Function Statistics ===" << std::endl;
-        for (const auto& [func, count] : result.function_counts) {
-            std::cout << "  " << std::setw(20) << std::left << func << ": " << count << std::endl;
-        }
-    }
-    
-    if (verbose && !result.category_counts.empty()) {
-        std::cout << "\n=== Category Statistics ===" << std::endl;
-        for (const auto& [cat, count] : result.category_counts) {
-            std::cout << "  " << std::setw(15) << std::left << cat << ": " << count << std::endl;
-        }
-    }
-    
-    if (!result.error_messages.empty()) {
-        std::cout << "\n=== Errors ===" << std::endl;
-        for (const auto& error : result.error_messages) {
-            std::cout << "  ERROR: " << error << std::endl;
-        }
-    }
-}
-
-
 
 /**
  * Collect trace files from directory or file list
@@ -129,6 +88,79 @@ int main(int argc, char** argv) {
         .help("Enable verbose output and detailed statistics")
         .flag();
     
+    // Filtering options - Process/Thread
+    program.add_argument("--filter-pid")
+        .help("Only replay events from specific PID(s) (comma-separated)")
+        .default_value(std::string(""));
+    
+    program.add_argument("--exclude-pid")
+        .help("Exclude events from specific PID(s) (comma-separated)")
+        .default_value(std::string(""));
+    
+    program.add_argument("--filter-tid")
+        .help("Only replay events from specific TID(s) (comma-separated)")
+        .default_value(std::string(""));
+    
+    program.add_argument("--exclude-tid")
+        .help("Exclude events from specific TID(s) (comma-separated)")
+        .default_value(std::string(""));
+    
+    // Filtering options - Function/Category
+    program.add_argument("--filter-function")
+        .help("Only replay specific function(s) (comma-separated, e.g., 'read,write,open')")
+        .default_value(std::string(""));
+    
+    program.add_argument("--exclude-function")
+        .help("Exclude specific function(s) (comma-separated)")
+        .default_value(std::string(""));
+    
+    program.add_argument("--filter-category")
+        .help("Only replay specific category/categories (comma-separated, e.g., 'POSIX,storage')")
+        .default_value(std::string(""));
+    
+    program.add_argument("--exclude-category")
+        .help("Exclude specific category/categories (comma-separated)")
+        .default_value(std::string(""));
+    
+    // Filtering options - Timestamp
+    program.add_argument("--start-timestamp")
+        .help("Only replay events after this timestamp (microseconds)")
+        .default_value(std::uint64_t(0))
+        .scan<'u', std::uint64_t>();
+    
+    program.add_argument("--end-timestamp")
+        .help("Only replay events before this timestamp (microseconds)")
+        .default_value(UINT64_MAX)
+        .scan<'u', std::uint64_t>();
+    
+    // Filtering options - Size
+    program.add_argument("--min-size")
+        .help("Only replay operations with size >= this value (bytes)")
+        .default_value(std::int64_t(-1))
+        .scan<'i', std::int64_t>();
+    
+    program.add_argument("--max-size")
+        .help("Only replay operations with size <= this value (bytes)")
+        .default_value(std::int64_t(-1))
+        .scan<'i', std::int64_t>();
+    
+    // Sampling options
+    program.add_argument("--sample-rate")
+        .help("Sample rate for replay (0.0-1.0, 1.0=all events, 0.1=10%)")
+        .default_value(1.0)
+        .scan<'g', double>();
+    
+    program.add_argument("--sample-seed")
+        .help("Random seed for sampling (for reproducibility)")
+        .default_value(std::uint64_t(0))
+        .scan<'u', std::uint64_t>();
+    
+    // Resource limits
+    program.add_argument("--max-events")
+        .help("Maximum number of events to replay (0=unlimited)")
+        .default_value(std::size_t(0))
+        .scan<'u', std::size_t>();
+    
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
@@ -136,6 +168,35 @@ int main(int argc, char** argv) {
         std::cerr << program;
         return 1;
     }
+    
+    // Helper to parse comma-separated values
+    auto parse_csv_uint32 = [](const std::string& csv) -> std::unordered_set<std::uint32_t> {
+        std::unordered_set<std::uint32_t> result;
+        if (csv.empty()) return result;
+        
+        std::istringstream ss(csv);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            if (!token.empty()) {
+                result.insert(std::stoul(token));
+            }
+        }
+        return result;
+    };
+    
+    auto parse_csv_string = [](const std::string& csv) -> std::unordered_set<std::string> {
+        std::unordered_set<std::string> result;
+        if (csv.empty()) return result;
+        
+        std::istringstream ss(csv);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            if (!token.empty()) {
+                result.insert(token);
+            }
+        }
+        return result;
+    };
     
     // Parse arguments
     std::vector<std::string> inputs = program.get<std::vector<std::string>>("inputs");
@@ -145,9 +206,33 @@ int main(int argc, char** argv) {
     bool no_sleep = program.get<bool>("--no-sleep");
     bool verbose = program.get<bool>("--verbose");
     
+    // Parse filter arguments
+    auto filter_pids = parse_csv_uint32(program.get<std::string>("--filter-pid"));
+    auto exclude_pids = parse_csv_uint32(program.get<std::string>("--exclude-pid"));
+    auto filter_tids = parse_csv_uint32(program.get<std::string>("--filter-tid"));
+    auto exclude_tids = parse_csv_uint32(program.get<std::string>("--exclude-tid"));
+    auto filter_functions = parse_csv_string(program.get<std::string>("--filter-function"));
+    auto exclude_functions = parse_csv_string(program.get<std::string>("--exclude-function"));
+    auto filter_categories = parse_csv_string(program.get<std::string>("--filter-category"));
+    auto exclude_categories = parse_csv_string(program.get<std::string>("--exclude-category"));
+    
+    std::uint64_t start_timestamp = program.get<std::uint64_t>("--start-timestamp");
+    std::uint64_t end_timestamp = program.get<std::uint64_t>("--end-timestamp");
+    std::int64_t min_size = program.get<std::int64_t>("--min-size");
+    std::int64_t max_size = program.get<std::int64_t>("--max-size");
+    double sample_rate = program.get<double>("--sample-rate");
+    std::uint64_t sample_seed = program.get<std::uint64_t>("--sample-seed");
+    std::size_t max_events = program.get<std::size_t>("--max-events");
+    
     // Validate --no-sleep usage
     if (no_sleep && !dftracer_mode) {
         std::cerr << "Error: --no-sleep can only be used with --dftracer-mode" << std::endl;
+        return 1;
+    }
+    
+    // Validate sample rate
+    if (sample_rate < 0.0 || sample_rate > 1.0) {
+        std::cerr << "Error: --sample-rate must be between 0.0 and 1.0" << std::endl;
         return 1;
     }
     
@@ -171,6 +256,25 @@ int main(int argc, char** argv) {
     config.dftracer_mode = dftracer_mode;
     config.no_sleep = no_sleep;
     config.verbose = verbose;
+    
+    // Apply filters
+    config.filter_pids = filter_pids;
+    config.exclude_pids = exclude_pids;
+    config.filter_tids = filter_tids;
+    config.exclude_tids = exclude_tids;
+    config.filter_functions = filter_functions;
+    config.exclude_functions = exclude_functions;
+    config.filter_categories = filter_categories;
+    config.exclude_categories = exclude_categories;
+    
+    // Apply ranges and limits
+    config.start_timestamp = start_timestamp;
+    config.end_timestamp = end_timestamp;
+    config.min_operation_size = min_size;
+    config.max_operation_size = max_size;
+    config.sampling_rate = sample_rate;
+    config.sample_seed = sample_seed;
+    config.max_events = max_events;
 
     
     // Print configuration
@@ -181,6 +285,73 @@ int main(int argc, char** argv) {
         std::cout << "DFTracer mode: yes (" << (config.no_sleep ? "no-sleep" : "sleep-based") << ")" << std::endl;
     } else {
         std::cout << "DFTracer mode: no (actual I/O)" << std::endl;
+    }
+    
+    // Print active filters
+    if (!filter_pids.empty() || !exclude_pids.empty() || !filter_tids.empty() || !exclude_tids.empty() ||
+        !filter_functions.empty() || !exclude_functions.empty() || !filter_categories.empty() || !exclude_categories.empty() ||
+        start_timestamp > 0 || end_timestamp < UINT64_MAX || min_size >= 0 || max_size >= 0 || 
+        sample_rate < 1.0 || max_events > 0) {
+        
+        std::cout << "\nActive Filters:" << std::endl;
+        if (!filter_pids.empty()) {
+            std::cout << "  Filter PIDs: ";
+            for (auto pid : filter_pids) std::cout << pid << " ";
+            std::cout << std::endl;
+        }
+        if (!exclude_pids.empty()) {
+            std::cout << "  Exclude PIDs: ";
+            for (auto pid : exclude_pids) std::cout << pid << " ";
+            std::cout << std::endl;
+        }
+        if (!filter_tids.empty()) {
+            std::cout << "  Filter TIDs: ";
+            for (auto tid : filter_tids) std::cout << tid << " ";
+            std::cout << std::endl;
+        }
+        if (!exclude_tids.empty()) {
+            std::cout << "  Exclude TIDs: ";
+            for (auto tid : exclude_tids) std::cout << tid << " ";
+            std::cout << std::endl;
+        }
+        if (!filter_functions.empty()) {
+            std::cout << "  Filter functions: ";
+            for (const auto& f : filter_functions) std::cout << f << " ";
+            std::cout << std::endl;
+        }
+        if (!exclude_functions.empty()) {
+            std::cout << "  Exclude functions: ";
+            for (const auto& f : exclude_functions) std::cout << f << " ";
+            std::cout << std::endl;
+        }
+        if (!filter_categories.empty()) {
+            std::cout << "  Filter categories: ";
+            for (const auto& c : filter_categories) std::cout << c << " ";
+            std::cout << std::endl;
+        }
+        if (!exclude_categories.empty()) {
+            std::cout << "  Exclude categories: ";
+            for (const auto& c : exclude_categories) std::cout << c << " ";
+            std::cout << std::endl;
+        }
+        if (start_timestamp > 0) {
+            std::cout << "  Start timestamp: " << start_timestamp << std::endl;
+        }
+        if (end_timestamp < UINT64_MAX) {
+            std::cout << "  End timestamp: " << end_timestamp << std::endl;
+        }
+        if (min_size >= 0) {
+            std::cout << "  Min operation size: " << min_size << " bytes" << std::endl;
+        }
+        if (max_size >= 0) {
+            std::cout << "  Max operation size: " << max_size << " bytes" << std::endl;
+        }
+        if (sample_rate < 1.0) {
+            std::cout << "  Sampling rate: " << (sample_rate * 100.0) << "%" << std::endl;
+        }
+        if (max_events > 0) {
+            std::cout << "  Max events: " << max_events << std::endl;
+        }
     }
     
     // Create replay engine and execute
@@ -197,8 +368,8 @@ int main(int argc, char** argv) {
     std::cout << "\n=== Replay Completed ===" << std::endl;
     std::cout << "Wall clock time: " << static_cast<double>(total_wall_time.count()) / 1000.0 << " ms" << std::endl;
     
-    // Print results
-    print_results(result, verbose);
+    // Print results using the new summary method
+    result.print_summary(verbose);
     
     // Return appropriate exit code
     if (result.failed_events > 0) {
