@@ -119,6 +119,14 @@ int main(int argc, char* argv[]) {
     // Also print the built-in statistics
     tree.print_statistics();
     
+    // Save analysis results in JSON format for downstream processing
+    std::cout << "\nSaving analysis results..." << std::endl;
+    if (tree.save_to_json("analysis_output.pfw")) {
+        std::cout << "✓ JSON output saved to: analysis_output.pfw" << std::endl;
+        std::cout << "  This file can be imported into Chrome Tracing, Perfetto," << std::endl;
+        std::cout << "  or analyzed with DFAnalyzer tools." << std::endl;
+    }
+    
     std::cout << "\n=== Analysis complete ===" << std::endl;
     
     return 0;

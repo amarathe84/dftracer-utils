@@ -97,6 +97,11 @@ int main(int argc, char* argv[]) {
         std::cout << "Binary format saved: nodes-4_calltree.bin" << std::endl;
     }
     
+    // Save to JSON (Chrome Tracing format)
+    if (tree.save_to_json("nodes-4_calltree.pfw")) {
+        std::cout << "JSON format saved: nodes-4_calltree.pfw (Chrome Tracing compatible)" << std::endl;
+    }
+    
     if (tree.print_depth_first_to_file("nodes-4_calltree_full.txt", 0)) {
         std::cout << "Full tree saved: nodes-4_calltree_full.txt" << std::endl;
     }

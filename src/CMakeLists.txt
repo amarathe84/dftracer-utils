@@ -92,6 +92,7 @@ set(DFTRACER_UTILS_SOURCES
     # Call Tree
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_tree/call_tree.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_tree/call_tree_internal.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_tree/json_serializer.cpp
 )
 
 # Add MPI call tree sources if MPI is enabled

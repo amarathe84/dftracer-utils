@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
     std::cout << std::endl;
     
     // Save to file
-    std::cout << "Step 6: Serialize call tree to file" << std::endl;
+    std::cout << "Step 6: Serialize call tree to binary file" << std::endl;
     std::string output_file = tree.get_output_path();
     std::cout << "  Default output path: " << output_file << std::endl;
     
@@ -67,8 +67,15 @@ int main(int argc, char* argv[]) {
     }
     std::cout << std::endl;
     
+    // Save to JSON format
+    std::cout << "Step 7: Serialize call tree to JSON (Chrome Tracing format)" << std::endl;
+    if (tree.save_to_json()) {
+        std::cout << "  Successfully saved to JSON!" << std::endl;
+    }
+    std::cout << std::endl;
+    
     // Print tree to text file
-    std::cout << "Step 7: Export call tree to text file" << std::endl;
+    std::cout << "Step 8: Export call tree to text file" << std::endl;
     std::string text_file = "nodes-1_calltree.txt";
     if (tree.print_depth_first_to_file(text_file)) {
         std::cout << "  Exported to: " << text_file << std::endl;
