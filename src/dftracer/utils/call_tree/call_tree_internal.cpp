@@ -1,0 +1,840 @@
+#include <dftracer/utils/call_tree/call_tree_internal.h>
+#include <dftracer/utils/reader/reader_factory.h>
+#include <dftracer/utils/reader/line_processor.h>
+#include <dftracer/utils/common/format_detector.h>
+#include <fstream>
+#include <iostream>
+#include <algorithm>
+#include <yyjson.h>
+#include <filesystem>
+#include <zlib.h>
+
+namespace dftracer::utils::call_tree {
+namespace internal {
+
+// ============================================================================
+// CallTreeNode Implementation
+// ============================================================================
+
+CallTreeNode::CallTreeNode()
+    : id_(0)
+    , name_()
+    , category_()
+    , start_time_(0)
+    , duration_(0)
+    , level_(0)
+    , parent_id_(0)
+    , args_()
+    , children_()
+    , initialized_(false)
+    , cleaned_up_(false) {
+}
+
+CallTreeNode::CallTreeNode(std::uint64_t id, const std::string& name, const std::string& category)
+    : id_(id)
+    , name_(name)
+    , category_(category)
+    , start_time_(0)
+    , duration_(0)
+    , level_(0)
+    , parent_id_(0)
+    , args_()
+    , children_()
+    , initialized_(false)
+    , cleaned_up_(false) {
+}
+
+CallTreeNode::~CallTreeNode() {
+    if (!cleaned_up_) {
+        cleanup();
+    }
+    // Clear all state
+    id_ = 0;
+    name_.clear();
+    category_.clear();
+    start_time_ = 0;
+    duration_ = 0;
+    level_ = 0;
+    parent_id_ = 0;
+    args_.clear();
+    children_.clear();
+    initialized_ = false;
+    cleaned_up_ = true;
+}
+
+CallTreeNode::CallTreeNode(CallTreeNode&& other) noexcept
+    : id_(other.id_)
+    , name_(std::move(other.name_))
+    , category_(std::move(other.category_))
+    , start_time_(other.start_time_)
+    , duration_(other.duration_)
+    , level_(other.level_)
+    , parent_id_(other.parent_id_)
+    , args_(std::move(other.args_))
+    , children_(std::move(other.children_))
+    , initialized_(other.initialized_)
+    , cleaned_up_(other.cleaned_up_) {
+    // Reset other
+    other.id_ = 0;
+    other.start_time_ = 0;
+    other.duration_ = 0;
+    other.level_ = 0;
+    other.parent_id_ = 0;
+    other.initialized_ = false;
+    other.cleaned_up_ = true;
+}
+
+CallTreeNode& CallTreeNode::operator=(CallTreeNode&& other) noexcept {
+    if (this != &other) {
+        // Clean up current resources
+        if (!cleaned_up_) {
+            cleanup();
+        }
+        
+        // Move from other
+        id_ = other.id_;
+        name_ = std::move(other.name_);
+        category_ = std::move(other.category_);
+        start_time_ = other.start_time_;
+        duration_ = other.duration_;
+        level_ = other.level_;
+        parent_id_ = other.parent_id_;
+        args_ = std::move(other.args_);
+        children_ = std::move(other.children_);
+        initialized_ = other.initialized_;
+        cleaned_up_ = other.cleaned_up_;
+        
+        // Reset other
+        other.id_ = 0;
+        other.start_time_ = 0;
+        other.duration_ = 0;
+        other.level_ = 0;
+        other.parent_id_ = 0;
+        other.initialized_ = false;
+        other.cleaned_up_ = true;
+    }
+    return *this;
+}
+
+void CallTreeNode::initialize(std::uint64_t id, const std::string& name, const std::string& category,
+                               std::uint64_t start_time, std::uint64_t duration, int level) {
+    id_ = id;
+    name_ = name;
+    category_ = category;
+    start_time_ = start_time;
+    duration_ = duration;
+    level_ = level;
+    parent_id_ = 0;
+    args_.clear();
+    children_.clear();
+    initialized_ = true;
+    cleaned_up_ = false;
+}
+
+void CallTreeNode::cleanup() {
+    if (cleaned_up_) {
+        return;
+    }
+    
+    // Clear containers to free memory
+    args_.clear();
+    children_.clear();
+    name_.clear();
+    category_.clear();
+    
+    cleaned_up_ = true;
+}
+
+// ============================================================================
+// CallTreeFactory Implementation
+// ============================================================================
+
+CallTreeFactory::CallTreeFactory()
+    : node_count_(0)
+    , initialized_(false)
+    , cleaned_up_(false)
+    , managed_nodes_() {
+}
+
+CallTreeFactory::~CallTreeFactory() {
+    if (!cleaned_up_) {
+        cleanup();
+    }
+    node_count_ = 0;
+    initialized_ = false;
+    cleaned_up_ = true;
+    managed_nodes_.clear();
+}
+
+void CallTreeFactory::initialize() {
+    node_count_ = 0;
+    managed_nodes_.clear();
+    initialized_ = true;
+    cleaned_up_ = false;
+}
+
+void CallTreeFactory::cleanup() {
+    if (cleaned_up_) {
+        return;
+    }
+    
+    // Clean up all managed nodes
+    for (auto& node : managed_nodes_) {
+        if (node) {
+            node->cleanup();
+        }
+    }
+    managed_nodes_.clear();
+    node_count_ = 0;
+    cleaned_up_ = true;
+}
+
+std::shared_ptr<CallTreeNode> CallTreeFactory::create_node(
+    std::uint64_t id,
+    const std::string& name,
+    const std::string& category,
+    std::uint64_t start_time,
+    std::uint64_t duration,
+    int level,
+    const std::unordered_map<std::string, std::string>& args) {
+    
+    auto node = std::make_shared<CallTreeNode>(id, name, category);
+    node->initialize(id, name, category, start_time, duration, level);
+    node->set_args(args);
+    
+    // Track the node for cleanup
+    managed_nodes_.push_back(node);
+    node_count_++;
+    
+    return node;
+}
+
+// ============================================================================
+// TraceLineProcessor - LineProcessor for parsing trace events
+// ============================================================================
+
+class TraceLineProcessor : public LineProcessor {
+public:
+    TraceLineProcessor(TraceReader& reader, CallTree& graph)
+        : reader_(reader)
+        , graph_(graph)
+        , line_count_(0)
+        , processed_(0)
+        , report_interval_(10000) {}
+    
+    bool process(const char* data, std::size_t length) override {
+        line_count_++;
+        
+        // Progress indicator
+        if (line_count_ % report_interval_ == 0) {
+            std::cout << "  processed " << line_count_ << " lines, " 
+                      << processed_ << " traces..." << std::endl;
+        }
+        
+        // Skip empty lines, brackets
+        if (length == 0) {
+            return true;
+        }
+        
+        std::string line(data, length);
+        
+        // Skip brackets
+        if (line == "[" || line == "]") {
+            return true;
+        }
+        
+        // Remove trailing comma
+        if (!line.empty() && line.back() == ',') {
+            line.pop_back();
+        }
+        
+        if (reader_.process_trace_line(line, graph_)) {
+            processed_++;
+        }
+        
+        return true; // Continue processing
+    }
+    
+    void end() override {
+        std::cout << "processed " << processed_ << " trace entries from " 
+                  << line_count_ << " total lines" << std::endl;
+    }
+    
+    std::size_t get_processed_count() const { return processed_; }
+    
+private:
+    TraceReader& reader_;
+    CallTree& graph_;
+    std::size_t line_count_;
+    std::size_t processed_;
+    std::size_t report_interval_;
+};
+
+// ============================================================================
+// TraceReader Implementation
+// ============================================================================
+
+bool TraceReader::read(const std::string& trace_file, CallTree& graph) {
+    std::cout << "reading trace file: " << trace_file << std::endl;
+    
+    // Try to use Reader API first (for compressed files, tar.gz, etc.)
+    if (read_with_reader(trace_file, graph)) {
+        return true;
+    }
+    
+    // Fallback to direct reading for plain text files
+    return read_direct(trace_file, graph);
+}
+
+bool TraceReader::read_with_reader(const std::string& trace_file, CallTree& graph) {
+    try {
+        // Detect file format
+        ArchiveFormat format = FormatDetector::detect(trace_file);
+        
+        // For GZIP files, skip Reader API and use direct zlib decompression
+        // since Reader API requires .zindex files
+        if (format == ArchiveFormat::GZIP) {
+            return false;  // Will trigger fallback to read_direct which handles gzip
+        }
+        
+        // Check if format is supported by Reader
+        if (!ReaderFactory::is_format_supported(format)) {
+            // Not supported, will use fallback
+            return false;
+        }
+        
+        // Generate index file path
+        std::string idx_file = trace_file + ".zindex";
+        
+        // Create reader (this will auto-build index if needed)
+        auto reader = ReaderFactory::create(trace_file, idx_file);
+        if (!reader || !reader->is_valid()) {
+            std::cerr << "Failed to create reader for " << trace_file << std::endl;
+            return false;
+        }
+        
+        std::cout << "Using Reader API for " << trace_file 
+                  << " (format: " << reader->get_format_name() << ")" << std::endl;
+        
+        // Create line processor
+        TraceLineProcessor processor(*this, graph);
+        
+        // Read all lines using line processor
+        std::size_t num_lines = reader->get_num_lines();
+        if (num_lines > 0) {
+            reader->read_lines_with_processor(1, num_lines, processor);
+        }
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Reader API failed for " << trace_file << ": " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool TraceReader::read_direct(const std::string& trace_file, CallTree& graph) {
+    // Detect file format to see if we need decompression
+    ArchiveFormat format = FormatDetector::detect(trace_file);
+    
+    // Handle gzip files with zlib
+    if (format == ArchiveFormat::GZIP) {
+        std::cout << "Using zlib decompression for " << trace_file << std::endl;
+        
+        gzFile gz = gzopen(trace_file.c_str(), "rb");
+        if (!gz) {
+            std::cerr << "Cannot open gzip file: " << trace_file << std::endl;
+            return false;
+        }
+        
+        char buffer[65536];
+        std::string current_line;
+        size_t line_count = 0;
+        size_t processed = 0;
+        size_t report_interval = 10000;
+        
+        while (true) {
+            int bytes_read = gzread(gz, buffer, sizeof(buffer) - 1);
+            if (bytes_read <= 0) {
+                // Process any remaining line
+                if (!current_line.empty()) {
+                    line_count++;
+                    if (!current_line.empty() && current_line != "[" && current_line != "]") {
+                        if (current_line.back() == ',') current_line.pop_back();
+                        if (process_trace_line(current_line, graph)) {
+                            processed++;
+                        }
+                    }
+                }
+                break;
+            }
+            
+            buffer[bytes_read] = '\0';
+            current_line += buffer;
+            
+            // Process complete lines
+            size_t pos;
+            while ((pos = current_line.find('\n')) != std::string::npos) {
+                std::string line = current_line.substr(0, pos);
+                current_line = current_line.substr(pos + 1);
+                line_count++;
+                
+                if (line_count % report_interval == 0) {
+                    std::cout << "  processed " << line_count << " lines, " 
+                              << processed << " traces..." << std::endl;
+                }
+                
+                if (line.empty() || line == "[" || line == "]") continue;
+                if (!line.empty() && line.back() == ',') line.pop_back();
+                
+                if (process_trace_line(line, graph)) {
+                    processed++;
+                }
+            }
+        }
+        
+        gzclose(gz);
+        std::cout << "processed " << processed << " trace entries from " 
+                  << line_count << " lines" << std::endl;
+        return true;
+    }
+    
+    // Handle tar.gz - not supported without indexer
+    if (format == ArchiveFormat::TAR_GZ) {
+        std::cerr << "Cannot read tar.gz file without index: " << trace_file << std::endl;
+        std::cerr << "Please create an index using dftracer_map" << std::endl;
+        return false;
+    }
+    
+    // Plain text file
+    std::cout << "Using direct file reading for " << trace_file << std::endl;
+    
+    std::ifstream file(trace_file);
+    if (!file.is_open()) {
+        std::cerr << "cant open trace file: " << trace_file << std::endl;
+        return false;
+    }
+    
+    std::string line;
+    size_t line_count = 0;
+    size_t processed = 0;
+    size_t report_interval = 10000;
+    
+    while (std::getline(file, line)) {
+        line_count++;
+        
+        // progress indicator
+        if (line_count % report_interval == 0) {
+            std::cout << "  processed " << line_count << " lines, " << processed << " traces..." << std::endl;
+        }
+        
+        // skip brackets and empty lines
+        if (line.empty() || line == "[" || line == "]") {
+            continue;
+        }
+        
+        // remove trailing comma
+        if (!line.empty() && line.back() == ',') {
+            line.pop_back();
+        }
+        
+        if (process_trace_line(line, graph)) {
+            processed++;
+        } else {
+            // Don't spam errors for metadata entries
+            if (line_count < 10) {
+                std::cerr << "failed to parse line " << line_count << " in " << trace_file << std::endl;
+            }
+        }
+    }
+    
+    std::cout << "processed " << processed << " trace entries from " << trace_file << std::endl;
+    
+    return true;
+}
+
+bool TraceReader::read_multiple(const std::vector<std::string>& trace_files, CallTree& graph) {
+    bool all_success = true;
+    
+    std::cout << "reading " << trace_files.size() << " trace files..." << std::endl;
+    
+    size_t file_num = 0;
+    for (const auto& file : trace_files) {
+        file_num++;
+        std::cout << "[" << file_num << "/" << trace_files.size() << "] ";
+        if (!read(file, graph)) {
+            std::cerr << "failed to read: " << file << std::endl;
+            all_success = false;
+        }
+    }
+    
+    // build parent child relationships after all traces loaded
+    std::cout << "building call hierarchy for " << graph.size() << " process/thread/node combinations..." << std::endl;
+    graph.build_hierarchy();
+    
+    return all_success;
+}
+
+bool TraceReader::read_directory(const std::string& directory, const std::string& pattern, CallTree& graph) {
+    namespace fs = std::filesystem;
+    
+    if (!fs::exists(directory) || !fs::is_directory(directory)) {
+        std::cerr << "directory does not exist: " << directory << std::endl;
+        return false;
+    }
+    
+    std::vector<std::string> trace_files;
+    
+    // collect all matching files
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+            
+            // simple pattern matching (for now, just check file extension)
+            if (pattern == "*" || filename.find(pattern.substr(1)) != std::string::npos) {
+                trace_files.push_back(entry.path().string());
+            }
+        }
+    }
+    
+    if (trace_files.empty()) {
+        std::cerr << "no trace files found in " << directory << " matching " << pattern << std::endl;
+        return false;
+    }
+    
+    // sort files for consistent processing order
+    std::sort(trace_files.begin(), trace_files.end());
+    
+    std::cout << "found " << trace_files.size() << " trace files in " << directory << std::endl;
+    
+    return read_multiple(trace_files, graph);
+}
+
+bool TraceReader::process_trace_line(const std::string& line, CallTree& graph) {
+    yyjson_doc* doc = yyjson_read(line.c_str(), line.length(), 0);
+    if (!doc) {
+        return false;
+    }
+    
+    yyjson_val* root = yyjson_doc_get_root(doc);
+    if (!root) {
+        yyjson_doc_free(doc);
+        return false;
+    }
+    
+    // get basic fields
+    yyjson_val* id_val = yyjson_obj_get(root, "id");
+    yyjson_val* name_val = yyjson_obj_get(root, "name");
+    yyjson_val* cat_val = yyjson_obj_get(root, "cat");
+    yyjson_val* pid_val = yyjson_obj_get(root, "pid");
+    yyjson_val* ph_val = yyjson_obj_get(root, "ph");
+    yyjson_val* ts_val = yyjson_obj_get(root, "ts");
+    yyjson_val* dur_val = yyjson_obj_get(root, "dur");
+    yyjson_val* args_val = yyjson_obj_get(root, "args");
+    
+    // skip metadata entries
+    if (!ph_val || !yyjson_is_str(ph_val) || strcmp(yyjson_get_str(ph_val), "X") != 0) {
+        yyjson_doc_free(doc);
+        return true; // not an error just skip
+    }
+    
+    if (!id_val || !name_val || !pid_val || !ts_val) {
+        yyjson_doc_free(doc);
+        return false;
+    }
+    
+    std::uint64_t call_id = yyjson_get_uint(id_val);
+    std::uint64_t pid = yyjson_get_uint(pid_val);
+    std::string name = yyjson_get_str(name_val);
+    std::string category = cat_val ? yyjson_get_str(cat_val) : "";
+    std::uint64_t start_time = yyjson_get_uint(ts_val);
+    std::uint64_t duration = dur_val ? yyjson_get_uint(dur_val) : 0;
+    
+    // get level, tid, and node_id from args
+    int level = 0;
+    std::uint32_t tid = 0;
+    std::uint32_t node_id = 0;
+    
+    // Collect all args
+    std::unordered_map<std::string, std::string> args;
+    
+    if (args_val && yyjson_is_obj(args_val)) {
+        yyjson_val* level_val = yyjson_obj_get(args_val, "level");
+        if (level_val) {
+            level = yyjson_get_int(level_val);
+        }
+        
+        yyjson_val* tid_val = yyjson_obj_get(args_val, "tid");
+        if (tid_val) {
+            tid = static_cast<std::uint32_t>(yyjson_get_uint(tid_val));
+        }
+        
+        yyjson_val* node_val = yyjson_obj_get(args_val, "node_id");
+        if (node_val) {
+            node_id = static_cast<std::uint32_t>(yyjson_get_uint(node_val));
+        }
+        
+        // Store all args
+        yyjson_obj_iter iter;
+        yyjson_obj_iter_init(args_val, &iter);
+        yyjson_val* arg_key, *arg_val;
+        while ((arg_key = yyjson_obj_iter_next(&iter))) {
+            arg_val = yyjson_obj_iter_get_val(arg_key);
+            if (yyjson_is_str(arg_val)) {
+                args[yyjson_get_str(arg_key)] = yyjson_get_str(arg_val);
+            } else if (yyjson_is_int(arg_val)) {
+                args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_int(arg_val));
+            } else if (yyjson_is_uint(arg_val)) {
+                args[yyjson_get_str(arg_key)] = std::to_string(yyjson_get_uint(arg_val));
+            }
+        }
+    }
+    
+    // Create function call using factory
+    ProcessKey key(static_cast<std::uint32_t>(pid), tid, node_id);
+    auto call = graph.get_factory().create_node(call_id, name, category, start_time, duration, level, args);
+    
+    // Add call to graph
+    graph.add_call(key, call);
+    
+    yyjson_doc_free(doc);
+    return true;
+}
+
+// ============================================================================
+// CallTree Implementation
+// ============================================================================
+
+CallTree::CallTree()
+    : process_graphs_()
+    , factory_()
+    , log_file_()
+    , initialized_(false)
+    , cleaned_up_(false) {
+}
+
+CallTree::CallTree(const std::string& log_file)
+    : process_graphs_()
+    , factory_()
+    , log_file_(log_file)
+    , initialized_(false)
+    , cleaned_up_(false) {
+}
+
+CallTree::~CallTree() {
+    if (!cleaned_up_) {
+        cleanup();
+    }
+    // Clear all state
+    process_graphs_.clear();
+    log_file_.clear();
+    initialized_ = false;
+    cleaned_up_ = true;
+}
+
+void CallTree::initialize() {
+    factory_.initialize();
+    process_graphs_.clear();
+    initialized_ = true;
+    cleaned_up_ = false;
+}
+
+void CallTree::cleanup() {
+    if (cleaned_up_) {
+        return;
+    }
+    
+    // Clean up all process graphs
+    for (auto& [key, graph] : process_graphs_) {
+        if (graph) {
+            graph->calls.clear();
+            graph->root_calls.clear();
+            graph->call_sequence.clear();
+        }
+    }
+    process_graphs_.clear();
+    
+    // Clean up factory
+    factory_.cleanup();
+    
+    cleaned_up_ = true;
+}
+
+bool CallTree::load(const std::string& trace_file) {
+    if (!initialized_) {
+        initialize();
+    }
+    log_file_ = trace_file;
+    TraceReader reader;
+    return reader.read(trace_file, *this);
+}
+
+void CallTree::add_call(const ProcessKey& key, std::shared_ptr<CallTreeNode> call) {
+    // make sure process graph exists
+    if (process_graphs_.find(key) == process_graphs_.end()) {
+        process_graphs_[key] = std::make_unique<ProcessCallTree>();
+        process_graphs_[key]->key = key;
+    }
+    
+    ProcessCallTree* graph = process_graphs_[key].get();
+    graph->calls[call->get_id()] = call;
+    graph->call_sequence.push_back(call->get_id());
+}
+
+void CallTree::build_hierarchy() {
+    std::cout << "building hierarchy for " << process_graphs_.size() << " process graphs..." << std::endl;
+    
+    size_t count = 0;
+    for (auto& [key, graph] : process_graphs_) {
+        count++;
+        if (count % 10 == 0 || count == process_graphs_.size()) {
+            std::cout << "  processed " << count << "/" << process_graphs_.size() << " processes..." << std::endl;
+        }
+        build_hierarchy_internal(graph.get());
+    }
+    
+    std::cout << "hierarchy building complete" << std::endl;
+}
+
+void CallTree::build_hierarchy_for_process(const ProcessKey& key) {
+    auto it = process_graphs_.find(key);
+    if (it != process_graphs_.end()) {
+        build_hierarchy_internal(it->second.get());
+    }
+}
+
+void CallTree::build_hierarchy_internal(ProcessCallTree* graph) {
+    // Skip if already built (root_calls is populated)
+    if (!graph->root_calls.empty()) {
+        return;
+    }
+    
+    std::vector<std::shared_ptr<CallTreeNode>> sorted_calls;
+    sorted_calls.reserve(graph->calls.size());
+    
+    for (auto& [id, call] : graph->calls) {
+        sorted_calls.push_back(call);
+    }
+    
+    // sort by start time to build hierarchy
+    std::sort(sorted_calls.begin(), sorted_calls.end(), 
+              [](const auto& a, const auto& b) {
+                  return a->get_start_time() < b->get_start_time();
+              });
+    
+    // find parents for each call
+    for (auto& call : sorted_calls) {
+        bool found_parent = false;
+        
+        // look for parent that contains this call
+        for (auto& potential_parent : sorted_calls) {
+            if (potential_parent->get_id() == call->get_id()) continue;
+            
+            std::uint64_t parent_end = potential_parent->get_start_time() + potential_parent->get_duration();
+            
+            // check if call is inside parent timespan and level is correct
+            if (call->get_start_time() >= potential_parent->get_start_time() &&
+                (call->get_start_time() + call->get_duration()) <= parent_end &&
+                call->get_level() > potential_parent->get_level()) {
+                
+                // find closest parent by level
+                if (!found_parent || 
+                    potential_parent->get_level() > graph->calls[call->get_parent_id()]->get_level()) {
+                    call->set_parent_id(potential_parent->get_id());
+                    found_parent = true;
+                }
+            }
+        }
+        
+        // add to parent children or root
+        if (found_parent) {
+            graph->calls[call->get_parent_id()]->add_child(call->get_id());
+        } else {
+            graph->root_calls.push_back(call->get_id());
+        }
+    }
+}
+
+ProcessCallTree* CallTree::get(const ProcessKey& key) {
+    auto it = process_graphs_.find(key);
+    if (it != process_graphs_.end()) {
+        return it->second.get();
+    }
+    return nullptr;
+}
+
+ProcessCallTree* CallTree::get(std::uint32_t pid, std::uint32_t tid, std::uint32_t node_id) {
+    return get(ProcessKey(pid, tid, node_id));
+}
+
+ProcessCallTree& CallTree::operator[](const ProcessKey& key) {
+    auto it = process_graphs_.find(key);
+    if (it == process_graphs_.end()) {
+        // Create new process graph if it doesn't exist
+        process_graphs_[key] = std::make_unique<ProcessCallTree>();
+        process_graphs_[key]->key = key;
+        return *process_graphs_[key];
+    }
+    return *it->second;
+}
+
+std::vector<ProcessKey> CallTree::keys() const {
+    std::vector<ProcessKey> result;
+    result.reserve(process_graphs_.size());
+    for (const auto& [key, graph] : process_graphs_) {
+        result.push_back(key);
+    }
+    return result;
+}
+
+void CallTree::print(const ProcessKey& key) const {
+    auto it = process_graphs_.find(key);
+    if (it == process_graphs_.end()) {
+        std::cout << "no graph for process key (pid=" << key.pid 
+                  << ", tid=" << key.tid << ", node=" << key.node_id << ")" << std::endl;
+        return;
+    }
+    
+    const ProcessCallTree& graph = *it->second;
+    std::cout << "call graph for process key (pid=" << key.pid 
+              << ", tid=" << key.tid << ", node=" << key.node_id << ")" << std::endl;
+    std::cout << "total calls: " << graph.calls.size() << std::endl;
+    std::cout << std::endl;
+    
+    // print root calls first
+    for (std::uint64_t root_id : graph.root_calls) {
+        print_calls_recursive(graph, root_id, 0);
+    }
+}
+
+void CallTree::print(std::uint32_t pid, std::uint32_t tid, std::uint32_t node_id) const {
+    print(ProcessKey(pid, tid, node_id));
+}
+
+void CallTree::print_calls_recursive(const ProcessCallTree& graph, std::uint64_t call_id, int indent) const {
+    auto it = graph.calls.find(call_id);
+    if (it == graph.calls.end()) {
+        return;
+    }
+    
+    const auto& call = it->second;
+    
+    // print indentation
+    for (int i = 0; i < indent; i++) {
+        std::cout << "  ";
+    }
+    
+    // print call info
+    std::cout << call->get_name() << " [" << call->get_category() << "] "
+              << "level=" << call->get_level() << " "
+              << "dur=" << call->get_duration() << "us "
+              << "ts=" << call->get_start_time() << std::endl;
+    
+    // print children
+    for (std::uint64_t child_id : call->get_children()) {
+        print_calls_recursive(graph, child_id, indent + 1);
+    }
+}
+
+} // namespace internal
+} // namespace dftracer::utils::call_tree
