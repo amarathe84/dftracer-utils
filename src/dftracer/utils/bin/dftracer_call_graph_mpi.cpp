@@ -22,8 +22,8 @@
  *   --load <file>        : Load and display existing call graph file
  */
 
-#include <dftracer/utils/call_graph/call_graph_mpi.h>
-#include <dftracer/utils/call_graph/call_graph.h>
+#include <dftracer/utils/call_tree/call_tree_mpi.h>
+#include <dftracer/utils/call_tree/call_tree_internal.h>
 #include <mpi.h>
 
 #include <iostream>
@@ -33,7 +33,7 @@
 #include <algorithm>
 
 namespace fs = std::filesystem;
-using namespace dftracer::utils::call_graph;
+using namespace dftracer::utils::call_tree;
 
 void print_usage(const char* program_name) {
     std::cerr << "Usage: mpirun -np <N> " << program_name << " <trace_dir_or_files> [options]" << std::endl;
@@ -62,14 +62,14 @@ void print_usage(const char* program_name) {
     std::cerr << "  mpirun -np 4 " << program_name << " trace_short/cosmoflow_a100/nodes-4 --verbose" << std::endl;
 }
 
-void print_call_graph_detailed(const CallGraph& call_graph, int rank, int world_size) {
+void print_call_graph_detailed(const internal::CallTree& call_graph, int rank, int world_size) {
     for (int r = 0; r < world_size; r++) {
         if (r == rank) {
             auto process_keys = call_graph.keys();
             for (const auto& key : process_keys) {
                 std::cout << "\n[Rank " << rank << "] ";
                 std::cout << "========================================" << std::endl;
-                const_cast<CallGraph&>(call_graph).print(key);
+                const_cast<internal::CallTree&>(call_graph).print(key);
                 std::cout << "========================================" << std::endl;
             }
             std::flush(std::cout);

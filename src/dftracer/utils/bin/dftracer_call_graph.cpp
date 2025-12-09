@@ -1,4 +1,4 @@
-#include <dftracer/utils/call_graph/call_graph.h>
+#include <dftracer/utils/call_tree/call_tree_internal.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -6,7 +6,7 @@
 #include <set>
 #include <map>
 
-using namespace dftracer::utils::call_graph;
+using namespace dftracer::utils::call_tree::internal;
 
 void print_usage(const char* program_name) {
     std::cerr << "usage: " << program_name << " <trace_file_or_directory> [options]" << std::endl;
@@ -18,7 +18,7 @@ void print_usage(const char* program_name) {
     std::cerr << "    --detailed           : show detailed call graphs (default)" << std::endl;
 }
 
-void print_summary(const CallGraph& call_graph) {
+void print_summary(const dftracer::utils::call_tree::internal::CallTree& call_graph) {
     auto process_keys = call_graph.keys();
     
     // collect statistics
@@ -35,7 +35,7 @@ void print_summary(const CallGraph& call_graph) {
         unique_nodes.insert(key.node_id);
         pids_per_node[key.node_id].insert(key.pid);
         
-        auto* graph = const_cast<CallGraph&>(call_graph).get(key);
+        auto* graph = const_cast<dftracer::utils::call_tree::internal::CallTree&>(call_graph).get(key);
         if (graph) {
             total_calls += graph->calls.size();
         }
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    CallGraph call_graph;
+    dftracer::utils::call_tree::internal::CallTree call_graph;
     call_graph.initialize();  // Initialize before use
     TraceReader reader;
     

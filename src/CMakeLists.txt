@@ -89,14 +89,15 @@ set(DFTRACER_UTILS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/analyzers/helpers/parse_trace.cpp
     # Replay
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/replay/replay.cpp
-    # Call Graph
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_graph/call_graph.cpp
+    # Call Tree
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_tree/call_tree.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_tree/call_tree_internal.cpp
 )
 
-# Add MPI call graph sources if MPI is enabled
+# Add MPI call tree sources if MPI is enabled
 if(DFTRACER_UTILS_ENABLE_MPI)
   list(APPEND DFTRACER_UTILS_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_graph/call_graph_mpi.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/call_tree/call_tree_mpi.cpp
   )
 endif()
 
@@ -265,6 +266,38 @@ if(DFTRACER_UTILS_ENABLE_MPI)
 
     # Install executable
     install(TARGETS ${bin_exec} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  endforeach()
+endif()
+
+# ##############################################################################
+# Call Tree Examples (optional)
+# ##############################################################################
+
+option(DFTRACER_UTILS_BUILD_EXAMPLES "Build CallTree API examples" ON)
+
+if(DFTRACER_UTILS_BUILD_EXAMPLES)
+  set(DFTRACER_EXAMPLES
+      ${CMAKE_CURRENT_SOURCE_DIR}/../examples/call_tree_example1.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../examples/call_tree_example2.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../examples/call_tree_example3.cpp)
+
+  foreach(example ${DFTRACER_EXAMPLES})
+    get_filename_component(example_name ${example} NAME_WE)
+
+    add_executable(${example_name} ${example})
+    set_target_properties(${example_name} PROPERTIES OUTPUT_NAME "${example_name}")
+    target_link_libraries(
+      ${example_name} PRIVATE dftracer_utils argparse::argparse ghc_filesystem)
+    link_sqlite3(${example_name} STATIC)
+    link_zlib(${example_name} STATIC)
+
+    target_include_directories(${example_name}
+                               PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+
+    target_set_warnings(${example_name})
+
+    # Install example
+    install(TARGETS ${example_name} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples)
   endforeach()
 endif()
 
