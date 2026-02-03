@@ -49,6 +49,7 @@ option(DFTRACER_UTILS_ENABLE_PCH "Enable precompiled headers" ON)
 option(DFTRACER_UTILS_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(DFTRACER_UTILS_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(DFTRACER_UTILS_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+option(DFTRACER_UTILS_ENABLE_MPI "Enable MPI support for call tree" OFF)
 
 if(DFTRACER_UTILS_TESTS)
   message(STATUS "Building tests")
@@ -73,6 +74,10 @@ if(DFTRACER_UTILS_TESTS)
   # set(DFTRACER_UTILS_ENABLE_ASAN ON CACHE BOOL "" FORCE)
   # set(DFTRACER_UTILS_ENABLE_UBSAN ON CACHE BOOL "" FORCE)
   # set(DFTRACER_UTILS_ENABLE_TSAN ON CACHE BOOL "" FORCE)
+endif()
+
+if(DFTRACER_UTILS_ENABLE_MPI)
+  find_package(MPI REQUIRED)
 endif()
 
 # Validation: Ensure at least one library type is enabled

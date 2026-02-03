@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <memory>
 
 using namespace dftracer::utils;
@@ -105,17 +104,13 @@ int main(int argc, char** argv) {
 
         // Show basic info
         if (show_info || (!list_files && !build_only)) {
-            std::cout << "Archive Information:" << std::endl;
-            std::cout << "  Format: " << indexer->get_format_name()
-                      << std::endl;
-            std::cout << "  Path: " << indexer->get_archive_path() << std::endl;
-            std::cout << "  Index: " << indexer->get_idx_path() << std::endl;
-            std::cout << "  Total size: " << indexer->get_max_bytes()
-                      << " bytes" << std::endl;
-            std::cout << "  Total lines: " << indexer->get_num_lines()
-                      << std::endl;
-            std::cout << "  Checkpoints: " << indexer->get_checkpoints().size()
-                      << std::endl;
+            printf("Archive Information:\n");
+            printf("  Format: %s\n", indexer->get_format_name());
+            printf("  Path: %s\n", indexer->get_archive_path().c_str());
+            printf("  Index: %s\n", indexer->get_idx_path().c_str());
+            printf("  Total size: %zu bytes\n", indexer->get_max_bytes());
+            printf("  Total lines: %zu\n", indexer->get_num_lines());
+            printf("  Checkpoints: %zu\n", indexer->get_checkpoints().size());
         }
 
         // List files for TAR archives
@@ -125,25 +120,22 @@ int main(int argc, char** argv) {
             auto* tar_indexer = dynamic_cast<tar::TarIndexer*>(indexer.get());
             if (tar_indexer) {
                 auto files = tar_indexer->list_files();
-                std::cout << "\nFiles in archive (" << files.size()
-                          << " total):" << std::endl;
+                printf("\nFiles in archive (%zu total):\n", files.size());
 
                 for (const auto& file : files) {
-                    std::cout << "  " << file.file_name;
+                    printf("  %s", file.file_name.c_str());
                     if (file.typeflag == '5') {
-                        std::cout << " (directory)";
+                        printf(" (directory)");
                     } else {
-                        std::cout << " (" << file.file_size << " bytes)";
+                        printf(" (%zu bytes)", file.file_size);
                     }
-                    std::cout << std::endl;
+                    printf("\n");
                 }
             } else {
-                std::cout << "File listing not available for this format"
-                          << std::endl;
+                printf("File listing not available for this format\n");
             }
         } else if (list_files) {
-            std::cout << "File listing not available for GZIP format"
-                      << std::endl;
+            printf("File listing not available for GZIP format\n");
         }
 
     } catch (const std::exception& e) {

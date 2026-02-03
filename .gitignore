@@ -48,7 +48,8 @@ dict_analyzer*
 *.pfw.gz.idx
 install
 
-build_*
+# Build directories (but not files like build_task.h)
+build_*/
 coverage/
 .venv
 *venv*
@@ -63,7 +64,6 @@ build
 .vs
 /dist
 *.idx
-*.zindex
 .claude
 CLAUDE.md
 TODO

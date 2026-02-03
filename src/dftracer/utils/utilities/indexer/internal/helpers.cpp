@@ -1,7 +1,6 @@
 #include <dftracer/utils/core/common/filesystem.h>
 #include <dftracer/utils/core/common/logging.h>
 #include <dftracer/utils/utilities/indexer/internal/helpers.h>
-#include <xxhash.h>
 
 // Platform-specific includes for file stats
 #ifdef _WIN32
@@ -14,8 +13,10 @@
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <sstream>
+#include <string_view>
 #include <vector>
 
 namespace dftracer::utils::utilities::indexer::internal {
@@ -57,38 +58,30 @@ std::uint64_t calculate_file_hash(const std::string &file_path) {
 
     FILE *file = std::fopen(file_path.c_str(), "rb");
     if (!file) {
-        DFTRACER_UTILS_LOG_ERROR("Cannot open file for XXH3 calculation: %s",
+        DFTRACER_UTILS_LOG_ERROR("Cannot open file for hash calculation: %s",
                                  file_path.c_str());
         return 0;
     }
 
-    XXH3_state_t *state = XXH3_createState();
-    if (!state) {
-        DFTRACER_UTILS_LOG_ERROR("%s", "Failed to create XXH3 state");
-        std::fclose(file);
-        return 0;
-    }
-    const XXH64_hash_t seed = 0;
-    if (XXH3_64bits_reset_withSeed(state, seed) == XXH_ERROR) {
-        DFTRACER_UTILS_LOG_ERROR("%s", "Failed to reset XXH3 state");
-        XXH3_freeState(state);
-        std::fclose(file);
-        return 0;
-    }
-
+    // Simple hash accumulator using std::hash
+    std::size_t hash_accumulator = 0;
     std::vector<unsigned char> buffer(HASH_BUFFER_SIZE);
 
     std::size_t bytes_read = 0;
     while ((bytes_read = std::fread(buffer.data(), 1, buffer.size(), file)) >
            0) {
-        XXH3_64bits_update(state, buffer.data(), bytes_read);
+        // Create a string_view for the buffer and hash it
+        std::string_view chunk(reinterpret_cast<const char *>(buffer.data()),
+                               bytes_read);
+        std::size_t chunk_hash = std::hash<std::string_view>{}(chunk);
+
+        // Combine hashes using a simple but effective method
+        hash_accumulator ^= chunk_hash + 0x9e3779b9 + (hash_accumulator << 6) +
+                            (hash_accumulator >> 2);
     }
     std::fclose(file);
 
-    XXH64_hash_t hash = XXH3_64bits_digest(state);
-    XXH3_freeState(state);
-
-    return static_cast<std::uint64_t>(hash);
+    return static_cast<std::uint64_t>(hash_accumulator);
 }
 
 std::uint64_t file_size_bytes(const std::string &path) {

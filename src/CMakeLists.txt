@@ -99,7 +99,19 @@ set(DFTRACER_UTILS_UTILITIES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utilities/reader/internal/tar_reader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utilities/reader/internal/reader_factory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utilities/reader/internal/error.cpp
+    # Call Tree
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utilities/call_tree/call_tree.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utilities/call_tree/call_tree_internal.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utilities/call_tree/json_serializer.cpp
 )
+
+# Add MPI-specific call tree sources if MPI is enabled
+if(DFTRACER_UTILS_ENABLE_MPI)
+  list(APPEND DFTRACER_UTILS_UTILITIES_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/core/mpi/mpi_utils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dftracer/utils/utilities/call_tree/call_tree_mpi.cpp
+  )
+endif()
 
 # Determine which dependencies to require based on what was found vs built with
 # CPM
@@ -267,8 +279,17 @@ foreach(variant shared static)
   if(TARGET dftracer_utils_utilities_${variant})
     # No need to link dependencies here - they're inherited from core
 
+    # Add stdfs if needed
+    add_stdfs_if_needed(dftracer_utils_utilities_${variant})
+
     # Set warnings
     target_set_warnings(dftracer_utils_utilities_${variant})
+
+    # Add MPI compile definitions and link library when enabled
+    if(DFTRACER_UTILS_ENABLE_MPI)
+      target_compile_definitions(dftracer_utils_utilities_${variant} PUBLIC DFTRACER_UTILS_MPI_ENABLED)
+      target_link_libraries(dftracer_utils_utilities_${variant} PUBLIC MPI::MPI_CXX)
+    endif()
 
     # Apply precompiled headers (automatically reuses from core library)
     if(DFTRACER_UTILS_ENABLE_PCH)
@@ -624,6 +645,8 @@ if(DFTRACER_UTILS_BUILD_BINARIES)
     target_include_directories(${bin_exec}
                                PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
+    add_stdfs_if_needed(${bin_exec})
+
     target_set_warnings(${bin_exec})
 
     # Apply coverage flags if enabled
@@ -640,6 +663,45 @@ if(DFTRACER_UTILS_BUILD_BINARIES)
     if(SKBUILD)
       create_python_wrapper(${bin_exec})
     endif()
+  endforeach()
+endif()
+
+# ##############################################################################
+# Call Tree Examples (optional)
+# ##############################################################################
+
+option(DFTRACER_UTILS_BUILD_EXAMPLES "Build CallTree API examples" ON)
+
+if(DFTRACER_UTILS_BUILD_EXAMPLES)
+  set(DFTRACER_EXAMPLES
+      ${CMAKE_CURRENT_SOURCE_DIR}/../examples/call_tree_example1.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../examples/call_tree_example2.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../examples/call_tree_example3.cpp)
+
+  foreach(example ${DFTRACER_EXAMPLES})
+    get_filename_component(example_name ${example} NAME_WE)
+
+    add_executable(${example_name} ${example})
+    set_target_properties(${example_name} PROPERTIES OUTPUT_NAME "${example_name}")
+    target_link_libraries(
+      ${example_name} PRIVATE dftracer_utils argparse::argparse)
+
+    target_include_directories(${example_name}
+                               PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+
+    add_stdfs_if_needed(${example_name})
+
+    target_set_warnings(${example_name})
+
+    # Apply coverage flags if enabled
+    if(DFTRACER_UTILS_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      target_compile_options(${example_name} PRIVATE --coverage -fprofile-arcs
+                                                     -ftest-coverage)
+      target_link_libraries(${example_name} PRIVATE --coverage)
+    endif()
+
+    # Install example
+    install(TARGETS ${example_name} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples)
   endforeach()
 endif()
 

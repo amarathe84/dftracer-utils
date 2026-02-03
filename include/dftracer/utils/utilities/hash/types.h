@@ -8,8 +8,8 @@ namespace dftracer::utils::utilities::hash {
  * @brief Hash algorithm to use for text hashing.
  */
 enum class HashAlgorithm {
-    XXH64,    // xxHash 64-bit (fast, high quality)
-    XXH3_64,  // xxHash3 64-bit (fastest, recommended)
+    XXH3_64,  // XXH3 64-bit hash
+    XXH64,    // XXH64 hash
     STD       // std::hash (platform-dependent)
 };
 

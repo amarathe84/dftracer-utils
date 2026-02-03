@@ -7,7 +7,7 @@ fi
 
 SUPPORTED_CLANG_FORMAT_VERSION="19.1.7"
 
-if [ command -v $clang_format_exe >/dev/null 2>&1 ]; then
+if ! command -v $clang_format_exe >/dev/null 2>&1; then
     echo "You must have 'clang-format' in PATH to use 'check-formatting.sh'"
     exit 1
 fi
@@ -21,18 +21,18 @@ if [ "$clang_format_version" != "$SUPPORTED_CLANG_FORMAT_VERSION" ]; then
     echo "         The resulting check is highly likely to be incorrect."
 fi
 
-if [ command -v find >/dev/null 2>&1 ]; then
+if ! command -v find >/dev/null 2>&1; then
     echo "You must have 'find' in PATH to use 'check-formatting.sh'"
     exit 1
 fi
 
-if [ command -v dirname >/dev/null 2>&1 ]; then
+if ! command -v dirname >/dev/null 2>&1; then
     echo "You must have 'dirname' in PATH to use 'check-formatting.sh'"
     exit 1
 fi
 
-if [ command -v xargs >/dev/null 2>&1 ]; then
-    echo "You must have 'dirname' in PATH to use 'check-formatting.sh'"
+if ! command -v xargs >/dev/null 2>&1; then
+    echo "You must have 'xargs' in PATH to use 'check-formatting.sh'"
     exit 1
 fi
 
