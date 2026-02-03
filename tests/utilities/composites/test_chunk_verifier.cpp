@@ -14,7 +14,7 @@
 
 #include <any>
 #include <chrono>
-#include <iostream>
+#include <cstdio>
 #include <numeric>
 #include <thread>
 
@@ -45,7 +45,7 @@ using TestEvent = int;
 TEST_SUITE("ChunkVerifier") {
     TEST_CASE("ChunkVerifier - Basic Verification") {
         SUBCASE("Verify matching chunks") {
-            std::cout << "Starting test: Verify matching chunks" << std::endl;
+            printf("Starting test: Verify matching chunks\n");
 
             // Create input hasher
             auto input_hasher =
@@ -55,8 +55,8 @@ TEST_SUITE("ChunkVerifier") {
                     hash ^= std::hash<std::string>{}(meta.name);
                     hash ^= std::hash<std::size_t>{}(meta.total_events);
                 }
-                std::cout << "Input hasher calculated hash: " << hash
-                          << std::endl;
+                printf("Input hasher calculated hash: %lu\n",
+                       (unsigned long)hash);
                 return hash;
             };
 
@@ -64,8 +64,7 @@ TEST_SUITE("ChunkVerifier") {
             auto event_collector =
                 [](TaskContext&,
                    const TestChunk& chunk) -> std::vector<TestEvent> {
-                std::cout << "Collecting events from chunk " << chunk.id
-                          << std::endl;
+                printf("Collecting events from chunk %zu\n", chunk.id);
                 return chunk.data;
             };
 
@@ -79,18 +78,18 @@ TEST_SUITE("ChunkVerifier") {
                 std::uint64_t hash = 0;
                 hash ^= std::hash<std::string>{}("test");
                 hash ^= std::hash<std::size_t>{}(9);  // total events
-                std::cout << "Event hasher calculated hash: " << hash
-                          << std::endl;
+                printf("Event hasher calculated hash: %lu\n",
+                       (unsigned long)hash);
                 return hash;
             };
 
-            std::cout << "Creating verifier..." << std::endl;
+            printf("Creating verifier...\n");
             // Create verifier
             auto verifier = std::make_shared<
                 ChunkVerifierUtility<TestChunk, TestMetadata, TestEvent>>(
                 input_hasher, event_collector, event_hasher);
 
-            std::cout << "Setting up pipeline..." << std::endl;
+            printf("Setting up pipeline...\n");
             // Set up pipeline instead of bare executor/scheduler
             // Need N+1 threads: 1 for main task + N for parallel chunk
             // processing
@@ -113,28 +112,28 @@ TEST_SUITE("ChunkVerifier") {
             ChunkVerificationUtilityInput<TestChunk, TestMetadata> input(
                 chunks, metadata);
 
-            std::cout << "Creating task adapter..." << std::endl;
+            printf("Creating task adapter...\n");
             // Use adapter to convert to task
             auto verify_task = use(verifier).as_task();
 
-            std::cout << "Setting up pipeline with single task..." << std::endl;
+            printf("Setting up pipeline with single task...\n");
             // Set up pipeline with single task
             pipeline.set_source(verify_task);
             pipeline.set_destination(verify_task);
 
-            std::cout << "Executing pipeline..." << std::endl;
+            printf("Executing pipeline...\n");
             // Execute pipeline
             pipeline.execute(input);
 
-            std::cout << "Getting results..." << std::endl;
+            printf("Getting results...\n");
             // Get results
             auto result = verify_task->get<ChunkVerificationUtilityOutput>();
 
-            std::cout << "Checking results..." << std::endl;
+            printf("Checking results...\n");
             CHECK(result.passed == true);
             CHECK(result.input_hash == result.output_hash);
 
-            std::cout << "Test completed successfully" << std::endl;
+            printf("Test completed successfully\n");
         }
 
         SUBCASE("Detect mismatched chunks") {
@@ -298,12 +297,12 @@ TEST_SUITE("ChunkVerifier") {
         }
 
         SUBCASE("Single chunk") {
-            std::cout << "Starting single chunk test" << std::endl;
+            printf("Starting single chunk test\n");
 
             auto input_hasher =
                 [](const std::vector<TestMetadata>& metadata) -> std::uint64_t {
                 auto hash = metadata.empty() ? 0 : metadata[0].total_events;
-                std::cout << "Input hash: " << hash << std::endl;
+                printf("Input hash: %lu\n", (unsigned long)hash);
                 return hash;
             };
 
@@ -311,24 +310,24 @@ TEST_SUITE("ChunkVerifier") {
                 [](TaskContext& ctx,
                    const TestChunk& chunk) -> std::vector<TestEvent> {
                 (void)ctx;  // Not used in this simple test
-                std::cout << "Collecting from chunk " << chunk.id << std::endl;
+                printf("Collecting from chunk %zu\n", chunk.id);
                 return chunk.data;
             };
 
             auto event_hasher =
                 [](const std::vector<TestEvent>& events) -> std::uint64_t {
                 auto hash = events.size();
-                std::cout << "Event hash: " << hash << " (from "
-                          << events.size() << " events)" << std::endl;
+                printf("Event hash: %zu (from %zu events)\n", hash,
+                       events.size());
                 return hash;
             };
 
-            std::cout << "Creating verifier" << std::endl;
+            printf("Creating verifier\n");
             auto verifier = std::make_shared<
                 ChunkVerifierUtility<TestChunk, TestMetadata, TestEvent>>(
                 input_hasher, event_collector, event_hasher);
 
-            std::cout << "Creating pipeline" << std::endl;
+            printf("Creating pipeline\n");
             {
                 // Need at least 2 threads: 1 for main task + 1 for subtasks
                 auto pipeline_config =
@@ -346,25 +345,25 @@ TEST_SUITE("ChunkVerifier") {
                 ChunkVerificationUtilityInput<TestChunk, TestMetadata> input(
                     chunks, metadata);
 
-                std::cout << "Creating task" << std::endl;
+                printf("Creating task\n");
                 auto verify_task = use(verifier).as_task();
 
-                std::cout << "Scheduling task" << std::endl;
+                printf("Scheduling task\n");
                 pipeline.set_source(verify_task);
                 pipeline.set_destination(verify_task);
                 pipeline.execute(input);
 
-                std::cout << "Waiting for completion" << std::endl;
-                std::cout << "Getting result" << std::endl;
+                printf("Waiting for completion\n");
+                printf("Getting result\n");
                 auto result =
                     verify_task->get<ChunkVerificationUtilityOutput>();
 
-                std::cout << "Checking result" << std::endl;
+                printf("Checking result\n");
                 CHECK(result.passed == true);
                 CHECK(result.input_hash == 3);
                 CHECK(result.output_hash == 3);
 
-                std::cout << "Single chunk test completed" << std::endl;
+                printf("Single chunk test completed\n");
             }
             // Executor and Scheduler destroyed here
         }

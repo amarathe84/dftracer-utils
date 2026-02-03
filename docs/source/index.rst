@@ -30,6 +30,7 @@ Features
    installation
    quickstart
    cli
+   call-tree
    api/index
    cpp_api/index
    developers

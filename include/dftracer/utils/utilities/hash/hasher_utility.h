@@ -94,7 +94,7 @@ class HasherUtility : public internal::BaseHasherUtility {
                 impl_ = std::make_unique<StdHasherUtility>();
                 break;
             default:
-                impl_ = std::make_unique<XXH3HasherUtility>();
+                impl_ = std::make_unique<StdHasherUtility>();
                 break;
         }
     }

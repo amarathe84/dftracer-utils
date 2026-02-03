@@ -10,6 +10,9 @@
 # +++++++++++++++++++++++++++++++++++++++++
 
 set(UTILITIES_TEST_SOURCES
+    # Call Tree
+    call_tree/test_call_tree_internal.cpp
+
     # Composites
     composites/test_batch_processor.cpp
     composites/test_chunk_verifier.cpp
@@ -40,8 +43,6 @@ set(UTILITIES_TEST_SOURCES
     # Hash
     hash/test_hasher_utility.cpp
     hash/test_mt_hasher.cpp
-    hash/test_xxh3_hasher.cpp
-    hash/test_xxh64_hasher.cpp
     hash/test_std_hasher.cpp
 
     # I/O
