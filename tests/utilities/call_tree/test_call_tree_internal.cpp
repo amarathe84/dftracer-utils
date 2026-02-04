@@ -16,7 +16,14 @@ TEST_CASE("CallTree - Basic construction and initialization") {
 
     SUBCASE("Initialize tree") {
         tree.initialize();
-        // Tree is initialized - verify we can use it
+        // Tree is initialized but empty - get returns nullptr for non-existent
+        // keys
+        CHECK(tree.get(1234, 5678) == nullptr);
+        // Using operator[] creates the entry
+        ProcessCallTree& pct = tree[ProcessKey(1234, 5678)];
+        CHECK(pct.key.pid == 1234);
+        CHECK(pct.key.tid == 5678);
+        // Now get() should return the entry
         CHECK(tree.get(1234, 5678) != nullptr);
     }
 
